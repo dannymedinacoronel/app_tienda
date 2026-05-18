@@ -154,6 +154,13 @@
                 </div>
             </header>
 
+            <!-- 🗺️ MENÚ DE NAVEGACIÓN DE SECCIONES (TABS) -->
+            <nav class="flex gap-2 p-1.5 card-bg border rounded-2xl mb-6 text-xs max-w-md">
+                <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white">📦 Panel General</button>
+                <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📊 Analítica</button>
+                <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📜 Auditoría</button>
+            </nav>
+
             <div class="card-bg border p-3 rounded-2xl mb-6 flex flex-wrap gap-3 items-center text-xs">
                 <span class="font-bold uppercase tracking-wider opacity-60 text-[10px]">🎯 Filtros rápidos:</span>
                 <select id="filtro-categoria" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-lg px-2 py-1 focus:outline-none">
@@ -204,7 +211,8 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+            <!-- SECCIÓN 1: PANEL GENERAL (FORMULARIO Y KANBAN) -->
+            <div id="sec-inventario" class="seccion-app grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
                 <div class="flex flex-col gap-6 lg:col-span-1">
                     <div id="form-container" class="card-bg border p-5 rounded-3xl shadow-xl transition-all">
                         <div class="flex justify-between items-center mb-3">
@@ -245,21 +253,6 @@
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-2 bg-black/10 p-2 rounded-xl border border-current/5">
-                                <div>
-                                    <label class="block text-[8px] font-bold uppercase text-indigo-400 mb-0.5">Conservación</label>
-                                    <select id="estadoConservacion" class="input-bg border w-full rounded-lg p-1.5 text-[11px] focus:outline-none">
-                                        <option value="Nuevo con etiqueta">🏷️ Con Etiqueta</option>
-                                        <option value="Como nuevo">✨ Como Nuevo</option>
-                                        <option value="Buen estado">👌 Buen Estado</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-[8px] font-bold uppercase text-indigo-400 mb-0.5">Ubicación Almacén</label>
-                                    <input type="text" id="ubicacionAlmacen" placeholder="Ej: Estante A2" class="input-bg border w-full rounded-lg p-1.5 text-[11px] focus:outline-none font-mono">
-                                </div>
-                            </div>
-
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Coste Compra (€)</label>
@@ -291,12 +284,18 @@
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Canal Comercial</label>
                                     <select id="canalVenta" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
+                                        <option value="Vinted" selected>👗 Vinted</option>
                                         <option value="Tienda Física">🏬 Tienda</option>
-                                        <option value="Vinted">👗 Vinted</option>
                                         <option value="Wallapop">🤝 Wallapop</option>
                                         <option value="Web">🌐 Web</option>
                                     </select>
                                 </div>
+                            </div>
+
+                            <!-- 💬 CAMPO NUEVO: COMENTARIOS SOBRE EL PRODUCTO -->
+                            <div>
+                                <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Comentarios del Producto</label>
+                                <textarea id="comentariosProducto" rows="2" placeholder="Detalles, estado, imperfecciones..." class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none resize-none"></textarea>
                             </div>
 
                             <div>
@@ -314,31 +313,6 @@
                             <button type="submit" id="btn-submit" class="w-full bg-blue-600 text-white font-bold text-xs py-3 rounded-xl shadow-md uppercase tracking-widest transition-all">Registrar Artículo</button>
                             <button type="button" id="btn-cancel" onclick="cancelEdit()" class="hidden w-full text-center text-[10px] uppercase opacity-50 py-0.5 hover:underline">Cancelar Cambios</button>
                         </form>
-                    </div>
-
-                    <div class="card-bg border p-5 rounded-3xl shadow-xl flex flex-col flex-1 min-h-[280px]">
-                        <h3 class="text-xs font-black text-pink-500 uppercase tracking-wider mb-2 flex justify-between items-center">
-                            🛒 CAJA MSTR TPV 
-                            <button onclick="vaciarCarritoCajaRapida()" class="text-[9px] opacity-40 hover:opacity-100 normal-case underline">Limpiar</button>
-                        </h3>
-                        <div id="caja-carrito-items" class="flex-1 overflow-y-auto space-y-2 pr-1 max-h-40 text-xs font-mono">
-                            <div class="text-center opacity-40 italic mt-6 text-[11px]">Carrito de compras vacío.<br>Escanea o añade prendas aquí.</div>
-                        </div>
-                        <div class="border-t border-current/10 pt-3 mt-2 space-y-2 text-xs">
-                            <div class="flex justify-between items-center">
-                                <span class="opacity-60">Descuento (%)</span>
-                                <input type="number" id="tpv-descuento" value="0" min="0" max="100" oninput="recalcularTotalesTPVMaster()" class="w-14 text-center bg-black/20 border border-current/20 rounded px-1 py-0.5 focus:outline-none font-mono">
-                            </div>
-                            <div class="flex justify-between items-center text-sm font-black">
-                                <span>TOTAL COBRO:</span>
-                                <span id="tpv-total-monto" class="text-emerald-500 text-base font-mono">0.00 €</span>
-                            </div>
-                            <div class="grid grid-cols-3 gap-1.5 pt-1 text-[10px] font-bold">
-                                <button onclick="procesarVentaCarritoCompleto('Efectivo')" class="bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl shadow-md">💵 Efectivo</button>
-                                <button onclick="procesarVentaCarritoCompleto('Tarjeta')" class="bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl shadow-md">💳 Tarjeta</button>
-                                <button onclick="procesarVentaCarritoCompleto('Bizum')" class="bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-xl shadow-md">📱 Bizum</button>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -361,22 +335,26 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="card-bg border p-6 rounded-3xl shadow-xl lg:col-span-1">
+            <!-- SECCIÓN 2: ANALÍTICA Y GRÁFICAS -->
+            <div id="sec-analitica" class="seccion-app hidden grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div class="card-bg border p-6 rounded-3xl shadow-xl">
                     <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento</h3>
-                    <div class="w-full h-48 relative" id="contenedor-canvas-grafica">
+                    <div class="w-full h-64 relative" id="contenedor-canvas-grafica">
                         <canvas id="graficaTendencias"></canvas>
                     </div>
                 </div>
 
-                <div class="card-bg border p-6 rounded-3xl shadow-xl lg:col-span-1">
+                <div class="card-bg border p-6 rounded-3xl shadow-xl">
                     <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📊 Distribución de Ventas</h3>
-                    <div class="w-full h-48 relative flex items-center justify-center" id="contenedor-canvas-tarta">
+                    <div class="w-full h-64 relative flex items-center justify-center" id="contenedor-canvas-tarta">
                         <canvas id="graficaTartaCategorias"></canvas>
                     </div>
                 </div>
-                
-                <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[240px] lg:col-span-1">
+            </div>
+            
+            <!-- SECCIÓN 3: AUDITORÍA -->
+            <div id="sec-auditoria" class="seccion-app hidden grid grid-cols-1 gap-6 mb-8">
+                <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[350px]">
                     <h3 class="text-xs font-black text-indigo-400 uppercase mb-3 tracking-wider flex justify-between">
                         📜 AUDITORÍA DEL NÚCLEO <span>LIVE</span>
                     </h3>
@@ -430,14 +408,35 @@
     <script>
         const BACKEND_URL = '';
         let BASE_DATOS = [];
-        let CARRITO_CAJA_TPV = [];
+        let CARRITO_CAJA_TPV = []; // Mantenido estructuralmente en JS para evitar romper hooks o integraciones secundarias
         let INSTANCIA_CHARTS = null;
         let INSTANCIA_TARTA = null;
         let OBJETO_ESCANER_CAMARA = null;
         let HISTORIAL_TIMESTAMPS_OPERACIONES = [];
         let LECTOR_BLOQUEADO_POR_CAPTURA = false;
         let ITEMS_SELECCIONADOS_MASIVOS = [];
-        let SOUND_MUTED_GLOBAL = false; // 🛠️ NUEVO: Estado global del muting de voz
+        let SOUND_MUTED_GLOBAL = false;
+
+        // 🗺️ FUNCIÓN DEL MENÚ DE NAVEGACIÓN (TABS)
+        function navegarASeccion(idSeccion) {
+            document.querySelectorAll('.seccion-app').forEach(sec => sec.classList.add('hidden'));
+            document.getElementById(idSeccion).classList.remove('hidden');
+            
+            // Actualizar clases de los botones del menú
+            document.querySelectorAll('nav border button').forEach(btn => {
+                btn.className = "flex-1 py-2 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100";
+            });
+            
+            const tabActivo = document.getElementById(`tab-${idSeccion}`);
+            if (tabActivo) {
+                tabActivo.className = "flex-1 py-2 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white";
+            }
+            
+            // Forzar renderizado de gráficas si se entra a analíticas
+            if (idSeccion === 'sec-analitica' && BASE_DATOS.length > 0) {
+                setTimeout(() => { dibujarGrafica(); dibujarGráficaTarta(); }, 50);
+            }
+        }
 
         window.allowDrop = function(e) { e.preventDefault(); const col = e.currentTarget; if(col) col.classList.add('drag-over'); };
         window.clearDrop = function(e) { const col = e.currentTarget; if(col) col.classList.remove('drag-over'); };
@@ -446,7 +445,6 @@
             e.dataTransfer.effectAllowed = 'move'; 
             e.dataTransfer.setData("text/plain", id); 
             
-            // 🛠️ NUEVO: Si arrastramos una tarjeta marcada, empaquetamos todo el lote masivo
             if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) {
                 e.dataTransfer.setData("text/lote-items", JSON.stringify(ITEMS_SELECCIONADOS_MASIVOS));
             } else {
@@ -471,7 +469,6 @@
         window.handleDropColumn = async function(e, newState) {
             e.preventDefault(); window.clearDrop(e);
             
-            // 🛠️ NUEVO: Recuperamos la lista de IDs (individual o por lote)
             const loteRaw = e.dataTransfer.getData("text/lote-items");
             if (!loteRaw) return;
             const listaIds = JSON.parse(loteRaw);
@@ -479,7 +476,6 @@
             cantarPorVoz(newState === 'Vendido' ? `Lote Vendido` : `Lote a stock`);
             procesarMultiplicadorCombo();
 
-            // Guardamos copias preventivas por si falla Render
             const copiasEstadosAnteriores = {};
             listaIds.forEach(id => {
                 const idx = BASE_DATOS.findIndex(x => x._id === id);
@@ -492,7 +488,6 @@
             recalcularKPIsLocalesOptimistas(); renderKanban(); dibujarGrafica(); dibujarGráficaTarta();
 
             try {
-                // Ejecutamos las llamadas en paralelo hacia tu Backend en Render
                 const promesas = listaIds.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: newState })
                 }));
@@ -500,7 +495,6 @@
                 limpiarSeleccionMasiva();
                 await reloadCoreData();
             } catch(err) {
-                // Rollback si cae la red
                 listaIds.forEach(id => {
                     const idx = BASE_DATOS.findIndex(x => x._id === id);
                     if (idx !== -1) BASE_DATOS[idx].estado = copiasEstadosAnteriores[id];
@@ -510,7 +504,6 @@
             }
         };
 
-        // 🛠️ NUEVO: Función para alternar el volumen (Mute) global de la app
         function toggleMuteVolumenGlobal() {
             SOUND_MUTED_GLOBAL = !SOUND_MUTED_GLOBAL;
             const btn = document.getElementById('btn-mute-volumen');
@@ -559,56 +552,6 @@
             else { indicator.className = "font-bold text-emerald-400"; }
         }
 
-        function agregarArticuloAlCarritoTPV(id) {
-            const item = BASE_DATOS.find(x => x._id === id);
-            if (!item || item.estado === 'Vendido') return;
-            const yaExiste = CARRITO_CAJA_TPV.find(x => x._id === id);
-            if (!yaExiste) { CARRITO_CAJA_TPV.push(item); cantarPorVoz("Añadido"); }
-            recalcularTotalesTPVMaster();
-        }
-        function removerItemDelCarritoTPV(id) {
-            CARRITO_CAJA_TPV = CARRITO_CAJA_TPV.filter(x => x._id !== id);
-            recalcularTotalesTPVMaster();
-        }
-        function vaciarCarritoCajaRapida() { CARRITO_CAJA_TPV = []; recalcularTotalesTPVMaster(); }
-        
-        function recalcularTotalesTPVMaster() {
-            const box = document.getElementById('caja-carrito-items');
-            if (CARRITO_CAJA_TPV.length === 0) {
-                box.innerHTML = `<div class="text-center opacity-40 italic mt-6 text-[11px]">Carrito de compras vacío.<br>Escanea o añade prendas aquí.</div>`;
-                document.getElementById('tpv-total-monto').innerText = "0.00 €"; return;
-            }
-            let html = ''; let subtotal = 0;
-            CARRITO_CAJA_TPV.forEach(item => {
-                subtotal += parseFloat(item.precioVenta || 0);
-                html += `<div class="flex justify-between items-center bg-black/10 p-1.5 rounded-lg border border-current/5"><span class="truncate pr-1">👕 ${item.prenda} [${item.talla}]</span><div class="flex items-center gap-2 flex-shrink-0"><b>${parseFloat(item.precioVenta).toFixed(2)}€</b><button onclick="removerItemDelCarritoTPV('${item._id}')" class="text-rose-500 hover:text-rose-600 px-1 font-black">✕</button></div></div>`;
-            });
-            box.innerHTML = html;
-            const descPorcentaje = parseFloat(document.getElementById('tpv-descuento').value) || 0;
-            const descuentoMonto = subtotal * (descPorcentaje / 100);
-            const totalFinal = subtotal - descuentoMonto;
-            document.getElementById('tpv-total-monto').innerText = `${totalFinal.toFixed(2)} €`;
-        }
-
-        async function procesarVentaCarritoCompleto(metodoPago) {
-            if (CARRITO_CAJA_TPV.length === 0) return alert("El carrito está vacío.");
-            const desc = parseFloat(document.getElementById('tpv-descuento').value) || 0;
-            if (confirm(`¿Procesar cobro por ${metodoPago}?`)) {
-                cantarPorVoz("Cobro procesado");
-                const promesas = CARRITO_CAJA_TPV.map(item => {
-                    item.estado = 'Vendido';
-                    item.canalVenta = `Tienda (${metodoPago})`;
-                    if(desc > 0) item.precioVenta = item.precioVenta - (item.precioVenta * (desc / 100));
-                    return fetch(`${BACKEND_URL}/api/ventas/${item._id}`, {
-                        method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(item)
-                    });
-                });
-                await Promise.all(promesas);
-                vaciarCarritoCajaRapida(); document.getElementById('tpv-descuento').value = 0;
-                procesarMultiplicadorCombo(); await reloadCoreData();
-            }
-        }
-
         function aplicarFiltrosFrontLineal() {
             const cat = document.getElementById('filtro-categoria').value;
             const talla = document.getElementById('filtro-talla').value;
@@ -623,6 +566,7 @@
                 if (cumple) card.classList.remove('hidden'); else card.classList.add('hidden');
             });
         }
+
         function limpiarFiltrosAvanzados() {
             document.getElementById('filtro-categoria').value = 'TODOS';
             document.getElementById('filtro-talla').value = 'TODOS';
@@ -642,7 +586,7 @@
             const formateado = BASE_DATOS.map(v => ({
                 Fecha: v.fecha, SKU: v.sku || 'N/A', Artículo: v.prenda, Categoría: v.categoria, Talla: v.talla,
                 'Coste (€)': parseFloat(v.precioCompra || 0).toFixed(2), 'Venta (€)': parseFloat(v.precioVenta || 0).toFixed(2), 
-                'Envío (€)': parseFloat(v.gastosEnvio || 0).toFixed(2), Canal: v.canalVenta || 'Tienda Física', Rating: v.rating || 0, Estado: v.estado
+                'Envío (€)': parseFloat(v.gastosEnvio || 0).toFixed(2), Canal: v.canalVenta || 'Vinted', Comentarios: v.comentariosProducto || '', Rating: v.rating || 0, Estado: v.estado
             }));
             const ws = XLSX.utils.json_to_sheet(formateado); const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Inventario"); XLSX.writeFile(wb, `Seychelles_Core_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -674,7 +618,6 @@
         }
 
         function cantarPorVoz(mensajeTexto) {
-            // 🛠️ ACTUALIZADO: Respeta el botón de Mute para no sonar si está silenciado
             if (!SOUND_MUTED_GLOBAL && 'speechSynthesis' in window) { 
                 window.speechSynthesis.cancel(); 
                 const frase = new SpeechSynthesisUtterance(mensajeTexto); 
@@ -716,8 +659,8 @@
                         sku: original.sku ? `${original.sku}-CLON` : '', prenda: `${original.prenda} (Copia)`,
                         categoria: original.categoria, talla: original.talla, cantidad: original.cantidad || 1,
                         precioCompra: original.precioCompra || 0, precioVenta: original.precioVenta || 0,
-                        gastosEnvio: original.gastosEnvio || 0, canalVenta: original.canalVenta || 'Tienda Física', rating: original.rating || 0, estado: 'No Vendido',
-                        estadoConservacion: original.estadoConservacion || 'Nuevo con etiqueta', ubicacionAlmacen: original.ubicacionAlmacen || '', proveedor: original.proveedor || ''
+                        gastosEnvio: original.gastosEnvio || 0, canalVenta: original.canalVenta || 'Vinted', rating: original.rating || 0, estado: 'No Vendido',
+                        comentariosProducto: original.comentariosProducto || '', proveedor: original.proveedor || ''
                     })
                 });
                 cantarPorVoz("Duplicado."); await reloadCoreData();
@@ -734,8 +677,8 @@
                         sku: original.sku ? `${original.sku}-CLON` : '', prenda: `${original.prenda} (Copia)`,
                         categoria: original.categoria, talla: original.talla, cantidad: original.cantidad || 1,
                         precioCompra: original.precioCompra || 0, precioVenta: original.precioVenta || 0,
-                        gastosEnvio: original.gastosEnvio || 0, canalVenta: original.canalVenta || 'Tienda Física', rating: original.rating || 0, estado: 'No Vendido',
-                        estadoConservacion: original.estadoConservacion || 'Nuevo con etiqueta', ubicacionAlmacen: original.ubicacionAlmacen || '', proveedor: original.proveedor || ''
+                        gastosEnvio: original.gastosEnvio || 0, canalVenta: original.canalVenta || 'Vinted', rating: original.rating || 0, estado: 'No Vendido',
+                        comentariosProducto: original.comentariosProducto || '', proveedor: original.proveedor || ''
                     })
                 });
             });
@@ -776,7 +719,7 @@
             if (ITEMS_SELECCIONADOS_MASIVOS.length === 0 || !valor) return;
             const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => {
                 const itemOriginal = BASE_DATOS.find(v => v._id === id); if (!itemOriginal) return Promise.resolve();
-                const payload = { sku: itemOriginal.sku, prenda: itemOriginal.prenda, precioCompra: itemOriginal.precioCompra || 0, precioVenta: itemOriginal.precioVenta || 0, cantidad: itemOriginal.cantidad || 1, categoria: itemOriginal.categoria, talla: itemOriginal.talla, estado: itemOriginal.estado, gastosEnvio: itemOriginal.gastosEnvio || 0, canalVenta: itemOriginal.canalVenta || 'Tienda Física', rating: itemOriginal.rating || 0, estadoConservacion: itemOriginal.estadoConservacion || 'Nuevo con etiqueta', ubicacionAlmacen: itemOriginal.ubicacionAlmacen || '', proveedor: itemOriginal.proveedor || '' };
+                const payload = { sku: itemOriginal.sku, prenda: itemOriginal.prenda, precioCompra: itemOriginal.precioCompra || 0, precioVenta: itemOriginal.precioVenta || 0, cantidad: itemOriginal.cantidad || 1, categoria: itemOriginal.categoria, talla: itemOriginal.talla, estado: itemOriginal.estado, gastosEnvio: itemOriginal.gastosEnvio || 0, canalVenta: itemOriginal.canalVenta || 'Vinted', rating: itemOriginal.rating || 0, comentariosProducto: itemOriginal.comentariosProducto || '', proveedor: itemOriginal.proveedor || '' };
                 payload[campo] = valor; return fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
             });
             await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
@@ -808,7 +751,6 @@
                         <div class="flex items-center gap-1.5 flex-shrink-0">
                             ${badgeEstado}
                             <div class="flex gap-1">
-                                <button onclick="agregarArticuloAlCarritoTPV('${item._id}')" class="bg-pink-600 text-white font-bold text-[9px] px-2 py-0.5 rounded shadow-sm hover:bg-pink-700">➕ Caja</button>
                                 <button onclick="ejecutarAccionDesplegable('${item._id}', '${esVendido ? 'No Vendido' : 'Vendido'}')" class="bg-blue-600 text-white font-bold text-[9px] px-2 py-0.5 rounded shadow-sm">${esVendido ? 'Stock' : 'Vender'}</button>
                                 <button onclick="editItem('${item._id}'); document.getElementById('dropdown-buscador').classList.add('hidden');" class="bg-current/10 hover:bg-current/20 px-1.5 py-0.5 rounded text-[9px]">✏️</button>
                             </div>
@@ -849,8 +791,6 @@
 
         async function ejecutarLogicaEscaneo(skuParam) {
             try {
-                const itemExistente = BASE_DATOS.find(x => x.sku === skuParam && x.estado === 'No Vendido');
-                if (itemExistente) { agregarArticuloAlCarritoTPV(itemExistente._id); return; }
                 const response = await fetch(`${BACKEND_URL}/api/ventas/escanear/${skuParam}`, { method: 'PUT', credentials: 'include' });
                 if (response.ok) {
                     const resJson = await response.json(); if(resJson.operacion === "Vendido") cantarPorVoz(`Vendido`);
@@ -948,27 +888,25 @@
                 card.className = `kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none ${claseAlertaStock}`;
 
                 const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
-                const badgeCanal = v.canalVenta && v.canalVenta !== 'Tienda Física' ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
+                const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
                 const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas); const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
                 
                 const badgeCriticoHtml = esStockCritico ? `<span class="bg-amber-500 text-slate-950 px-1 py-0.5 rounded text-[7px] font-black tracking-widest animate-pulse">RESERVA</span>` : '';
-                
-                // 🛠️ MODO AVANZADO: Badge de ubicación en almacén
-                const txtUbicacion = v.ubicacionAlmacen ? `<span class="bg-slate-800 text-slate-400 text-[8px] border border-slate-700 font-mono px-1 rounded">📍 ${v.ubicacionAlmacen}</span>` : '';
+                const renderComentario = v.comentariosProducto ? `<p class="text-[9px] italic opacity-60 mt-1 bg-black/5 p-1 rounded border border-current/5 truncate">💬 ${v.comentariosProducto}</p>` : '';
 
                 card.innerHTML = `
                     <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0">
                     <div class="flex-1 min-w-0 pointer-events-none">
                         <div class="flex items-center gap-1.5 flex-wrap">
                             <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
-                            ${badgeCanal} ${badgeCriticoHtml} ${txtUbicacion}
+                            ${badgeCanal} ${badgeCriticoHtml}
                         </div>
                         <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
                         <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
-                        <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} € <span class="text-[8px] font-normal opacity-40">(${v.estadoConservacion || 'N/A'})</span></span>
+                        ${renderComentario}
+                        <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
                     </div>
                     <div class="flex items-center gap-1.5 flex-shrink-0 text-[11px]">
-                        ${v.estado === 'No Vendido' ? `<button onclick="agregarArticuloAlCarritoTPV('${v._id}')" class="bg-pink-600/20 hover:bg-pink-600 text-pink-400 hover:text-white p-1 rounded-lg text-[9px] font-bold">🛒</button>` : ''}
                         <button onclick="duplicarPrendaIndividual('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg">👯</button>
                         <button onclick="lanzarModalImpresionEtiqueta('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg">🖨️</button>
                         <button onclick="editItem('${v._id}')" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-0.5">Editar</button>
@@ -1000,9 +938,8 @@
                 precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0, 
                 gastosEnvio: parseFloat(document.getElementById('gastosEnvio').value) || 0, 
                 canalVenta: document.getElementById('canalVenta').value, 
+                comentariosProducto: document.getElementById('comentariosProducto').value.trim(),
                 rating: parseInt(document.getElementById('rating').value, 10) || 0,
-                estadoConservacion: document.getElementById('estadoConservacion').value,
-                ubicacionAlmacen: document.getElementById('ubicacionAlmacen').value.trim(),
                 proveedor: document.getElementById('proveedor').value.trim()
             };
             if (id) { const itemOriginal = BASE_DATOS.find(v => v._id === id); if (itemOriginal) payload.estado = itemOriginal.estado; }
@@ -1021,9 +958,8 @@
             document.getElementById('precioCompra').value = item.precioCompra || 0; 
             document.getElementById('precioVenta').value = item.precioVenta || 0; 
             document.getElementById('gastosEnvio').value = item.gastosEnvio || 0; 
-            document.getElementById('canalVenta').value = item.canalVenta || 'Tienda Física'; 
-            document.getElementById('estadoConservacion').value = item.estadoConservacion || 'Nuevo con etiqueta';
-            document.getElementById('ubicacionAlmacen').value = item.ubicacionAlmacen || '';
+            document.getElementById('canalVenta').value = item.canalVenta || 'Vinted'; 
+            document.getElementById('comentariosProducto').value = item.comentariosProducto || '';
             document.getElementById('proveedor').value = item.proveedor || '';
             setFormRating(item.rating || 0);
             calcularMargenComercialAlVuelo();
@@ -1038,8 +974,8 @@
             document.getElementById('edit-id').value = ""; 
             document.getElementById('gastosEnvio').value = 0; 
             document.getElementById('cantidad').value = 1;
-            document.getElementById('canalVenta').value = "Tienda Física"; 
-            document.getElementById('estadoConservacion').value = "Nuevo con etiqueta";
+            document.getElementById('canalVenta').value = "Vinted"; 
+            document.getElementById('comentariosProducto').value = "";
             setFormRating(0); 
             calcularMargenComercialAlVuelo();
             document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl"; 

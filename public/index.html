@@ -72,7 +72,6 @@
         .star-rating-btn { cursor: pointer; transition: transform 0.1s ease; }
         .star-rating-btn:hover { transform: scale(1.2); }
         
-        /* Suaviza el movimiento al arrastrar tarjetas */
         .kanban-card { transition: transform 0.1s ease, box-shadow 0.1s ease; backface-visibility: hidden; }
         .dragging { opacity: 0.4 !important; transform: scale(0.98); }
     </style>
@@ -108,10 +107,10 @@
                         <form id="form-escaner-pistola" autocomplete="off">
                             <input type="text" id="input-pistola" oninput="filtrarProductosMenu(this.value)" placeholder="🔍 Buscar modelo o escanear..." class="w-full bg-black/20 border border-current/20 rounded-xl px-4 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40">
                         </form>
-                        <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-full dropdown-bg border rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto p-1 font-sans text-xs"></div>
+                        <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-full dropdown-bg border rounded-xl shadow-2xl z-[100] max-h-48 overflow-y-auto p-1 font-sans text-[11px]"></div>
                     </div>
                     <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md">
-                        📷 Iniciar Cámara
+                        📷 Cámara
                     </button>
                 </div>
 
@@ -123,7 +122,10 @@
                     <button onclick="setTheme('purple')" class="px-2.5 py-1 rounded-lg" id="t-purple">Morado</button>
                 </div>
 
-                <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md">💾 Backup JSON</button>
+                <button onclick="forceRefreshDataManual()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95" title="Sincronizar Cloud">
+                    🔄 <span class="hidden sm:inline">Refrescar</span>
+                </button>
+                <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md">💾 Backup</button>
                 <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md">📊 Excel</button>
                 <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
             </div>
@@ -341,63 +343,42 @@
             if(card) setTimeout(() => card.classList.add('dragging'), 0);
         };
 
-        // 🔥 OPTIMISTIC UI: El motor de arrastre instantáneo a 0ms
         window.handleDropColumn = async function(e, newState) {
-            e.preventDefault(); 
-            window.clearDrop(e);
-            const id = e.dataTransfer.getData("text/plain"); 
-            if(!id) return;
-            
-            // 1. Localizar el objeto en la base de datos local del Front
-            const itemIndex = BASE_DATOS.findIndex(x => x._id === id);
-            if(itemIndex === -1) return;
-            
-            const estadoAnterior = BASE_DATOS[itemIndex].estado;
-            if (estadoAnterior === newState) return; // Evitar procesar si es el mismo estado
+            e.preventDefault(); window.clearDrop(e);
+            const id = e.dataTransfer.getData("text/plain"); if(!id) return;
+            const itemIndex = BASE_DATOS.findIndex(x => x._id === id); if(itemIndex === -1) return;
+            const estadoAnterior = BASE_DATOS[itemIndex].estado; if (estadoAnterior === newState) return;
 
-            // 2. Mover instantáneamente en memoria local y actualizar la pantalla al milisegundo
             BASE_DATOS[itemIndex].estado = newState;
-            
-            // 3. Renderizar la UI de inmediato de forma reactiva y local
-            recalcularKPIsLocalesOptimistas();
-            renderKanban(); 
-            dibujarGrafica(); 
-            dibujarGráficaTarta();
-            
-            // 4. Feedback por voz instantáneo
-            cantarPorVoz(newState === 'Vendido' ? `Vendido` : `A stock`);
-            procesarMultiplicadorCombo();
+            recalcularKPIsLocalesOptimistas(); renderKanban(); dibujarGrafica(); dibujarGráficaTarta();
+            cantarPorVoz(newState === 'Vendido' ? `Vendido` : `A stock`); procesarMultiplicadorCombo();
 
-            // 5. Lanzar la petición asíncrona en segundo plano sin bloquear al usuario
             try {
                 const r = await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: newState })
                 });
-                if(!r.ok) throw new Error("Fallo en la sincronización cloud");
-                
-                // Actualizar logs en diferido
+                if(!r.ok) throw new Error();
                 await reloadCoreData();
             } catch(err) {
-                // Rollback de seguridad por si falla la red (devuelve al estado anterior)
-                BASE_DATOS[itemIndex].estado = estadoAnterior;
-                reloadCoreData();
-                alert("Error de sincronización con Render. El artículo ha vuelto a su posición original.");
+                BASE_DATOS[itemIndex].estado = estadoAnterior; reloadCoreData();
+                alert("Error de sincronización con Render.");
             }
         };
 
-        // 🔥 FUNCIÓN AXILIAR: Calcula los KPIs en local al instante para evitar parpadeos
+        // 🛠️ NUEVO: Función para forzar refresco manual desde el botón sin recargar el navegador
+        async function forceRefreshDataManual() {
+            cantarPorVoz("Sincronizando.");
+            await reloadCoreData();
+        }
+
         function recalcularKPIsLocalesOptimistas() {
             let ingresos = 0, inversion = 0, prendasVendidas = 0;
             BASE_DATOS.forEach(v => {
-                const cant = parseInt(v.cantidad, 10) || 1;
-                const pCompra = parseFloat(v.precioCompra) || 0;
-                const pVenta = parseFloat(v.precioVenta) || 0;
-                const gEnvio = parseFloat(v.gastosEnvio) || 0;
+                const cant = parseInt(v.cantidad, 10) || 1; const pCompra = parseFloat(v.precioCompra) || 0; const pVenta = parseFloat(v.precioVenta) || 0; const gEnvio = parseFloat(v.gastosEnvio) || 0;
                 inversion += ((pCompra + gEnvio) * cant);
                 if (v.estado === 'Vendido') {
                     let comision = (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') ? (pVenta * 0.05) : 0;
-                    ingresos += ((pVenta - comision) * cant);
-                    prendasVendidas += cant;
+                    ingresos += ((pVenta - comision) * cant); prendasVendidas += cant;
                 }
             });
             document.getElementById('kpi-ingresos').innerText = `${ingresos.toFixed(2)} €`;
@@ -441,12 +422,9 @@
         }
 
         function autocompletarNombreLocalRapido() {
-            const cat = document.getElementById('categoria').value;
-            const talla = document.getElementById('talla').value;
-            const singular = cat.endsWith('s') ? cat.slice(0, -1) : cat;
-            const nombreGenerado = `Nueva ${singular} - Talla ${talla}`;
-            document.getElementById('prenda').value = nombreGenerado;
-            cantarPorVoz("Nombre asignado.");
+            const cat = document.getElementById('categoria').value; const talla = document.getElementById('talla').value;
+            const singular = cat.endsWith('s') ? cat.slice(0, -1) : cat; const nombreGenerado = `Nueva ${singular} - Talla ${talla}`;
+            document.getElementById('prenda').value = nombreGenerado; cantarPorVoz("Nombre asignado.");
         }
 
         function descargarBackupSeguridadLocal() {
@@ -566,15 +544,32 @@
             }
         }
 
+        // 🛠️ CORREGIDO: Plantilla del buscador optimizada (Texto superpequeño, padding compacto, diseño slim)
         function filtrarProductosMenu(valorQuery) {
             const dropdown = document.getElementById('dropdown-buscador'); const query = valorQuery.toLowerCase().trim();
             if (!query && dropdown) { dropdown.innerHTML = ''; dropdown.classList.add('hidden'); return; }
             const coincidencias = BASE_DATOS.filter(v => v.prenda.toLowerCase().includes(query) || (v.sku && v.sku.toLowerCase().includes(query)));
-            if (coincidencias.length === 0 && dropdown) { dropdown.innerHTML = `<div class="p-3 opacity-50 italic">Sin resultados.</div>`; dropdown.classList.remove('hidden'); return; }
+            if (coincidencias.length === 0 && dropdown) { dropdown.innerHTML = `<div class="p-2 opacity-50 italic text-[10px]">Sin resultados.</div>`; dropdown.classList.remove('hidden'); return; }
             let htmlItems = '';
             coincidencias.slice(0, 8).forEach(item => {
-                const esVendido = item.estado === 'Vendido'; const badgeEstado = esVendido ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[9px] font-bold">💰 VENDIDO</span>` : `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[9px] font-bold">📦 STOCK</span>`;
-                htmlItems += `<div class="dropdown-item-hover p-2 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 cursor-pointer transition-all border border-transparent border-b-current/5 last:border-b-0"><div><p class="font-bold uppercase tracking-wide text-current">${item.prenda} <span class="opacity-50 font-mono text-[10px]">(${item.talla})</span></p><p class="text-[10px] font-mono opacity-40">${item.sku ? `🆔 ${item.sku}` : 'Sin código'} • ${parseFloat(item.precioVenta || 0).toFixed(2)}€</p></div><div class="flex items-center gap-2 self-end sm:flex-row sm:self-auto">${badgeEstado}<div class="flex gap-1"><button onclick="ejecutarAccionDesplegable('${item._id}', '${esVendido ? 'No Vendido' : 'Vendido'}')" class="bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white px-2 py-1 rounded-lg font-bold text-[10px] transition-all">${esVendido ? '↩️ Re-Stock' : '✅ Vender'}</button><button onclick="editItem('${item._id}'); document.getElementById('dropdown-buscador').classList.add('hidden');" class="bg-current/5 hover:bg-current/20 px-2 py-1 rounded-lg font-bold text-[10px]">✏️</button></div></div></div>`;
+                const esVendido = item.estado === 'Vendido'; 
+                const badgeEstado = esVendido ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.5 rounded text-[8px] font-bold">💰 VENDIDO</span>` : `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-bold">📦 STOCK</span>`;
+                htmlItems += `
+                    <div class="dropdown-item-hover p-1.5 rounded-lg flex justify-between items-center gap-1.5 cursor-pointer transition-all border-b border-current/5 last:border-b-0">
+                        <div class="min-w-0 flex-1">
+                            <p class="font-bold uppercase truncate text-[11px] text-current">${item.prenda} <span class="opacity-60 font-mono text-[9px]">(${item.talla})</span></p>
+                            <p class="text-[9px] font-mono opacity-40 truncate">${item.sku ? `🆔 ${item.sku}` : 'Sin SKU'} • ${parseFloat(item.precioVenta || 0).toFixed(2)}€</p>
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            ${badgeEstado}
+                            <div class="flex gap-1">
+                                <button onclick="ejecutarAccionDesplegable('${item._id}', '${esVendido ? 'No Vendido' : 'Vendido'}')" class="bg-blue-600 text-white font-bold text-[9px] px-1.5 py-0.5 rounded transition-transform active:scale-95">
+                                    ${esVendido ? 'Stock' : 'Vender'}
+                                </button>
+                                <button onclick="editItem('${item._id}'); document.getElementById('dropdown-buscador').classList.add('hidden');" class="bg-current/10 hover:bg-current/20 px-1 py-0.5 rounded text-[10px]">✏️</button>
+                            </div>
+                        </div>
+                    </div>`;
             });
             if(dropdown) { dropdown.innerHTML = htmlItems; dropdown.classList.remove('hidden'); }
         }
@@ -629,8 +624,7 @@
         async function reloadCoreData() {
             try {
                 const res = await fetch(`${BACKEND_URL}/api/ventas`, { credentials: 'include' }); if(!res.ok) return;
-                const data = await res.json(); 
-                BASE_DATOS = data.ventas || [];
+                const data = await res.json(); BASE_DATOS = data.ventas || [];
 
                 document.getElementById('kpi-ingresos').innerText = `${(data.resumen.ingresos || 0).toFixed(2)} €`;
                 document.getElementById('kpi-beneficio').innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
@@ -652,8 +646,8 @@
             contenedor.innerHTML = '<canvas id="graficaTendencias"></canvas>'; const ctx = document.getElementById('graficaTendencias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
             
-            const datosAgrupados = {}; BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => { datosAgrupados[v.fecha] = (datosAgrupados[v.fecha] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1)); });
-            const fechas = Object.keys(datosAgrupados).sort(); const montos = fechas.map(f => datosAgrupados[f]);
+            const datosAgrapados = {}; BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => { datosAgrapados[v.fecha] = (datosAgrapados[v.fecha] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1)); });
+            const fechas = Object.keys(datosAgrapados).sort(); const montos = fechas.map(f => datosAgrapados[f]);
 
             const configuracionGraficas = {
                 dark: { linea: '#3b82f6', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' }, pink: { linea: '#db2777', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
@@ -668,6 +662,7 @@
             });
         }
 
+        // Gráfica de quesito (Top Ventas)
         function dibujarGráficaTarta() {
             const contenedor = document.getElementById('contenedor-canvas-tarta'); if(!contenedor) return;
             contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
@@ -676,22 +671,18 @@
             const contadorCategorias = {};
             BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => { contadorCategorias[v.categoria] = (contadorCategorias[v.categoria] || 0) + (v.cantidad || 1); });
 
-            const etiquetas = Object.keys(contadorCategorias);
-            const datos = etiquetas.map(cat => contadorCategorias[cat]);
+            const etiquetas = Object.keys(contadorCategorias); const datos = etiquetas.map(cat => contadorCategorias[cat]);
 
             const paletasColor = {
-                dark: ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#a855f7'],
-                pink: ['#db2777', '#f472b6', '#fbcfe8', '#be185d', '#9d174d'],
-                light: ['#1e293b', '#475569', '#64748b', '#94a3b8', '#cbd5e1'],
-                emerald: ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
+                dark: ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#a855f7'], pink: ['#db2777', '#f472b6', '#fbcfe8', '#be185d', '#9d174d'],
+                light: ['#1e293b', '#475569', '#64748b', '#94a3b8', '#cbd5e1'], emerald: ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
                 purple: ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe']
             };
             const coloresSeleccionados = paletasColor[currentTheme] || paletasColor.dark;
             const colorTexto = currentTheme === 'light' || currentTheme === 'pink' ? '#0f172a' : '#f1f5f9';
 
             INSTANCIA_TARTA = new Chart(ctx, {
-                type: 'doughnut',
-                data: { labels: etiquetas, datasets: [{ data: datos, backgroundColor: coloresSeleccionados, borderWidth: 0 }] },
+                type: 'doughnut', data: { labels: etiquetas, datasets: [{ data: datos, backgroundColor: coloresSeleccionados, borderWidth: 0 }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: colorTexto, font: { size: 9, family: 'monospace' } } } } }
             });
         }
@@ -701,12 +692,7 @@
             colStock.innerHTML = ''; colVendido.innerHTML = ''; let sCount = 0, vCount = 0;
 
             BASE_DATOS.forEach(v => {
-                const card = document.createElement('div'); 
-                card.id = v._id; 
-                card.setAttribute('draggable', 'true'); 
-                card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`);
-                card.setAttribute('ondragend', `this.classList.remove('dragging')`);
-                
+                const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
                 card.className = "kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none";
 
                 const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);

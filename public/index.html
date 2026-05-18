@@ -101,12 +101,12 @@
         <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500/50 p-4 rounded-3xl shadow-2xl mb-8 max-w-md mx-auto text-center transition-all">
             <div class="flex justify-between items-center mb-2">
                 <span class="text-xs font-black uppercase text-blue-400 font-mono flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> Lector QR y Barras
+                    <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> Lector Inteligente QR / Barras
                 </span>
                 <button onclick="cerrarCamara()" class="text-xs font-bold opacity-50 hover:opacity-100 bg-black/20 px-2 py-0.5 rounded-lg">Cerrar ✕</button>
             </div>
             <div id="reader" class="overflow-hidden rounded-2xl bg-black/40 w-full aspect-video border border-current/10"></div>
-            <p class="text-[10px] opacity-50 font-mono mt-2">Coloca el código QR o de barras centrado en la pantalla</p>
+            <p class="text-[10px] opacity-50 font-mono mt-2">Coloca cualquier etiqueta QR o de barras frente a la cámara</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -323,41 +323,42 @@
             document.getElementById('input-pistola').value = '';
         };
 
-        // 🛠️ FUNCIÓN DE CÁMARA CORREGIDA CON CONFIGURACIÓN DE PARSEO NATIVA
+        // 🛠️ LÓGICA DE CÁMARA CORREGIDA CON DELEGACIÓN DE FORMATOS DE MANERA INTERNA
         function toggleEscanerCamara() {
             const modulo = document.getElementById('modulo-camara');
             if (modulo.classList.contains('hidden')) {
                 modulo.classList.remove('hidden');
                 
-                // Si ya había una instancia previa, la destruimos del DOM para evitar colisiones
                 if (OBJETO_ESCANER_CAMARA) {
                     try { OBJETO_ESCANER_CAMARA.clear(); } catch(e){}
                 }
 
-                // Instanciar pasando los formatos de lectura admitidos como argumentos nativos separados
-                OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader", {
-                    formatsToSupport: [
+                // Instanciar de manera limpia sin capar argumentos en el constructor base
+                OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader");
+
+                // Configurar los formatos admitidos (QR + Barras principales) directo en el setup de ejecución del motor
+                const configuracionEscaneo = { 
+                    fps: 20, 
+                    qrbox: { width: 260, height: 140 },
+                    formatsToSupport: [ 
                         Html5QrcodeSupportedFormats.QR_CODE,
                         Html5QrcodeSupportedFormats.EAN_13,
                         Html5QrcodeSupportedFormats.EAN_8,
                         Html5QrcodeSupportedFormats.CODE_128
                     ]
-                });
+                };
 
-                // Lanzar stream de la cámara trasera de manera limpia
+                // Encender la cámara enviando las restricciones correctas
                 OBJETO_ESCANER_CAMARA.start(
                     { facingMode: "environment" }, 
-                    { 
-                        fps: 20, 
-                        qrbox: { width: 260, height: 140 }
-                    },
+                    configuracionEscaneo,
                     async (codigoMapeado) => {
                         cerrarCamara();
                         await ejecutarLogicaEscaneo(codigoMapeado);
                     },
-                    (error) => {} // Silenciar escaneos fallidos por segundo
+                    (error) => {} // Omitir escaneos vacíos en bucle
                 ).catch(err => {
-                    alert("No se pudo iniciar la cámara trasera. Comprueba los permisos de privacidad del sitio web.");
+                    alert("No se pudo acceder a la cámara trasera. Asegura los permisos.");
                     modulo.classList.add('hidden');
                 });
             } else {

@@ -14,7 +14,7 @@ app.set('trust proxy', 1);
 const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb+srv://dannymedinacoronel_db_user:ccVg5uBpXkh5C0eo@cluster0.qnh4rbz.mongodb.net/tienda_ropa?appName=Cluster0";
 
 mongoose.connect(MONGO_URI_FINAL)
-    .then(() => console.log('\x1b[32m[OK]\x1b[0m MongoDB Atlas conectado con soporte para Multi-Temas y Gráficas.'))
+    .then(() => console.log('\x1b[32m[OK]\x1b[0m MongoDB Atlas listo con soporte para Escáner de Móvil Nativo.'))
     .catch(err => console.error('Fallo crítico en Atlas:', err));
 
 const VentaRopaSchema = new mongoose.Schema({

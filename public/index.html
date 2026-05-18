@@ -8,9 +8,9 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     
     <style>
-        /* DEFINICIÓN DE LOS 5 TEMAS MODERNOS */
         body.theme-dark { background-color: #0f172a; color: #f1f5f9; }
         .theme-dark .card-bg { background-color: #1e293b; border-color: #334155; }
         .theme-dark .input-bg { background-color: #0f172a; border-color: #334155; color: #ffffff; }
@@ -62,10 +62,13 @@
             </div>
             
             <div class="flex flex-wrap items-center justify-center lg:justify-end gap-3 w-full lg:w-auto">
-                <div class="relative w-full sm:w-60">
-                    <form id="form-escaner-pistola">
-                        <input type="text" id="input-pistola" placeholder="💥 Disparar lector de barras..." class="w-full bg-black/20 border border-current/20 rounded-xl px-4 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <form id="form-escaner-pistola" class="relative flex-1 sm:w-56">
+                        <input type="text" id="input-pistola" placeholder="💥 Código o pistola..." class="w-full bg-black/20 border border-current/20 rounded-xl px-4 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40">
                     </form>
+                    <button onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md" title="Escanear con Cámara del Móvil">
+                        📷 <span class="hidden sm:inline">Móvil</span>
+                    </button>
                 </div>
 
                 <div class="flex bg-black/20 p-1 rounded-xl border border-current/10 text-[10px] font-bold uppercase tracking-wider">
@@ -80,6 +83,17 @@
                 <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
             </div>
         </header>
+
+        <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500/50 p-4 rounded-3xl shadow-2xl mb-8 max-w-md mx-auto text-center transition-all">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-xs font-black uppercase text-blue-400 font-mono flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> Visor de Cámara Activo
+                </span>
+                <button onclick="cerrarCamara()" class="text-xs font-bold opacity-50 hover:opacity-100 bg-black/20 px-2 py-0.5 rounded-lg">Cerrar ✕</button>
+            </div>
+            <div id="reader" class="overflow-hidden rounded-2xl bg-black/40 w-full aspect-video border border-current/10"></div>
+            <p class="text-[10px] opacity-50 font-mono mt-2">Apunta con la cámara trasera al código de barras de la prenda</p>
+        </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl shadow-lg text-white">
@@ -174,17 +188,16 @@
         const BACKEND_URL = '';
         let BASE_DATOS = [];
         let INSTANCIA_CHARTS = null;
+        let OBJETO_ESCANER_CAMARA = null; // Guardará la instancia de la cámara activa
 
         function setTheme(theme) {
             const body = document.getElementById('main-body');
             body.className = `theme-${theme} min-h-screen font-sans antialiased pb-24 transition-all duration-300`;
-            
             ['dark', 'pink', 'light', 'emerald', 'purple'].forEach(t => {
                 document.getElementById(`t-${t}`).className = "px-2.5 py-1 rounded-lg opacity-40 hover:opacity-100 transition-all";
             });
             const activeColors = { dark: 'bg-blue-600 text-white', pink: 'bg-pink-600 text-white', light: 'bg-slate-800 text-white', emerald: 'bg-emerald-500 text-slate-900', purple: 'bg-purple-600 text-white' };
             document.getElementById(`t-${theme}`).className = `px-2.5 py-1 rounded-lg ${activeColors[theme]} shadow-md`;
-            
             localStorage.setItem('seychelles-theme-multi', theme);
             if(BASE_DATOS.length > 0) dibujarGrafica();
         }
@@ -215,16 +228,59 @@
             }
         };
 
+        // ESCANER 1: PROCESO PISTOLA DE ESCRITORIO
         document.getElementById('form-escaner-pistola').onsubmit = async (e) => {
             e.preventDefault();
             const skuInput = document.getElementById('input-pistola').value.trim();
             if(!skuInput) return;
-            const response = await fetch(`${BACKEND_URL}/api/ventas/escanear/${skuInput}`, { method: 'PUT', credentials: 'include' });
-            if (response.ok) {
-                document.getElementById('input-pistola').value = '';
-                await reloadCoreData();
-            } else { alert("Artículo no mapeado o ya vendido."); document.getElementById('input-pistola').value = ''; }
+            await ejecutarVentaPorSku(skuInput);
+            document.getElementById('input-pistola').value = '';
         };
+
+        // 🚀 ESCANER 2: PROCESO MÓVIL (GATILLO / APERTURA DE CÁMARA)
+        function toggleEscanerCamara() {
+            const modulo = document.getElementById('modulo-camara');
+            if (modulo.classList.contains('hidden')) {
+                modulo.classList.remove('hidden');
+                
+                // Inicializamos la librería configurando que busque códigos de barras convencionales (EAN_13, EAN_8, CODE_128)
+                OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader");
+                
+                // Forzar el uso de la cámara trasera ('environment') para enfocar etiquetas
+                OBJETO_ESCANER_CAMARA.start(
+                    { facingMode: "environment" }, 
+                    { fps: 15, qrbox: { width: 250, height: 120 } },
+                    async (codigoMapeado) => {
+                        // Callback de éxito: Qué pasa cuando lee un código
+                        cerrarCamara(); // Cierra visor al cazarlo
+                        await ejecutarVentaPorSku(codigoMapeado); // Mueve a vendido
+                    },
+                    (error) => { /* Silenciar logs continuos de escaneo en vacío */ }
+                ).catch(err => alert("Error al solicitar permisos de cámara trasera. Asegure permisos HTTPS."));
+            } else {
+                cerrarCamara();
+            }
+        }
+
+        function cerrarCamara() {
+            document.getElementById('modulo-camara').classList.add('hidden');
+            if (OBJETO_ESCANER_CAMARA) {
+                OBJETO_ESCANER_CAMARA.stop().then(() => { OBJETO_ESCANER_CAMARA = null; }).catch(e => console.error(e));
+            }
+        }
+
+        // FUNCIÓN CENTRALIZADA DE ESCANEO (SE USA PARA MÓVIL Y PARA PISTOLA)
+        async function ejecutarVentaPorSku(skuParam) {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/ventas/escanear/${skuParam}`, { method: 'PUT', credentials: 'include' });
+                if (response.ok) {
+                    await reloadCoreData();
+                } else {
+                    const errData = await response.json();
+                    alert(errData.error || "Código de barras no indexado en stock disponible.");
+                }
+            } catch (err) { alert("Error de comunicación cloud."); }
+        }
 
         async function handleCredentialResponse(response) {
             const res = await fetch(`${BACKEND_URL}/api/auth/google`, {
@@ -351,13 +407,10 @@
             e.preventDefault();
             const id = document.getElementById('edit-id').value;
             const payload = {
-                sku: document.getElementById('sku').value.trim(), 
-                prenda: document.getElementById('prenda').value,
-                categoria: document.getElementById('categoria').value, 
-                talla: document.getElementById('talla').value,
+                sku: document.getElementById('sku').value.trim(), prenda: document.getElementById('prenda').value,
+                categoria: document.getElementById('categoria').value, talla: document.getElementById('talla').value,
                 cantidad: parseInt(document.getElementById('cantidad').value) || 1,
-                precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, 
-                precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0
+                precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0
             };
             
             if (id) {
@@ -370,20 +423,10 @@
 
             try {
                 const response = await fetch(url, {
-                    method: method, 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    credentials: 'include',
-                    body: JSON.stringify(payload)
+                    method: method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
                 });
-                if (response.ok) {
-                    cancelEdit(); 
-                    await reloadCoreData(); 
-                } else {
-                    alert("Fallo operativo en la nube al guardar.");
-                }
-            } catch (err) {
-                alert("Error de red.");
-            }
+                if (response.ok) { cancelEdit(); await reloadCoreData(); }
+            } catch (err) { alert("Error."); }
         };
 
         function editItem(id) {

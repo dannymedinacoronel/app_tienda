@@ -15,7 +15,6 @@
         .theme-dark .card-bg { background-color: #1e293b; border-color: #334155; }
         .theme-dark .input-bg { background-color: #0f172a; border-color: #334155; color: #ffffff; }
 
-        /* TEMA FULL ROSA (INMERSIVO - SELECTION JULIA) */
         body.theme-pink { background-color: #fce7f3; color: #831843; }
         .theme-pink .card-bg { background-color: #ffffff; border-color: #fbcfe8; color: #831843; box-shadow: 0 4px 20px rgba(219, 39, 119, 0.08); }
         .theme-pink .input-bg { background-color: #fff1f2; border-color: #f9a8d4; color: #831843; }
@@ -42,7 +41,7 @@
         .ticker-content:hover { animation-play-state: paused; }
     </style>
 </head>
-<body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-20 transition-all duration-300">
+<body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-24 transition-all duration-300">
 
     <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4 bg-slate-950">
         <div class="bg-slate-900 p-8 rounded-3xl shadow-2xl text-center border border-slate-800 max-w-sm w-full">
@@ -101,14 +100,7 @@
             </div>
         </div>
 
-        <div class="card-bg border p-6 rounded-3xl shadow-xl mb-8 transition-all">
-            <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento Comercial (Subidas y Bajas)</h3>
-            <div class="w-full h-48 md:h-60 relative">
-                <canvas id="graficaTendencias"></canvas>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-8">
             <div id="form-container" class="card-bg border p-6 rounded-3xl shadow-xl self-start lg:col-span-1 transition-all">
                 <h2 id="form-title" class="text-lg font-black uppercase mb-4">Añadir Prenda</h2>
                 <form id="form-venta" class="space-y-4">
@@ -145,6 +137,7 @@
                             <input type="number" id="precioVenta" required step="0.01" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
                         </div>
                     </div>
+                    <input type="hidden" id="cantidad" value="1">
                     <button type="submit" id="btn-submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-4 rounded-xl shadow-md uppercase tracking-widest transition-all">Registrar Artículo</button>
                     <button type="button" id="btn-cancel" onclick="cancelEdit()" class="hidden w-full text-center text-xs uppercase opacity-50 py-1 hover:underline">Cancelar Cambios</button>
                 </form>
@@ -161,6 +154,13 @@
                 </div>
             </div>
         </div>
+
+        <div class="card-bg border p-6 rounded-3xl shadow-xl transition-all">
+            <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento Comercial (Subidas y Bajas)</h3>
+            <div class="w-full h-48 md:h-60 relative">
+                <canvas id="graficaTendencias"></canvas>
+            </div>
+        </div>
     </div>
 
     <footer id="ticker-bar" class="hidden fixed bottom-0 left-0 w-full bg-black h-10 flex items-center z-50 text-[10px] font-mono border-t border-white/5 shadow-2xl">
@@ -175,24 +175,20 @@
         let BASE_DATOS = [];
         let INSTANCIA_CHARTS = null;
 
-        // MANEJO DE LOS 5 TEMAS SELECTORES
         function setTheme(theme) {
             const body = document.getElementById('main-body');
-            body.className = `theme-${theme} min-h-screen font-sans antialiased pb-20 transition-all duration-300`;
+            body.className = `theme-${theme} min-h-screen font-sans antialiased pb-24 transition-all duration-300`;
             
-            // Limpiar botones de seleccion de temas
             ['dark', 'pink', 'light', 'emerald', 'purple'].forEach(t => {
                 document.getElementById(`t-${t}`).className = "px-2.5 py-1 rounded-lg opacity-40 hover:opacity-100 transition-all";
             });
-            // Activar visualmente el seleccionado
             const activeColors = { dark: 'bg-blue-600 text-white', pink: 'bg-pink-600 text-white', light: 'bg-slate-800 text-white', emerald: 'bg-emerald-500 text-slate-900', purple: 'bg-purple-600 text-white' };
             document.getElementById(`t-${theme}`).className = `px-2.5 py-1 rounded-lg ${activeColors[theme]} shadow-md`;
             
             localStorage.setItem('seychelles-theme-multi', theme);
-            if(BASE_DATOS.length > 0) dibujarGrafica(); // Redibujar colores de la grafica
+            if(BASE_DATOS.length > 0) dibujarGrafica();
         }
 
-        // EXPORTADOR EXCEL INTEGRADO
         function exportarExcel() {
             if (BASE_DATOS.length === 0) return alert("No hay datos disponibles.");
             const formateado = BASE_DATOS.map(v => ({
@@ -206,7 +202,6 @@
             XLSX.writeFile(wb, `Seychelles_Reporte_${new Date().toISOString().split('T')[0]}.xlsx`);
         }
 
-        // CARGA COMPLETA Y PERSISTENCIA (F5)
         window.onload = async () => {
             setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
             const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' });
@@ -220,7 +215,6 @@
             }
         };
 
-        // ENTRADA ESCANER PISTOLA DE BARRAS
         document.getElementById('form-escaner-pistola').onsubmit = async (e) => {
             e.preventDefault();
             const skuInput = document.getElementById('input-pistola').value.trim();
@@ -243,24 +237,22 @@
         async function reloadCoreData() {
             const res = await fetch(`${BACKEND_URL}/api/ventas`, { credentials: 'include' });
             const data = await res.json();
-            BASE_DATOS = data.ventas;
+            BASE_DATOS = data.ventas || [];
 
-            document.getElementById('kpi-ingresos').innerText = `${data.resumen.ingresos.toFixed(2)} €`;
-            document.getElementById('kpi-beneficio').innerText = `${data.resumen.beneficio.toFixed(2)} €`;
-            document.getElementById('kpi-inversion').innerText = `${data.resumen.inversion.toFixed(2)} €`;
-            document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas;
+            document.getElementById('kpi-ingresos').innerText = `${(data.resumen.ingresos || 0).toFixed(2)} €`;
+            document.getElementById('kpi-beneficio').innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
+            document.getElementById('kpi-inversion').innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
+            document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
 
             renderKanban();
             updateTickerWallStreet();
             dibujarGrafica();
         }
 
-        // LÓGICA DE PROCESAMIENTO DE LA GRÁFICA (SUBIDAS Y BAJAS)
         function dibujarGrafica() {
             const ctx = document.getElementById('graficaTendencias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
             
-            // Agrupar ventas diarias de artículos vendidos
             const datosAgrupados = {};
             BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => {
                 datosAgrupados[v.fecha] = (datosAgrupados[v.fecha] || 0) + (v.precioVenta * v.cantidad);
@@ -269,7 +261,6 @@
             const fechas = Object.keys(datosAgrupados).sort();
             const montos = fechas.map(f => datosAgrupados[f]);
 
-            // Mapeo estético cromático para los 5 temas
             const configuracionGraficas = {
                 dark: { linea: '#3b82f6', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' },
                 pink: { linea: '#db2777', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
@@ -360,26 +351,53 @@
             e.preventDefault();
             const id = document.getElementById('edit-id').value;
             const payload = {
-                sku: document.getElementById('sku').value.trim(), prenda: document.getElementById('prenda').value,
-                categoria: document.getElementById('categoria').value, talla: document.getElementById('talla').value,
+                sku: document.getElementById('sku').value.trim(), 
+                prenda: document.getElementById('prenda').value,
+                categoria: document.getElementById('categoria').value, 
+                talla: document.getElementById('talla').value,
                 cantidad: parseInt(document.getElementById('cantidad').value) || 1,
-                precioCompra: parseFloat(document.getElementById('precioCompra').value), precioVenta: parseFloat(document.getElementById('precioVenta').value)
+                precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, 
+                precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0
             };
+            
+            if (id) {
+                const itemOriginal = BASE_DATOS.find(v => v._id === id);
+                if (itemOriginal) payload.estado = itemOriginal.estado;
+            }
+
             const url = id ? `${BACKEND_URL}/api/ventas/${id}` : `${BACKEND_URL}/api/ventas`;
-            await fetch(url, {
-                method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-                body: JSON.stringify(payload)
-            });
-            cancelEdit(); await reloadCoreData();
+            const method = id ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(url, {
+                    method: method, 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    credentials: 'include',
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) {
+                    cancelEdit(); 
+                    await reloadCoreData(); 
+                } else {
+                    alert("Fallo operativo en la nube al guardar.");
+                }
+            } catch (err) {
+                alert("Error de red.");
+            }
         };
 
         function editItem(id) {
             const item = BASE_DATOS.find(v => v._id === id);
+            if (!item) return;
             document.getElementById('edit-id').value = item._id;
             document.getElementById('sku').value = item.sku || '';
             document.getElementById('prenda').value = item.prenda;
+            document.getElementById('categoria').value = item.categoria;
+            document.getElementById('talla').value = item.talla;
             document.getElementById('precioCompra').value = item.precioCompra;
             document.getElementById('precioVenta').value = item.precioVenta;
+            document.getElementById('cantidad').value = item.cantidad || 1;
+            
             document.getElementById('form-container').classList.add('modo-edicion');
             document.getElementById('form-title').innerText = "✏️ Editar Artículo";
             document.getElementById('btn-submit').innerText = "Guardar Cambios";
@@ -398,7 +416,7 @@
         async function deleteItem(id) {
             if (confirm("¿Eliminar del registro cloud?")) {
                 await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' });
-                await loadData();
+                await reloadCoreData();
             }
         }
 

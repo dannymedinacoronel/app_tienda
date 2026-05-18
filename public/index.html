@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Seychelles">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3081/3081559.png">
+    <link rel="apple-touch-icon" href="/logo.png">
     <link rel="manifest" href="/manifest.json">
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -48,7 +48,7 @@
         .theme-purple .dropdown-bg { background-color: #312e81; border-color: #4338ca; }
         .theme-purple .dropdown-item-hover:hover { background-color: #4338ca; }
 
-        .drag-over { border: 2px dashed #3b82f6 !important; background-color: rgba(59, 130, 246, 0.1) !important; }
+        .drag-over { border: 2px dashed #3b82f6 !important; background-color: rgba(59, 130, 246, 0.15) !important; }
         .modo-edicion { border-color: #3b82f6 !important; box-shadow: 0 0 15px rgba(59, 130, 246, 0.3) !important; }
 
         @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
@@ -71,6 +71,10 @@
         
         .star-rating-btn { cursor: pointer; transition: transform 0.1s ease; }
         .star-rating-btn:hover { transform: scale(1.2); }
+        
+        /* Suaviza el movimiento al arrastrar tarjetas */
+        .kanban-card { transition: transform 0.1s ease, box-shadow 0.1s ease; backface-visibility: hidden; }
+        .dragging { opacity: 0.4 !important; transform: scale(0.98); }
     </style>
 </head>
 <body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-24 transition-all duration-300">
@@ -329,22 +333,78 @@
 
         window.allowDrop = function(e) { e.preventDefault(); const col = e.currentTarget; if(col) col.classList.add('drag-over'); };
         window.clearDrop = function(e) { const col = e.currentTarget; if(col) col.classList.remove('drag-over'); };
-        window.handleDragStart = function(e, id) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData("text/plain", id); };
+        
+        window.handleDragStart = function(e, id) { 
+            e.dataTransfer.effectAllowed = 'move'; 
+            e.dataTransfer.setData("text/plain", id); 
+            const card = document.getElementById(id);
+            if(card) setTimeout(() => card.classList.add('dragging'), 0);
+        };
 
+        // 🔥 OPTIMISTIC UI: El motor de arrastre instantáneo a 0ms
         window.handleDropColumn = async function(e, newState) {
-            e.preventDefault(); window.clearDrop(e);
-            const id = e.dataTransfer.getData("text/plain"); if(!id) return;
+            e.preventDefault(); 
+            window.clearDrop(e);
+            const id = e.dataTransfer.getData("text/plain"); 
+            if(!id) return;
+            
+            // 1. Localizar el objeto en la base de datos local del Front
+            const itemIndex = BASE_DATOS.findIndex(x => x._id === id);
+            if(itemIndex === -1) return;
+            
+            const estadoAnterior = BASE_DATOS[itemIndex].estado;
+            if (estadoAnterior === newState) return; // Evitar procesar si es el mismo estado
+
+            // 2. Mover instantáneamente en memoria local y actualizar la pantalla al milisegundo
+            BASE_DATOS[itemIndex].estado = newState;
+            
+            // 3. Renderizar la UI de inmediato de forma reactiva y local
+            recalcularKPIsLocalesOptimistas();
+            renderKanban(); 
+            dibujarGrafica(); 
+            dibujarGráficaTarta();
+            
+            // 4. Feedback por voz instantáneo
+            cantarPorVoz(newState === 'Vendido' ? `Vendido` : `A stock`);
+            procesarMultiplicadorCombo();
+
+            // 5. Lanzar la petición asíncrona en segundo plano sin bloquear al usuario
             try {
                 const r = await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: newState })
                 });
-                if(r.ok) {
-                    const item = BASE_DATOS.find(x => x._id === id);
-                    if(item) cantarPorVoz(newState === 'Vendido' ? `Vendido` : `Restaurado`);
-                    procesarMultiplicadorCombo(); await reloadCoreData();
-                }
-            } catch(err){}
+                if(!r.ok) throw new Error("Fallo en la sincronización cloud");
+                
+                // Actualizar logs en diferido
+                await reloadCoreData();
+            } catch(err) {
+                // Rollback de seguridad por si falla la red (devuelve al estado anterior)
+                BASE_DATOS[itemIndex].estado = estadoAnterior;
+                reloadCoreData();
+                alert("Error de sincronización con Render. El artículo ha vuelto a su posición original.");
+            }
         };
+
+        // 🔥 FUNCIÓN AXILIAR: Calcula los KPIs en local al instante para evitar parpadeos
+        function recalcularKPIsLocalesOptimistas() {
+            let ingresos = 0, inversion = 0, prendasVendidas = 0;
+            BASE_DATOS.forEach(v => {
+                const cant = parseInt(v.cantidad, 10) || 1;
+                const pCompra = parseFloat(v.precioCompra) || 0;
+                const pVenta = parseFloat(v.precioVenta) || 0;
+                const gEnvio = parseFloat(v.gastosEnvio) || 0;
+                inversion += ((pCompra + gEnvio) * cant);
+                if (v.estado === 'Vendido') {
+                    let comision = (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') ? (pVenta * 0.05) : 0;
+                    ingresos += ((pVenta - comision) * cant);
+                    prendasVendidas += cant;
+                }
+            });
+            document.getElementById('kpi-ingresos').innerText = `${ingresos.toFixed(2)} €`;
+            document.getElementById('kpi-beneficio').innerText = `${(ingresos - inversion).toFixed(2)} €`;
+            document.getElementById('kpi-inversion').innerText = `${inversion.toFixed(2)} €`;
+            document.getElementById('kpi-prendas').innerText = prendasVendidas;
+        }
 
         function setTheme(theme) {
             const body = document.getElementById('main-body'); if(!body) return;
@@ -501,7 +561,7 @@
         async function ejecutarEliminacionMasiva() {
             if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
             if (confirm("¿Borrar permanentemente?")) {
-                const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/DELETE`, { method: 'DELETE', credentials: 'include' }));
+                const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }));
                 await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
             }
         }
@@ -524,7 +584,7 @@
             const ip = document.getElementById('input-pistola'); if(ip) ip.value = '';
             try {
                 const r = await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: nuevoEstado }) });
-                if(r.ok) { BlacklyMulti(); await reloadCoreData(); }
+                if(r.ok) { procesarMultiplicadorCombo(); await reloadCoreData(); }
             } catch (err) {}
         }
 
@@ -569,14 +629,15 @@
         async function reloadCoreData() {
             try {
                 const res = await fetch(`${BACKEND_URL}/api/ventas`, { credentials: 'include' }); if(!res.ok) return;
-                const data = await res.json(); BASE_DATOS = data.ventas || [];
+                const data = await res.json(); 
+                BASE_DATOS = data.ventas || [];
 
                 document.getElementById('kpi-ingresos').innerText = `${(data.resumen.ingresos || 0).toFixed(2)} €`;
                 document.getElementById('kpi-beneficio').innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
                 document.getElementById('kpi-inversion').innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
                 document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
 
-                renderKanban(); updateTickerWallStreet(); dibujarGrafica(); dibujarGráficaTarta(); ejecutarVerificacionAlertasStock(); actualizarVisibilidadPanelMasivo();
+                renderKanban(); updateTickerWallStreet(); 'dark'; dibujarGrafica(); dibujarGráficaTarta(); ejecutarVerificacionAlertasStock(); actualizarVisibilidadPanelMasivo();
                 
                 const contenedorLogs = document.getElementById('contenedor-logs-auditoria');
                 if (contenedorLogs && data.logs && data.logs.length > 0) {
@@ -607,16 +668,13 @@
             });
         }
 
-        // 🔥 NUEVA FUNCIÓN: Generación pasiva del gráfico de quesito (Top Categorías Vendidas)
         function dibujarGráficaTarta() {
             const contenedor = document.getElementById('contenedor-canvas-tarta'); if(!contenedor) return;
             contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
 
             const contadorCategorias = {};
-            BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => {
-                contadorCategorias[v.categoria] = (contadorCategorias[v.categoria] || 0) + (v.cantidad || 1);
-            });
+            BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => { contadorCategorias[v.categoria] = (contadorCategorias[v.categoria] || 0) + (v.cantidad || 1); });
 
             const etiquetas = Object.keys(contadorCategorias);
             const datos = etiquetas.map(cat => contadorCategorias[cat]);
@@ -633,16 +691,8 @@
 
             INSTANCIA_TARTA = new Chart(ctx, {
                 type: 'doughnut',
-                data: {
-                    labels: etiquetas,
-                    datasets: [{ data: datos, backgroundColor: coloresSeleccionados, borderWidth: 0 }]
-                },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'right', labels: { color: colorTexto, font: { size: 9, family: 'monospace' } } }
-                    }
-                }
+                data: { labels: etiquetas, datasets: [{ data: datos, backgroundColor: coloresSeleccionados, borderWidth: 0 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: colorTexto, font: { size: 9, family: 'monospace' } } } } }
             });
         }
 
@@ -651,8 +701,13 @@
             colStock.innerHTML = ''; colVendido.innerHTML = ''; let sCount = 0, vCount = 0;
 
             BASE_DATOS.forEach(v => {
-                const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`);
-                card.className = "input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] transition-transform flex items-center gap-3 select-none";
+                const card = document.createElement('div'); 
+                card.id = v._id; 
+                card.setAttribute('draggable', 'true'); 
+                card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`);
+                card.setAttribute('ondragend', `this.classList.remove('dragging')`);
+                
+                card.className = "kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none";
 
                 const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
                 const badgeCanal = v.canalVenta && v.canalVenta !== 'Tienda Física' ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
@@ -717,12 +772,9 @@
             } catch(e){}
         }, 300);
 
-        // 🔥 REGISTRO MAESTRO DE LA PWA (Service Worker)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(reg => console.log('PWA Sincronizada con éxito.'))
-                    .catch(err => console.log('Error de Service Worker pasivo.'));
+                navigator.serviceWorker.register('/sw.js').then(reg => console.log('PWA Sincronizada.')).catch(err => {});
             });
         }
     </script>

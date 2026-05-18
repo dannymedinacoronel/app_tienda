@@ -3,333 +3,286 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control de Ventas Premium - Tienda de Ropa</title>
+    <title>Consola de Control Financiero - Seychelles Shop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <style>
-        body { background: #f4f6f9; padding-top: 30px; }
-        .hidden { display: none !important; }
-        .login-card { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); max-width: 440px; margin: 80px auto; text-align: center; border: 1px solid #eef2f5; }
-        .kpi-card { border: none; border-radius: 14px; box-shadow: 0 5px 15px rgba(0,0,0,0.02); transition: transform 0.2s; }
-        .kpi-card:hover { transform: translateY(-3px); }
-        .font-monospace-custom { font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-        .table-card { background: white; border-radius: 14px; box-shadow: 0 5px 15px rgba(0,0,0,0.02); border: none; }
-        .badge-category { font-size: 0.75rem; padding: 6px 10px; border-radius: 30px; }
-    </style>
 </head>
-<body>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased">
 
-<div class="container-fluid px-4" style="max-width: 1600px;">
-    <div id="login-screen" class="login-card">
-        <div class="display-5 mb-3">👕</div>
-        <h2 class="fw-bold mb-2">RopaApp Suite v2.0</h2>
-        <p class="text-muted mb-4">Módulo Avanzado de Inventario, Márgenes y Control de Facturación Financiera.</p>
-        <div id="g_id_onload"
-             data-client_id="463908353578-o70ia5lgf0c7fcce0utp8qqlqnc41iuo.apps.googleusercontent.com"
-             data-callback="handleCredentialResponse"
-             data-auto_prompt="false">
-        </div>
-        <div class="g_id_signin d-flex justify-content-center" data-type="standard" data-size="large" data-theme="outline"></div>
-    </div>
-
-    <div id="dashboard-screen" class="hidden">
-        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start align-items-sm-center mb-4 pb-3 border-bottom">
-            <div>
-                <h1 class="h2 fw-bold text-dark m-0">Consola de Control Financiero</h1>
-                <span class="badge bg-success-subtle text-success mt-1 border border-success-subtle font-monospace-custom" id="user-email"></span>
-            </div>
-            <button class="btn btn-outline-danger btn-sm mt-2 mt-sm-0 px-3 rounded-pill" onclick="window.location.href='/api/logout'">
-                <i class="bi bi-box-arrow-right me-1"></i> Cerrar Sesión Segura
-            </button>
-        </div>
-
-        <div class="row g-3 mb-4">
-            <div class="col-12 col-md-4">
-                <div class="card kpi-card bg-primary text-white p-2">
-                    <div class="card-body d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="text-white-50 text-uppercase small fw-bold">Facturación Bruta</h6>
-                            <h2 class="card-text fw-bold font-monospace-custom m-0" id="kpi-ingresos">0.00 €</h2>
-                        </div>
-                        <div class="fs-1 text-white-50"><i class="bi bi-currency-euro"></i></div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-12 col-md-4">
-                <div class="card kpi-card bg-success text-white p-2">
-                    <div class="card-body d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="text-white-50 text-uppercase small fw-bold">Margen de Ganancia Neto</h6>
-                            <h2 class="card-text fw-bold font-monospace-custom m-0" id="kpi-beneficio">0.00 €</h2>
-                        </div>
-                        <div class="fs-1 text-white-50"><i class="bi bi-graph-up-arrow"></i></div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-12 col-md-4">
-                <div class="card kpi-card bg-dark text-white p-2">
-                    <div class="card-body d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="text-white-50 text-uppercase small fw-bold">Volumen de Artículos</h6>
-                            <h2 class="card-text fw-bold font-monospace-custom m-0" id="kpi-prendas">0</h2>
-                        </div>
-                        <div class="fs-1 text-white-50"><i class="bi bi-box-seam"></i></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row g-4">
-            <div class="col-12 col-xl-4">
-                <div class="card p-4 shadow-sm border-0 table-card">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold m-0" id="form-title">Registrar Nueva Operación</h5>
-                        <button id="btn-cancel-edit" class="btn btn-sm btn-secondary hidden" onclick="cancelarEdicion()">Cancelar</button>
-                    </div>
-                    <form id="form-ropa">
-                        <input type="hidden" id="edit-id" value=""> 
-                        
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold text-secondary small">Modelo / Descripción del Artículo</label>
-                            <input type="text" id="ropa-prenda" class="form-control" placeholder="Ej. Chaqueta Denim Vintage" required>
-                        </div>
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label fw-semibold text-secondary small">Categoría</label>
-                                <select id="ropa-categoria" class="form-select">
-                                    <option value="Camisetas">👕 Camisetas</option>
-                                    <option value="Pantalones">👖 Pantalones</option>
-                                    <option value="Sudaderas">🧥 Sudaderas</option>
-                                    <option value="Chaquetas">🧥 Chaquetas</option>
-                                    <option value="Accesorios">🕶️ Accesorios</option>
-                                </select>
-                            </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label fw-semibold text-secondary small">Talla</label>
-                                <select id="ropa-talla" class="form-select">
-                                    <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold text-secondary small">Unidades Vendidas</label>
-                            <input type="number" id="ropa-cantidad" class="form-control" min="1" value="1" required>
-                        </div>
-                        <div class="row">
-                            <div class="col-6 mb-4">
-                                <label class="form-label fw-semibold text-secondary small">Coste Unidad (€)</label>
-                                <input type="number" id="ropa-compra" class="form-control" step="0.01" required>
-                            </div>
-                            <div class="col-6 mb-4">
-                                <label class="form-label fw-semibold text-secondary small">Precio Venta (€)</label>
-                                <input type="number" id="ropa-venta" class="form-control" step="0.01" required>
-                            </div>
-                        </div>
-                        <button type="submit" id="btn-submit-form" class="btn btn-primary w-100 fw-bold">
-                            <i class="bi bi-cloud-arrow-up-fill me-1"></i> Guardar en Base de Datos
-                        </button>
-                    </form>
-                </div>
-            </div>
-
-            <div class="col-12 col-xl-8">
-                <div class="card p-4 shadow-sm border-0 table-card">
-                    <div class="row g-2 mb-3">
-                        <div class="col-12 col-md-6">
-                            <input type="text" id="tabla-buscador" class="form-control" placeholder="Buscar prenda o categoría..." oninput="filtrarTabla()">
-                        </div>
-                        <div class="col-12 col-md-6 d-flex justify-content-md-end gap-1">
-                            <button class="btn btn-sm btn-outline-secondary active btn-filter" onclick="filtrarCategoria('Todas', this)">Todas</button>
-                            <button class="btn btn-sm btn-outline-secondary btn-filter" onclick="filtrarCategoria('Camisetas', this)">Camisetas</button>
-                            <button class="btn btn-sm btn-outline-secondary btn-filter" onclick="filtrarCategoria('Pantalones', this)">Pantalones</button>
-                        </div>
-                    </div>
-
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle m-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Fecha</th><th>Detalle Artículo</th><th>Talla</th><th>Cant.</th><th>Precios (C/V)</th><th>Margen</th><th class="text-end">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tabla-ropa-body"></tbody>
-                        </table>
-                    </div>
-                </div>
+    <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4 bg-gradient-to-b from-slate-900 to-slate-950">
+        <div class="bg-slate-800/80 backdrop-blur-md p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700 text-center">
+            <h1 class="text-3xl font-black text-white tracking-wider mb-2 uppercase">Seychelles Shop</h1>
+            <p class="text-slate-400 text-sm mb-6">Consola de Control Financiero de Artículos</p>
+            <div class="flex justify-center mb-4">
+                <div id="g_id_onload" data-client_id="463908353578-o70ia5lgf0c7fcce0utp8qqlqnc41iuo.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleCredentialResponse" data-auto_select="false"></div>
+                <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_blue" data-text="signin_with" data-size="large"></div>
             </div>
         </div>
     </div>
-</div>
 
-<script>
-    let VENTAS_CACHE = []; 
-    let CATEGORIA_SELECCIONADA = 'Todas';
-
-    // Manejo de la respuesta de autenticación de Google
-    async function handleCredentialResponse(response) {
-        try {
-            const res = await fetch('/api/auth/google', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: response.credential })
-            });
-            const data = await res.json();
-            
-            if (res.ok) {
-                // PRIMERO: Forzamos el cambio de pantalla visual para que no se quede colgado
-                document.getElementById('login-screen').classList.add('hidden');
-                document.getElementById('dashboard-screen').classList.remove('hidden');
-                document.getElementById('user-email').innerText = `🔐 Conectado: ${data.usuario}`;
-                
-                // SEGUNDO: Cargamos los datos de MongoDB de forma asíncrona segura
-                recargarTodoElSistema();
-            } else {
-                alert(data.error || "No autorizado");
-            }
-        } catch (error) {
-            console.error("Error en la petición de autenticación:", error);
-            alert("Error al conectar con el servicio de autenticación.");
-        }
-    }
-
-    async function recargarTodoElSistema() {
-        try {
-            const res = await fetch('/api/ventas');
-            if (!res.ok) return;
-            const data = await res.json();
-            
-            if (data.resumen) {
-                document.getElementById('kpi-ingresos').innerText = `${Number(data.resumen.ingresos || 0).toFixed(2)} €`;
-                document.getElementById('kpi-beneficio').innerText = `${Number(data.resumen.beneficio || 0).toFixed(2)} €`;
-                document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
-            }
-            
-            VENTAS_CACHE = data.ventas || [];
-            renderizarTabla(VENTAS_CACHE);
-        } catch (err) {
-            console.error("Error en sincronización:", err);
-            renderizarTabla([]);
-        }
-    }
-
-    function renderizarTabla(listaVentas) {
-        const tbody = document.getElementById('tabla-ropa-body');
-        tbody.innerHTML = '';
+    <div id="panel-control" class="hidden max-w-7xl mx-auto px-4 py-6">
         
-        if (!listaVentas || listaVentas.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted small">No hay registros en la base de datos cloud.</td></tr>`;
-            return;
-        }
+        <header class="flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight text-white uppercase">Consola de Control Financiero</h1>
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <p class="text-xs text-emerald-400 font-mono" id="user-display">Cargando identidad de administrador...</p>
+                </div>
+            </div>
+            <button onclick="logout()" class="text-xs bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 px-4 py-2 rounded-xl border border-slate-700 transition-all uppercase font-semibold tracking-wider">Cerrar Sesión Segura</button>
+        </header>
 
-        listaVentas.forEach(v => {
-            const margenTotal = (Number(v.precioVenta) - Number(v.precioCompra)) * Number(v.cantidad);
-            const porcentaje = v.precioVenta > 0 ? (((Number(v.precioVenta) - Number(v.precioCompra)) / Number(v.precioVenta)) * 100).toFixed(0) : 0;
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-blue-600 p-5 rounded-xl shadow-xl border border-blue-500 relative overflow-hidden">
+                <p class="text-xs font-bold text-blue-100 uppercase tracking-widest">Facturación Bruta</p>
+                <p class="text-3xl font-black text-white mt-2" id="kpi-ingresos">0.00 €</p>
+                <span class="absolute right-4 bottom-2 text-4xl font-extrabold text-blue-500/40 select-none">€</span>
+            </div>
+            <div class="bg-emerald-700 p-5 rounded-xl shadow-xl border border-emerald-600 relative overflow-hidden">
+                <p class="text-xs font-bold text-emerald-100 uppercase tracking-widest">Margen de Ganancia Neto</p>
+                <p class="text-3xl font-black text-white mt-2" id="kpi-beneficio">0.00 €</p>
+                <span class="absolute right-4 bottom-2 text-3xl font-extrabold text-emerald-600/40 select-none">📈</span>
+            </div>
+            <div class="bg-amber-600 p-5 rounded-xl shadow-xl border border-amber-500 relative overflow-hidden">
+                <p class="text-xs font-bold text-amber-100 uppercase tracking-widest">Inversión en Stock</p>
+                <p class="text-3xl font-black text-white mt-2" id="kpi-inversion">0.00 €</p>
+                <span class="absolute right-4 bottom-2 text-3xl font-extrabold text-amber-500/40 select-none">💰</span>
+            </div>
+            <div class="bg-zinc-800 p-5 rounded-xl shadow-xl border border-zinc-700 relative overflow-hidden">
+                <p class="text-xs font-bold text-zinc-400 uppercase tracking-widest">Prendas Vendidas</p>
+                <p class="text-3xl font-black text-white mt-2" id="kpi-prendas">0</p>
+                <span class="absolute right-4 bottom-2 text-3xl font-extrabold text-zinc-700/50 select-none">📦</span>
+            </div>
+        </div>
 
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td class="text-secondary small font-monospace-custom">${v.fecha || ''}</td>
-                <td>
-                    <div class="fw-bold">${v.prenda || ''}</div>
-                    <span class="badge bg-light text-dark border badge-category">${v.categoria || ''}</span>
-                </td>
-                <td><span class="badge bg-light text-dark border">${v.talla || ''}</span></td>
-                <td class="fw-bold">${v.cantidad || 0}</td>
-                <td class="small text-secondary font-monospace-custom">C: ${Number(v.precioCompra || 0).toFixed(2)}€<br><b>V: ${Number(v.precioVenta || 0).toFixed(2)}€</b></td>
-                <td><span class="text-success fw-bold">+${margenTotal.toFixed(2)} €</span><br><small class="text-muted">${porcentaje}% rent.</small></td>
-                <td class="text-end">
-                    <div class="btn-group shadow-sm">
-                        <button class="btn btn-white btn-sm text-primary border" onclick="activarModoEdicion('${v._id}', '${v.prenda}', '${v.categoria}', '${v.talla}', ${v.cantidad}, ${v.precioCompra}, ${v.precioVenta})"><i class="bi bi-pencil-square"></i></button>
-                        <button class="btn btn-white btn-sm text-danger border" onclick="eliminarRegistro('${v._id}')"><i class="bi bi-trash3-fill"></i></button>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700 shadow-2xl self-start">
+                <h2 class="text-md font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">Registrar Nueva Operación</h2>
+                <form id="form-venta" class="space-y-3">
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Modelo / Descripción del Artículo</label>
+                        <input type="text" id="prenda" required placeholder="Ej. Sudadera Crop Seychelles" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                     </div>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    }
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Categoría</label>
+                            <select id="categoria" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-white focus:outline-none">
+                                <option value="Camisetas">👕 Camisetas</option>
+                                <option value="Sudaderas">🧥 Sudaderas</option>
+                                <option value="Pantalones">👖 Pantalones</option>
+                                <option value="Vestidos">👗 Vestidos</option>
+                                <option value="Accesorios">👜 Accesorios</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Talla</label>
+                            <select id="talla" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-white focus:outline-none">
+                                <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                            </select>
+                        </div>
+                    </div>
 
-    document.getElementById('form-ropa').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const idParaEditar = document.getElementById('edit-id').value;
-        const datos = {
-            prenda: document.getElementById('ropa-prenda').value,
-            categoria: document.getElementById('ropa-categoria').value,
-            talla: document.getElementById('ropa-talla').value,
-            cantidad: document.getElementById('ropa-cantidad').value,
-            precioCompra: document.getElementById('ropa-compra').value,
-            precioVenta: document.getElementById('ropa-venta').value
-        };
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Unidades Vendidas</label>
+                        <input type="number" id="cantidad" required min="1" value="1" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
+                    </div>
 
-        if (idParaEditar) {
-            const res = await fetch(`/api/ventas/${idParaEditar}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(datos)
-            });
-            if (res.ok) {
-                cancelarEdicion();
-                recargarTodoElSistema();
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Coste Unidad (€)</label>
+                            <input type="number" id="precioCompra" required step="0.01" placeholder="0.00" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Precio Venta (€)</label>
+                            <input type="number" id="precioVenta" required step="0.01" placeholder="0.00" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-lg shadow-lg transition-all mt-4">💾 Guardar en Base de Datos</button>
+                </form>
+            </div>
+
+            <div class="lg:col-span-2 bg-slate-800/60 p-5 rounded-xl border border-slate-700 shadow-2xl flex flex-col">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4 w-full">
+                    <input type="text" id="filtro-buscar" placeholder="Buscar por modelo o prenda..." oninput="filtrarYMostrar()" class="bg-slate-900 text-xs border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none w-full sm:w-64">
+                    <div class="flex gap-2 w-full sm:w-auto">
+                        <select id="filtro-cat" onchange="filtrarYMostrar()" class="bg-slate-900 text-xs border border-slate-700 rounded-lg p-2 text-slate-300">
+                            <option value="TODAS">Todas las Categorías</option>
+                            <option value="Camisetas">Camisetas</option>
+                            <option value="Sudaderas">Sudaderas</option>
+                            <option value="Pantalones">Pantalones</option>
+                            <option value="Vestidos">Vestidos</option>
+                            <option value="Accesorios">Accesorios</option>
+                        </select>
+                        <select id="filtro-talla" onchange="filtrarYMostrar()" class="bg-slate-900 text-xs border border-slate-700 rounded-lg p-2 text-slate-300">
+                            <option value="TODAS">Tallas</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900">
+                    <table class="min-w-full divide-y divide-slate-700">
+                        <thead class="bg-slate-800">
+                            <tr>
+                                <th class="px-4 py-2.5 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Fecha</th>
+                                <th class="px-4 py-2.5 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Detalle Artículo</th>
+                                <th class="px-2 py-2.5 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Talla</th>
+                                <th class="px-2 py-2.5 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Cant.</th>
+                                <th class="px-4 py-2.5 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Margen Total</th>
+                                <th class="px-4 py-2.5 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-ventas-body" class="divide-y divide-slate-800">
+                            <tr><td colspan="6" class="px-4 py-6 text-center text-slate-500 text-xs font-mono">Esperando autenticación...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'https://app-dwm2.onrender.com';
+        let BASE_DATOS_VENTAS = []; // Array en memoria global
+
+        async function handleCredentialResponse(response) {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/auth/google`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ token: response.credential })
+                });
+                const data = await res.json();
+                if (res.ok && data.status === 'success') {
+                    document.getElementById('user-display').innerText = `Conectado: ${data.usuario}`;
+                    document.getElementById('login-box').classList.add('hidden');
+                    document.getElementById('panel-control').classList.remove('hidden');
+                    await cargarVentas();
+                } else { 
+                    alert(data.error || 'Acceso denegado de forma estricta.'); 
+                }
+            } catch (err) { 
+                alert("Error crítico de comunicación con el backend de Render."); 
             }
-        } else {
-            await fetch('/api/ventas', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(datos)
+        }
+
+        async function cargarVentas() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/ventas`, { method: 'GET', credentials: 'include' });
+                if (response.status === 401 || response.status === 403) {
+                    document.getElementById('panel-control').classList.add('hidden');
+                    document.getElementById('login-box').classList.remove('hidden');
+                    return;
+                }
+                const data = await response.json();
+                
+                // Renderizado de KPIs
+                document.getElementById('kpi-ingresos').innerText = `${data.resumen.ingresos.toFixed(2)} €`;
+                document.getElementById('kpi-beneficio').innerText = `${data.resumen.beneficio.toFixed(2)} €`;
+                document.getElementById('kpi-inversion').innerText = `${data.resumen.inversion.toFixed(2)} €`;
+                document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas;
+
+                BASE_DATOS_VENTAS = data.ventas || [];
+                filtrarYMostrar();
+            } catch (error) { 
+                console.error("Error al inyectar datos:", error); 
+            }
+        }
+
+        function filtrarYMostrar() {
+            const buscar = document.getElementById('filtro-buscar').value.toLowerCase().trim();
+            const cat = document.getElementById('filtro-cat').value;
+            const talla = document.getElementById('filtro-talla').value;
+            const tbody = document.getElementById('tabla-ventas-body');
+            tbody.innerHTML = '';
+
+            const filtradas = BASE_DATOS_VENTAS.filter(v => {
+                const coincideBuscar = v.prenda.toLowerCase().includes(buscar);
+                const coincideCat = cat === 'TODAS' || v.categoria === cat;
+                const coincideTalla = talla === 'TODAS' || v.talla === talla;
+                return coincideBuscar && coincideCat && coincideTalla;
             });
-            document.getElementById('form-ropa').reset();
-            document.getElementById('ropa-cantidad').value = "1";
-            recargarTodoElSistema();
+
+            if (filtradas.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500 text-xs font-mono">Sin registros coincidentes en la base de datos cloud.</td></tr>`;
+                return;
+            }
+
+            filtradas.forEach(v => {
+                const row = document.createElement('tr');
+                const esDevuelto = v.estado === 'Devuelto';
+                row.className = esDevuelto ? "bg-rose-950/20 text-slate-500 line-through" : "hover:bg-slate-800/40 text-slate-300";
+                
+                const beneficio = esDevuelto ? -(Number(v.precioCompra) * v.cantidad) : (Number(v.precioVenta) - Number(v.precioCompra)) * v.cantidad;
+
+                row.innerHTML = `
+                    <td class="px-4 py-3 text-xs font-mono">${v.fecha || ''}</td>
+                    <td class="px-4 py-3 text-xs font-semibold ${esDevuelto ? 'text-slate-500' : 'text-white'}">${v.prenda} <span class="text-[10px] block font-normal text-slate-400 font-mono">${v.categoria}</span></td>
+                    <td class="px-2 py-3 text-xs text-center"><span class="bg-slate-800 px-2 py-0.5 rounded text-slate-300 text-[11px] font-bold">${v.talla}</span></td>
+                    <td class="px-2 py-3 text-xs text-center font-mono font-bold">${v.cantidad}</td>
+                    <td class="px-4 py-3 text-xs text-right font-mono font-bold ${beneficio >= 0 && !esDevuelto ? 'text-emerald-400' : 'text-rose-400'}">${beneficio.toFixed(2)} €</td>
+                    <td class="px-4 py-3 text-xs text-center flex justify-center gap-1">
+                        ${esDevuelto ? '<span class="text-[9px] tracking-wider text-rose-400 bg-rose-950/60 px-2 py-1 rounded font-bold border border-rose-900/50">ANULADO</span>' : `<button onclick="ejecutarDevolucion('${v._id}')" class="text-[10px] bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-900 px-2 py-1 rounded font-bold transition-all">Devolver</button>`}
+                        <button onclick="eliminarRegistro('${v._id}')" class="text-[10px] bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white px-2 py-1 rounded transition-all">✕</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
         }
-    });
 
-    function activarModoEdicion(id, prenda, category, talla, cantidad, compra, venta) {
-        document.getElementById('edit-id').value = id;
-        document.getElementById('ropa-prenda').value = prenda;
-        document.getElementById('ropa-categoria').value = category;
-        document.getElementById('ropa-talla').value = talla;
-        document.getElementById('ropa-cantidad').value = cantidad;
-        document.getElementById('ropa-compra').value = compra;
-        document.getElementById('ropa-venta').value = venta;
-
-        document.getElementById('form-title').innerText = "📝 Editando Artículo";
-        document.getElementById('btn-submit-form').innerText = "Actualizar Cambios en la Nube";
-        document.getElementById('btn-submit-form').className = "btn btn-warning w-100 fw-bold text-dark";
-        document.getElementById('btn-cancel-edit').classList.remove('hidden');
-    }
-
-    function cancelarEdicion() {
-        document.getElementById('edit-id').value = "";
-        document.getElementById('form-ropa').reset();
-        document.getElementById('ropa-cantidad').value = "1";
-        document.getElementById('form-title').innerText = "Registrar Nueva Operación";
-        document.getElementById('btn-submit-form').innerText = "Guardar en Base de Datos";
-        document.getElementById('btn-submit-form').className = "btn btn-primary w-100 fw-bold";
-        document.getElementById('btn-cancel-edit').classList.add('hidden');
-    }
-
-    async function eliminarRegistro(id) {
-        if (confirm("⚠️ ¿Deseas eliminar este registro de MongoDB Atlas permanentemente?")) {
-            const res = await fetch(`/api/ventas/${id}`, { method: 'DELETE' });
-            if (res.ok) recargarTodoElSistema();
-        }
-    }
-
-    function filtrarTabla() {
-        const texto = document.getElementById('tabla-buscador').value.toLowerCase().trim();
-        const filtrados = VENTAS_CACHE.filter(v => {
-            const matchCat = (CATEGORIA_SELECCIONADA === 'Todas' || v.categoria === CATEGORIA_SELECCIONADA);
-            const matchTxt = (v.prenda || '').toLowerCase().includes(texto) || (v.categoria || '').toLowerCase().includes(texto);
-            return matchCat && matchTxt;
+        document.getElementById('form-venta').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                prenda: document.getElementById('prenda').value,
+                categoria: document.getElementById('categoria').value,
+                talla: document.getElementById('talla').value,
+                cantidad: parseInt(document.getElementById('cantidad').value, 10),
+                precioCompra: parseFloat(document.getElementById('precioCompra').value),
+                precioVenta: parseFloat(document.getElementById('precioVenta').value)
+            };
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/ventas`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(payload)
+                });
+                if (response.ok) { 
+                    document.getElementById('form-venta').reset(); 
+                    await cargarVentas(); 
+                } else {
+                    const errData = await response.json();
+                    alert(`Error al guardar: ${errData.error}`);
+                }
+            } catch (error) { 
+                alert("Error de red al enviar el artículo a Render."); 
+            }
         });
-        renderizarTabla(filtrados);
-    }
 
-    function filtrarCategoria(categoria, btn) {
-        CATEGORIA_SELECCIONADA = categoria;
-        document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        filtrarTabla();
-    }
-</script>
+        async function ejecutarDevolucion(id) {
+            if (!confirm('¿Marcar este artículo como devolución? El beneficio neto se deducirá del balance.')) return;
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/ventas/${id}/devolucion`, { method: 'PUT', credentials: 'include' });
+                if (res.ok) await cargarVentas();
+            } catch (e) { console.error(e); }
+        }
+
+        async function eliminarRegistro(id) {
+            if (!confirm('¿Eliminar permanentemente de MongoDB Atlas?')) return;
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' });
+                if (res.ok) await cargarVentas();
+            } catch (e) { console.error(e); }
+        }
+
+        async function logout() {
+            try { await fetch(`${BACKEND_URL}/api/logout`, { credentials: 'include' }); } catch (e) {}
+            window.location.reload();
+        }
+    </script>
 </body>
 </html>

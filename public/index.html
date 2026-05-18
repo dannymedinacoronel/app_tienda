@@ -6,6 +6,9 @@
     <title>Consola Financiera - Seychelles Shop</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        .drag-over { border: 2px dashed #3b82f6 !important; background-color: rgba(59, 130, 246, 0.1) !important; }
+    </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased">
 
@@ -33,31 +36,31 @@
         </header>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="bg-blue-600 p-5 rounded-xl shadow-xl border border-blue-500 relative overflow-hidden">
+            <div class="bg-blue-600 p-5 rounded-xl shadow-xl border border-blue-500">
                 <p class="text-xs font-bold text-blue-100 uppercase tracking-widest">Facturación Bruta</p>
                 <p class="text-3xl font-black text-white mt-2" id="kpi-ingresos">0.00 €</p>
             </div>
-            <div class="bg-emerald-700 p-5 rounded-xl shadow-xl border border-emerald-600 relative overflow-hidden">
-                <p class="text-xs font-bold text-emerald-100 uppercase tracking-widest">Margen de Ganancia Neto</p>
+            <div class="bg-emerald-700 p-5 rounded-xl shadow-xl border border-emerald-600">
+                <p class="text-xs font-bold text-emerald-100 uppercase tracking-widest">Margen Neto Teórico</p>
                 <p class="text-3xl font-black text-white mt-2" id="kpi-beneficio">0.00 €</p>
             </div>
-            <div class="bg-amber-600 p-5 rounded-xl shadow-xl border border-amber-500 relative overflow-hidden">
-                <p class="text-xs font-bold text-amber-100 uppercase tracking-widest">Inversión en Stock</p>
+            <div class="bg-amber-600 p-5 rounded-xl shadow-xl border border-amber-500">
+                <p class="text-xs font-bold text-amber-100 uppercase tracking-widest">Inversión Total Realizada</p>
                 <p class="text-3xl font-black text-white mt-2" id="kpi-inversion">0.00 €</p>
             </div>
-            <div class="bg-zinc-800 p-5 rounded-xl shadow-xl border border-zinc-700 relative overflow-hidden">
-                <p class="text-xs font-bold text-zinc-400 uppercase tracking-widest">Prendas Vendidas</p>
+            <div class="bg-zinc-800 p-5 rounded-xl shadow-xl border border-zinc-700">
+                <p class="text-xs font-bold text-zinc-400 uppercase tracking-widest">Unidades Vendidas</p>
                 <p class="text-3xl font-black text-white mt-2" id="kpi-prendas">0</p>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700 shadow-2xl self-start">
-                <h2 class="text-md font-bold text-white uppercase tracking-wider mb-4">Registrar Nueva Operación</h2>
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700 shadow-2xl self-start lg:col-span-1">
+                <h2 class="text-md font-bold text-white uppercase tracking-wider mb-4">Añadir Prenda</h2>
                 <form id="form-venta" class="space-y-3">
                     <div>
-                        <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Modelo / Descripción del Artículo</label>
-                        <input type="text" id="prenda" required placeholder="Ej. Sudadera Crop Seychelles" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                        <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Nombre / Descripción</label>
+                        <input type="text" id="prenda" required placeholder="Ej. Vestido Satinado" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
@@ -78,51 +81,50 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Unidades Vendidas</label>
+                        <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Unidades</label>
                         <input type="number" id="cantidad" required min="1" value="1" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Coste Unidad (€)</label>
+                            <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Coste (€)</label>
                             <input type="number" id="precioCompra" required step="0.01" placeholder="0.00" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
                         </div>
                         <div>
-                            <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Precio Venta (€)</label>
+                            <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Venta (€)</label>
                             <input type="number" id="precioVenta" required step="0.01" placeholder="0.00" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
                         </div>
                     </div>
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-lg shadow-lg mt-4">💾 Guardar en Base de Datos</button>
+                    <div>
+                        <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Estado Inicial</label>
+                        <select id="estado-inicial" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-white focus:outline-none">
+                            <option value="No Vendido">📦 En Stock (Disponible)</option>
+                            <option value="Vendido">💰 Ya Vendido</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-lg shadow-lg mt-4">💾 Registrar Stock</button>
                 </form>
             </div>
 
-            <div class="lg:col-span-2 bg-slate-800/60 p-5 rounded-xl border border-slate-700 shadow-2xl flex flex-col">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4 w-full">
-                    <input type="text" id="filtro-buscar" placeholder="Buscar por modelo..." oninput="filtrarYMostrar()" class="bg-slate-900 text-xs border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none w-full sm:w-64">
-                    <div class="flex gap-2 w-full sm:w-auto">
-                        <select id="filtro-cat" onchange="filtrarYMostrar()" class="bg-slate-900 text-xs border border-slate-700 rounded-lg p-2 text-slate-300">
-                            <option value="TODAS">Categorías</option>
-                            <option value="Camisetas">Camisetas</option><option value="Sudaderas">Sudaderas</option><option value="Pantalones">Pantalones</option><option value="Vestidos">Vestidos</option><option value="Accesorios">Accesorios</option>
-                        </select>
-                        <select id="filtro-talla" onchange="filtrarYMostrar()" class="bg-slate-900 text-xs border border-slate-700 rounded-lg p-2 text-slate-300">
-                            <option value="TODAS">Tallas</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
-                        </select>
+            <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 flex flex-col min-h-[500px]">
+                    <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-700">
+                        <h3 class="text-sm font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">📦 DISPONIBLES EN STOCK</h3>
+                        <span id="badge-stock" class="bg-amber-500/10 text-amber-400 text-xs font-bold px-2.5 py-0.5 rounded-full border border-amber-500/20">0</span>
                     </div>
+                    <div id="col-no-vendido" class="space-y-3 flex-1 transition-all p-1 rounded-lg" ondragover="permitirSoltar(event)" ondragleave="quitarMarcaDrop(event)" ondrop="soltarTarjeta(event, 'No Vendido')">
+                        </div>
                 </div>
-                <div class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900">
-                    <table class="min-w-full divide-y divide-slate-700">
-                        <thead class="bg-slate-800">
-                            <tr>
-                                <th class="px-4 py-2.5 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Fecha</th>
-                                <th class="px-4 py-2.5 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Detalle Artículo</th>
-                                <th class="px-2 py-2.5 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Talla</th>
-                                <th class="px-2 py-2.5 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Cant.</th>
-                                <th class="px-4 py-2.5 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Margen</th>
-                                <th class="px-4 py-2.5 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabla-ventas-body" class="divide-y divide-slate-800"></tbody>
-                    </table>
+
+                <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 flex flex-col min-h-[500px]">
+                    <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-700">
+                        <h3 class="text-sm font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">💰 ARTÍCULOS VENDIDOS</h3>
+                        <span id="badge-vendido" class="bg-emerald-500/10 text-emerald-400 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/20">0</span>
+                    </div>
+                    <div id="col-vendido" class="space-y-3 flex-1 transition-all p-1 rounded-lg" ondragover="permitirSoltar(event)" ondragleave="quitarMarcaDrop(event)" ondrop="soltarTarjeta(event, 'Vendido')">
+                        </div>
                 </div>
+
             </div>
         </div>
     </div>
@@ -152,15 +154,9 @@
         async function cargarVentas() {
             try {
                 const response = await fetch(`${BACKEND_URL}/api/ventas`, { method: 'GET', credentials: 'include' });
-                if (!response.ok) {
-                    resetearPanelesACero();
-                    return;
-                }
+                if (!response.ok) return;
                 const data = await response.json();
-                if (!data || !data.resumen) {
-                    resetearPanelesACero();
-                    return;
-                }
+                if (!data || !data.resumen) return;
 
                 document.getElementById('kpi-ingresos').innerText = `${(data.resumen.ingresos || 0).toFixed(2)} €`;
                 document.getElementById('kpi-beneficio').innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
@@ -168,61 +164,96 @@
                 document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
 
                 BASE_DATOS_VENTAS = data.ventas || [];
-                filtrarYMostrar();
-            } catch (error) { 
-                resetearPanelesACero();
-            }
+                renderizarTablero();
+            } catch (error) { console.error(error); }
         }
 
-        function resetearPanelesACero() {
-            document.getElementById('kpi-ingresos').innerText = "0.00 €";
-            document.getElementById('kpi-beneficio').innerText = "0.00 €";
-            document.getElementById('kpi-inversion').innerText = "0.00 €";
-            document.getElementById('kpi-prendas').innerText = "0";
-            document.getElementById('tabla-ventas-body').innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500 text-xs font-mono">Sincronizando con la base de datos cloud...</td></tr>`;
-        }
+        function renderizarTablero() {
+            const colNoVendido = document.getElementById('col-no-vendido');
+            const colVendido = document.getElementById('col-vendido');
+            
+            colNoVendido.innerHTML = '';
+            colVendido.innerHTML = '';
 
-        function filtrarYMostrar() {
-            const buscar = document.getElementById('filtro-buscar').value.toLowerCase().trim();
-            const cat = document.getElementById('filtro-cat').value;
-            const talla = document.getElementById('filtro-talla').value;
-            const tbody = document.getElementById('tabla-ventas-body');
-            tbody.innerHTML = '';
+            let countStock = 0;
+            let countVendido = 0;
 
-            const filtradas = BASE_DATOS_VENTAS.filter(v => {
-                if (!v || !v.prenda) return false;
-                const coincideBuscar = v.prenda.toLowerCase().includes(buscar);
-                const coincideCat = cat === 'TODAS' || v.categoria === cat;
-                const coincideTalla = talla === 'TODAS' || v.talla === talla;
-                return coincideBuscar && coincideCat && coincideTalla;
-            });
+            BASE_DATOS_VENTAS.forEach(v => {
+                const tarjeta = document.createElement('div');
+                tarjeta.id = v._id;
+                tarjeta.draggable = true;
+                tarjeta.ondragstart = arrastrarTarjeta;
+                
+                tarjeta.className = "bg-slate-900 p-4 rounded-xl border border-slate-700/70 shadow-md cursor-grab active:cursor-grabbing hover:border-slate-500 transition-all flex flex-col justify-between gap-3";
 
-            if (filtradas.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500 text-xs font-mono">Sin registros en la base de datos cloud.</td></tr>`;
-                return;
-            }
+                const beneficioTarjeta = (Number(v.precioVenta) - Number(v.precioCompra)) * v.cantidad;
 
-            filtradas.forEach(v => {
-                const row = document.createElement('tr');
-                const esDevuelto = v.estado === 'Devuelto';
-                row.className = esDevuelto ? "bg-rose-950/20 text-slate-500 line-through" : "hover:bg-slate-800/40 text-slate-300";
-                const beneficio = esDevuelto ? -(Number(v.precioCompra) * v.cantidad) : (Number(v.precioVenta) - Number(v.precioCompra)) * v.cantidad;
-
-                row.innerHTML = `
-                    <td class="px-4 py-3 text-xs font-mono">${v.fecha || ''}</td>
-                    <td class="px-4 py-3 text-xs font-semibold ${esDevuelto ? 'text-slate-500' : 'text-white'}">${v.prenda} <span class="text-[10px] block font-normal text-slate-400 font-mono">${v.categoria}</span></td>
-                    <td class="px-2 py-3 text-xs text-center"><span class="bg-slate-800 px-2 py-0.5 rounded text-slate-300 text-[11px] font-bold">${v.talla}</span></td>
-                    <td class="px-2 py-3 text-xs text-center font-mono font-bold">${v.cantidad}</td>
-                    <td class="px-4 py-3 text-xs text-right font-mono font-bold ${beneficio >= 0 && !esDevuelto ? 'text-emerald-400' : 'text-rose-400'}">${beneficio.toFixed(2)} €</td>
-                    <td class="px-4 py-3 text-xs text-center flex justify-center gap-1">
-                        ${esDevuelto ? '<span class="text-[9px] tracking-wider text-rose-400 bg-rose-950/60 px-2 py-1 rounded font-bold border border-rose-900/50">ANULADO</span>' : `<button onclick="ejecutarDevolucion('${v._id}')" class="text-[10px] bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-slate-900 px-2 py-1 rounded font-bold transition-all">Devolver</button>`}
-                        <button onclick="eliminarRegistro('${v._id}')" class="text-[10px] bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white px-2 py-1 rounded transition-all">✕</button>
-                    </td>
+                tarjeta.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-start gap-2">
+                            <h4 class="font-bold text-white text-sm tracking-wide uppercase">${v.prenda}</h4>
+                            <span class="bg-slate-800 text-[10px] font-bold text-slate-300 px-2 py-0.5 rounded">${v.talla}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 font-mono mt-1">${v.categoria} • ${v.cantidad} ud.</p>
+                    </div>
+                    <div class="flex justify-between items-center pt-2 border-t border-slate-800/60 mt-1">
+                        <div class="text-xs font-mono">
+                            <span class="text-slate-500 block text-[9px] uppercase font-bold">Ganancia</span>
+                            <span class="${beneficioTarjeta >= 0 ? 'text-emerald-400' : 'text-rose-400'} font-bold">${beneficioTarjeta.toFixed(2)} €</span>
+                        </div>
+                        <button onclick="eliminarRegistro('${v._id}')" class="text-slate-500 hover:text-rose-400 p-1 rounded transition-all text-sm">✕</button>
+                    </div>
                 `;
-                tbody.appendChild(row);
+
+                if (v.estado === 'Vendido') {
+                    colVendido.appendChild(tarjeta);
+                    countVendido += v.cantidad;
+                } else {
+                    colNoVendido.appendChild(tarjeta);
+                    countStock += v.cantidad;
+                }
             });
+
+            document.getElementById('badge-stock').innerText = `${countStock} uds`;
+            document.getElementById('badge-sold-out' || 'badge-vendido').innerText = `${countVendido} uds`;
         }
 
+        // --- LÓGICA DRAG AND DROP NATIVA ---
+        function arrastrarTarjeta(e) {
+            e.dataTransfer.setData("text/plain", e.target.id);
+        }
+
+        function permitirSoltar(e) {
+            e.preventDefault();
+            e.currentTarget.classList.add('drag-over');
+        }
+
+        function quitarMarcaDrop(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+
+        async function soltarTarjeta(e, nuevoEstado) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+            
+            const idTarjeta = e.dataTransfer.getData("text/plain");
+            if (!idTarjeta) return;
+
+            // Enviar cambio inmediato a MongoDB Atlas
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/ventas/${idTarjeta}/estado`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ estado: nuevoEstado })
+                });
+                if (response.ok) {
+                    await cargarVentas(); // Recarga limpia de KPIs y posiciones
+                } else { alert("Fallo al actualizar el estado de la prenda."); }
+            } catch (err) { alert("Error de conexión."); }
+        }
+
+        // --- ENVIAR NUEVA PRENDA ---
         document.getElementById('form-venta').addEventListener('submit', async (e) => {
             e.preventDefault();
             const payload = {
@@ -231,7 +262,8 @@
                 talla: document.getElementById('talla').value,
                 cantidad: parseInt(document.getElementById('cantidad').value, 10),
                 precioCompra: parseFloat(document.getElementById('precioCompra').value),
-                precioVenta: parseFloat(document.getElementById('precioVenta').value)
+                precioVenta: parseFloat(document.getElementById('precioVenta').value),
+                estado: document.getElementById('estado-inicial').value
             };
             try {
                 const response = await fetch(`${BACKEND_URL}/api/ventas`, {
@@ -243,20 +275,12 @@
                 if (response.ok) { 
                     document.getElementById('form-venta').reset(); 
                     await cargarVentas(); 
-                } else { alert("Fallo al guardar. Compruebe los permisos."); }
+                }
             } catch (error) { alert("Error de red."); }
         });
 
-        async function ejecutarDevolucion(id) {
-            if (!confirm('¿Procesar devolución del artículo?')) return;
-            try {
-                const res = await fetch(`${BACKEND_URL}/api/ventas/${id}/devolucion`, { method: 'PUT', credentials: 'include' });
-                if (res.ok) await cargarVentas();
-            } catch (e) { console.error(e); }
-        }
-
         async function eliminarRegistro(id) {
-            if (!confirm('¿Eliminar permanentemente de MongoDB Atlas?')) return;
+            if (!confirm('¿Eliminar de MongoDB?')) return;
             try {
                 const res = await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' });
                 if (res.ok) await cargarVentas();

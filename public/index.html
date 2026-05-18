@@ -27,7 +27,7 @@
                 <h1 class="text-2xl font-bold tracking-tight text-white uppercase">Consola de Control Financiero</h1>
                 <div class="flex items-center gap-2 mt-1">
                     <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <p class="text-xs text-emerald-400 font-mono" id="user-display">Cargando identidad de administrador...</p>
+                    <p class="text-xs text-emerald-400 font-mono" id="user-display">Autenticado</p>
                 </div>
             </div>
             <button onclick="logout()" class="text-xs bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 px-4 py-2 rounded-xl border border-slate-700 transition-all uppercase font-semibold tracking-wider">Cerrar Sesión Segura</button>
@@ -107,15 +107,11 @@
 
             <div class="lg:col-span-2 bg-slate-800/60 p-5 rounded-xl border border-slate-700 shadow-2xl flex flex-col">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4 w-full">
-                    <input type="text" id="filtro-buscar" placeholder="Buscar por modelo o prenda..." oninput="filtrarYMostrar()" class="bg-slate-900 text-xs border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none w-full sm:w-64">
+                    <input type="text" id="filtro-buscar" placeholder="Buscar por modelo..." oninput="filtrarYMostrar()" class="bg-slate-900 text-xs border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none w-full sm:w-64">
                     <div class="flex gap-2 w-full sm:w-auto">
                         <select id="filtro-cat" onchange="filtrarYMostrar()" class="bg-slate-900 text-xs border border-slate-700 rounded-lg p-2 text-slate-300">
-                            <option value="TODAS">Todas las Categorías</option>
-                            <option value="Camisetas">Camisetas</option>
-                            <option value="Sudaderas">Sudaderas</option>
-                            <option value="Pantalones">Pantalones</option>
-                            <option value="Vestidos">Vestidos</option>
-                            <option value="Accesorios">Accesorios</option>
+                            <option value="TODAS">Categorías</option>
+                            <option value="Camisetas">Camisetas</option><option value="Sudaderas">Sudaderas</option><option value="Pantalones">Pantalones</option><option value="Vestidos">Vestidos</option><option value="Accesorios">Accesorios</option>
                         </select>
                         <select id="filtro-talla" onchange="filtrarYMostrar()" class="bg-slate-900 text-xs border border-slate-700 rounded-lg p-2 text-slate-300">
                             <option value="TODAS">Tallas</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
@@ -131,13 +127,11 @@
                                 <th class="px-4 py-2.5 text-left text-xs font-bold text-slate-400 uppercase tracking-wider">Detalle Artículo</th>
                                 <th class="px-2 py-2.5 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Talla</th>
                                 <th class="px-2 py-2.5 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Cant.</th>
-                                <th class="px-4 py-2.5 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Margen Total</th>
+                                <th class="px-4 py-2.5 text-right text-xs font-bold text-slate-400 uppercase tracking-wider">Margen</th>
                                 <th class="px-4 py-2.5 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">Acciones</th>
                             </tr>
                         </thead>
-                        <tbody id="tabla-ventas-body" class="divide-y divide-slate-800">
-                            <tr><td colspan="6" class="px-4 py-6 text-center text-slate-500 text-xs font-mono">Esperando autenticación...</td></tr>
-                        </tbody>
+                        <tbody id="tabla-ventas-body" class="divide-y divide-slate-800"></tbody>
                     </table>
                 </div>
             </div>
@@ -146,7 +140,7 @@
 
     <script>
         const BACKEND_URL = 'https://app-dwm2.onrender.com';
-        let BASE_DATOS_VENTAS = []; // Array en memoria global
+        let BASE_DATOS_VENTAS = []; 
 
         async function handleCredentialResponse(response) {
             try {
@@ -162,25 +156,16 @@
                     document.getElementById('login-box').classList.add('hidden');
                     document.getElementById('panel-control').classList.remove('hidden');
                     await cargarVentas();
-                } else { 
-                    alert(data.error || 'Acceso denegado de forma estricta.'); 
-                }
-            } catch (err) { 
-                alert("Error crítico de comunicación con el backend de Render."); 
-            }
+                } else { alert(data.error || 'No autorizado.'); }
+            } catch (err) { alert("Error de comunicación con Render."); }
         }
 
         async function cargarVentas() {
             try {
                 const response = await fetch(`${BACKEND_URL}/api/ventas`, { method: 'GET', credentials: 'include' });
-                if (response.status === 401 || response.status === 403) {
-                    document.getElementById('panel-control').classList.add('hidden');
-                    document.getElementById('login-box').classList.remove('hidden');
-                    return;
-                }
+                if (response.status === 401 || response.status === 403) return;
                 const data = await response.json();
                 
-                // Renderizado de KPIs
                 document.getElementById('kpi-ingresos').innerText = `${data.resumen.ingresos.toFixed(2)} €`;
                 document.getElementById('kpi-beneficio').innerText = `${data.resumen.beneficio.toFixed(2)} €`;
                 document.getElementById('kpi-inversion').innerText = `${data.resumen.inversion.toFixed(2)} €`;
@@ -188,9 +173,7 @@
 
                 BASE_DATOS_VENTAS = data.ventas || [];
                 filtrarYMostrar();
-            } catch (error) { 
-                console.error("Error al inyectar datos:", error); 
-            }
+            } catch (error) { console.error(error); }
         }
 
         function filtrarYMostrar() {
@@ -208,7 +191,7 @@
             });
 
             if (filtradas.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500 text-xs font-mono">Sin registros coincidentes en la base de datos cloud.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500 text-xs font-mono">Sin registros en la base de datos cloud.</td></tr>`;
                 return;
             }
 
@@ -254,17 +237,12 @@
                 if (response.ok) { 
                     document.getElementById('form-venta').reset(); 
                     await cargarVentas(); 
-                } else {
-                    const errData = await response.json();
-                    alert(`Error al guardar: ${errData.error}`);
                 }
-            } catch (error) { 
-                alert("Error de red al enviar el artículo a Render."); 
-            }
+            } catch (error) { alert("Error al subir artículo."); }
         });
 
         async function ejecutarDevolucion(id) {
-            if (!confirm('¿Marcar este artículo como devolución? El beneficio neto se deducirá del balance.')) return;
+            if (!confirm('¿Procesar devolución del artículo?')) return;
             try {
                 const res = await fetch(`${BACKEND_URL}/api/ventas/${id}/devolucion`, { method: 'PUT', credentials: 'include' });
                 if (res.ok) await cargarVentas();

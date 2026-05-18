@@ -66,6 +66,9 @@
         #reader__scan_region { display: flex; justify-content: center; align-items: center; }
         #reader__scan_region video { object-fit: cover !important; width: 100% !important; height: 100% !important; border-radius: 1.5rem; }
         #reader button, #reader img { display: none !important; }
+        
+        .star-rating-btn { cursor: pointer; transition: transform 0.1s ease; }
+        .star-rating-btn:hover { transform: scale(1.2); }
     </style>
 </head>
 <body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-24 transition-all duration-300">
@@ -135,19 +138,19 @@
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="kpi-container-grid">
-            <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl shadow-lg text-white transition-all duration-300">
+            <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl shadow-lg text-white">
                 <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Facturación Bruta</p>
                 <p class="text-3xl font-black mt-1" id="kpi-ingresos">0.00 €</p>
             </div>
-            <div class="bg-gradient-to-br from-pink-600 to-pink-700 p-6 rounded-2xl shadow-lg text-white transition-all duration-300">
+            <div class="bg-gradient-to-br from-pink-600 to-pink-700 p-6 rounded-2xl shadow-lg text-white">
                 <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Ganancia Neta Limpia</p>
                 <p class="text-3xl font-black mt-1" id="kpi-beneficio">0.00 €</p>
             </div>
-            <div class="bg-gradient-to-br from-amber-600 to-amber-700 p-6 rounded-2xl shadow-lg text-white transition-all duration-300">
+            <div class="bg-gradient-to-br from-amber-600 to-amber-700 p-6 rounded-2xl shadow-lg text-white">
                 <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Inversión Stock + Envío</p>
                 <p class="text-3xl font-black mt-1" id="kpi-inversion">0.00 €</p>
             </div>
-            <div class="bg-gradient-to-br from-purple-600 to-purple-700 p-6 rounded-2xl shadow-lg text-white transition-all duration-300">
+            <div class="bg-gradient-to-br from-purple-600 to-purple-700 p-6 rounded-2xl shadow-lg text-white">
                 <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Prendas Vendidas</p>
                 <p class="text-3xl font-black mt-1" id="kpi-prendas">0</p>
             </div>
@@ -209,6 +212,18 @@
                             </select>
                         </div>
                     </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Valoración de la Prenda</label>
+                        <input type="hidden" id="rating" value="0">
+                        <div class="flex items-center gap-1.5 bg-black/10 p-2.5 rounded-xl border border-current/10 justify-center text-xl">
+                            <span onclick="setFormRating(1)" id="star-1" class="star-rating-btn text-slate-500">☆</span>
+                            <span onclick="setFormRating(2)" id="star-2" class="star-rating-btn text-slate-500">☆</span>
+                            <span onclick="setFormRating(3)" id="star-3" class="star-rating-btn text-slate-500">☆</span>
+                            <span onclick="setFormRating(4)" id="star-4" class="star-rating-btn text-slate-500">☆</span>
+                            <span onclick="setFormRating(5)" id="star-5" class="star-rating-btn text-slate-500">☆</span>
+                        </div>
+                    </div>
                     
                     <input type="hidden" id="cantidad" value="1">
                     <button type="submit" id="btn-submit" class="w-full bg-blue-600 text-white font-bold text-xs py-4 rounded-xl shadow-md uppercase tracking-widest transition-all">Registrar Artículo</button>
@@ -222,7 +237,7 @@
                         <h3 class="text-xs font-black text-amber-500 uppercase tracking-wider">📦 STOCK DISPONIBLE <span id="badge-stock" class="opacity-60 font-mono">0</span></h3>
                         <button onclick="alternarSeleccionColumna('No Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2 py-1 rounded-lg uppercase font-bold opacity-70">Marcar Todo</button>
                     </div>
-                    <div id="col-no-vendido" class="flex-1 space-y-3 p-1" ondragover="allowDrop(event)" ondrop="drop(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
+                    <div id="col-no-vendido" class="flex-1 space-y-3 p-1 min-h-[400px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
                 </div>
                 
                 <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px] transition-all">
@@ -230,7 +245,7 @@
                         <h3 class="text-xs font-black text-emerald-500 uppercase tracking-wider">💰 ARTÍCULOS VENDIDOS <span id="badge-vendido" class="opacity-60 font-mono">0</span></h3>
                         <button onclick="alternarSeleccionColumna('Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2 py-1 rounded-lg uppercase font-bold opacity-70">Marcar Todo</button>
                     </div>
-                    <div id="col-vendido" class="flex-1 space-y-3 p-1" ondragover="allowDrop(event)" ondrop="drop(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
+                    <div id="col-vendido" class="flex-1 space-y-3 p-1 min-h-[400px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
                 </div>
             </div>
         </div>
@@ -254,10 +269,11 @@
         </div>
     </div>
 
-    <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-2xl w-[92%] transition-all">
+    <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-3xl w-[92%] transition-all">
         <div class="text-xs font-bold font-mono">💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> MARCADOS</div>
         <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
         <div class="flex flex-wrap items-center gap-2">
+            <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">👯 Duplicar Lote</button>
             <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">💵 Vender Lote</button>
             <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">📦 Mover a Stock</button>
             <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
@@ -275,11 +291,7 @@
         <div class="bg-white text-slate-900 p-6 rounded-2xl shadow-2xl border max-w-xs w-full text-center flex flex-col items-center">
             <h4 class="text-slate-500 uppercase font-mono text-[10px] tracking-widest mb-1">Seychelles Shop</h4>
             <h3 id="print-prenda" class="font-black text-sm uppercase tracking-tight mb-4">Modelo Prenda</h3>
-            
-            <div id="canvas-generador-qr" class="p-2 border rounded-xl bg-white mb-3 text-[11px] font-mono select-all bg-slate-100 break-all p-3">
-                ID DE ESCANEO ACTIVO
-            </div>
-            
+            <div id="canvas-generador-qr" class="p-2 border rounded-xl bg-white mb-3 text-[11px] font-mono select-all bg-slate-100 break-all p-3">ID DE ESCANEO ACTIVO</div>
             <p id="print-sku" class="font-mono text-xs text-slate-400 mb-1">SKU-CODE</p>
             <p id="print-precio" class="text-xl font-black text-slate-900 font-mono mb-6">0.00 €</p>
             <div class="flex gap-2 w-full">
@@ -305,6 +317,43 @@
         let LECTOR_BLOQUEADO_POR_CAPTURA = false;
         let ITEMS_SELECCIONADOS_MASIVOS = [];
 
+        // 🛠️ EXPOSICIÓN MAESTRA DE FUNCIONES DRAG & DROP AL CONTEXTO WINDOWS (SYSADMIN STYLE)
+        window.allowDrop = function(e) {
+            e.preventDefault();
+            const col = e.currentTarget;
+            if(col) col.classList.add('drag-over');
+        };
+
+        window.clearDrop = function(e) {
+            const col = e.currentTarget;
+            if(col) col.classList.remove('drag-over');
+        };
+
+        window.handleDragStart = function(e, id) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData("text/plain", id);
+        };
+
+        window.handleDropColumn = async function(e, newState) {
+            e.preventDefault();
+            window.clearDrop(e);
+            const id = e.dataTransfer.getData("text/plain");
+            if(!id) return;
+            
+            try {
+                const r = await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                    body: JSON.stringify({ estado: newState })
+                });
+                if(r.ok) {
+                    const item = BASE_DATOS.find(x => x._id === id);
+                    if(item) cantarPorVoz(newState === 'Vendido' ? `Vendido, ${item.prenda}` : `Regresado a stock`);
+                    procesarMultiplicadorCombo();
+                    await reloadCoreData();
+                }
+            } catch(err){ console.error("Error al mover tarjeta por lote:", err); }
+        };
+
         function setTheme(theme) {
             const body = document.getElementById('main-body');
             if(!body) return;
@@ -321,47 +370,60 @@
         }
 
         function exportarExcel() {
-            if (BASE_DATOS.length === 0) return alert("No hay datos disponibles.");
+            if (BASE_DATOS.length === 0) return alert("No hay datos.");
             const formateado = BASE_DATOS.map(v => ({
-                Fecha: v.fecha, 'SKU / QR': v.sku || 'N/A', Artículo: v.prenda, Categoría: v.categoria, Talla: v.talla,
+                Fecha: v.fecha, SKU: v.sku || 'N/A', Artículo: v.prenda, Categoría: v.categoria, Talla: v.talla,
                 'Coste (€)': parseFloat(v.precioCompra || 0).toFixed(2), 'Venta (€)': parseFloat(v.precioVenta || 0).toFixed(2), 
-                'Envío Logístico (€)': parseFloat(v.gastosEnvio || 0).toFixed(2), 'Canal Comercial': v.canalVenta || 'Tienda Física', Estado: v.estado
+                'Envío (€)': parseFloat(v.gastosEnvio || 0).toFixed(2), Canal: v.canalVenta || 'Tienda Física', Rating: v.rating || 0, Estado: v.estado
             }));
             const ws = XLSX.utils.json_to_sheet(formateado);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Inventario Core");
-            XLSX.writeFile(wb, `Seychelles_Reporte_${new Date().toISOString().split('T')[0]}.xlsx`);
+            XLSX.utils.book_append_sheet(wb, ws, "Inventario");
+            XLSX.writeFile(wb, `Seychelles_Core_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+        function setFormRating(estrellasSeleccionadas) {
+            document.getElementById('rating').value = estrellasSeleccionadas;
+            for (let i = 1; i <= 5; i++) {
+                const starElement = document.getElementById(`star-${i}`);
+                if (starElement) {
+                    if (i <= estrellasSeleccionadas) {
+                        starElement.innerText = "★";
+                        starElement.className = "star-rating-btn text-amber-400 font-bold";
+                    } else {
+                        starElement.innerText = "☆";
+                        starElement.className = "star-rating-btn text-slate-500";
+                    }
+                }
+            }
         }
 
         async function autocompletarNombreConGeminiIA() {
             const cat = document.getElementById('categoria').value;
             const talla = document.getElementById('talla').value;
-            const sku = document.getElementById('sku').value || "N/A";
-            
-            cantarPorVoz("Consultando al modelo generativo.");
+            cantarPorVoz("Consultando IA.");
             try {
                 const response = await fetch(`${BACKEND_URL}/api/ia/generar-descripcion`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-                    body: JSON.stringify({ categoria: cat, talla: talla, sku: sku })
+                    body: JSON.stringify({ categoria: cat, talla: talla })
                 });
                 if(response.ok) {
                     const rData = await response.json();
                     document.getElementById('prenda').value = rData.nombre;
-                    cantarPorVoz(`Nombre generado: ${rData.nombre}`);
-                } else { cantarPorVoz("Fallo en el motor generativo."); }
-            } catch (e) { cantarPorVoz("Error de red."); }
+                    cantarPorVoz(`Nombre: ${rData.nombre}`);
+                }
+            } catch (e) {}
         }
 
         function descargarBackupSeguridadLocal() {
-            if (BASE_DATOS.length === 0) return alert("No hay registros que respaldar.");
+            if (BASE_DATOS.length === 0) return alert("Sin datos.");
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(BASE_DATOS, null, 2));
             const downloadAnchor = document.createElement('a');
             downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `Backup_Seychelles_Atlas_${new Date().toISOString().split('T')[0]}.json`);
+            downloadAnchor.setAttribute("download", `Backup_Seychelles_${new Date().toISOString().split('T')[0]}.json`);
             document.body.appendChild(downloadAnchor);
             downloadAnchor.click();
             downloadAnchor.remove();
-            cantarPorVoz("Copia de seguridad local completada.");
         }
 
         function cantarPorVoz(mensajeTexto) {
@@ -369,7 +431,6 @@
                 window.speechSynthesis.cancel();
                 const frase = new SpeechSynthesisUtterance(mensajeTexto);
                 frase.lang = 'es-ES';
-                frase.rate = 1.05;
                 window.speechSynthesis.speak(frase);
             }
         }
@@ -402,10 +463,10 @@
             const footerBadge = document.getElementById('ticker-header-badge');
             if (categoriasCriticas.length > 0 && footerBar && footerBadge) {
                 footerBar.classList.add('ticker-alert-mode');
-                footerBadge.innerText = `🚨 RESERVAS ALERTA: ${categoriasCriticas.join(' / ').toUpperCase()}`;
+                footerBadge.innerText = `🚨 ALERTA RESERVAS: ${categoriasCriticas.join(' / ').toUpperCase()}`;
             } else if (footerBar && footerBadge) {
                 footerBar.classList.remove('ticker-alert-mode');
-                footerBadge.className = "bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none transition-colors duration-300";
+                footerBadge.className = "bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none";
                 footerBadge.innerText = "WALL•ST•SEYCHELLES";
             }
         }
@@ -414,12 +475,50 @@
             const v = BASE_DATOS.find(item => item._id === idElemento);
             if(!v) return;
             document.getElementById('print-prenda').innerText = v.prenda;
-            document.getElementById('print-sku').innerText = v.sku ? `SKU: ${v.sku}` : 'CÓDIGO GENERAL';
+            document.getElementById('print-sku').innerText = v.sku ? `SKU: ${v.sku}` : 'GENERAL';
             document.getElementById('print-precio').innerText = `${parseFloat(v.precioVenta || 0).toFixed(2)} €`;
-            
-            // Renderizado textual/plano limpio para evitar bloqueos por fallos de red en la CDN del código QR
             document.getElementById('canvas-generador-qr').innerText = v.sku || v._id;
             document.getElementById('modal-qr').classList.remove('hidden');
+        }
+
+        async function duplicarPrendaIndividual(idItem) {
+            const original = BASE_DATOS.find(v => v._id === idItem);
+            if (!original) return;
+            try {
+                await fetch(`${BACKEND_URL}/api/ventas`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                    body: JSON.stringify({
+                        sku: original.sku ? `${original.sku}-CLON` : '', prenda: `${original.prenda} (Copia)`,
+                        categoria: original.categoria, talla: original.talla, cantidad: original.cantidad || 1,
+                        precioCompra: original.precioCompra || 0, precioVenta: original.precioVenta || 0,
+                        gastosEnvio: original.gastosEnvio || 0, canalVenta: original.canalVenta || 'Tienda Física',
+                        rating: original.rating || 0, estado: 'No Vendido'
+                    })
+                });
+                cantarPorVoz("Duplicado.");
+                await reloadCoreData();
+            } catch(e) {}
+        }
+
+        async function ejecutarDuplicadoMasivo() {
+            if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
+            const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => {
+                const original = BASE_DATOS.find(v => v._id === id);
+                if (!original) return Promise.resolve();
+                return fetch(`${BACKEND_URL}/api/ventas`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                    body: JSON.stringify({
+                        sku: original.sku ? `${original.sku}-CLON` : '', prenda: `${original.prenda} (Copia)`,
+                        categoria: original.categoria, talla: original.talla, cantidad: original.cantidad || 1,
+                        precioCompra: original.precioCompra || 0, precioVenta: original.precioVenta || 0,
+                        gastosEnvio: original.gastosEnvio || 0, canalVenta: original.canalVenta || 'Tienda Física',
+                        rating: original.rating || 0, estado: 'No Vendido'
+                    })
+                });
+            });
+            await Promise.all(promesas);
+            limpiarSeleccionMasiva();
+            await reloadCoreData();
         }
 
         function manejarSeleccionCheckMasiva(idItem, casillaElemento) {
@@ -482,7 +581,7 @@
                 const payload = {
                     sku: itemOriginal.sku, prenda: itemOriginal.prenda, precioCompra: itemOriginal.precioCompra || 0,
                     precioVenta: itemOriginal.precioVenta || 0, cantidad: itemOriginal.cantidad || 1, categoria: itemOriginal.categoria,
-                    talla: itemOriginal.talla, estado: itemOriginal.estado, gastosEnvio: itemOriginal.gastosEnvio || 0, canalVenta: itemOriginal.canalVenta || 'Tienda Física'
+                    talla: itemOriginal.talla, estado: itemOriginal.estado, gastosEnvio: itemOriginal.gastosEnvio || 0, canalVenta: itemOriginal.canalVenta || 'Tienda Física', rating: itemOriginal.rating || 0
                 };
                 payload[campo] = valor;
                 return fetch(`${BACKEND_URL}/api/ventas/${id}`, {
@@ -496,7 +595,7 @@
 
         async function ejecutarEliminacionMasiva() {
             if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
-            if (confirm(`¿Eliminar permanently las ${ITEMS_SELECCIONADOS_MASIVOS.length} prendas?`)) {
+            if (confirm("¿Borrar permanentemente lote?")) {
                 const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => 
                     fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' })
                 );
@@ -546,8 +645,6 @@
                     method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: nuevoEstado })
                 });
                 if(r.ok) {
-                    const item = BASE_DATOS.find(x => x._id === id);
-                    if(item) cantarPorVoz(nuevoEstado === 'Vendido' ? `Vendido, ${item.prenda}` : `Regresado a stock`);
                     procesarMultiplicadorCombo();
                     await reloadCoreData();
                 }
@@ -558,8 +655,6 @@
             e.preventDefault();
             const ip = document.getElementById('input-pistola');
             const skuInput = ip ? ip.value.trim() : '';
-            const dbb = document.getElementById('dropdown-buscador');
-            if(dbb) dbb.classList.add('hidden');
             if(!skuInput) return;
             await ejecutarLogicaEscaneo(skuInput);
             if(ip) ip.value = '';
@@ -571,49 +666,34 @@
             if (modulo.classList.contains('hidden')) {
                 modulo.classList.remove('hidden');
                 if (OBJETO_ESCANER_CAMARA) { try { OBJETO_ESCANER_CAMARA.clear(); } catch(e){} }
-
                 OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader");
                 LECTOR_BLOQUEADO_POR_CAPTURA = false;
-
-                const configuracionNativa = { 
-                    fps: 30, qrbox: { width: 260, height: 260 },
-                    formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.CODE_128 ]
-                };
-
                 OBJETO_ESCANER_CAMARA.start(
-                    { facingMode: "environment" }, configuracionNativa,
+                    { facingMode: "environment" }, { fps: 30, qrbox: { width: 260, height: 260 } },
                     async (codigoMapeado) => {
                         if (!LECTOR_BLOQUEADO_POR_CAPTURA) {
                             LECTOR_BLOQUEADO_POR_CAPTURA = true;
-                            const cps = document.getElementById('camara-ping-state');
-                            const cts = document.getElementById('camara-text-state');
-                            const bre = document.getElementById('btn-rearmar-escaner');
-                            if(cps) cps.className = "w-2 h-2 rounded-full bg-amber-500 animate-pulse";
-                            if(cts) cts.innerText = "Código Procesado";
-                            if(bre) bre.classList.remove('hidden');
+                            document.getElementById('camara-ping-state').className = "w-2 h-2 rounded-full bg-amber-500 animate-pulse";
+                            document.getElementById('camara-text-state').innerText = "Procesado";
+                            document.getElementById('btn-rearmar-escaner').classList.remove('hidden');
                             await ejecutarLogicaEscaneo(codigoMapeado);
                         }
                     },
                     () => {}
-                ).catch(err => { alert("Permisos denegados."); modulo.classList.add('hidden'); });
+                ).catch(err => { modulo.classList.add('hidden'); });
             } else { cerrarCamara(); }
         }
 
         function rearmarLectorParaSiguientePrenda() {
             LECTOR_BLOQUEADO_POR_CAPTURA = false;
-            const cps = document.getElementById('camara-ping-state');
-            const cts = document.getElementById('camara-text-state');
-            const bre = document.getElementById('btn-rearmar-escaner');
-            if(cps) cps.className = "w-2 h-2 rounded-full bg-emerald-500 animate-ping";
-            if(cts) cts.innerText = "Lector Listo";
-            if(bre) bre.classList.add('hidden');
+            document.getElementById('camara-ping-state').className = "w-2 h-2 rounded-full bg-emerald-500 animate-ping";
+            document.getElementById('camara-text-state').innerText = "Lector Listo";
+            document.getElementById('btn-rearmar-escaner').classList.add('hidden');
         }
 
         function cerrarCamara() {
             const modulo = document.getElementById('modulo-camara');
-            const bre = document.getElementById('btn-rearmar-escaner');
             if(modulo) modulo.classList.add('hidden');
-            if(bre) bre.classList.add('hidden');
             if (OBJETO_ESCANER_CAMARA) { OBJETO_ESCANER_CAMARA.stop().then(() => { OBJETO_ESCANER_CAMARA = null; }).catch(e => {}); }
         }
 
@@ -624,13 +704,11 @@
                     const resJson = await response.json();
                     if(resJson.operacion === "Vendido") cantarPorVoz(`Vendido: ${resJson.venta.prenda}`);
                     else if (resJson.operacion === "Creado") {
-                        cantarPorVoz(`Código indexado.`);
+                        cantarPorVoz(`Indexado.`);
                         cancelEdit();
-                        const sk = document.getElementById('sku');
-                        if(sk) sk.value = resJson.venta.sku;
-                        const pr = document.getElementById('prenda');
-                        if(pr) pr.focus();
-                    } else if (resJson.operacion === "Repuesto") cantarPorVoz(`Unidad repuesta.`);
+                        document.getElementById('sku').value = resJson.venta.sku;
+                        document.getElementById('prenda').focus();
+                    }
                     procesarMultiplicadorCombo();
                     await reloadCoreData();
                 }
@@ -643,7 +721,7 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ token: response.credential })
                 });
                 if (res.ok) window.location.reload();
-            } catch(e) { alert("Error de red."); }
+            } catch(e) {}
         }
 
         async function reloadCoreData() {
@@ -653,15 +731,10 @@
                 const data = await res.json();
                 BASE_DATOS = data.ventas || [];
 
-                const ki = document.getElementById('kpi-ingresos');
-                const kb = document.getElementById('kpi-beneficio');
-                const kin = document.getElementById('kpi-inversion');
-                const kp = document.getElementById('kpi-prendas');
-
-                if(ki) ki.innerText = `${(data.resumen.ingresos || 0).toFixed(2)} €`;
-                if(kb) kb.innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
-                if(kin) kin.innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
-                if(kp) kp.innerText = data.resumen.prendasVendidas || 0;
+                document.getElementById('kpi-ingresos').innerText = `${(data.resumen.ingresos || 0).toFixed(2)} €`;
+                document.getElementById('kpi-beneficio').innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
+                document.getElementById('kpi-inversion').innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
+                document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
 
                 renderKanban();
                 updateTickerWallStreet();
@@ -674,13 +747,11 @@
                     let htmlLogs = '';
                     data.logs.forEach(l => {
                         const horaFormateada = new Date(l.fechaHora).toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'});
-                        htmlLogs += `<div class="border-b border-white/5 pb-1"><span class="text-indigo-400">[${horaFormateada}]</span> <b class="text-slate-300">${l.usuario.split('@')[0]}:</b> ${l.accion}</div>`;
+                        htmlLogs += `<div class="border-b border-white/5 pb-1"><span class="text-indigo-400">[${horaFormateada}]</span> <b>${l.usuario.split('@')[0]}:</b> ${l.accion}</div>`;
                     });
                     contenedorLogs.innerHTML = htmlLogs;
-                } else if(contenedorLogs) {
-                    contenedorLogs.innerHTML = `<div class="opacity-40 italic">Sin movimientos hoy.</div>`;
                 }
-            } catch(e) { console.error("Fallo de renderizado pasivo de datos:", e); }
+            } catch(e) {}
         }
 
         function dibujarGrafica() {
@@ -692,9 +763,7 @@
             
             const datosAgrupados = {};
             BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => {
-                const fVenta = parseFloat(v.precioVenta || 0);
-                const cQty = parseInt(v.cantidad, 10) || 1;
-                datosAgrupados[v.fecha] = (datosAgrupados[v.fecha] || 0) + (fVenta * cQty);
+                datosAgrupados[v.fecha] = (datosAgrupados[v.fecha] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1));
             });
 
             const fechas = Object.keys(datosAgrupados).sort();
@@ -719,8 +788,8 @@
                     responsive: true, maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
-                        x: { grid: { color: cfg.malla }, ticks: { color: cfg.texto, font: { size: 10, family: 'monospace' } } },
-                        y: { grid: { color: cfg.malla }, ticks: { color: cfg.texto, font: { size: 10, family: 'monospace' }, callback: v => v + '€' } }
+                        x: { grid: { color: cfg.malla }, ticks: { color: cfg.texto } },
+                        y: { grid: { color: cfg.malla }, ticks: { color: cfg.texto, callback: v => v + '€' } }
                     }
                 }
             });
@@ -735,25 +804,35 @@
 
             BASE_DATOS.forEach(v => {
                 const card = document.createElement('div');
-                card.id = v._id; card.draggable = true;
-                card.ondragstart = (e) => e.dataTransfer.setData("text", e.target.id);
-                card.className = "input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] transition-transform flex items-center gap-3";
+                card.id = v._id; 
+                
+                // 🔥 INYECCIÓN MAESTRA Y COMPATIBLE DE ATRIBUTOS DRAG
+                card.setAttribute('draggable', 'true');
+                card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`);
+                
+                card.className = "input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] transition-transform flex items-center gap-3 select-none";
 
                 const pVentaFormateado = parseFloat(v.precioVenta || 0);
                 const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
                 const badgeCanal = v.canalVenta && v.canalVenta !== 'Tienda Física' ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
 
+                const numEstrellas = parseInt(v.rating || 0, 10);
+                const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas);
+                const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
+
                 card.innerHTML = `
                     <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0">
-                    <div class="flex-1 min-w-0">
+                    <div class="flex-1 min-w-0 pointer-events-none">
                         <h4 class="font-bold text-xs uppercase tracking-wide truncate flex items-center gap-1.5">${v.prenda} ${badgeCanal}</h4>
                         <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
+                        <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
                         <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
                     </div>
-                    <div class="flex items-center gap-1.5 flex-shrink-0">
-                        <button onclick="lanzarModalImpresionEtiqueta('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1.5 rounded-lg text-[11px]">🖨️</button>
-                        <button onclick="editItem('${v._id}')" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-1">Editar</button>
-                        <button onclick="deleteItem('${v._id}')" class="opacity-30 hover:opacity-100 text-xs px-1">✕</button>
+                    <div class="flex items-center gap-1.5 flex-shrink-0 text-[11px]">
+                        <button onclick="duplicarPrendaIndividual('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1.5 rounded-lg">👯</button>
+                        <button onclick="lanzarModalImpresionEtiqueta('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1.5 rounded-lg">🖨️</button>
+                        <button onclick="editItem('${v._id}')" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-0.5">Editar</button>
+                        <button onclick="deleteItem('${v._id}')" class="opacity-30 hover:opacity-100 text-xs px-0.5">✕</button>
                     </div>`;
 
                 if (v.estado === 'Vendido') { colVendido.appendChild(card); vCount += (v.cantidad || 1); }
@@ -776,23 +855,6 @@
             ticker.innerHTML = txt + txt;
         }
 
-        const allowDrop = (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
-        const clearDrop = (e) => e.currentTarget.classList.remove('drag-over');
-        async function drop(e, newState) {
-            e.preventDefault(); clearDrop(e);
-            const id = e.dataTransfer.setData("text");
-            if(!id) return;
-            try {
-                const r = await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
-                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: newState })
-                });
-                if(r.ok) {
-                    procesarMultiplicadorCombo();
-                    await reloadCoreData();
-                }
-            } catch(err){}
-        }
-
         document.getElementById('form-venta').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('edit-id').value;
@@ -805,7 +867,8 @@
                 precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, 
                 precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0,
                 gastosEnvio: parseFloat(document.getElementById('gastosEnvio').value) || 0,
-                canalVenta: document.getElementById('canalVenta').value
+                canalVenta: document.getElementById('canalVenta').value,
+                rating: parseInt(document.getElementById('rating').value, 10) || 0
             };
             if (id) {
                 const itemOriginal = BASE_DATOS.find(v => v._id === id);
@@ -818,7 +881,7 @@
                     method: method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
                 });
                 if (response.ok) { cancelEdit(); await reloadCoreData(); }
-            } catch (err) { alert("Error."); }
+            } catch (err) {}
         };
 
         function editItem(id) {
@@ -833,6 +896,7 @@
             document.getElementById('precioVenta').value = item.precioVenta || 0;
             document.getElementById('gastosEnvio').value = item.gastosEnvio || 0;
             document.getElementById('canalVenta').value = item.canalVenta || 'Tienda Física';
+            setFormRating(item.rating || 0);
             
             document.getElementById('form-container').classList.add('modo-edicion');
             document.getElementById('form-title').innerText = "✏️ Editar Artículo";
@@ -845,6 +909,7 @@
             document.getElementById('edit-id').value = "";
             document.getElementById('gastosEnvio').value = 0;
             document.getElementById('canalVenta').value = "Tienda Física";
+            setFormRating(0);
             document.getElementById('form-container').classList.remove('modo-edicion');
             document.getElementById('form-title').innerText = "Añadir Prenda";
             document.getElementById('btn-submit').innerText = "Registrar Prenda";
@@ -852,7 +917,7 @@
         }
 
         async function deleteItem(id) {
-            if (confirm("¿Eliminar del registro cloud?")) {
+            if (confirm("¿Eliminar?")) {
                 await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' });
                 await reloadCoreData();
             }
@@ -860,20 +925,16 @@
 
         async function logout() { await fetch(`${BACKEND_URL}/api/logout`, { credentials: 'include' }); window.location.reload(); }
 
-        // Mapeo inicial asíncrono robusto e inmune a fallos de carga en red
         setTimeout(async () => {
             try {
+                setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
                 const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' });
                 const data = await res.json();
                 if (data.autenticado) {
-                    const lb = document.getElementById('login-box');
-                    const pc = document.getElementById('panel-control');
-                    const tb = document.getElementById('ticker-bar');
-                    const ud = document.getElementById('user-display');
-                    if(lb) lb.classList.add('hidden');
-                    if(pc) pc.classList.remove('hidden');
-                    if(tb) tb.classList.remove('hidden');
-                    if(ud) ud.innerText = `👤 Conectado: ${data.usuario}`;
+                    document.getElementById('login-box').classList.add('hidden');
+                    document.getElementById('panel-control').classList.remove('hidden');
+                    document.getElementById('ticker-bar').classList.remove('hidden');
+                    document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario}`;
                     await reloadCoreData();
                 }
             } catch(e){}

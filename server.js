@@ -8,12 +8,12 @@ const path = require('path');
 const app = express();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// Conexión limpia a MongoDB Atlas
+// Conexión robusta a MongoDB Cloud
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('\x1b[32m[OK]\x1b[0m Conectado con éxito a MongoDB Atlas'))
     .catch(err => console.error('Error crítico al conectar a MongoDB:', err));
 
-// Esquema de Datos Elástico (Previene Errores 500 si algún parámetro varía)
+// Esquema de Datos Elástico de Producción
 const VentaRopaSchema = new mongoose.Schema({
     fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
     prenda: { type: String, default: 'Artículo General', trim: true },
@@ -35,10 +35,10 @@ app.use(express.json());
 app.use(cookieSession({
     name: 'session-admin',
     keys: [process.env.SESSION_SECRET || 'clave_alternativa_segura_123'],
-    maxAge: 12 * 60 * 60 * 1000
+    maxAge: 12 * 60 * 60 * 1000 // 12 horas
 }));
 
-// Servir estáticos de la carpeta public de forma nativa
+// Servir la interfaz estática
 app.use(express.static(path.join(__dirname, 'public')));
 
 function exigeAdmin(req, res, next) {
@@ -46,7 +46,8 @@ function exigeAdmin(req, res, next) {
     return res.status(403).json({ error: 'Acceso denegado. No autorizado.' });
 }
 
-// --- ENDPOINTS ---
+// --- ENDPOINTS DE LA API ---
+
 app.post('/api/auth/google', async (req, res) => {
     const { token } = req.body;
     if (!token) return res.status(400).json({ error: 'Token no suministrado.' });
@@ -64,41 +65,58 @@ app.post('/api/auth/google', async (req, res) => {
     } catch (error) { return res.status(400).json({ error: 'Token inválido o expirado.' }); }
 });
 
+// GET TOTALMENTE BLINDADO CONTRA DATOS CORRUPTOS (ERR 500 FIX)
 app.get('/api/ventas', exigeAdmin, async (req, res) => {
     try {
         const ventas = await VentaRopa.find().sort({ _id: -1 }).lean();
-        let ingresos = 0, inversion = 0, prendasVendidas = 0;
+        
+        let ingresos = 0;
+        let inversion = 0;
+        let prendasVendidas = 0;
 
-        ventas.forEach(v => {
-            const estadoActual = v.estado || 'Vendido';
-            const cant = Number(v.cantidad) || 0;
-            const pCompra = Number(v.precioCompra) || 0;
-            const pVenta = Number(v.precioVenta) || 0;
+        if (ventas && ventas.length > 0) {
+            ventas.forEach(v => {
+                const estadoActual = v.estado || 'Vendido';
+                
+                // Forzar conversión y aplicar un "Salvavidas" si el dato es NaN o corrupto
+                const cant = parseInt(v.cantidad, 10);
+                const pCompra = parseFloat(v.precioCompra);
+                const pVenta = parseFloat(v.precioVenta);
 
-            if (estadoActual === 'Vendido') {
-                ingresos += (pVenta * cant);
-                inversion += (pCompra * cant);
-                prendasVendidas += cant;
-            } else if (estadoActual === 'Devuelto') {
-                inversion += (pCompra * cant);
-            }
+                const cantidadSegura = isNaN(cant) ? 0 : cant;
+                const compraSegura = isNaN(pCompra) ? 0 : pCompra;
+                const ventaSegura = isNaN(pVenta) ? 0 : pVenta;
+
+                if (estadoActual === 'Vendido') {
+                    ingresos += (ventaSegura * cantidadSegura);
+                    inversion += (compraSegura * cantidadSegura);
+                    prendasVendidas += cantidadSegura;
+                } else if (estadoActual === 'Devuelto') {
+                    inversion += (compraSegura * cantidadSegura);
+                }
+            });
+        }
+
+        return res.json({
+            resumen: { ingresos, beneficio: ingresos - inversion, inversion, prendasVendidas },
+            ventas: ventas || []
         });
-        return res.json({ resumen: { ingresos, beneficio: ingresos - inversion, inversion, prendasVendidas }, ventas });
-    } catch (error) { return res.status(500).json({ error: 'Error al consultar los datos.' }); }
+    } catch (error) { 
+        console.error("Fallo crítico controlado en GET /api/ventas:", error);
+        return res.status(500).json({ error: 'Error interno del servidor al mapear registros.' }); 
+    }
 });
 
-// POST Modificado con Captura Robusta de variables del formulario
 app.post('/api/ventas', exigeAdmin, async (req, res) => {
     try {
         const { prenda, categoria, talla, cantidad, precioCompra, precioVenta } = req.body;
         
-        // Mapeo seguro: si el frontend manda nulos o nombres cruzados, se asocian alternativas correctas al vuelo
         const nuevaVenta = new VentaRopa({
-            prenda: prenda || "Artículo Seychelles",
+            prenda: prenda ? prenda.trim() : "Artículo Seychelles",
             categoria: categoria || "Otros",
             talla: talla || "M",
             cantidad: parseInt(cantidad, 10) || 1,
-            precioCompra: parseFloat(precioCompra) || parseFloat(req.body.costeUnidad) || 0,
+            precioCompra: parseFloat(precioCompra) || 0,
             precioVenta: parseFloat(precioVenta) || 0,
             estado: 'Vendido'
         });
@@ -106,8 +124,7 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
         await nuevaVenta.save(); 
         return res.json({ status: "success", venta: nuevaVenta });
     } catch (error) { 
-        console.error("Error interno al meter artículo:", error);
-        return res.status(500).json({ error: 'Error interno de inserción en Mongoose.' }); 
+        return res.status(500).json({ error: 'Error al procesar la inserción.' }); 
     }
 });
 
@@ -130,4 +147,4 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`[OK] Servidor API en puerto: ${PORT}`));
+app.listen(PORT, () => console.log(`[OK] Servidor corriendo de forma segura en puerto: ${PORT}`));

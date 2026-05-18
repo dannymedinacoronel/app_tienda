@@ -305,21 +305,21 @@
             const data = await res.json();
             BASE_DATOS = data.ventas || [];
 
-            document.getElementById('kpi-ingresos').innerText = `${(data.resumen. ingresos || 0).toFixed(2)} €`;
+            document.getElementById('kpi-ingresos').innerText = `${(data.resumen.ingresos || 0).toFixed(2)} €`;
             document.getElementById('kpi-beneficio').innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
             document.getElementById('kpi-inversion').innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
             document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
 
             renderKanban();
             updateTickerWallStreet();
-            dibujarGrafica(); // 🚀 Fuerza el refresco matemático y visual de la gráfica
+            dibujarGrafica();
         }
 
-        // 🛠️ LA FUNCIÓN DE LA GRÁFICA REPARADA CON DESTRUCCIÓN COMPLETA DE CANVAS
+        // 🛠️ FIX DE AUTOREFRESCO CON RECREACIÓN DE LIENZO CANVAS
         function dibujarGrafica() {
             const contenedor = document.getElementById('contenedor-canvas-grafica');
             
-            // Forzamos el borrado total del nodo HTML del canvas viejo para desvincular la memoria anterior de Chart.js
+            // Destrucción total del canvas para evitar sobreescritura en caché de Chart.js
             contenedor.innerHTML = '<canvas id="graficaTendencias"></canvas>';
             
             const ctx = document.getElementById('graficaTendencias').getContext('2d');

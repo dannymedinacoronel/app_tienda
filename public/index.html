@@ -11,7 +11,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     
     <style>
-        /* DEFINICIÓN DE LOS 5 TEMAS MODERNOS */
+        /* DEFINICIÓN DE TEMAS VISUALES */
         body.theme-dark { background-color: #0f172a; color: #f1f5f9; }
         .theme-dark .card-bg { background-color: #1e293b; border-color: #334155; }
         .theme-dark .input-bg { background-color: #0f172a; border-color: #334155; color: #ffffff; }
@@ -51,12 +51,22 @@
         .ticker-content { display: flex; white-space: nowrap; animation: ticker 30s linear infinite; }
         .ticker-content:hover { animation-play-state: paused; }
 
-        /* 🎯 MODIFICACIÓN DE ESTILOS INTERNOS DE LA LIBRERÍA DE ESCANEO */
+        /* 🔥 ANIMACIÓN MODO COMBO FIRE */
+        @keyframes fireGlow {
+            0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); border-color: #f59e0b; }
+            50% { box-shadow: 0 0 35px rgba(239, 68, 68, 0.8); border-color: #ef4444; }
+        }
+        .combo-fire-active { animation: fireGlow 0.8s infinite ease-in-out !important; }
+
+        /* 🚨 ALERTAS CRÍTICAS TICKER */
+        .ticker-alert-mode { background-color: #991b1b !important; color: #fef2f2 !important; font-weight: 900; animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.8; } }
+
         #reader { border: none !important; }
         #reader__scan_region { display: flex; justify-content: center; align-items: center; }
-        /* Forzamos que la guía visual interna de la cámara sea un cuadrado perfecto para QR y Barras */
         #reader__scan_region video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-24 transition-all duration-300">
 
@@ -73,9 +83,14 @@
 
     <div id="panel-control" class="hidden max-w-7xl mx-auto px-4 py-6">
         <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-8">
-            <div>
-                <h1 class="text-3xl font-black uppercase tracking-tight">Seychelles Shop</h1>
-                <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
+            <div class="flex items-center gap-4">
+                <div>
+                    <h1 class="text-3xl font-black uppercase tracking-tight">Seychelles Shop</h1>
+                    <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
+                </div>
+                <div id="combo-badge" class="hidden bg-amber-500 text-slate-950 font-black px-3 py-1 rounded-xl text-xs uppercase tracking-wider animate-bounce">
+                    💥 Combo x<span id="combo-count">0</span>
+                </div>
             </div>
             
             <div class="flex flex-wrap items-center justify-center lg:justify-end gap-3 w-full lg:w-auto">
@@ -86,7 +101,7 @@
                         </form>
                         <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-full dropdown-bg border rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto p-1 font-sans text-xs"></div>
                     </div>
-                    <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md" title="Abrir cámara de escaneo rápido">
+                    <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md">
                         📷 Escáner
                     </button>
                 </div>
@@ -107,28 +122,28 @@
         <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500 p-5 rounded-3xl shadow-2xl mb-8 max-w-sm mx-auto text-center transition-all">
             <div class="flex justify-between items-center mb-3">
                 <span class="text-xs font-black uppercase text-blue-400 font-mono flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> LECTOR CAJA DIGITAL INSTANTÁNEO
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> VISOR DIGITAL HYPE-SCAN
                 </span>
                 <button onclick="cerrarCamara()" class="text-xs font-bold opacity-50 hover:opacity-100 bg-black/20 px-2 py-0.5 rounded-lg">Cerrar ✕</button>
             </div>
             <div id="reader" class="overflow-hidden rounded-2xl bg-black w-full aspect-square border border-current/10 mx-auto"></div>
-            <p class="text-[10px] opacity-60 font-mono mt-3 uppercase tracking-wider text-center">Enfoca cualquier código de barras o QR cuadrado</p>
+            <p class="text-[10px] opacity-50 font-mono mt-3">Soporta lecturas múltiples continuas por voz</p>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl shadow-lg text-white">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="kpi-container-grid">
+            <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl shadow-lg text-white transition-all duration-300">
                 <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Facturación Bruta</p>
                 <p class="text-3xl font-black mt-1" id="kpi-ingresos">0.00 €</p>
             </div>
-            <div class="bg-gradient-to-br from-pink-600 to-pink-700 p-6 rounded-2xl shadow-lg text-white">
+            <div class="bg-gradient-to-br from-pink-600 to-pink-700 p-6 rounded-2xl shadow-lg text-white transition-all duration-300">
                 <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Ganancia Neta</p>
                 <p class="text-3xl font-black mt-1" id="kpi-beneficio">0.00 €</p>
             </div>
-            <div class="bg-gradient-to-br from-amber-600 to-amber-700 p-6 rounded-2xl shadow-lg text-white">
+            <div class="bg-gradient-to-br from-amber-600 to-amber-700 p-6 rounded-2xl shadow-lg text-white transition-all duration-300">
                 <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Inversión Stock</p>
                 <p class="text-3xl font-black mt-1" id="kpi-inversion">0.00 €</p>
             </div>
-            <div class="bg-gradient-to-br from-purple-600 to-purple-700 p-6 rounded-2xl shadow-lg text-white">
+            <div class="bg-gradient-to-br from-purple-600 to-purple-700 p-6 rounded-2xl shadow-lg text-white transition-all duration-300">
                 <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Prendas Vendidas</p>
                 <p class="text-3xl font-black mt-1" id="kpi-prendas">0</p>
             </div>
@@ -197,8 +212,22 @@
         </div>
     </div>
 
-    <footer id="ticker-bar" class="hidden fixed bottom-0 left-0 w-full bg-black h-10 flex items-center z-50 text-[10px] font-mono border-t border-white/5 shadow-2xl">
-        <div class="bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none">WALL•ST•SEYCHELLES</div>
+    <div id="modal-qr" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div class="bg-white text-slate-900 p-6 rounded-2xl shadow-2xl border max-w-xs w-full text-center flex flex-col items-center">
+            <h4 class="text-slate-500 uppercase font-mono text-[10px] tracking-widest mb-1">Seychelles Shop</h4>
+            <h3 id="print-prenda" class="font-black text-sm uppercase tracking-tight mb-4">Modelo Prenda</h3>
+            <div id="canvas-generador-qr" class="p-2 border rounded-xl bg-white mb-3"></div>
+            <p id="print-sku" class="font-mono text-xs text-slate-400 mb-1">SKU-CODE</p>
+            <p id="print-precio" class="text-xl font-black text-slate-900 font-mono mb-6">0.00 €</p>
+            <div class="flex gap-2 w-full">
+                <button onclick="document.getElementById('modal-qr').classList.add('hidden')" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 rounded-xl text-xs uppercase">Cerrar</button>
+                <button onclick="window.print()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs uppercase flex items-center justify-center gap-1">🖨️ Imprimir</button>
+            </div>
+        </div>
+    </div>
+
+    <footer id="ticker-bar" class="hidden fixed bottom-0 left-0 w-full bg-black h-10 flex items-center z-50 text-[10px] font-mono border-t border-white/5 shadow-2xl transition-colors duration-300">
+        <div id="ticker-header-badge" class="bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none transition-colors duration-300">WALL•ST•SEYCHELLES</div>
         <div class="flex-1 overflow-hidden flex">
             <div class="ticker-content flex items-center gap-12" id="ticker-content"></div>
         </div>
@@ -209,6 +238,9 @@
         let BASE_DATOS = [];
         let INSTANCIA_CHARTS = null;
         let OBJETO_ESCANER_CAMARA = null;
+        
+        // Variables de control para el modo combo de ludificación
+        let HISTORIAL_TIMESTAMPS_OPERACIONES = [];
 
         function setTheme(theme) {
             const body = document.getElementById('main-body');
@@ -253,6 +285,90 @@
             });
         };
 
+        // 🔊 FUNCIÓN LOCA 1: SÍNTESIS DE VOZ HUMANA ROBÚSTA (NATIVA ACCESIBLE)
+        function cantarPorVoz(mensajeTexto) {
+            if ('speechSynthesis' in window) {
+                // Cancelamos lecturas solapadas previas
+                window.speechSynthesis.cancel();
+                const frase = new SpeechSynthesisUtterance(mensajeTexto);
+                frase.lang = 'es-ES';
+                frase.rate = 1.05; // Un toque ágil para entorno retail
+                frase.pitch = 1.0;
+                window.speechSynthesis.speak(frase);
+            }
+        }
+
+        // 🎮 FUNCIÓN LOCA 2: CONTROLADOR LOGÍSTICO DE MULTIPLICADORES COMBO GAMING
+        function procesarMultiplicadorCombo() {
+            const tAhora = Date.now();
+            // Mantener solo registros de los últimos 3 minutos (180000 ms)
+            HISTORIAL_TIMESTAMPS_OPERACIONES = HISTORIAL_TIMESTAMPS_OPERACIONES.filter(t => (tAhora - t) < 180000);
+            HISTORIAL_TIMESTAMPS_OPERACIONES.push(tAhora);
+
+            const totalCombos = HISTORIAL_TIMESTAMPS_OPERACIONES.length;
+            const bBadge = document.getElementById('combo-badge');
+            const bCards = document.querySelectorAll('#kpi-container-grid > div');
+
+            if (totalCombos >= 3) {
+                // Activamos efectos de fuego dorado en los KPIs principales de facturación
+                document.getElementById('combo-count').innerText = totalCombos;
+                bBadge.classList.remove('hidden');
+                bCards.forEach(card => card.classList.add('combo-fire-active'));
+            } else {
+                bBadge.classList.add('hidden');
+                bCards.forEach(card => card.classList.remove('combo-fire-active'));
+            }
+        }
+
+        // 🚨 FUNCIÓN LOCA 3: ALGORITMO PREDICTIVO DE RIESGO DE STOCK POR CATEGORÍA
+        function ejecutarVerificacionAlertasStock() {
+            const resumenContador = {};
+            // Mapeamos cuántas prendas libres hay por categoría en stock real
+            BASE_DATOS.filter(v => v.estado === 'No Vendido').forEach(v => {
+                resumenContador[v.categoria] = (resumenContador[v.categoria] || 0) + (parseInt(v.cantidad) || 1);
+            });
+
+            // Buscamos si alguna categoría clave está por debajo del mínimo de seguridad de 2 unidades
+            const categoriasCriticas = Object.keys(resumenContador).filter(cat => resumenContador[cat] < 2);
+            const footerBar = document.getElementById('ticker-bar');
+            const footerBadge = document.getElementById('ticker-header-badge');
+
+            if (categoriasCriticas.length > 0) {
+                // Cambiamos el pie de página entero a modo neón militar de advertencia
+                footerBar.classList.add('ticker-alert-mode');
+                footerBadge.innerText = `🚨 RESERVAS ALERTA: ${categoriasCriticas.join(' / ').toUpperCase()}`;
+            } else {
+                footerBar.classList.remove('ticker-alert-mode');
+                footerBadge.className = "bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none transition-colors duration-300";
+                footerBadge.innerText = "WALL•ST•SEYCHELLES";
+            }
+        }
+
+        // 🖨️ FUNCIÓN LOCA 4: RENDERIZADOR TÉRMICO DE CÓDIGOS QR
+        function lanzarModalImpresionEtiqueta(idElemento) {
+            const v = BASE_DATOS.find(item => item._id === idElemento);
+            if(!v) return;
+
+            document.getElementById('print-prenda').innerText = v.prenda;
+            document.getElementById('print-sku').innerText = v.sku ? `SKU: ${v.sku}` : 'CÓDIGO GENERAL';
+            document.getElementById('print-precio').innerText = `${parseFloat(v.precioVenta).toFixed(2)} €`;
+
+            const contenedorQr = document.getElementById('canvas-generador-qr');
+            contenedorQr.innerHTML = ''; // Limpieza previa
+
+            // Instanciar el escritor físico del QR en el DOM transparente
+            new QRCode(contenedorQr, {
+                text: v.sku || v.prenda,
+                width: 130,
+                height: 130,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+
+            document.getElementById('modal-qr').classList.remove('hidden');
+        }
+
         function filtrarProductosMenu(valorQuery) {
             const dropdown = document.getElementById('dropdown-buscador');
             const query = valorQuery.toLowerCase().trim();
@@ -269,7 +385,7 @@
             );
 
             if (coincidencias.length === 0) {
-                dropdown.innerHTML = `<div class="p-3 opacity-50 italic">Sin resultados.</div>`;
+                dropdown.innerHTML = `<div class="p-3 opacity-50 italic">Sin resultados en la nube.</div>`;
                 dropdown.classList.remove('hidden');
                 return;
             }
@@ -310,13 +426,16 @@
             document.getElementById('dropdown-buscador').classList.add('hidden');
             document.getElementById('input-pistola').value = '';
             try {
-                await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
+                const r = await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                     body: JSON.stringify({ estado: nuevoEstado })
                 });
-                await reloadCoreData();
+                if(r.ok) {
+                    const item = BASE_DATOS.find(x => x._id === id);
+                    if(item) cantarPorVoz(nuevoEstado === 'Vendido' ? `Vendido, ${item.prenda}` : `Regresado a stock, ${item.prenda}`);
+                    procesarMultiplicadorCombo();
+                    await reloadCoreData();
+                }
             } catch (err) { alert("Error de red."); }
         }
 
@@ -329,7 +448,6 @@
             document.getElementById('input-pistola').value = '';
         };
 
-        // 🚀 NUEVA FUNCIÓN DE ESCANEO REPARADA: DETECTA EL TIPO DE CÓDIGO (QR o BARRAS) AL INSTANTE
         function toggleEscanerCamara() {
             const modulo = document.getElementById('modulo-camara');
             if (modulo.classList.contains('hidden')) {
@@ -341,38 +459,23 @@
 
                 OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader");
 
-                // Configuración de vídeo súper agresiva para enfocar y capturar al vuelo
                 const configuracionVelocidad = { 
-                    fps: 30, // 30 lecturas por segundo para que sea instantáneo
-                    // 🎯 Hacemos que el recuadro sea un CUADRADO PERFECTO (250x250) para que entren los QR enteros
-                    qrbox: { width: 250, height: 250 }, 
+                    fps: 30, 
+                    qrbox: { width: 250, height: 250 }, // Cuadrado perfecto reactivo
                     videoConstraints: {
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        facingMode: "environment" // Fuerza el uso de la cámara trasera
+                        width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "environment"
                     }
                 };
 
-                // Encendemos el visor
                 OBJETO_ESCANER_CAMARA.start(
                     { facingMode: "environment" }, 
                     configuracionVelocidad,
                     async (codigoMapeado, resultadoDetallado) => {
-                        // 🤖 DETECCIÓN DEL TIPO DE IMAGEN: Averigua qué formato se acaba de escanear
-                        let formatoDetectado = "Código Desconocido";
-                        if (resultadoDetallado && resultadoDetallado.result && resultadoDetallado.result.format) {
-                            formatoDetectado = resultadoDetallado.result.format.formatName;
-                        }
-
-                        // Imprime de forma limpia en la consola del desarrollador el tipo de código capturado
-                        console.log(`[ESCÁNER] Capturado con éxito: ${codigoMapeado} | Tipo: ${formatoDetectado}`);
-                        
-                        // Envía los datos directamente a Atlas sin cerrar la cámara para poder meter ráfagas de ropa
                         await ejecutarLogicaEscaneo(codigoMapeado);
                     },
-                    (error) => {} // Silenciamos los errores de búsqueda por milisegundo para no congelar la pantalla
+                    (error) => {}
                 ).catch(err => {
-                    alert("Asegúrate de conceder permisos de cámara.");
+                    alert("Comprueba los permisos de cámara.");
                     modulo.classList.add('hidden');
                 });
             } else {
@@ -391,7 +494,19 @@
             try {
                 const response = await fetch(`${BACKEND_URL}/api/ventas/escanear/${skuParam}`, { method: 'PUT', credentials: 'include' });
                 if (response.ok) {
-                    await reloadCoreData(); // Actualiza el Kanban y la gráfica en tiempo real
+                    const resJson = await response.json();
+                    
+                    // Activamos las respuestas por voz cantada interactiva según lo que devuelva Atlas
+                    if(resJson.operacion === "Vendido") {
+                        cantarPorVoz(`Vendido, ${resJson.venta.prenda}. ${resJson.venta.precioVenta} euros.`);
+                    } else if (resJson.operacion === "Creado") {
+                        cantarPorVoz(`Código nuevo guardado en stock disponible.`);
+                    } else if (resJson.operacion === "Repuesto") {
+                        cantarPorVoz(`Nueva unidad indexada para, ${resJson.venta.prenda}.`);
+                    }
+
+                    procesarMultiplicadorCombo();
+                    await reloadCoreData();
                 }
             } catch (err) { console.error("Fallo cloud."); }
         }
@@ -402,7 +517,6 @@
                 body: JSON.stringify({ token: response.credential })
             });
             if (res.ok) window.location.reload();
-            else alert("No autorizado.");
         }
 
         async function reloadCoreData() {
@@ -418,6 +532,7 @@
             renderKanban();
             updateTickerWallStreet();
             dibujarGrafica();
+            ejecutarVerificacionAlertasStock(); // Ejecución del algoritmo predictivo de mínimos
         }
 
         function dibujarGrafica() {
@@ -477,117 +592,11 @@
                 const card = document.createElement('div');
                 card.id = v._id; card.draggable = true;
                 card.ondragstart = (e) => e.dataTransfer.setData("text", e.target.id);
-                card.className = "input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] transition-transform flex justify-between items-center";
+                card.className = "input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] transition-transform flex justify-between items-center gap-2";
 
                 const pVentaFormateado = parseFloat(v.precioVenta) || 0;
 
                 card.innerHTML = `
-                    <div>
-                        <h4 class="font-bold text-xs uppercase tracking-wide">${v.prenda}</h4>
-                        <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
-                        <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="editItem('${v._id}')" class="text-[10px] text-blue-500 font-bold uppercase hover:underline">Editar</button>
-                        <button onclick="deleteItem('${v._id}')" class="opacity-30 hover:opacity-100 text-xs px-1">✕</button>
-                    </div>
-                `;
-
-                if (v.estado === 'Vendido') { colVendido.appendChild(card); vCount += v.cantidad; }
-                else { colStock.appendChild(card); sCount += v.cantidad; }
-            });
-            document.getElementById('badge-stock').innerText = sCount;
-            document.getElementById('badge-vendido').innerText = vCount;
-        }
-
-        function updateTickerWallStreet() {
-            const ticker = document.getElementById('ticker-content');
-            let txt = '';
-            BASE_DATOS.slice(0, 10).forEach(v => {
-                const symbol = v.estado === 'Vendido' ? '<span class="text-emerald-400">▲</span>' : '<span class="text-amber-400">●</span>';
-                const pVentaFormateado = parseFloat(v.precioVenta) || 0;
-                txt += `<span class="text-white font-mono uppercase">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400">${pVentaFormateado.toFixed(2)}€</b></span>`;
-            });
-            ticker.innerHTML = txt + txt;
-        }
-
-        const allowDrop = (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
-        const clearDrop = (e) => e.currentTarget.classList.remove('drag-over');
-        async function drop(e, newState) {
-            e.preventDefault(); clearDrop(e);
-            const id = e.dataTransfer.getData("text");
-            if(!id) return;
-            await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
-                method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-                body: JSON.stringify({ estado: newState })
-            });
-            await reloadCoreData();
-        }
-
-        document.getElementById('form-venta').onsubmit = async (e) => {
-            e.preventDefault();
-            const id = document.getElementById('edit-id').value;
-            const payload = {
-                sku: document.getElementById('sku').value.trim(), 
-                prenda: document.getElementById('prenda').value,
-                categoria: document.getElementById('categoria').value, 
-                talla: document.getElementById('talla').value,
-                cantidad: parseInt(document.getElementById('cantidad').value) || 1,
-                precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, 
-                precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0
-            };
-            
-            if (id) {
-                const itemOriginal = BASE_DATOS.find(v => v._id === id);
-                if (itemOriginal) payload.estado = itemOriginal.estado;
-            }
-
-            const url = id ? `${BACKEND_URL}/api/ventas/${id}` : `${BACKEND_URL}/api/ventas`;
-            const method = id ? 'PUT' : 'POST';
-
-            try {
-                const response = await fetch(url, {
-                    method: method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
-                });
-                if (response.ok) { cancelEdit(); await reloadCoreData(); }
-            } catch (err) { alert("Error."); }
-        };
-
-        function editItem(id) {
-            const item = BASE_DATOS.find(v => v._id === id);
-            if (!item) return;
-            document.getElementById('edit-id').value = item._id;
-            document.getElementById('sku').value = item.sku || '';
-            document.getElementById('prenda').value = item.prenda;
-            document.getElementById('categoria').value = item.categoria;
-            document.getElementById('talla').value = item.talla;
-            document.getElementById('precioCompra').value = item.precioCompra;
-            document.getElementById('precioVenta').value = item.precioVenta;
-            document.getElementById('cantidad').value = item.cantidad || 1;
-            
-            document.getElementById('form-container').classList.add('modo-edicion');
-            document.getElementById('form-title').innerText = "✏️ Editar Artículo";
-            document.getElementById('btn-submit').innerText = "Guardar Cambios";
-            document.getElementById('btn-cancel').classList.remove('hidden');
-        }
-
-        function cancelEdit() {
-            document.getElementById('form-venta').reset();
-            document.getElementById('edit-id').value = "";
-            document.getElementById('form-container').classList.remove('modo-edicion');
-            document.getElementById('form-title').innerText = "Añadir Prenda";
-            document.getElementById('btn-submit').innerText = "Registrar Prenda";
-            document.getElementById('btn-cancel').classList.add('hidden');
-        }
-
-        async function deleteItem(id) {
-            if (confirm("¿Eliminar del registro cloud?")) {
-                await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' });
-                await reloadCoreData();
-            }
-        }
-
-        async function logout() { await fetch(`${BACKEND_URL}/api/logout`, { credentials: 'include' }); window.location.reload(); }
-    </script>
-</body>
-</html>
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4>
+                        <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` :

@@ -5,7 +5,6 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo'); 
 const mongoose = require('mongoose');
 const path = require('path');
-const { GoogleGenAI } = require('@google/genai');
 
 const app = express();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -15,7 +14,7 @@ app.set('trust proxy', 1);
 const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb+srv://dannymedinacoronel_db_user:ccVg5uBpXkh5C0eo@cluster0.qnh4rbz.mongodb.net/tienda_ropa?appName=Cluster0";
 
 mongoose.connect(MONGO_URI_FINAL)
-    .then(() => console.log('\x1b[32m[OK]\x1b[0m Core de Seychelles conectado a MongoDB Atlas.'))
+    .then(() => console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.'))
     .catch(err => console.error('Fallo crítico en Atlas:', err));
 
 const VentaRopaSchema = new mongoose.Schema({
@@ -205,21 +204,8 @@ app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
     } catch (error) { return res.status(500).json({ error: 'Error al remover.' }); }
 });
 
-app.post('/api/ia/generar-descripcion', exigeAdmin, async (req, res) => {
-    try {
-        const { categoria, talla } = req.body;
-        if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: "API Key ausente." });
-
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const prontuario = `Genera un nombre de producto comercial urbano y conciso (máximo 4 palabras) para una prenda de categoría: ${categoria} talla: ${talla}. Devuelve SOLO el texto limpio sin comillas.`;
-
-        const respuestaIa = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prontuario });
-        return res.json({ nombre: respuestaIa.text.trim() });
-    } catch (e) { return res.status(500).json({ error: "Fallo generativo." }); }
-});
-
 app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(200)); });
 app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`[SERVER] Seychelles Control activo en puerto: ${PORT}`));
+app.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: ${PORT}`));

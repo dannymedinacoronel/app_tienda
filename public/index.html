@@ -3,240 +3,326 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Consola Seychelles Shop</title>
+    <title>Consola Financiera - Seychelles Shop</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <style>
-        /* TEMAS */
+        /* DEFINICIÓN DE LOS 5 TEMAS MODERNOS */
         body.theme-dark { background-color: #0f172a; color: #f1f5f9; }
-        body.theme-pink { background-color: #fff1f2; color: #831843; }
-
         .theme-dark .card-bg { background-color: #1e293b; border-color: #334155; }
-        .theme-pink .card-bg { background-color: #ffffff; border-color: #fbcfe8; color: #831843; }
-        
-        .theme-pink .text-main { color: #be185d; }
+        .theme-dark .input-bg { background-color: #0f172a; border-color: #334155; color: #ffffff; }
+
+        /* TEMA FULL ROSA (INMERSIVO - SELECTION JULIA) */
+        body.theme-pink { background-color: #fce7f3; color: #831843; }
+        .theme-pink .card-bg { background-color: #ffffff; border-color: #fbcfe8; color: #831843; box-shadow: 0 4px 20px rgba(219, 39, 119, 0.08); }
+        .theme-pink .input-bg { background-color: #fff1f2; border-color: #f9a8d4; color: #831843; }
         .theme-pink .btn-primary { background-color: #db2777; color: white; }
         .theme-pink .btn-primary:hover { background-color: #be185d; }
-        
+
+        body.theme-light { background-color: #f8fafc; color: #0f172a; }
+        .theme-light .card-bg { background-color: #ffffff; border-color: #e2e8f0; color: #0f172a; box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
+        .theme-light .input-bg { background-color: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
+
+        body.theme-emerald { background-color: #022c22; color: #e6f4ea; }
+        .theme-emerald .card-bg { background-color: #064e3b; border-color: #047857; }
+        .theme-emerald .input-bg { background-color: #022c22; border-color: #047857; color: #ffffff; }
+
+        body.theme-purple { background-color: #1e1b4b; color: #e0e7ff; }
+        .theme-purple .card-bg { background-color: #312e81; border-color: #4338ca; }
+        .theme-purple .input-bg { background-color: #1e1b4b; border-color: #4338ca; color: #ffffff; }
+
         .drag-over { border: 2px dashed #3b82f6 !important; background-color: rgba(59, 130, 246, 0.1) !important; }
-        
+        .modo-edicion { border-color: #3b82f6 !important; box-shadow: 0 0 15px rgba(59, 130, 246, 0.3) !important; }
+
         @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
-        .ticker-content { display: flex; white-space: nowrap; animation: ticker 25s linear infinite; }
+        .ticker-content { display: flex; white-space: nowrap; animation: ticker 30s linear infinite; }
+        .ticker-content:hover { animation-play-state: paused; }
     </style>
 </head>
-<body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-20 transition-colors duration-500">
+<body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-20 transition-all duration-300">
 
-    <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4">
-        <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl text-center border border-slate-700">
-            <h1 class="text-3xl font-black mb-6 uppercase tracking-widest text-white">Seychelles Shop</h1>
-            <div id="g_id_onload" data-client_id="463908353578-o70ia5lgf0c7fcce0utp8qqlqnc41iuo.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
-            <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_blue"></div>
+    <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4 bg-slate-950">
+        <div class="bg-slate-900 p-8 rounded-3xl shadow-2xl text-center border border-slate-800 max-w-sm w-full">
+            <h1 class="text-3xl font-black mb-2 uppercase tracking-widest text-white">Seychelles</h1>
+            <p class="text-xs text-slate-500 mb-6 font-mono">FINANCIAL CORE CONTROL</p>
+            <div class="flex justify-center">
+                <div id="g_id_onload" data-client_id="463908353578-o70ia5lgf0c7fcce0utp8qqlqnc41iuo.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
+                <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_blue"></div>
+            </div>
         </div>
     </div>
 
     <div id="panel-control" class="hidden max-w-7xl mx-auto px-4 py-6">
-        <header class="flex flex-col md:flex-row justify-between items-center gap-4 border-b border-slate-700/50 pb-6 mb-8">
+        <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-8">
             <div>
-                <h1 class="text-3xl font-black uppercase tracking-tighter" id="title-main">Consola Seychelles</h1>
-                <p class="text-xs font-mono opacity-60" id="user-display">Sesión Activa</p>
+                <h1 class="text-3xl font-black uppercase tracking-tight">Seychelles Shop</h1>
+                <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
             </div>
             
-            <div class="flex flex-wrap items-center gap-3">
-                <div class="flex bg-slate-800/50 p-1 rounded-xl border border-slate-700">
-                    <button onclick="setTheme('dark')" class="px-3 py-1 text-[10px] font-bold uppercase rounded-lg transition-all" id="btn-theme-dark">Oscuro</button>
-                    <button onclick="setTheme('pink')" class="px-3 py-1 text-[10px] font-bold uppercase rounded-lg transition-all" id="btn-theme-pink">Rosa</button>
+            <div class="flex flex-wrap items-center justify-center lg:justify-end gap-3 w-full lg:w-auto">
+                <div class="relative w-full sm:w-60">
+                    <form id="form-escaner-pistola">
+                        <input type="text" id="input-pistola" placeholder="💥 Disparar lector de barras..." class="w-full bg-black/20 border border-current/20 rounded-xl px-4 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40">
+                    </form>
                 </div>
-                <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg transition-all">
-                    📊 EXPORTAR EXCEL
-                </button>
-                <button onclick="logout()" class="text-[10px] bg-rose-950/20 text-rose-400 border border-rose-900/50 px-4 py-2 rounded-xl font-bold uppercase">Salir</button>
+
+                <div class="flex bg-black/20 p-1 rounded-xl border border-current/10 text-[10px] font-bold uppercase tracking-wider">
+                    <button onclick="setTheme('dark')" class="px-2.5 py-1 rounded-lg" id="t-dark">Oscuro</button>
+                    <button onclick="setTheme('pink')" class="px-2.5 py-1 rounded-lg" id="t-pink">Rosa</button>
+                    <button onclick="setTheme('light')" class="px-2.5 py-1 rounded-lg" id="t-light">Claro</button>
+                    <button onclick="setTheme('emerald')" class="px-2.5 py-1 rounded-lg" id="t-emerald">Verde</button>
+                    <button onclick="setTheme('purple')" class="px-2.5 py-1 rounded-lg" id="t-purple">Morado</button>
+                </div>
+
+                <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md">📊 Excel</button>
+                <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
             </div>
         </header>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div class="bg-blue-600 p-6 rounded-2xl shadow-xl text-white">
-                <p class="text-[10px] font-bold uppercase opacity-80">Ingresos Brutos</p>
+            <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl shadow-lg text-white">
+                <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Facturación Bruta</p>
                 <p class="text-3xl font-black mt-1" id="kpi-ingresos">0.00 €</p>
             </div>
-            <div class="bg-pink-600 p-6 rounded-2xl shadow-xl text-white">
-                <p class="text-[10px] font-bold uppercase opacity-80">Margen Neto</p>
+            <div class="bg-gradient-to-br from-pink-600 to-pink-700 p-6 rounded-2xl shadow-lg text-white">
+                <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Ganancia Neta</p>
                 <p class="text-3xl font-black mt-1" id="kpi-beneficio">0.00 €</p>
             </div>
-            <div class="bg-amber-600 p-6 rounded-2xl shadow-xl text-white">
-                <p class="text-[10px] font-bold uppercase opacity-80">Inversión Stock</p>
+            <div class="bg-gradient-to-br from-amber-600 to-amber-700 p-6 rounded-2xl shadow-lg text-white">
+                <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Inversión Stock</p>
                 <p class="text-3xl font-black mt-1" id="kpi-inversion">0.00 €</p>
             </div>
-            <div class="bg-slate-700 p-6 rounded-2xl shadow-xl text-white">
-                <p class="text-[10px] font-bold uppercase opacity-80">Vendidas</p>
+            <div class="bg-gradient-to-br from-purple-600 to-purple-700 p-6 rounded-2xl shadow-lg text-white">
+                <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Prendas Vendidas</p>
                 <p class="text-3xl font-black mt-1" id="kpi-prendas">0</p>
             </div>
         </div>
 
+        <div class="card-bg border p-6 rounded-3xl shadow-xl mb-8 transition-all">
+            <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento Comercial (Subidas y Bajas)</h3>
+            <div class="w-full h-48 md:h-60 relative">
+                <canvas id="graficaTendencias"></canvas>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <div id="form-container" class="card-bg border p-6 rounded-3xl shadow-2xl self-start lg:col-span-1 transition-all">
+            <div id="form-container" class="card-bg border p-6 rounded-3xl shadow-xl self-start lg:col-span-1 transition-all">
                 <h2 id="form-title" class="text-lg font-black uppercase mb-4">Añadir Prenda</h2>
                 <form id="form-venta" class="space-y-4">
                     <input type="hidden" id="edit-id" value="">
                     <div>
-                        <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Nombre Artículo</label>
-                        <input type="text" id="prenda" required class="w-full bg-black/10 border border-current/20 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
+                        <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Código de Barras / SKU</label>
+                        <input type="text" id="sku" placeholder="Etiqueta lectora" class="input-bg border w-full rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/40">
                     </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <select id="categoria" class="bg-black/10 border border-current/20 rounded-xl p-3 text-sm">
-                            <option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
-                        </select>
-                        <select id="talla" class="bg-black/10 border border-current/20 rounded-xl p-3 text-sm">
-                            <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
-                        </select>
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Modelo / Descripción</label>
+                        <input type="text" id="prenda" required class="input-bg border w-full rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-[10px] font-bold uppercase opacity-60">Coste (€)</label>
-                            <input type="number" id="precioCompra" required step="0.01" class="w-full bg-black/10 border border-current/20 rounded-xl p-3 text-sm">
+                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Categoría</label>
+                            <select id="categoria" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
+                                <option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
+                            </select>
                         </div>
                         <div>
-                            <label class="block text-[10px] font-bold uppercase opacity-60">Venta (€)</label>
-                            <input type="number" id="precioVenta" required step="0.01" class="w-full bg-black/10 border border-current/20 rounded-xl p-3 text-sm">
+                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Talla</label>
+                            <select id="talla" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
+                                <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                            </select>
                         </div>
                     </div>
-                    <button type="submit" id="btn-submit" class="w-full btn-primary bg-blue-600 text-white font-bold text-xs py-4 rounded-xl shadow-lg uppercase tracking-widest transition-all">Registrar Prenda</button>
-                    <button type="button" id="btn-cancel" onclick="cancelEdit()" class="hidden w-full text-[10px] font-bold uppercase opacity-50 py-2">Cancelar</button>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Coste (€)</label>
+                            <input type="number" id="precioCompra" required step="0.01" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Venta (€)</label>
+                            <input type="number" id="precioVenta" required step="0.01" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
+                        </div>
+                    </div>
+                    <button type="submit" id="btn-submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-4 rounded-xl shadow-md uppercase tracking-widest transition-all">Registrar Artículo</button>
+                    <button type="button" id="btn-cancel" onclick="cancelEdit()" class="hidden w-full text-center text-xs uppercase opacity-50 py-1 hover:underline">Cancelar Cambios</button>
                 </form>
             </div>
 
             <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px]">
-                    <h3 class="text-xs font-black text-amber-500 uppercase mb-4 flex justify-between">📦 Stock Disponible <span id="badge-stock" class="opacity-50">0</span></h3>
-                    <div id="col-no-vendido" class="flex-1 space-y-3" ondragover="allowDrop(event)" ondrop="drop(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
+                <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px] transition-all">
+                    <h3 class="text-xs font-black text-amber-500 uppercase mb-4 flex justify-between tracking-wider">📦 STOCK DISPONIBLE <span id="badge-stock" class="opacity-60 font-mono">0</span></h3>
+                    <div id="col-no-vendido" class="flex-1 space-y-3 p-1" ondragover="allowDrop(event)" ondrop="drop(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
                 </div>
-                <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px]">
-                    <h3 class="text-xs font-black text-emerald-500 uppercase mb-4 flex justify-between">💰 Vendido <span id="badge-vendido" class="opacity-50">0</span></h3>
-                    <div id="col-vendido" class="flex-1 space-y-3" ondragover="allowDrop(event)" ondrop="drop(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
+                <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px] transition-all">
+                    <h3 class="text-xs font-black text-emerald-500 uppercase mb-4 flex justify-between tracking-wider">💰 ARTÍCULOS VENDIDOS <span id="badge-vendido" class="opacity-60 font-mono">0</span></h3>
+                    <div id="col-vendido" class="flex-1 space-y-3 p-1" ondragover="allowDrop(event)" ondrop="drop(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
                 </div>
             </div>
         </div>
     </div>
 
-    <footer id="ticker-bar" class="hidden fixed bottom-0 left-0 w-full bg-black h-10 flex items-center z-50 text-[10px] font-mono border-t border-slate-800">
-        <div class="bg-rose-600 text-white px-4 h-full flex items-center font-black italic">SEYCHELLES•TICKER</div>
-        <div class="ticker-content flex items-center gap-10" id="ticker-content"></div>
+    <footer id="ticker-bar" class="hidden fixed bottom-0 left-0 w-full bg-black h-10 flex items-center z-50 text-[10px] font-mono border-t border-white/5 shadow-2xl">
+        <div class="bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none">WALL•ST•SEYCHELLES</div>
+        <div class="flex-1 overflow-hidden flex">
+            <div class="ticker-content flex items-center gap-12" id="ticker-content"></div>
+        </div>
     </footer>
 
     <script>
         const BACKEND_URL = '';
         let BASE_DATOS = [];
+        let INSTANCIA_CHARTS = null;
 
-        // SISTEMA DE TEMAS
+        // MANEJO DE LOS 5 TEMAS SELECTORES
         function setTheme(theme) {
             const body = document.getElementById('main-body');
-            const btnDark = document.getElementById('btn-theme-dark');
-            const btnPink = document.getElementById('btn-theme-pink');
+            body.className = `theme-${theme} min-h-screen font-sans antialiased pb-20 transition-all duration-300`;
             
-            if (theme === 'pink') {
-                body.className = 'theme-pink min-h-screen font-sans antialiased pb-20 transition-colors duration-500';
-                btnPink.className = 'px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-pink-600 text-white shadow-md';
-                btnDark.className = 'px-3 py-1 text-[10px] font-bold uppercase rounded-lg opacity-40';
-            } else {
-                body.className = 'theme-dark min-h-screen font-sans antialiased pb-20 transition-colors duration-500';
-                btnDark.className = 'px-3 py-1 text-[10px] font-bold uppercase rounded-lg bg-blue-600 text-white shadow-md';
-                btnPink.className = 'px-3 py-1 text-[10px] font-bold uppercase rounded-lg opacity-40';
-            }
-            localStorage.setItem('seychelles-theme', theme);
+            // Limpiar botones de seleccion de temas
+            ['dark', 'pink', 'light', 'emerald', 'purple'].forEach(t => {
+                document.getElementById(`t-${t}`).className = "px-2.5 py-1 rounded-lg opacity-40 hover:opacity-100 transition-all";
+            });
+            // Activar visualmente el seleccionado
+            const activeColors = { dark: 'bg-blue-600 text-white', pink: 'bg-pink-600 text-white', light: 'bg-slate-800 text-white', emerald: 'bg-emerald-500 text-slate-900', purple: 'bg-purple-600 text-white' };
+            document.getElementById(`t-${theme}`).className = `px-2.5 py-1 rounded-lg ${activeColors[theme]} shadow-md`;
+            
+            localStorage.setItem('seychelles-theme-multi', theme);
+            if(BASE_DATOS.length > 0) dibujarGrafica(); // Redibujar colores de la grafica
         }
 
-        // EXPORTAR A EXCEL
+        // EXPORTADOR EXCEL INTEGRADO
         function exportarExcel() {
-            if (BASE_DATOS.length === 0) return alert("No hay datos para exportar.");
-            
-            const dataFormateada = BASE_DATOS.map(v => ({
-                Fecha: v.fecha,
-                Artículo: v.prenda,
-                Categoría: v.categoria,
-                Talla: v.talla,
-                Cantidad: v.cantidad,
-                'Coste Unidad (€)': v.precioCompra.toFixed(2),
-                'Venta Unidad (€)': v.precioVenta.toFixed(2),
-                Estado: v.estado,
-                'Total Inversión (€)': (v.precioCompra * v.cantidad).toFixed(2),
-                'Total Venta (€)': (v.precioVenta * v.cantidad).toFixed(2),
-                'Beneficio Neto (€)': ((v.precioVenta - v.precioCompra) * v.cantidad).toFixed(2)
+            if (BASE_DATOS.length === 0) return alert("No hay datos disponibles.");
+            const formateado = BASE_DATOS.map(v => ({
+                Fecha: v.fecha, 'Código / SKU': v.sku || 'N/A', Artículo: v.prenda, Categoría: v.categoria, Talla: v.talla,
+                'Coste (€)': v.precioCompra.toFixed(2), 'Venta (€)': v.precioVenta.toFixed(2), Estado: v.estado,
+                'Margen Neto (€)': ((v.precioVenta - v.precioCompra) * v.cantidad).toFixed(2)
             }));
-
-            const ws = XLSX.utils.json_to_sheet(dataFormateada);
+            const ws = XLSX.utils.json_to_sheet(formateado);
             const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Inventario Seychelles");
-            
-            const fecha = new Date().toISOString().split('T')[0];
-            XLSX.writeFile(wb, `Seychelles_Reporte_${fecha}.xlsx`);
+            XLSX.utils.book_append_sheet(wb, ws, "Inventario Core");
+            XLSX.writeFile(wb, `Seychelles_Reporte_${new Date().toISOString().split('T')[0]}.xlsx`);
         }
 
-        // LOGICA DE DATOS
+        // CARGA COMPLETA Y PERSISTENCIA (F5)
         window.onload = async () => {
-            const savedTheme = localStorage.getItem('seychelles-theme') || 'dark';
-            setTheme(savedTheme);
-            
+            setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
             const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' });
             const data = await res.json();
             if (data.autenticado) {
                 document.getElementById('login-box').classList.add('hidden');
                 document.getElementById('panel-control').classList.remove('hidden');
                 document.getElementById('ticker-bar').classList.remove('hidden');
-                document.getElementById('user-display').innerText = `👤 ${data.usuario}`;
-                await loadData();
+                document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario}`;
+                await reloadCoreData();
             }
+        };
+
+        // ENTRADA ESCANER PISTOLA DE BARRAS
+        document.getElementById('form-escaner-pistola').onsubmit = async (e) => {
+            e.preventDefault();
+            const skuInput = document.getElementById('input-pistola').value.trim();
+            if(!skuInput) return;
+            const response = await fetch(`${BACKEND_URL}/api/ventas/escanear/${skuInput}`, { method: 'PUT', credentials: 'include' });
+            if (response.ok) {
+                document.getElementById('input-pistola').value = '';
+                await reloadCoreData();
+            } else { alert("Artículo no mapeado o ya vendido."); document.getElementById('input-pistola').value = ''; }
         };
 
         async function handleCredentialResponse(response) {
             const res = await fetch(`${BACKEND_URL}/api/auth/google`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                 body: JSON.stringify({ token: response.credential })
             });
             if (res.ok) window.location.reload();
         }
 
-        async function loadData() {
+        async function reloadCoreData() {
             const res = await fetch(`${BACKEND_URL}/api/ventas`, { credentials: 'include' });
             const data = await res.json();
             BASE_DATOS = data.ventas;
-            
+
             document.getElementById('kpi-ingresos').innerText = `${data.resumen.ingresos.toFixed(2)} €`;
             document.getElementById('kpi-beneficio').innerText = `${data.resumen.beneficio.toFixed(2)} €`;
             document.getElementById('kpi-inversion').innerText = `${data.resumen.inversion.toFixed(2)} €`;
             document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas;
-            
-            renderBoard();
-            updateTicker();
+
+            renderKanban();
+            updateTickerWallStreet();
+            dibujarGrafica();
         }
 
-        function renderBoard() {
+        // LÓGICA DE PROCESAMIENTO DE LA GRÁFICA (SUBIDAS Y BAJAS)
+        function dibujarGrafica() {
+            const ctx = document.getElementById('graficaTendencias').getContext('2d');
+            const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
+            
+            // Agrupar ventas diarias de artículos vendidos
+            const datosAgrupados = {};
+            BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => {
+                datosAgrupados[v.fecha] = (datosAgrupados[v.fecha] || 0) + (v.precioVenta * v.cantidad);
+            });
+
+            const fechas = Object.keys(datosAgrupados).sort();
+            const montos = fechas.map(f => datosAgrupados[f]);
+
+            // Mapeo estético cromático para los 5 temas
+            const configuracionGraficas = {
+                dark: { linea: '#3b82f6', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' },
+                pink: { linea: '#db2777', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
+                light: { linea: '#0f172a', texto: '#475569', malla: 'rgba(0,0,0,0.05)' },
+                emerald: { linea: '#10b981', texto: '#e6f4ea', malla: 'rgba(255,255,255,0.05)' },
+                purple: { linea: '#a855f7', texto: '#e0e7ff', malla: 'rgba(255,255,255,0.05)' }
+            };
+
+            const cfg = configuracionGraficas[currentTheme] || configuracionGraficas.dark;
+
+            if (INSTANCIA_CHARTS) INSTANCIA_CHARTS.destroy();
+
+            INSTANCIA_CHARTS = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: fechas.map(f => f.split('-').reverse().slice(0,2).join('/')),
+                    datasets: [{
+                        data: montos, borderColor: cfg.linea, borderWidth: 3, pointBackgroundColor: cfg.linea,
+                        tension: 0.25, fill: false
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: cfg.malla }, ticks: { color: cfg.texto, font: { size: 10, family: 'monospace' } } },
+                        y: { grid: { color: cfg.malla }, ticks: { color: cfg.texto, font: { size: 10, family: 'monospace' }, callback: v => v + '€' } }
+                    }
+                }
+            });
+        }
+
+        function renderKanban() {
             const colStock = document.getElementById('col-no-vendido');
             const colVendido = document.getElementById('col-vendido');
             colStock.innerHTML = ''; colVendido.innerHTML = '';
-            
             let sCount = 0, vCount = 0;
 
             BASE_DATOS.forEach(v => {
                 const card = document.createElement('div');
-                card.id = v._id;
-                card.draggable = true;
+                card.id = v._id; card.draggable = true;
                 card.ondragstart = (e) => e.dataTransfer.setData("text", e.target.id);
-                card.className = "card-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.02] transition-transform";
-                
+                card.className = "input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] transition-transform flex justify-between items-center";
+
                 card.innerHTML = `
-                    <div class="flex justify-between items-start">
-                        <h4 class="font-black text-xs uppercase">${v.prenda}</h4>
-                        <span class="text-[9px] font-bold bg-black/5 px-2 py-0.5 rounded">${v.talla}</span>
+                    <div>
+                        <h4 class="font-bold text-xs uppercase tracking-wide">${v.prenda}</h4>
+                        <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
+                        <span class="text-[10px] font-bold block mt-1 font-mono">${v.precioVenta.toFixed(2)} €</span>
                     </div>
-                    <div class="flex justify-between items-end mt-4">
-                        <span class="text-[10px] font-mono opacity-50">${v.categoria}</span>
-                        <div class="flex gap-2">
-                            <button onclick="editItem('${v._id}')" class="text-[9px] font-bold text-blue-500 uppercase">Editar</button>
-                            <button onclick="deleteItem('${v._id}')" class="text-[9px] font-bold text-rose-500 uppercase">✕</button>
-                        </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="editItem('${v._id}')" class="text-[10px] text-blue-500 font-bold uppercase hover:underline">Editar</button>
+                        <button onclick="deleteItem('${v._id}')" class="opacity-30 hover:opacity-100 text-xs px-1">✕</button>
                     </div>
                 `;
 
@@ -247,64 +333,55 @@
             document.getElementById('badge-vendido').innerText = vCount;
         }
 
-        function updateTicker() {
+        function updateTickerWallStreet() {
             const ticker = document.getElementById('ticker-content');
-            let content = '';
+            let txt = '';
             BASE_DATOS.slice(0, 10).forEach(v => {
-                const icon = v.estado === 'Vendido' ? '🟢' : '🟡';
-                content += `<span>${icon} ${v.prenda.toUpperCase()} - ${v.precioVenta.toFixed(2)}€ [${v.estado}]</span>`;
+                const symbol = v.estado === 'Vendido' ? '<span class="text-emerald-400">▲</span>' : '<span class="text-amber-400">●</span>';
+                txt += `<span class="text-white font-mono uppercase">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400">${v.precioVenta.toFixed(2)}€</b></span>`;
             });
-            ticker.innerHTML = content + content;
+            ticker.innerHTML = txt + txt;
         }
 
-        // DRAG AND DROP
         const allowDrop = (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
         const clearDrop = (e) => e.currentTarget.classList.remove('drag-over');
         async function drop(e, newState) {
-            e.preventDefault();
-            clearDrop(e);
+            e.preventDefault(); clearDrop(e);
             const id = e.dataTransfer.getData("text");
+            if(!id) return;
             await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                 body: JSON.stringify({ estado: newState })
             });
-            await loadData();
+            await reloadCoreData();
         }
 
-        // FORMULARIO
         document.getElementById('form-venta').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('edit-id').value;
             const payload = {
-                prenda: document.getElementById('prenda').value,
-                categoria: document.getElementById('categoria').value,
-                talla: document.getElementById('talla').value,
-                cantidad: parseInt(document.getElementById('cantidad').value),
-                precioCompra: parseFloat(document.getElementById('precioCompra').value),
-                precioVenta: parseFloat(document.getElementById('precioVenta').value)
+                sku: document.getElementById('sku').value.trim(), prenda: document.getElementById('prenda').value,
+                categoria: document.getElementById('categoria').value, talla: document.getElementById('talla').value,
+                cantidad: parseInt(document.getElementById('cantidad').value) || 1,
+                precioCompra: parseFloat(document.getElementById('precioCompra').value), precioVenta: parseFloat(document.getElementById('precioVenta').value)
             };
-            const method = id ? 'PUT' : 'POST';
             const url = id ? `${BACKEND_URL}/api/ventas/${id}` : `${BACKEND_URL}/api/ventas`;
-            
             await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
+                method: id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                 body: JSON.stringify(payload)
             });
-            cancelEdit();
-            await loadData();
+            cancelEdit(); await reloadCoreData();
         };
 
         function editItem(id) {
             const item = BASE_DATOS.find(v => v._id === id);
             document.getElementById('edit-id').value = item._id;
+            document.getElementById('sku').value = item.sku || '';
             document.getElementById('prenda').value = item.prenda;
             document.getElementById('precioCompra').value = item.precioCompra;
             document.getElementById('precioVenta').value = item.precioVenta;
-            document.getElementById('form-title').innerText = "Editar Artículo";
+            document.getElementById('form-container').classList.add('modo-edicion');
+            document.getElementById('form-title').innerText = "✏️ Editar Artículo";
             document.getElementById('btn-submit').innerText = "Guardar Cambios";
             document.getElementById('btn-cancel').classList.remove('hidden');
         }
@@ -312,13 +389,14 @@
         function cancelEdit() {
             document.getElementById('form-venta').reset();
             document.getElementById('edit-id').value = "";
+            document.getElementById('form-container').classList.remove('modo-edicion');
             document.getElementById('form-title').innerText = "Añadir Prenda";
             document.getElementById('btn-submit').innerText = "Registrar Prenda";
             document.getElementById('btn-cancel').classList.add('hidden');
         }
 
         async function deleteItem(id) {
-            if (confirm("¿Eliminar para siempre?")) {
+            if (confirm("¿Eliminar del registro cloud?")) {
                 await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' });
                 await loadData();
             }

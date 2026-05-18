@@ -14,11 +14,12 @@ app.set('trust proxy', 1);
 const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb+srv://dannymedinacoronel_db_user:ccVg5uBpXkh5C0eo@cluster0.qnh4rbz.mongodb.net/tienda_ropa?appName=Cluster0";
 
 mongoose.connect(MONGO_URI_FINAL)
-    .then(() => console.log('\x1b[32m[OK]\x1b[0m MongoDB Atlas conectado correctamente.'))
-    .catch(err => console.error('Fallo en Atlas:', err));
+    .then(() => console.log('\x1b[32m[OK]\x1b[0m MongoDB Atlas conectado con soporte para Multi-Temas y Gráficas.'))
+    .catch(err => console.error('Fallo crítico en Atlas:', err));
 
 const VentaRopaSchema = new mongoose.Schema({
     fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
+    sku: { type: String, default: '', trim: true },
     prenda: { type: String, default: 'Artículo General', trim: true },
     categoria: { type: String, default: 'Camisetas' },
     talla: { type: String, default: 'M' },
@@ -48,6 +49,8 @@ function exigeAdmin(req, res, next) {
     if (req.session && req.session.esAdmin) return next();
     return res.status(403).json({ error: 'No autorizado.' });
 }
+
+// --- API ENDPOINTS ---
 
 app.get('/api/auth/verificar', (req, res) => {
     if (req.session && req.session.esAdmin) return res.json({ autenticado: true, usuario: req.session.email });
@@ -92,7 +95,7 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
         const nuevaVenta = new VentaRopa(req.body);
         await nuevaVenta.save(); 
         return res.json({ status: "success", venta: nuevaVenta });
-    } catch (error) { return res.status(500).json({ error: 'Error al indexar.' }); }
+    } catch (error) { return res.status(500).json({ error: 'Error al registrar.' }); }
 });
 
 app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
@@ -107,6 +110,18 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
         await VentaRopa.findByIdAndUpdate(req.params.id, { estado: req.body.estado });
         return res.json({ status: "success" });
     } catch (error) { return res.status(500).json({ error: 'Error al mover.' }); }
+});
+
+app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
+    try {
+        const articulo = await VentaRopa.findOneAndUpdate(
+            { sku: req.params.sku.trim(), estado: 'No Vendido' },
+            { estado: 'Vendido' },
+            { new: true }
+        );
+        if (!articulo) return res.status(404).json({ error: 'No encontrado en stock.' });
+        return res.json({ status: "success", venta: articulo });
+    } catch (error) { return res.status(500).json({ error: 'Error en escaneo.' }); }
 });
 
 app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
@@ -125,4 +140,4 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`[OK] Servidor en puerto: ${PORT}`));
+app.listen(PORT, () => console.log(`[PRODUCTION-READY] Levantado en puerto: ${PORT}`));

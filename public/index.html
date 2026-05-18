@@ -16,39 +16,40 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
     
     <style>
         body.theme-dark { background-color: #0f172a; color: #f1f5f9; }
-        .theme-dark .card-bg { background-color: #1e293b; border-color: #334155; }
+        .theme-dark .card-bg { background-color: rgba(30, 41, 59, 0.75); border-color: #334155; backdrop-filter: blur(12px); }
         .theme-dark .input-bg { background-color: #0f172a; border-color: #334155; color: #ffffff; }
         .theme-dark .dropdown-bg { background-color: #1e293b; border-color: #475569; }
         .theme-dark .dropdown-item-hover:hover { background-color: #334155; }
 
         body.theme-pink { background-color: #fce7f3; color: #831843; }
-        .theme-pink .card-bg { background-color: #ffffff; border-color: #fbcfe8; color: #831843; box-shadow: 0 4px 20px rgba(219, 39, 119, 0.08); }
+        .theme-pink .card-bg { background-color: rgba(255, 255, 255, 0.8); border-color: #fbcfe8; color: #831843; box-shadow: 0 4px 20px rgba(219, 39, 119, 0.08); backdrop-filter: blur(12px); }
         .theme-pink .input-bg { background-color: #fff1f2; border-color: #f9a8d4; color: #831843; }
         .theme-pink .dropdown-bg { background-color: #ffffff; border-color: #fbcfe8; }
         .theme-pink .dropdown-item-hover:hover { background-color: #fce7f3; }
 
         body.theme-light { background-color: #f8fafc; color: #0f172a; }
-        .theme-light .card-bg { background-color: #ffffff; border-color: #e2e8f0; color: #0f172a; box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
+        .theme-light .card-bg { background-color: rgba(255, 255, 255, 0.85); border-color: #e2e8f0; color: #0f172a; box-shadow: 0 4px 15px rgba(0,0,0,0.03); backdrop-filter: blur(12px); }
         .theme-light .input-bg { background-color: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
         .theme-light .dropdown-bg { background-color: #ffffff; border-color: #e2e8f0; }
         .theme-light .dropdown-item-hover:hover { background-color: #f1f5f9; }
 
         body.theme-emerald { background-color: #022c22; color: #e6f4ea; }
-        .theme-emerald .card-bg { background-color: #064e3b; border-color: #047857; }
+        .theme-emerald .card-bg { background-color: rgba(6, 78, 59, 0.8); border-color: #047857; backdrop-filter: blur(12px); }
         .theme-emerald .input-bg { background-color: #022c22; border-color: #047857; color: #ffffff; }
         .theme-emerald .dropdown-bg { background-color: #064e3b; border-color: #047857; }
         .theme-emerald .dropdown-item-hover:hover { background-color: #047857; }
 
         body.theme-purple { background-color: #1e1b4b; color: #e0e7ff; }
-        .theme-purple .card-bg { background-color: #312e81; border-color: #4338ca; }
+        .theme-purple .card-bg { background-color: rgba(49, 46, 129, 0.8); border-color: #4338ca; backdrop-filter: blur(12px); }
         .theme-purple .input-bg { background-color: #1e1b4b; border-color: #4338ca; color: #ffffff; }
         .theme-purple .dropdown-bg { background-color: #312e81; border-color: #4338ca; }
         .theme-purple .dropdown-item-hover:hover { background-color: #4338ca; }
 
-        .drag-over { border: 2px dashed #3b82f6 !important; background-color: rgba(59, 130, 246, 0.15) !important; }
+        .drag-over { border: 2px dashed #ec4899 !important; background-color: rgba(236, 72, 153, 0.15) !important; }
         .modo-edicion { border-color: #3b82f6 !important; box-shadow: 0 0 15px rgba(59, 130, 246, 0.3) !important; }
 
         @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
@@ -74,254 +75,275 @@
         
         .kanban-card { transition: transform 0.1s ease, box-shadow 0.1s ease; backface-visibility: hidden; }
         .dragging { opacity: 0.4 !important; transform: scale(0.98); }
+
+        /* 🌌 CONTENEDOR MAESTRO DE PARTÍCULAS DE FONDO */
+        #particles-js {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 0; /* Por detrás de todo el panel de control */
+            pointer-events: all; /* Permite interactuar con los nodos flotantes */
+        }
+        
+        /* Asegura que el panel flote por encima del tapiz de partículas */
+        #wrapper-core {
+            position: relative;
+            z-index: 10;
+        }
     </style>
 </head>
 <body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-24 transition-all duration-300">
 
-    <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4 bg-slate-950">
-        <div class="bg-slate-900 p-8 rounded-3xl shadow-2xl text-center border border-slate-800 max-w-sm w-full">
-            <h1 class="text-3xl font-black mb-2 uppercase tracking-widest text-white">Seychelles</h1>
-            <p class="text-xs text-slate-500 mb-6 font-mono">FINANCIAL CORE CONTROL</p>
-            <div class="flex justify-center">
-                <div id="g_id_onload" data-client_id="463908353578-o70ia5lgf0c7fcce0utp8qqlqnc41iuo.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
-                <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_blue"></div>
-            </div>
-        </div>
-    </div>
+    <div id="particles-js"></div>
 
-    <div id="panel-control" class="hidden max-w-7xl mx-auto px-4 py-6">
-        <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-8">
-            <div class="flex items-center gap-4">
-                <div>
-                    <h1 class="text-3xl font-black uppercase tracking-tight">Seychelles Shop</h1>
-                    <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
+    <div id="wrapper-core">
+        <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4 bg-slate-950/90 backdrop-blur-md">
+            <div class="bg-slate-900 p-8 rounded-3xl shadow-2xl text-center border border-slate-800 max-w-sm w-full">
+                <h1 class="text-3xl font-black mb-2 uppercase tracking-widest text-white">Seychelles</h1>
+                <p class="text-xs text-slate-500 mb-6 font-mono">FINANCIAL CORE CONTROL</p>
+                <div class="flex justify-center">
+                    <div id="g_id_onload" data-client_id="463908353578-o70ia5lgf0c7fcce0utp8qqlqnc41iuo.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
+                    <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_blue"></div>
                 </div>
-                <div id="combo-badge" class="hidden bg-amber-500 text-slate-950 font-black px-3 py-1 rounded-xl text-xs uppercase tracking-wider animate-bounce">
-                    💥 Combo x<span id="combo-count">0</span>
-                </div>
-            </div>
-            
-            <div class="flex flex-wrap items-center justify-center lg:justify-end gap-3 w-full lg:w-auto">
-                <div class="relative w-full sm:w-64 flex items-center gap-2">
-                    <div class="relative flex-1">
-                        <form id="form-escaner-pistola" autocomplete="off">
-                            <input type="text" id="input-pistola" oninput="filtrarProductosMenu(this.value)" placeholder="🔍 Buscar modelo o escanear..." class="w-full bg-black/20 border border-current/20 rounded-xl px-4 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40">
-                        </form>
-                        <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-full dropdown-bg border rounded-xl shadow-2xl z-[100] max-h-48 overflow-y-auto p-1 font-sans text-[11px]"></div>
-                    </div>
-                    <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md">
-                        📷 Cámara
-                    </button>
-                </div>
-
-                <div class="flex bg-black/20 p-1 rounded-xl border border-current/10 text-[10px] font-bold uppercase tracking-wider">
-                    <button onclick="setTheme('dark')" class="px-2.5 py-1 rounded-lg" id="t-dark">Oscuro</button>
-                    <button onclick="setTheme('pink')" class="px-2.5 py-1 rounded-lg" id="t-pink">Rosa</button>
-                    <button onclick="setTheme('light')" class="px-2.5 py-1 rounded-lg" id="t-light">Claro</button>
-                    <button onclick="setTheme('emerald')" class="px-2.5 py-1 rounded-lg" id="t-emerald">Verde</button>
-                    <button onclick="setTheme('purple')" class="px-2.5 py-1 rounded-lg" id="t-purple">Morado</button>
-                </div>
-
-                <button onclick="forceRefreshDataManual()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95" title="Sincronizar Cloud">
-                    🔄 <span class="hidden sm:inline">Refrescar</span>
-                </button>
-                <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md">💾 Backup</button>
-                <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md">📊 Excel</button>
-                <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
-            </div>
-        </header>
-
-        <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500 p-5 rounded-3xl shadow-2xl mb-8 max-w-sm mx-auto text-center transition-all">
-            <div class="flex justify-between items-center mb-3">
-                <span class="text-xs font-black uppercase text-blue-400 font-mono flex items-center gap-2">
-                    <span id="camara-ping-state" class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> 
-                    <span id="camara-text-state">Lector Listo</span>
-                </span>
-                <button onclick="cerrarCamara()" class="text-xs font-bold opacity-50 hover:opacity-100 bg-black/20 px-2 py-0.5 rounded-lg">Cerrar ✕</button>
-            </div>
-            <div id="reader" class="overflow-hidden rounded-2xl bg-slate-950 border border-current/10 mx-auto flex items-center justify-center"></div>
-            <button id="btn-rearmar-escaner" type="button" onclick="rearmarLectorParaSiguientePrenda()" class="hidden w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-xl transition-all">
-                🔄 ESCANEAR OTRA PRENDA
-            </button>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="kpi-container-grid">
-            <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl shadow-lg text-white">
-                <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Facturación Bruta</p>
-                <p class="text-3xl font-black mt-1" id="kpi-ingresos">0.00 €</p>
-            </div>
-            <div class="bg-gradient-to-br from-pink-600 to-pink-700 p-6 rounded-2xl shadow-lg text-white">
-                <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Ganancia Neta Limpia</p>
-                <p class="text-3xl font-black mt-1" id="kpi-beneficio">0.00 €</p>
-            </div>
-            <div class="bg-gradient-to-br from-amber-600 to-amber-700 p-6 rounded-2xl shadow-lg text-white">
-                <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Inversión Stock + Envío</p>
-                <p class="text-3xl font-black mt-1" id="kpi-inversion">0.00 €</p>
-            </div>
-            <div class="bg-gradient-to-br from-purple-600 to-purple-700 p-6 rounded-2xl shadow-lg text-white">
-                <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Prendas Vendidas</p>
-                <p class="text-3xl font-black mt-1" id="kpi-prendas">0</p>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-8">
-            <div id="form-container" class="card-bg border p-6 rounded-3xl shadow-xl self-start lg:col-span-1 transition-all">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 id="form-title" class="text-lg font-black uppercase">Añadir Prenda</h2>
-                    <button type="button" onclick="autocompletarNombreLocalRapido()" class="text-[10px] bg-slate-800 text-white px-2.5 py-1.5 rounded-xl font-bold uppercase tracking-wider hover:bg-slate-700">✨ Autocompletar</button>
-                </div>
-                <form id="form-venta" class="space-y-4">
-                    <input type="hidden" id="edit-id" value="">
+        <div id="panel-control" class="hidden max-w-7xl mx-auto px-4 py-6">
+            <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-8">
+                <div class="flex items-center gap-4">
                     <div>
-                        <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Código de Barras / SKU / QR</label>
-                        <input type="text" id="sku" placeholder="Código identificador" class="input-bg border w-full rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none">
+                        <h1 class="text-3xl font-black uppercase tracking-tight">Seychelles Shop</h1>
+                        <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
                     </div>
-                    <div>
-                        <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Modelo / Descripción</label>
-                        <input type="text" id="prenda" required class="input-bg border w-full rounded-xl px-4 py-2.5 text-sm focus:outline-none">
+                    <div id="combo-badge" class="hidden bg-amber-500 text-slate-950 font-black px-3 py-1 rounded-xl text-xs uppercase tracking-wider animate-bounce">
+                        💥 Combo x<span id="combo-count">0</span>
                     </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Categoría</label>
-                            <select id="categoria" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
-                                <option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Talla</label>
-                            <select id="talla" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
-                                <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Coste (€)</label>
-                            <input type="number" id="precioCompra" required step="0.01" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Venta (€)</label>
-                            <input type="number" id="precioVenta" required step="0.01" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Coste Envío (€)</label>
-                            <input type="number" id="gastosEnvio" step="0.01" value="0" class="input-bg border w-full rounded-xl p-3 text-sm font-mono focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Canal Comercial</label>
-                            <select id="canalVenta" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
-                                <option value="Tienda Física">🏬 Tienda</option>
-                                <option value="Vinted">👗 Vinted</option>
-                                <option value="Wallapop">🤝 Wallapop</option>
-                                <option value="Web">🌐 Web</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Valoración de la Prenda</label>
-                        <input type="hidden" id="rating" value="0">
-                        <div class="flex items-center gap-1.5 bg-black/10 p-2.5 rounded-xl border border-current/10 justify-center text-xl">
-                            <span onclick="setFormRating(1)" id="star-1" class="star-rating-btn text-slate-500">☆</span>
-                            <span onclick="setFormRating(2)" id="star-2" class="star-rating-btn text-slate-500">☆</span>
-                            <span onclick="setFormRating(3)" id="star-3" class="star-rating-btn text-slate-500">☆</span>
-                            <span onclick="setFormRating(4)" id="star-4" class="star-rating-btn text-slate-500">☆</span>
-                            <span onclick="setFormRating(5)" id="star-5" class="star-rating-btn text-slate-500">☆</span>
-                        </div>
-                    </div>
-                    
-                    <input type="hidden" id="cantidad" value="1">
-                    <button type="submit" id="btn-submit" class="w-full bg-blue-600 text-white font-bold text-xs py-4 rounded-xl shadow-md uppercase tracking-widest transition-all">Registrar Artículo</button>
-                    <button type="button" id="btn-cancel" onclick="cancelEdit()" class="hidden w-full text-center text-xs uppercase opacity-50 py-1 hover:underline">Cancelar Cambios</button>
-                </form>
-            </div>
-
-            <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px] transition-all">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xs font-black text-amber-500 uppercase tracking-wider">📦 STOCK DISPONIBLE <span id="badge-stock" class="opacity-60 font-mono">0</span></h3>
-                        <button onclick="alternarSeleccionColumna('No Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2 py-1 rounded-lg uppercase font-bold opacity-70">Marcar Todo</button>
-                    </div>
-                    <div id="col-no-vendido" class="flex-1 space-y-3 p-1 min-h-[400px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
                 </div>
                 
-                <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px] transition-all">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xs font-black text-emerald-500 uppercase tracking-wider">💰 ARTÍCULOS VENDIDOS <span id="badge-vendido" class="opacity-60 font-mono">0</span></h3>
-                        <button onclick="alternarSeleccionColumna('Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2 py-1 rounded-lg uppercase font-bold opacity-70">Marcar Todo</button>
+                <div class="flex flex-wrap items-center justify-center lg:justify-end gap-3 w-full lg:w-auto">
+                    <div class="relative w-full sm:w-64 flex items-center gap-2">
+                        <div class="relative flex-1">
+                            <form id="form-escaner-pistola" autocomplete="off">
+                                <input type="text" id="input-pistola" oninput="filtrarProductosMenu(this.value)" placeholder="🔍 Buscar modelo o escanear..." class="w-full bg-black/20 border border-current/20 rounded-xl px-4 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40">
+                            </form>
+                            <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-full dropdown-bg border rounded-xl shadow-2xl z-[100] max-h-48 overflow-y-auto p-1 font-sans text-[11px]"></div>
+                        </div>
+                        <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md">
+                            📷 Cámara
+                        </button>
                     </div>
-                    <div id="col-vendido" class="flex-1 space-y-3 p-1 min-h-[400px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
+
+                    <div class="flex bg-black/20 p-1 rounded-xl border border-current/10 text-[10px] font-bold uppercase tracking-wider">
+                        <button onclick="setTheme('dark')" class="px-2.5 py-1 rounded-lg" id="t-dark">Oscuro</button>
+                        <button onclick="setTheme('pink')" class="px-2.5 py-1 rounded-lg" id="t-pink">Rosa</button>
+                        <button onclick="setTheme('light')" class="px-2.5 py-1 rounded-lg" id="t-light">Claro</button>
+                        <button onclick="setTheme('emerald')" class="px-2.5 py-1 rounded-lg" id="t-emerald">Verde</button>
+                        <button onclick="setTheme('purple')" class="px-2.5 py-1 rounded-lg" id="t-purple">Morado</button>
+                    </div>
+
+                    <button onclick="forceRefreshDataManual()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95" title="Sincronizar Cloud">
+                        🔄 <span class="hidden sm:inline">Refrescar</span>
+                    </button>
+                    <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md">💾 Backup</button>
+                    <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md">📊 Excel</button>
+                    <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
+                </div>
+            </header>
+
+            <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500 p-5 rounded-3xl shadow-2xl mb-8 max-w-sm mx-auto text-center transition-all">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-xs font-black uppercase text-blue-400 font-mono flex items-center gap-2">
+                        <span id="camara-ping-state" class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> 
+                        <span id="camara-text-state">Lector Listo</span>
+                    </span>
+                    <button onclick="cerrarCamara()" class="text-xs font-bold opacity-50 hover:opacity-100 bg-black/20 px-2 py-0.5 rounded-lg">Cerrar ✕</button>
+                </div>
+                <div id="reader" class="overflow-hidden rounded-2xl bg-slate-950 border border-current/10 mx-auto flex items-center justify-center"></div>
+                <button id="btn-rearmar-escaner" type="button" onclick="rearmarLectorParaSiguientePrenda()" class="hidden w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-xl transition-all">
+                    🔄 ESCANEAR OTRA PRENDA
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="kpi-container-grid">
+                <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl shadow-lg text-white">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Facturación Bruta</p>
+                    <p class="text-3xl font-black mt-1" id="kpi-ingresos">0.00 €</p>
+                </div>
+                <div class="bg-gradient-to-br from-pink-600 to-pink-700 p-6 rounded-2xl shadow-lg text-white">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Ganancia Neta Limpia</p>
+                    <p class="text-3xl font-black mt-1" id="kpi-beneficio">0.00 €</p>
+                </div>
+                <div class="bg-gradient-to-br from-amber-600 to-amber-700 p-6 rounded-2xl shadow-lg text-white">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Inversión Stock + Envío</p>
+                    <p class="text-3xl font-black mt-1" id="kpi-inversion">0.00 €</p>
+                </div>
+                <div class="bg-gradient-to-br from-purple-600 to-purple-700 p-6 rounded-2xl shadow-lg text-white">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Prendas Vendidas</p>
+                    <p class="text-3xl font-black mt-1" id="kpi-prendas">0</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-8">
+                <div id="form-container" class="card-bg border p-6 rounded-3xl shadow-xl self-start lg:col-span-1 transition-all">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 id="form-title" class="text-lg font-black uppercase">Añadir Prenda</h2>
+                        <button type="button" onclick="autocompletarNombreLocalRapido()" class="text-[10px] bg-slate-800 text-white px-2.5 py-1.5 rounded-xl font-bold uppercase tracking-wider hover:bg-slate-700">✨ Autocompletar</button>
+                    </div>
+                    <form id="form-venta" class="space-y-4">
+                        <input type="hidden" id="edit-id" value="">
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Código de Barras / SKU / QR</label>
+                            <input type="text" id="sku" placeholder="Código identificador" class="input-bg border w-full rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Modelo / Descripción</label>
+                            <input type="text" id="prenda" required class="input-bg border w-full rounded-xl px-4 py-2.5 text-sm focus:outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Categoría</label>
+                                <select id="categoria" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
+                                    <option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Talla</label>
+                                <select id="talla" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
+                                    <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Coste (€)</label>
+                                <input type="number" id="precioCompra" required step="0.01" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Venta (€)</label>
+                                <input type="number" id="precioVenta" required step="0.01" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Coste Envío (€)</label>
+                                <input type="number" id="gastosEnvio" step="0.01" value="0" class="input-bg border w-full rounded-xl p-3 text-sm font-mono focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Canal Comercial</label>
+                                <select id="canalVenta" class="input-bg border w-full rounded-xl p-3 text-sm focus:outline-none">
+                                    <option value="Tienda Física">🏬 Tienda</option>
+                                    <option value="Vinted">👗 Vinted</option>
+                                    <option value="Wallapop">🤝 Wallapop</option>
+                                    <option value="Web">🌐 Web</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Valoración de la Prenda</label>
+                            <input type="hidden" id="rating" value="0">
+                            <div class="flex items-center gap-1.5 bg-black/10 p-2.5 rounded-xl border border-current/10 justify-center text-xl">
+                                <span onclick="setFormRating(1)" id="star-1" class="star-rating-btn text-slate-500">☆</span>
+                                <span onclick="setFormRating(2)" id="star-2" class="star-rating-btn text-slate-500">☆</span>
+                                <span onclick="setFormRating(3)" id="star-3" class="star-rating-btn text-slate-500">☆</span>
+                                <span onclick="setFormRating(4)" id="star-4" class="star-rating-btn text-slate-500">☆</span>
+                                <span onclick="setFormRating(5)" id="star-5" class="star-rating-btn text-slate-500">☆</span>
+                            </div>
+                        </div>
+                        
+                        <input type="hidden" id="cantidad" value="1">
+                        <button type="submit" id="btn-submit" class="w-full bg-blue-600 text-white font-bold text-xs py-4 rounded-xl shadow-md uppercase tracking-widest transition-all">Registrar Artículo</button>
+                        <button type="button" id="btn-cancel" onclick="cancelEdit()" class="hidden w-full text-center text-xs uppercase opacity-50 py-1 hover:underline">Cancelar Cambios</button>
+                    </form>
+                </div>
+
+                <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px] transition-all">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xs font-black text-amber-500 uppercase tracking-wider">📦 STOCK DISPONIBLE <span id="badge-stock" class="opacity-60 font-mono">0</span></h3>
+                            <button onclick="alternarSeleccionColumna('No Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2 py-1 rounded-lg uppercase font-bold opacity-70">Marcar Todo</button>
+                        </div>
+                        <div id="col-no-vendido" class="flex-1 space-y-3 p-1 min-h-[400px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
+                    </div>
+                    
+                    <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px] transition-all">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xs font-black text-emerald-500 uppercase tracking-wider">💰 ARTÍCULOS VENDIDOS <span id="badge-vendido" class="opacity-60 font-mono">0</span></h3>
+                            <button onclick="alternarSeleccionColumna('Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2 py-1 rounded-lg uppercase font-bold opacity-70">Marcar Todo</button>
+                        </div>
+                        <div id="col-vendido" class="flex-1 space-y-3 p-1 min-h-[400px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="card-bg border p-6 rounded-3xl shadow-xl lg:col-span-1">
+                    <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento</h3>
+                    <div class="w-full h-48 relative" id="contenedor-canvas-grafica">
+                        <canvas id="graficaTendencias"></canvas>
+                    </div>
+                </div>
+
+                <div class="card-bg border p-6 rounded-3xl shadow-xl lg:col-span-1">
+                    <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📊 Distribución de Ventas</h3>
+                    <div class="w-full h-48 relative flex items-center justify-center" id="contenedor-canvas-tarta">
+                        <canvas id="graficaTartaCategorias"></canvas>
+                    </div>
+                </div>
+                
+                <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[240px] lg:col-span-1">
+                    <h3 class="text-xs font-black text-indigo-400 uppercase mb-3 tracking-wider flex justify-between">
+                        📜 AUDITORÍA DEL NÚCLEO <span>LIVE</span>
+                    </h3>
+                    <div id="contenedor-logs-auditoria" class="flex-1 overflow-y-auto space-y-2 pr-1 text-[11px] font-mono opacity-80">
+                        <div class="italic opacity-50">Sincronizando operaciones cloud...</div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="card-bg border p-6 rounded-3xl shadow-xl lg:col-span-1">
-                <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento</h3>
-                <div class="w-full h-48 relative" id="contenedor-canvas-grafica">
-                    <canvas id="graficaTendencias"></canvas>
-                </div>
+        <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-3xl w-[92%] transition-all">
+            <div class="text-xs font-bold font-mono">💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> MARCADOS</div>
+            <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
+            <div class="flex flex-wrap items-center gap-2">
+                <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">👯 Duplicar Lote</button>
+                <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">💵 Vender Lote</button>
+                <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">📦 Mover a Stock</button>
+                <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                    <option value="">📐 Talla...</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                </select>
+                <select id="categoria-masiva" onchange="ejecutarEdicionMasivaPropiedad('categoria', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                    <option value="">👕 Categoría...</option><option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
+                </select>
+                <button onclick="ejecutarEliminacionMasiva()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">🗑️ Eliminar</button>
+                <button onclick="limpiarSeleccionMasiva()" class="text-[10px] underline opacity-50 hover:opacity-100 px-1">Limpiar</button>
             </div>
+        </div>
 
-            <div class="card-bg border p-6 rounded-3xl shadow-xl lg:col-span-1">
-                <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📊 Distribución de Ventas</h3>
-                <div class="w-full h-48 relative flex items-center justify-center" id="contenedor-canvas-tarta">
-                    <canvas id="graficaTartaCategorias"></canvas>
-                </div>
-            </div>
-            
-            <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[240px] lg:col-span-1">
-                <h3 class="text-xs font-black text-indigo-400 uppercase mb-3 tracking-wider flex justify-between">
-                    📜 AUDITORÍA DEL NÚCLEO <span>LIVE</span>
-                </h3>
-                <div id="contenedor-logs-auditoria" class="flex-1 overflow-y-auto space-y-2 pr-1 text-[11px] font-mono opacity-80">
-                    <div class="italic opacity-50">Sincronizando operaciones cloud...</div>
+        <div id="modal-qr" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div class="bg-white text-slate-900 p-6 rounded-2xl shadow-2xl border max-w-xs w-full text-center flex flex-col items-center">
+                <h4 class="text-slate-500 uppercase font-mono text-[10px] tracking-widest mb-1">Seychelles Shop</h4>
+                <h3 id="print-prenda" class="font-black text-sm uppercase tracking-tight mb-4">Modelo Prenda</h3>
+                <div id="canvas-generador-qr" class="p-2 border rounded-xl bg-white mb-3 text-[11px] font-mono select-all bg-slate-100 break-all p-3">ID DE ESCANEO ACTIVO</div>
+                <p id="print-sku" class="font-mono text-xs text-slate-400 mb-1">SKU-CODE</p>
+                <p id="print-precio" class="text-xl font-black text-slate-900 font-mono mb-6">0.00 €</p>
+                <div class="flex gap-2 w-full">
+                    <button onclick="document.getElementById('modal-qr').classList.add('hidden')" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 rounded-xl text-xs uppercase">Cerrar</button>
+                    <button onclick="window.print()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs uppercase">Imprimir</button>
                 </div>
             </div>
         </div>
+
+        <footer id="ticker-bar" class="hidden fixed bottom-0 left-0 w-full bg-black h-10 flex items-center z-50 text-[10px] font-mono border-t border-white/5 shadow-2xl transition-colors duration-300">
+            <div id="ticker-header-badge" class="bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none">WALL•ST•SEYCHELLES</div>
+            <div class="flex-1 overflow-hidden flex">
+                <div class="ticker-content flex items-center gap-12" id="ticker-content"></div>
+            </div>
+        </footer>
     </div>
-
-    <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-3xl w-[92%] transition-all">
-        <div class="text-xs font-bold font-mono">💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> MARCADOS</div>
-        <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
-        <div class="flex flex-wrap items-center gap-2">
-            <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">👯 Duplicar Lote</button>
-            <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">💵 Vender Lote</button>
-            <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">📦 Mover a Stock</button>
-            <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
-                <option value="">📐 Talla...</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
-            </select>
-            <select id="categoria-masiva" onchange="ejecutarEdicionMasivaPropiedad('categoria', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
-                <option value="">👕 Categoría...</option><option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
-            </select>
-            <button onclick="ejecutarEliminacionMasiva()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">🗑️ Eliminar</button>
-            <button onclick="limpiarSeleccionMasiva()" class="text-[10px] underline opacity-50 hover:opacity-100 px-1">Limpiar</button>
-        </div>
-    </div>
-
-    <div id="modal-qr" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-        <div class="bg-white text-slate-900 p-6 rounded-2xl shadow-2xl border max-w-xs w-full text-center flex flex-col items-center">
-            <h4 class="text-slate-500 uppercase font-mono text-[10px] tracking-widest mb-1">Seychelles Shop</h4>
-            <h3 id="print-prenda" class="font-black text-sm uppercase tracking-tight mb-4">Modelo Prenda</h3>
-            <div id="canvas-generador-qr" class="p-2 border rounded-xl bg-white mb-3 text-[11px] font-mono select-all bg-slate-100 break-all p-3">ID DE ESCANEO ACTIVO</div>
-            <p id="print-sku" class="font-mono text-xs text-slate-400 mb-1">SKU-CODE</p>
-            <p id="print-precio" class="text-xl font-black text-slate-900 font-mono mb-6">0.00 €</p>
-            <div class="flex gap-2 w-full">
-                <button onclick="document.getElementById('modal-qr').classList.add('hidden')" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 rounded-xl text-xs uppercase">Cerrar</button>
-                <button onclick="window.print()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs uppercase">Imprimir</button>
-            </div>
-        </div>
-    </div>
-
-    <footer id="ticker-bar" class="hidden fixed bottom-0 left-0 w-full bg-black h-10 flex items-center z-50 text-[10px] font-mono border-t border-white/5 shadow-2xl transition-colors duration-300">
-        <div id="ticker-header-badge" class="bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none">WALL•ST•SEYCHELLES</div>
-        <div class="flex-1 overflow-hidden flex">
-            <div class="ticker-content flex items-center gap-12" id="ticker-content"></div>
-        </div>
-    </footer>
 
     <script>
         const BACKEND_URL = '';
@@ -365,7 +387,6 @@
             }
         };
 
-        // 🛠️ NUEVO: Función para forzar refresco manual desde el botón sin recargar el navegador
         async function forceRefreshDataManual() {
             cantarPorVoz("Sincronizando.");
             await reloadCoreData();
@@ -544,7 +565,6 @@
             }
         }
 
-        // 🛠️ CORREGIDO: Plantilla del buscador optimizada (Texto superpequeño, padding compacto, diseño slim)
         function filtrarProductosMenu(valorQuery) {
             const dropdown = document.getElementById('dropdown-buscador'); const query = valorQuery.toLowerCase().trim();
             if (!query && dropdown) { dropdown.innerHTML = ''; dropdown.classList.add('hidden'); return; }
@@ -650,7 +670,7 @@
             const fechas = Object.keys(datosAgrapados).sort(); const montos = fechas.map(f => datosAgrapados[f]);
 
             const configuracionGraficas = {
-                dark: { linea: '#3b82f6', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' }, pink: { linea: '#db2777', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
+                dark: { linea: '#ec4899', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' }, pink: { linea: '#db2777', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
                 light: { linea: '#0f172a', texto: '#475569', malla: 'rgba(0,0,0,0.05)' }, emerald: { linea: '#10b981', texto: '#e6f4ea', malla: 'rgba(255,255,255,0.05)' },
                 purple: { linea: '#a855f7', texto: '#e0e7ff', malla: 'rgba(255,255,255,0.05)' }
             };
@@ -662,7 +682,6 @@
             });
         }
 
-        // Gráfica de quesito (Top Ventas)
         function dibujarGráficaTarta() {
             const contenedor = document.getElementById('contenedor-canvas-tarta'); if(!contenedor) return;
             contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
@@ -674,7 +693,7 @@
             const etiquetas = Object.keys(contadorCategorias); const datos = etiquetas.map(cat => contadorCategorias[cat]);
 
             const paletasColor = {
-                dark: ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#a855f7'], pink: ['#db2777', '#f472b6', '#fbcfe8', '#be185d', '#9d174d'],
+                dark: ['#ec4899', '#f472b6', '#3b82f6', '#10b981', '#f59e0b'], pink: ['#db2777', '#f472b6', '#fbcfe8', '#be185d', '#9d174d'],
                 light: ['#1e293b', '#475569', '#64748b', '#94a3b8', '#cbd5e1'], emerald: ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
                 purple: ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe']
             };
@@ -763,6 +782,32 @@
                 navigator.serviceWorker.register('/sw.js').then(reg => console.log('PWA Sincronizada.')).catch(err => {});
             });
         }
+
+        // 🔥 CONFIGURACIÓN MAESTRA DE PARTICLES.JS EN ROSA NEÓN INTERACTIVO
+        particlesJS("particles-js", {
+            "particles": {
+                "number": { "value": 45, "density": { "enable": true, "value_area": 800 } },
+                "color": { "value": "#ec4899" }, /* Rosa Neón Corporativo */
+                "shape": { "type": "circle" },
+                "opacity": { "value": 0.35, "random": false },
+                "size": { "value": 3.5, "random": true },
+                "line_linked": { "enable": true, "distance": 150, "color": "#ec4899", "opacity": 0.2, "width": 1 },
+                "move": { "enable": true, "speed": 1.8, "direction": "none", "random": true, "straight": false, "out_mode": "out", "bounce": false }
+            },
+            "interactivity": {
+                "detect_on": "canvas",
+                "events": {
+                    "onhover": { "enable": true, "mode": "grab" }, /* Vincula nodos al pasar el cursor o dedo */
+                    "onclick": { "enable": true, "mode": "push" }, /* Genera mas particulas al pulsar */
+                    "resize": true
+                },
+                "modes": {
+                    "grab": { "distance": 180, "line_linked": { "opacity": 0.45 } },
+                    "push": { "particles_nb": 3 }
+                }
+            },
+            "retina_detect": true
+        });
     </script>
 </body>
 </html>

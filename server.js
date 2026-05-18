@@ -17,7 +17,7 @@ mongoose.connect(MONGO_URI_FINAL)
     .then(() => console.log('\x1b[32m[OK]\x1b[0m Conectado correctamente a MongoDB Atlas (tienda_ropa)'))
     .catch(err => console.error('Error de conexión en MongoDB Atlas:', err));
 
-// Esquema de Datos Adaptado para los dos estados
+// Esquema de Datos
 const VentaRopaSchema = new mongoose.Schema({
     fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
     prenda: { type: String, default: 'Artículo General', trim: true },
@@ -26,7 +26,7 @@ const VentaRopaSchema = new mongoose.Schema({
     cantidad: { type: Number, default: 1, min: 1 },
     precioCompra: { type: Number, default: 0, min: 0 },
     precioVenta: { type: Number, default: 0, min: 0 },
-    estado: { type: String, enum: ['Vendido', 'No Vendido', 'Devuelto'], default: 'No Vendido' } // 'No Vendido' por defecto al registrar stock
+    estado: { type: String, enum: ['Vendido', 'No Vendido', 'Devuelto'], default: 'No Vendido' }
 });
 const VentaRopa = mongoose.model('VentaRopa', VentaRopaSchema);
 
@@ -57,6 +57,13 @@ function exigeAdmin(req, res, next) {
 
 // --- API ENDPOINTS ---
 
+app.get('/api/auth/verificar', (req, res) => {
+    if (req.session && req.session.esAdmin) {
+        return res.json({ autenticado: true, usuario: req.session.email });
+    }
+    return res.json({ autenticado: false });
+});
+
 app.post('/api/auth/google', async (req, res) => {
     const { token } = req.body;
     if (!token) return res.status(400).json({ error: 'Token ausente.' });
@@ -85,7 +92,6 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
             const pCompra = parseFloat(v.precioCompra) || 0;
             const pVenta = parseFloat(v.precioVenta) || 0;
 
-            // Inversión se calcula siempre (es stock comprado)
             inversion += (pCompra * cant);
 
             if (estadoActual === 'Vendido') {
@@ -110,14 +116,34 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
             cantidad: parseInt(cantidad, 10) || 1,
             precioCompra: parseFloat(precioCompra) || 0,
             precioVenta: parseFloat(precioVenta) || 0,
-            estado: estado || 'No Vendido' // Se puede elegir al crear si ya se vendió o es stock nuevo
+            estado: estado || 'No Vendido'
         });
         await nuevaVenta.save(); 
         return res.json({ status: "success", venta: nuevaVenta });
     } catch (error) { return res.status(500).json({ error: 'Error al indexar stock.' }); }
 });
 
-// NUEVO ENDPOINT CRÍTICO: Actualiza el estado al arrastrar y soltar
+// NUEVO ENDPOINT: Actualización completa de campos (Edición)
+app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
+    try {
+        const { prenda, categoria, talla, cantidad, precioCompra, precioVenta, estado } = req.body;
+        const articuloActualizado = await VentaRopa.findByIdAndUpdate(
+            req.params.id,
+            {
+                prenda: prenda ? prenda.trim() : "Artículo General",
+                categoria, talla,
+                cantidad: parseInt(cantidad, 10) || 1,
+                precioCompra: parseFloat(precioCompra) || 0,
+                precioVenta: parseFloat(precioVenta) || 0,
+                estado
+            },
+            { new: true }
+        );
+        if (!articuloActualizado) return res.status(404).json({ error: 'Artículo no encontrado' });
+        return res.json({ status: "success", venta: articuloActualizado });
+    } catch (error) { return res.status(500).json({ error: 'Error al editar el artículo.' }); }
+});
+
 app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
     try {
         const { estado } = req.body;

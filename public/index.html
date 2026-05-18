@@ -8,6 +8,7 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         .drag-over { border: 2px dashed #3b82f6 !important; background-color: rgba(59, 130, 246, 0.1) !important; }
+        .modo-edicion { border-color: #3b82f6 !important; background-color: rgba(30, 41, 59, 0.9) !important; }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased">
@@ -55,9 +56,10 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700 shadow-2xl self-start lg:col-span-1">
-                <h2 class="text-md font-bold text-white uppercase tracking-wider mb-4">Añadir Prenda</h2>
+            <div id="contenedor-formulario" class="bg-slate-800/60 p-5 rounded-xl border border-slate-700 shadow-2xl self-start lg:col-span-1 transition-all">
+                <h2 id="titulo-formulario" class="text-md font-bold text-white uppercase tracking-wider mb-4">Añadir Prenda</h2>
                 <form id="form-venta" class="space-y-3">
+                    <input type="hidden" id="edit-id" value="">
                     <div>
                         <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Nombre / Descripción</label>
                         <input type="text" id="prenda" required placeholder="Ej. Vestido Satinado" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
@@ -95,25 +97,26 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Estado Inicial</label>
+                        <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Estado</label>
                         <select id="estado-inicial" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-2 text-sm text-white focus:outline-none">
                             <option value="No Vendido">📦 En Stock (Disponible)</option>
                             <option value="Vendido">💰 Ya Vendido</option>
                         </select>
                     </div>
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-lg shadow-lg mt-4">💾 Registrar Stock</button>
+                    <div class="space-y-2 pt-2">
+                        <button type="submit" id="btn-submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-lg shadow-lg">💾 Registrar Stock</button>
+                        <button type="button" id="btn-cancelar" onclick="cancelarEdicion()" class="hidden w-full bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold text-xs uppercase tracking-wider py-2 rounded-lg">Cancelar Edición</button>
+                    </div>
                 </form>
             </div>
 
             <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
-                
                 <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 flex flex-col min-h-[500px]">
                     <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-700">
                         <h3 class="text-sm font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">📦 DISPONIBLES EN STOCK</h3>
                         <span id="badge-stock" class="bg-amber-500/10 text-amber-400 text-xs font-bold px-2.5 py-0.5 rounded-full border border-amber-500/20">0</span>
                     </div>
-                    <div id="col-no-vendido" class="space-y-3 flex-1 transition-all p-1 rounded-lg" ondragover="permitirSoltar(event)" ondragleave="quitarMarcaDrop(event)" ondrop="soltarTarjeta(event, 'No Vendido')">
-                        </div>
+                    <div id="col-no-vendido" class="space-y-3 flex-1 transition-all p-1 rounded-lg" ondragover="permitirSoltar(event)" ondragleave="quitarMarcaDrop(event)" ondrop="soltarTarjeta(event, 'No Vendido')"></div>
                 </div>
 
                 <div class="bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 flex flex-col min-h-[500px]">
@@ -121,10 +124,8 @@
                         <h3 class="text-sm font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">💰 ARTÍCULOS VENDIDOS</h3>
                         <span id="badge-vendido" class="bg-emerald-500/10 text-emerald-400 text-xs font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/20">0</span>
                     </div>
-                    <div id="col-vendido" class="space-y-3 flex-1 transition-all p-1 rounded-lg" ondragover="permitirSoltar(event)" ondragleave="quitarMarcaDrop(event)" ondrop="soltarTarjeta(event, 'Vendido')">
-                        </div>
+                    <div id="col-vendido" class="space-y-3 flex-1 transition-all p-1 rounded-lg" ondragover="permitirSoltar(event)" ondragleave="quitarMarcaDrop(event)" ondrop="soltarTarjeta(event, 'Vendido')"></div>
                 </div>
-
             </div>
         </div>
     </div>
@@ -132,6 +133,20 @@
     <script>
         const BACKEND_URL = ''; 
         let BASE_DATOS_VENTAS = []; 
+
+        // VERIFICACIÓN PERSISTENTE DE SESIÓN AL CARGAR CON F5
+        window.onload = async function() {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' });
+                const data = await res.json();
+                if (data.autenticado) {
+                    document.getElementById('user-display').innerText = `Conectado: ${data.usuario}`;
+                    document.getElementById('login-box').classList.add('hidden');
+                    document.getElementById('panel-control').classList.remove('hidden');
+                    await cargarVentas();
+                }
+            } catch (err) { console.error("Error comprobando sesión en F5:", err); }
+        };
 
         async function handleCredentialResponse(response) {
             try {
@@ -148,7 +163,7 @@
                     document.getElementById('panel-control').classList.remove('hidden');
                     await cargarVentas();
                 } else { alert(data.error || 'No autorizado.'); }
-            } catch (err) { alert("Error de comunicación con el servidor."); }
+            } catch (err) { alert("Error de comunicación."); }
         }
 
         async function cargarVentas() {
@@ -171,19 +186,16 @@
         function renderizarTablero() {
             const colNoVendido = document.getElementById('col-no-vendido');
             const colVendido = document.getElementById('col-vendido');
-            
             colNoVendido.innerHTML = '';
             colVendido.innerHTML = '';
 
-            let countStock = 0;
-            let countVendido = 0;
+            let countStock = 0, countVendido = 0;
 
             BASE_DATOS_VENTAS.forEach(v => {
                 const tarjeta = document.createElement('div');
                 tarjeta.id = v._id;
                 tarjeta.draggable = true;
                 tarjeta.ondragstart = arrastrarTarjeta;
-                
                 tarjeta.className = "bg-slate-900 p-4 rounded-xl border border-slate-700/70 shadow-md cursor-grab active:cursor-grabbing hover:border-slate-500 transition-all flex flex-col justify-between gap-3";
 
                 const beneficioTarjeta = (Number(v.precioVenta) - Number(v.precioCompra)) * v.cantidad;
@@ -195,13 +207,17 @@
                             <span class="bg-slate-800 text-[10px] font-bold text-slate-300 px-2 py-0.5 rounded">${v.talla}</span>
                         </div>
                         <p class="text-[11px] text-slate-400 font-mono mt-1">${v.categoria} • ${v.cantidad} ud.</p>
+                        <p class="text-[10px] text-slate-500 font-mono mt-0.5">Coste: ${Number(v.precioCompra).toFixed(2)}€ | Venta: ${Number(v.precioVenta).toFixed(2)}€</p>
                     </div>
                     <div class="flex justify-between items-center pt-2 border-t border-slate-800/60 mt-1">
                         <div class="text-xs font-mono">
                             <span class="text-slate-500 block text-[9px] uppercase font-bold">Ganancia</span>
                             <span class="${beneficioTarjeta >= 0 ? 'text-emerald-400' : 'text-rose-400'} font-bold">${beneficioTarjeta.toFixed(2)} €</span>
                         </div>
-                        <button onclick="eliminarRegistro('${v._id}')" class="text-slate-500 hover:text-rose-400 p-1 rounded transition-all text-sm">✕</button>
+                        <div class="flex items-center gap-2">
+                            <button onclick="activarModoEdicion('${v._id}')" class="text-xs bg-slate-800 text-blue-400 hover:bg-blue-950/50 px-2 py-1 rounded font-bold border border-blue-900/40 transition-all">Editar</button>
+                            <button onclick="eliminarRegistro('${v._id}')" class="text-slate-500 hover:text-rose-400 p-1 text-sm">✕</button>
+                        </div>
                     </div>
                 `;
 
@@ -215,47 +231,54 @@
             });
 
             document.getElementById('badge-stock').innerText = `${countStock} uds`;
-            document.getElementById('badge-sold-out' || 'badge-vendido').innerText = `${countVendido} uds`;
+            document.getElementById('badge-vendido').innerText = `${countVendido} uds`;
         }
 
-        // --- LÓGICA DRAG AND DROP NATIVA ---
-        function arrastrarTarjeta(e) {
-            e.dataTransfer.setData("text/plain", e.target.id);
-        }
+        // --- MANIPULACIÓN DEL MODO EDICIÓN ---
+        function activarModoEdicion(id) {
+            const articulo = BASE_DATOS_VENTAS.find(v => v._id === id);
+            if (!articulo) return;
 
-        function permitirSoltar(e) {
-            e.preventDefault();
-            e.currentTarget.classList.add('drag-over');
-        }
+            // Rellenar formulario con los datos recuperados de Atlas
+            document.getElementById('edit-id').value = articulo._id;
+            document.getElementById('prenda').value = articulo.prenda;
+            document.getElementById('categoria').value = articulo.categoria;
+            document.getElementById('talla').value = articulo.talla;
+            document.getElementById('cantidad').value = articulo.cantidad;
+            document.getElementById('precioCompra').value = articulo.precioCompra;
+            document.getElementById('precioVenta').value = articulo.precioVenta;
+            document.getElementById('estado-inicial').value = articulo.estado;
 
-        function quitarMarcaDrop(e) {
-            e.currentTarget.classList.remove('drag-over');
-        }
-
-        async function soltarTarjeta(e, nuevoEstado) {
-            e.preventDefault();
-            e.currentTarget.classList.remove('drag-over');
+            // Transición estética visual del contenedor
+            document.getElementById('contenedor-formulario').classList.add('modo-edicion');
+            document.getElementById('titulo-formulario').innerText = "✏️ Editar Artículo";
+            document.getElementById('titulo-formulario').classList.add('text-blue-400');
+            document.getElementById('btn-submit').innerText = "🔄 Actualizar Artículo";
+            document.getElementById('btn-submit').classList.replace('bg-blue-600', 'bg-blue-500');
+            document.getElementById('btn-cancelar').classList.remove('hidden');
             
-            const idTarjeta = e.dataTransfer.getData("text/plain");
-            if (!idTarjeta) return;
-
-            // Enviar cambio inmediato a MongoDB Atlas
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/ventas/${idTarjeta}/estado`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ estado: nuevoEstado })
-                });
-                if (response.ok) {
-                    await cargarVentas(); // Recarga limpia de KPIs y posiciones
-                } else { alert("Fallo al actualizar el estado de la prenda."); }
-            } catch (err) { alert("Error de conexión."); }
+            // Scroll suave automático al formulario si están en móvil
+            document.getElementById('contenedor-formulario').scrollIntoView({ behavior: 'smooth' });
         }
 
-        // --- ENVIAR NUEVA PRENDA ---
+        function cancelarEdicion() {
+            document.getElementById('form-venta').reset();
+            document.getElementById('edit-id').value = "";
+            
+            // Restaurar estados visuales normales
+            document.getElementById('contenedor-formulario').classList.remove('modo-edicion');
+            document.getElementById('titulo-formulario').innerText = "Añadir Prenda";
+            document.getElementById('titulo-formulario').classList.remove('text-blue-400');
+            document.getElementById('btn-submit').innerText = "💾 Registrar Stock";
+            document.getElementById('btn-submit').classList.replace('bg-blue-500', 'bg-blue-600');
+            document.getElementById('btn-cancelar').classList.add('hidden');
+        }
+
+        // --- SUBMIT ÚNICO (CREACIÓN O EDICIÓN) ---
         document.getElementById('form-venta').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const idParaEditar = document.getElementById('edit-id').value;
+            
             const payload = {
                 prenda: document.getElementById('prenda').value,
                 categoria: document.getElementById('categoria').value,
@@ -265,25 +288,59 @@
                 precioVenta: parseFloat(document.getElementById('precioVenta').value),
                 estado: document.getElementById('estado-inicial').value
             };
+
+            let url = `${BACKEND_URL}/api/ventas`;
+            let metodo = 'POST';
+
+            if (idParaEditar) {
+                url = `${BACKEND_URL}/api/ventas/${idParaEditar}`;
+                metodo = 'PUT';
+            }
+
             try {
-                const response = await fetch(`${BACKEND_URL}/api/ventas`, {
-                    method: 'POST',
+                const response = await fetch(url, {
+                    method: metodo,
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     body: JSON.stringify(payload)
                 });
                 if (response.ok) { 
-                    document.getElementById('form-venta').reset(); 
+                    cancelarEdicion();
                     await cargarVentas(); 
-                }
+                } else { alert("Error al procesar la operación."); }
             } catch (error) { alert("Error de red."); }
         });
 
+        // --- DRAG AND DROP NATIVO ---
+        function arrastrarTarjeta(e) { e.dataTransfer.setData("text/plain", e.target.id); }
+        function permitirSoltar(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+        function quitarMarcaDrop(e) { e.currentTarget.classList.remove('drag-over'); }
+
+        async function soltarTarjeta(e, nuevoEstado) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+            const idTarjeta = e.dataTransfer.getData("text/plain");
+            if (!idTarjeta) return;
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/ventas/${idTarjeta}/estado`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ estado: nuevoEstado })
+                });
+                if (response.ok) await cargarVentas();
+            } catch (err) { alert("Error de red al arrastrar."); }
+        }
+
         async function eliminarRegistro(id) {
-            if (!confirm('¿Eliminar de MongoDB?')) return;
+            if (!confirm('¿Eliminar permanentemente de MongoDB?')) return;
             try {
                 const res = await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' });
-                if (res.ok) await cargarVentas();
+                if (res.ok) {
+                    if(document.getElementById('edit-id').value === id) cancelarEdicion();
+                    await cargarVentas();
+                }
             } catch (e) { console.error(e); }
         }
 

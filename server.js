@@ -123,7 +123,6 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
     } catch (error) { return res.status(500).json({ error: 'Error al indexar stock.' }); }
 });
 
-// NUEVO ENDPOINT: Actualización completa de campos (Edición)
 app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
     try {
         const { prenda, categoria, talla, cantidad, precioCompra, precioVenta, estado } = req.body;

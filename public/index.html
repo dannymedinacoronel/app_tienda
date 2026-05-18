@@ -9,11 +9,18 @@
     <style>
         .drag-over { border: 2px dashed #3b82f6 !important; background-color: rgba(59, 130, 246, 0.1) !important; }
         .modo-edicion { border-color: #3b82f6 !important; background-color: rgba(30, 41, 59, 0.9) !important; }
+        
+        /* ANIMACIÓN ESTILO WALL STREET (TICKER MARQUEE) */
+        @keyframes ticker {
+            0% { transform: translate3d(0, 0, 0); }
+            100% { transform: translate3d(-50%, 0, 0); }
+        }
+        .ticker-wrap { display: flex; width: 100%; overflow: hidden; }
+        .ticker-content { display: flex; white-space: nowrap; animation: ticker 25s linear infinite; }
+        .ticker-content:hover { animation-play-state: paused; } /* Se frena al pasar el ratón por encima */
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased">
-
-    <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4 bg-gradient-to-b from-slate-900 to-slate-950">
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans antialiased pb-16"> <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4 bg-gradient-to-b from-slate-900 to-slate-950">
         <div class="bg-slate-800/80 backdrop-blur-md p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700 text-center">
             <h1 class="text-3xl font-black text-white tracking-wider mb-2 uppercase">Seychelles Shop</h1>
             <p class="text-slate-400 text-sm mb-6">Consola de Control Financiero de Artículos</p>
@@ -130,11 +137,18 @@
         </div>
     </div>
 
+    <div id="ticker-bolsa" class="hidden fixed bottom-0 left-0 w-full bg-black border-t border-slate-800 h-9 flex items-center z-50 shadow-2xl font-mono text-xs">
+        <div class="bg-rose-600 text-white font-black px-3 h-full flex items-center text-[10px] tracking-widest uppercase shadow-md select-none">WALL•ST•SEYCHELLES</div>
+        <div class="ticker-wrap flex-1">
+            <div id="marquesina-dinamica" class="ticker-content flex items-center gap-12">
+                </div>
+        </div>
+    </div>
+
     <script>
         const BACKEND_URL = ''; 
         let BASE_DATOS_VENTAS = []; 
 
-        // VERIFICACIÓN PERSISTENTE DE SESIÓN AL CARGAR CON F5
         window.onload = async function() {
             try {
                 const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' });
@@ -143,9 +157,10 @@
                     document.getElementById('user-display').innerText = `Conectado: ${data.usuario}`;
                     document.getElementById('login-box').classList.add('hidden');
                     document.getElementById('panel-control').classList.remove('hidden');
+                    document.getElementById('ticker-bolsa').classList.remove('hidden'); // Mostrar marquesina
                     await cargarVentas();
                 }
-            } catch (err) { console.error("Error comprobando sesión en F5:", err); }
+            } catch (err) { console.error("Error en F5:", err); }
         };
 
         async function handleCredentialResponse(response) {
@@ -161,6 +176,7 @@
                     document.getElementById('user-display').innerText = `Conectado: ${data.usuario}`;
                     document.getElementById('login-box').classList.add('hidden');
                     document.getElementById('panel-control').classList.remove('hidden');
+                    document.getElementById('ticker-bolsa').classList.remove('hidden'); // Mostrar marquesina
                     await cargarVentas();
                 } else { alert(data.error || 'No autorizado.'); }
             } catch (err) { alert("Error de comunicación."); }
@@ -180,6 +196,7 @@
 
                 BASE_DATOS_VENTAS = data.ventas || [];
                 renderizarTablero();
+                actualizarMarquesinaBolsa(); // 🚀 Renderiza el ticker Wall Street
             } catch (error) { console.error(error); }
         }
 
@@ -234,12 +251,34 @@
             document.getElementById('badge-vendido').innerText = `${countVendido} uds`;
         }
 
-        // --- MANIPULACIÓN DEL MODO EDICIÓN ---
+        // 🚀 LÓGICA DE ACTUALIZACIÓN DEL TICKER DE LA BOLSA DE NEW YORK
+        function actualizarMarquesinaBolsa() {
+            const marquesina = document.getElementById('marquesina-dinamica');
+            if (BASE_DATOS_VENTAS.length === 0) {
+                marquesina.innerHTML = `<span class="text-slate-500">SIN MOVIMIENTOS REGISTRADOS EN ATLAS CLOUD...</span>`;
+                return;
+            }
+
+            let stringItems = '';
+            
+            // Construimos las cadenas estilo bolsa (Prenda + Estado + Precio)
+            BASE_DATOS_VENTAS.slice(0, 15).forEach(v => {
+                const nombreCorto = v.prenda.toUpperCase();
+                if (v.estado === 'Vendido') {
+                    stringItems += `<span class="flex items-center gap-1"><b class="text-white">${nombreCorto}</b> <span class="text-emerald-400 font-bold">▲ VENDIDO +${v.precioVenta.toFixed(2)}€</span> (Talla ${v.talla})</span>`;
+                } else {
+                    stringItems += `<span class="flex items-center gap-1"><b class="text-white">${nombreCorto}</b> <span class="text-amber-400 font-bold">● STOCK DISP ${v.precioVenta.toFixed(2)}€</span> (Talla ${v.talla})</span>`;
+                }
+            });
+
+            // Duplicamos el contenido dentro del contenedor para que el scroll infinito CSS no deje huecos en blanco al terminar la vuelta
+            marquesina.innerHTML = stringItems + stringItems;
+        }
+
         function activarModoEdicion(id) {
             const articulo = BASE_DATOS_VENTAS.find(v => v._id === id);
             if (!articulo) return;
 
-            // Rellenar formulario con los datos recuperados de Atlas
             document.getElementById('edit-id').value = articulo._id;
             document.getElementById('prenda').value = articulo.prenda;
             document.getElementById('categoria').value = articulo.categoria;
@@ -249,7 +288,6 @@
             document.getElementById('precioVenta').value = articulo.precioVenta;
             document.getElementById('estado-inicial').value = articulo.estado;
 
-            // Transición estética visual del contenedor
             document.getElementById('contenedor-formulario').classList.add('modo-edicion');
             document.getElementById('titulo-formulario').innerText = "✏️ Editar Artículo";
             document.getElementById('titulo-formulario').classList.add('text-blue-400');
@@ -257,15 +295,12 @@
             document.getElementById('btn-submit').classList.replace('bg-blue-600', 'bg-blue-500');
             document.getElementById('btn-cancelar').classList.remove('hidden');
             
-            // Scroll suave automático al formulario si están en móvil
             document.getElementById('contenedor-formulario').scrollIntoView({ behavior: 'smooth' });
         }
 
         function cancelarEdicion() {
             document.getElementById('form-venta').reset();
             document.getElementById('edit-id').value = "";
-            
-            // Restaurar estados visuales normales
             document.getElementById('contenedor-formulario').classList.remove('modo-edicion');
             document.getElementById('titulo-formulario').innerText = "Añadir Prenda";
             document.getElementById('titulo-formulario').classList.remove('text-blue-400');
@@ -274,7 +309,6 @@
             document.getElementById('btn-cancelar').classList.add('hidden');
         }
 
-        // --- SUBMIT ÚNICO (CREACIÓN O EDICIÓN) ---
         document.getElementById('form-venta').addEventListener('submit', async (e) => {
             e.preventDefault();
             const idParaEditar = document.getElementById('edit-id').value;
@@ -307,11 +341,10 @@
                 if (response.ok) { 
                     cancelarEdicion();
                     await cargarVentas(); 
-                } else { alert("Error al procesar la operación."); }
+                } else { alert("Error operativo."); }
             } catch (error) { alert("Error de red."); }
         });
 
-        // --- DRAG AND DROP NATIVO ---
         function arrastrarTarjeta(e) { e.dataTransfer.setData("text/plain", e.target.id); }
         function permitirSoltar(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
         function quitarMarcaDrop(e) { e.currentTarget.classList.remove('drag-over'); }
@@ -330,7 +363,7 @@
                     body: JSON.stringify({ estado: nuevoEstado })
                 });
                 if (response.ok) await cargarVentas();
-            } catch (err) { alert("Error de red al arrastrar."); }
+            } catch (err) { alert("Error de red."); }
         }
 
         async function eliminarRegistro(id) {

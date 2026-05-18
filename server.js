@@ -37,20 +37,34 @@ const VentaRopaSchema = new mongoose.Schema({
 const VentaRopa = mongoose.model('VentaRopa', VentaRopaSchema);
 
 // ==========================================
-// 5. CONFIGURACIÓN DE MIDDLEWARES Y SESIONES
+// 5. CONFIGURACIÓN DE MIDDLEWARES, CORS Y SESIONES
 // ==========================================
+
+// Lista blanca oficial de administradores para Seychelles Shop
 const ADMIN_WHITELIST = [
-    'dannymedinacoronel@gmail.com'
+    'dannymedinacoronel@gmail.com',
+    'juliamugo2001@gmail.com'
 ];
 
+// Configuración de encriptación de cookies y sesiones
 app.use(cookieSession({
     name: 'session-admin',
     keys: [process.env.SESSION_SECRET || 'clave_alternativa_segura_123'],
-    maxAge: 12 * 60 * 60 * 1000 // Expira en 12 horas
+    maxAge: 12 * 60 * 60 * 1000 // Expira en 12 horas de forma segura
 }));
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// CONTROL DE CORS: Enlace vital para que Netlify pueda leer/escribir en Render sin bloqueos
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', 'https://seychellesshop.com');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+    next();
+});
 
 // Middleware para restringir accesos si no eres administrador
 function exigeAdmin(req, res, next) {
@@ -147,12 +161,12 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
     }
 });
 
-// Cierre de sesión seguro
+// Cierre de sesión seguro modificado para API
 app.get('/api/logout', (req, res) => {
     req.session = null;
-    res.redirect('/');
+    res.sendStatus(200); // Devuelve éxito al frontend para que index.html controle la salida
 });
 
 // Arranque del servidor
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`[OK] Servidor en: http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`[OK] Servidor en puerto: ${PORT}`));

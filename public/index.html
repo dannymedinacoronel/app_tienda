@@ -51,20 +51,23 @@
         .ticker-content { display: flex; white-space: nowrap; animation: ticker 30s linear infinite; }
         .ticker-content:hover { animation-play-state: paused; }
 
-        /* 🔥 ANIMACIÓN MODO COMBO FIRE */
         @keyframes fireGlow {
             0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); border-color: #f59e0b; }
             50% { box-shadow: 0 0 35px rgba(239, 68, 68, 0.8); border-color: #ef4444; }
         }
         .combo-fire-active { animation: fireGlow 0.8s infinite ease-in-out !important; }
 
-        /* 🚨 ALERTAS CRÍTICAS TICKER */
         .ticker-alert-mode { background-color: #991b1b !important; color: #fef2f2 !important; font-weight: 900; animation: blinker 1s linear infinite; }
         @keyframes blinker { 50% { opacity: 0.8; } }
 
-        #reader { border: none !important; }
+        /* Estilos del contenedor de cámara para forzar el aspect-ratio cuadrado */
+        #reader { border: none !important; width: 100% !important; max-width: 320px; margin: 0 auto; }
         #reader__scan_region { display: flex; justify-content: center; align-items: center; }
-        #reader__scan_region video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
+        #reader__scan_region video { object-fit: cover !important; width: 100% !important; height: 100% !important; border-radius: 1rem; }
+        
+        /* Limpieza de la interfaz nativa fea de la librería */
+        #reader button { display: none !important; }
+        #reader img { display: none !important; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
@@ -101,8 +104,8 @@
                         </form>
                         <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-full dropdown-bg border rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto p-1 font-sans text-xs"></div>
                     </div>
-                    <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md">
-                        📷 Escáner
+                    <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md">
+                        📷 Escanear
                     </button>
                 </div>
 
@@ -122,12 +125,16 @@
         <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500 p-5 rounded-3xl shadow-2xl mb-8 max-w-sm mx-auto text-center transition-all">
             <div class="flex justify-between items-center mb-3">
                 <span class="text-xs font-black uppercase text-blue-400 font-mono flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> VISOR DIGITAL HYPE-SCAN
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> DISPARADOR MANUAL ACTIVADO
                 </span>
                 <button onclick="cerrarCamara()" class="text-xs font-bold opacity-50 hover:opacity-100 bg-black/20 px-2 py-0.5 rounded-lg">Cerrar ✕</button>
             </div>
+            
             <div id="reader" class="overflow-hidden rounded-2xl bg-black w-full aspect-square border border-current/10 mx-auto"></div>
-            <p class="text-[10px] opacity-50 font-mono mt-3">Soporta lecturas múltiples continuas por voz</p>
+            
+            <button type="button" onclick="dispararCapturaManual()" class="w-full mt-4 bg-gradient-to-r from-red-600 to-amber-500 hover:from-red-700 hover:to-amber-600 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all">
+                💥 CAPTURAR CÓDIGO
+            </button>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="kpi-container-grid">
@@ -238,8 +245,6 @@
         let BASE_DATOS = [];
         let INSTANCIA_CHARTS = null;
         let OBJETO_ESCANER_CAMARA = null;
-        
-        // Variables de control para el modo combo de ludificación
         let HISTORIAL_TIMESTAMPS_OPERACIONES = [];
 
         function setTheme(theme) {
@@ -285,23 +290,18 @@
             });
         };
 
-        // 🔊 FUNCIÓN LOCA 1: SÍNTESIS DE VOZ HUMANA ROBÚSTA (NATIVA ACCESIBLE)
         function cantarPorVoz(mensajeTexto) {
             if ('speechSynthesis' in window) {
-                // Cancelamos lecturas solapadas previas
                 window.speechSynthesis.cancel();
                 const frase = new SpeechSynthesisUtterance(mensajeTexto);
                 frase.lang = 'es-ES';
-                frase.rate = 1.05; // Un toque ágil para entorno retail
-                frase.pitch = 1.0;
+                frase.rate = 1.05;
                 window.speechSynthesis.speak(frase);
             }
         }
 
-        // 🎮 FUNCIÓN LOCA 2: CONTROLADOR LOGÍSTICO DE MULTIPLICADORES COMBO GAMING
         function procesarMultiplicadorCombo() {
             const tAhora = Date.now();
-            // Mantener solo registros de los últimos 3 minutos (180000 ms)
             HISTORIAL_TIMESTAMPS_OPERACIONES = HISTORIAL_TIMESTAMPS_OPERACIONES.filter(t => (tAhora - t) < 180000);
             HISTORIAL_TIMESTAMPS_OPERACIONES.push(tAhora);
 
@@ -310,7 +310,6 @@
             const bCards = document.querySelectorAll('#kpi-container-grid > div');
 
             if (totalCombos >= 3) {
-                // Activamos efectos de fuego dorado en los KPIs principales de facturación
                 document.getElementById('combo-count').innerText = totalCombos;
                 bBadge.classList.remove('hidden');
                 bCards.forEach(card => card.classList.add('combo-fire-active'));
@@ -320,21 +319,17 @@
             }
         }
 
-        // 🚨 FUNCIÓN LOCA 3: ALGORITMO PREDICTIVO DE RIESGO DE STOCK POR CATEGORÍA
         function ejecutarVerificacionAlertasStock() {
             const resumenContador = {};
-            // Mapeamos cuántas prendas libres hay por categoría en stock real
             BASE_DATOS.filter(v => v.estado === 'No Vendido').forEach(v => {
                 resumenContador[v.categoria] = (resumenContador[v.categoria] || 0) + (parseInt(v.cantidad) || 1);
             });
 
-            // Buscamos si alguna categoría clave está por debajo del mínimo de seguridad de 2 unidades
             const categoriasCriticas = Object.keys(resumenContador).filter(cat => resumenContador[cat] < 2);
             const footerBar = document.getElementById('ticker-bar');
             const footerBadge = document.getElementById('ticker-header-badge');
 
             if (categoriasCriticas.length > 0) {
-                // Cambiamos el pie de página entero a modo neón militar de advertencia
                 footerBar.classList.add('ticker-alert-mode');
                 footerBadge.innerText = `🚨 RESERVAS ALERTA: ${categoriasCriticas.join(' / ').toUpperCase()}`;
             } else {
@@ -344,7 +339,6 @@
             }
         }
 
-        // 🖨️ FUNCIÓN LOCA 4: RENDERIZADOR TÉRMICO DE CÓDIGOS QR
         function lanzarModalImpresionEtiqueta(idElemento) {
             const v = BASE_DATOS.find(item => item._id === idElemento);
             if(!v) return;
@@ -354,9 +348,8 @@
             document.getElementById('print-precio').innerText = `${parseFloat(v.precioVenta).toFixed(2)} €`;
 
             const contenedorQr = document.getElementById('canvas-generador-qr');
-            contenedorQr.innerHTML = ''; // Limpieza previa
+            contenedorQr.innerHTML = '';
 
-            // Instanciar el escritor físico del QR en el DOM transparente
             new QRCode(contenedorQr, {
                 text: v.sku || v.prenda,
                 width: 130,
@@ -385,7 +378,7 @@
             );
 
             if (coincidencias.length === 0) {
-                dropdown.innerHTML = `<div class="p-3 opacity-50 italic">Sin resultados en la nube.</div>`;
+                dropdown.innerHTML = `<div class="p-3 opacity-50 italic">Sin resultados.</div>`;
                 dropdown.classList.remove('hidden');
                 return;
             }
@@ -403,7 +396,7 @@
                             <p class="font-bold uppercase tracking-wide text-current">${item.prenda} <span class="opacity-50 font-mono text-[10px]">(${item.talla})</span></p>
                             <p class="text-[10px] font-mono opacity-40">${item.sku ? `🆔 ${item.sku}` : 'Sin código'} • ${parseFloat(item.precioVenta).toFixed(2)}€</p>
                         </div>
-                        <div class="flex items-center gap-2 self-end sm:self-auto">
+                        <div class="flex items-center gap-2 self-end sm:flex-row sm:self-auto">
                             ${badgeEstado}
                             <div class="flex gap-1">
                                 <button onclick="ejecutarAccionDesplegable('${item._id}', '${esVendido ? 'No Vendido' : 'Vendido'}')" class="bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white px-2 py-1 rounded-lg font-bold text-[10px] transition-all">
@@ -448,6 +441,7 @@
             document.getElementById('input-pistola').value = '';
         };
 
+        // 📷 ARREGLO INTEGRAL DE INICIALIZACIÓN DE LA CÁMARA
         function toggleEscanerCamara() {
             const modulo = document.getElementById('modulo-camara');
             if (modulo.classList.contains('hidden')) {
@@ -457,30 +451,66 @@
                     try { OBJETO_ESCANER_CAMARA.clear(); } catch(e){}
                 }
 
+                // Instanciamos el lector de manera limpia
                 OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader");
 
-                const configuracionVelocidad = { 
-                    fps: 30, 
-                    qrbox: { width: 250, height: 250 }, // Cuadrado perfecto reactivo
+                const configuracionCamaraVisual = { 
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 }, 
                     videoConstraints: {
-                        width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "environment"
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: "environment"
                     }
                 };
 
+                // Inicializar stream visual pasivo sin callback automático en bucle
                 OBJETO_ESCANER_CAMARA.start(
                     { facingMode: "environment" }, 
-                    configuracionVelocidad,
-                    async (codigoMapeado, resultadoDetallado) => {
-                        await ejecutarLogicaEscaneo(codigoMapeado);
-                    },
-                    (error) => {}
+                    configuracionCamaraVisual,
+                    () => {}, // Callback de éxito vacío para delegar al botón manual
+                    () => {}  // Ignorar errores de frames vacíos por segundo
                 ).catch(err => {
-                    alert("Comprueba los permisos de cámara.");
+                    alert("Por favor, asegúrate de dar permisos a la cámara en el navegador.");
                     modulo.classList.add('hidden');
                 });
             } else {
                 cerrarCamara();
             }
+        }
+
+        // 🔥 FIJACIÓN DE LA CAPTURA MANUAL POR BOTÓN
+        function dispararCapturaManual() {
+            if (!OBJETO_ESCANER_CAMARA) return;
+
+            const videoElement = document.querySelector("#reader video");
+            if (!videoElement) return alert("Espere a que cargue el stream de vídeo.");
+
+            // Creamos un lienzo fantasma en la memoria del navegador
+            const canvasAux = document.createElement("canvas");
+            canvasAux.width = videoElement.videoWidth;
+            canvasAux.height = videoElement.videoHeight;
+            const contextAux = canvasAux.getContext("2d");
+            
+            // Congelamos el fotograma actual
+            contextAux.drawImage(videoElement, 0, 0, canvasAux.width, canvasAux.height);
+
+            // Escaneamos el lienzo con compatibilidad absoluta
+            OBJETO_ESCANER_CAMARA.scanFile(canvasAux, {
+                formatsToSupport: [
+                    Html5QrcodeSupportedFormats.QR_CODE,
+                    Html5QrcodeSupportedFormats.EAN_13,
+                    Html5QrcodeSupportedFormats.EAN_8,
+                    Html5QrcodeSupportedFormats.CODE_128
+                ]
+            })
+            .then(async (codigoMapeado) => {
+                console.log(`[DISPARADOR] Código capturado: ${codigoMapeado}`);
+                await ejecutarLogicaEscaneo(codigoMapeado);
+            })
+            .catch(err => {
+                cantarPorVoz("Código no detectado. Reenfoca y vuelve a pulsar.");
+            });
         }
 
         function cerrarCamara() {
@@ -496,13 +526,15 @@
                 if (response.ok) {
                     const resJson = await response.json();
                     
-                    // Activamos las respuestas por voz cantada interactiva según lo que devuelva Atlas
                     if(resJson.operacion === "Vendido") {
-                        cantarPorVoz(`Vendido, ${resJson.venta.prenda}. ${resJson.venta.precioVenta} euros.`);
+                        cantarPorVoz(`Vendido: ${resJson.venta.prenda}. ${resJson.venta.precioVenta} euros.`);
                     } else if (resJson.operacion === "Creado") {
-                        cantarPorVoz(`Código nuevo guardado en stock disponible.`);
+                        cantarPorVoz(`Nuevo código indexado en stock disponible.`);
+                        cancelEdit();
+                        document.getElementById('sku').value = resJson.venta.sku;
+                        document.getElementById('prenda').focus();
                     } else if (resJson.operacion === "Repuesto") {
-                        cantarPorVoz(`Nueva unidad indexada para, ${resJson.venta.prenda}.`);
+                        cantarPorVoz(`Unidad repuesta para: ${resJson.venta.prenda}.`);
                     }
 
                     procesarMultiplicadorCombo();
@@ -517,6 +549,7 @@
                 body: JSON.stringify({ token: response.credential })
             });
             if (res.ok) window.location.reload();
+            else alert("Error de inicio de sesión.");
         }
 
         async function reloadCoreData() {
@@ -532,7 +565,7 @@
             renderKanban();
             updateTickerWallStreet();
             dibujarGrafica();
-            ejecutarVerificacionAlertasStock(); // Ejecución del algoritmo predictivo de mínimos
+            ejecutarVerificacionAlertasStock();
         }
 
         function dibujarGrafica() {
@@ -542,15 +575,15 @@
             const ctx = document.getElementById('graficaTendencias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
             
-            const datosAgrupados = {};
+            const datosAgrapados = {};
             BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => {
                 const fVenta = parseFloat(v.precioVenta) || 0;
                 const cQty = parseInt(v.cantidad, 10) || 1;
-                datosAgrupados[v.fecha] = (datosAgrupados[v.fecha] || 0) + (fVenta * cQty);
+                datosAgrapados[v.fecha] = (datosAgrapados[v.fecha] || 0) + (fVenta * cQty);
             });
 
-            const fechas = Object.keys(datosAgrupados).sort();
-            const montos = fechas.map(f => datosAgrupados[f]);
+            const fechas = Object.keys(datosAgrapados).sort();
+            const montos = fechas.map(f => datosAgrapados[f]);
 
             const configuracionGraficas = {
                 dark: { linea: '#3b82f6', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' },
@@ -599,4 +632,123 @@
                 card.innerHTML = `
                     <div class="flex-1 min-w-0">
                         <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4>
-                        <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` :
+                        <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
+                        <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                        <button onclick="lanzarModalImpresionEtiqueta('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1.5 rounded-lg text-[11px]" title="Generar etiqueta">🖨️</button>
+                        <button onclick="editItem('${v._id}')" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-1">Editar</button>
+                        <button onclick="deleteItem('${v._id}')" class="opacity-30 hover:opacity-100 text-xs px-1">✕</button>
+                    </div>
+                `;
+
+                if (v.estado === 'Vendido') { colVendido.appendChild(card); vCount += v.cantidad; }
+                else { colStock.appendChild(card); sCount += v.cantidad; }
+            });
+            document.getElementById('badge-stock').innerText = sCount;
+            document.getElementById('badge-vendido').innerText = vCount;
+        }
+
+        function updateTickerWallStreet() {
+            const ticker = document.getElementById('ticker-content');
+            let txt = '';
+            BASE_DATOS.slice(0, 10).forEach(v => {
+                const symbol = v.estado === 'Vendido' ? '<span class="text-emerald-400">▲</span>' : '<span class="text-amber-400">●</span>';
+                const pVentaFormateado = parseFloat(v.precioVenta) || 0;
+                txt += `<span class="text-white font-mono uppercase">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400">${pVentaFormateado.toFixed(2)}€</b></span>`;
+            });
+            ticker.innerHTML = txt + txt;
+        }
+
+        const allowDrop = (e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); };
+        const clearDrop = (e) => e.currentTarget.classList.remove('drag-over');
+        async function drop(e, newState) {
+            e.preventDefault(); clearDrop(e);
+            const id = e.dataTransfer.getData("text");
+            if(!id) return;
+            try {
+                const r = await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                    body: JSON.stringify({ estado: newState })
+                });
+                if(r.ok) {
+                    const item = BASE_DATOS.find(x => x._id === id);
+                    if(item) cantarPorVoz(newState === 'Vendido' ? `Vendido, ${item.prenda}` : `Regresado a stock`);
+                    procesarMultiplicadorCombo();
+                    await reloadCoreData();
+                }
+            } catch(err){}
+        }
+
+        document.getElementById('form-venta').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('edit-id').value;
+            const payload = {
+                sku: document.getElementById('sku').value.trim(), 
+                prenda: document.getElementById('prenda').value,
+                categoria: document.getElementById('categoria').value, 
+                talla: document.getElementById('talla').value,
+                cantidad: parseInt(document.getElementById('cantidad').value) || 1,
+                precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, 
+                precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0
+            };
+            
+            if (id) {
+                const itemOriginal = BASE_DATOS.find(v => v._id === id);
+                if (itemOriginal) payload.estado = itemOriginal.estado;
+            }
+
+            const url = id ? `${BACKEND_URL}/api/ventas/${id}` : `${BACKEND_URL}/api/ventas`;
+            const method = id ? 'PUT' : 'POST';
+
+            try {
+                const response = await fetch(url, {
+                    method: method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
+                });
+                if (response.ok) { 
+                    cantarPorVoz(`Artículo guardado con éxito.`);
+                    cancelEdit(); 
+                    await reloadCoreData(); 
+                }
+            } catch (err) { alert("Error."); }
+        };
+
+        function editItem(id) {
+            const item = BASE_DATOS.find(v => v._id === id);
+            if (!item) return;
+            document.getElementById('edit-id').value = item._id;
+            document.getElementById('sku').value = item.sku || '';
+            document.getElementById('prenda').value = item.prenda;
+            document.getElementById('categoria').value = item.categoria;
+            document.getElementById('talla').value = item.talla;
+            document.getElementById('precioCompra').value = item.precioCompra;
+            document.getElementById('precioVenta').value = item.precioVenta;
+            document.getElementById('cantidad').value = item.cantidad || 1;
+            
+            document.getElementById('form-container').classList.add('modo-edicion');
+            document.getElementById('form-title').innerText = "✏️ Editar Artículo";
+            document.getElementById('btn-submit').innerText = "Guardar Cambios";
+            document.getElementById('btn-cancel').classList.remove('hidden');
+        }
+
+        function cancelEdit() {
+            document.getElementById('form-venta').reset();
+            document.getElementById('edit-id').value = "";
+            document.getElementById('form-container').classList.remove('modo-edicion');
+            document.getElementById('form-title').innerText = "Añadir Prenda";
+            document.getElementById('btn-submit').innerText = "Registrar Prenda";
+            document.getElementById('btn-cancel').classList.add('hidden');
+        }
+
+        async function deleteItem(id) {
+            if (confirm("¿Eliminar del registro cloud?")) {
+                await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' });
+                cantarPorVoz("Artículo eliminado.");
+                await reloadCoreData();
+            }
+        }
+
+        async function logout() { await fetch(`${BACKEND_URL}/api/logout`, { credentials: 'include' }); window.location.reload(); }
+    </script>
+</body>
+</html>

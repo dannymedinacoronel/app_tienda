@@ -50,6 +50,12 @@
         @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
         .ticker-content { display: flex; white-space: nowrap; animation: ticker 30s linear infinite; }
         .ticker-content:hover { animation-play-state: paused; }
+
+        /* 🎯 MODIFICACIÓN DE ESTILOS INTERNOS DE LA LIBRERÍA DE ESCANEO */
+        #reader { border: none !important; }
+        #reader__scan_region { display: flex; justify-content: center; align-items: center; }
+        /* Forzamos que la guía visual interna de la cámara sea un cuadrado perfecto para QR y Barras */
+        #reader__scan_region video { object-fit: cover !important; width: 100% !important; height: 100% !important; }
     </style>
 </head>
 <body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-24 transition-all duration-300">
@@ -80,8 +86,8 @@
                         </form>
                         <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-full dropdown-bg border rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto p-1 font-sans text-xs"></div>
                     </div>
-                    <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md">
-                        📷
+                    <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md" title="Abrir cámara de escaneo rápido">
+                        📷 Escáner
                     </button>
                 </div>
 
@@ -98,14 +104,15 @@
             </div>
         </header>
 
-        <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500/50 p-4 rounded-3xl shadow-2xl mb-8 max-w-md mx-auto text-center transition-all">
-            <div class="flex justify-between items-center mb-2">
+        <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500 p-5 rounded-3xl shadow-2xl mb-8 max-w-sm mx-auto text-center transition-all">
+            <div class="flex justify-between items-center mb-3">
                 <span class="text-xs font-black uppercase text-blue-400 font-mono flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> MODO ULTRA-RÁPIDO ACTIVADO
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> LECTOR CAJA DIGITAL INSTANTÁNEO
                 </span>
                 <button onclick="cerrarCamara()" class="text-xs font-bold opacity-50 hover:opacity-100 bg-black/20 px-2 py-0.5 rounded-lg">Cerrar ✕</button>
             </div>
-            <div id="reader" class="overflow-hidden rounded-2xl bg-black/40 w-full aspect-video border border-current/10"></div>
+            <div id="reader" class="overflow-hidden rounded-2xl bg-black w-full aspect-square border border-current/10 mx-auto"></div>
+            <p class="text-[10px] opacity-60 font-mono mt-3 uppercase tracking-wider text-center">Enfoca cualquier código de barras o QR cuadrado</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -322,6 +329,7 @@
             document.getElementById('input-pistola').value = '';
         };
 
+        // 🚀 NUEVA FUNCIÓN DE ESCANEO REPARADA: DETECTA EL TIPO DE CÓDIGO (QR o BARRAS) AL INSTANTE
         function toggleEscanerCamara() {
             const modulo = document.getElementById('modulo-camara');
             if (modulo.classList.contains('hidden')) {
@@ -333,25 +341,38 @@
 
                 OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader");
 
+                // Configuración de vídeo súper agresiva para enfocar y capturar al vuelo
                 const configuracionVelocidad = { 
-                    fps: 30, 
-                    qrbox: { width: 250, height: 130 },
+                    fps: 30, // 30 lecturas por segundo para que sea instantáneo
+                    // 🎯 Hacemos que el recuadro sea un CUADRADO PERFECTO (250x250) para que entren los QR enteros
+                    qrbox: { width: 250, height: 250 }, 
                     videoConstraints: {
                         width: { ideal: 640 },
                         height: { ideal: 480 },
-                        facingMode: "environment"
+                        facingMode: "environment" // Fuerza el uso de la cámara trasera
                     }
                 };
 
+                // Encendemos el visor
                 OBJETO_ESCANER_CAMARA.start(
                     { facingMode: "environment" }, 
                     configuracionVelocidad,
-                    async (codigoMapeado) => {
+                    async (codigoMapeado, resultadoDetallado) => {
+                        // 🤖 DETECCIÓN DEL TIPO DE IMAGEN: Averigua qué formato se acaba de escanear
+                        let formatoDetectado = "Código Desconocido";
+                        if (resultadoDetallado && resultadoDetallado.result && resultadoDetallado.result.format) {
+                            formatoDetectado = resultadoDetallado.result.format.formatName;
+                        }
+
+                        // Imprime de forma limpia en la consola del desarrollador el tipo de código capturado
+                        console.log(`[ESCÁNER] Capturado con éxito: ${codigoMapeado} | Tipo: ${formatoDetectado}`);
+                        
+                        // Envía los datos directamente a Atlas sin cerrar la cámara para poder meter ráfagas de ropa
                         await ejecutarLogicaEscaneo(codigoMapeado);
                     },
-                    (error) => {}
+                    (error) => {} // Silenciamos los errores de búsqueda por milisegundo para no congelar la pantalla
                 ).catch(err => {
-                    alert("Comprueba los permisos de cámara.");
+                    alert("Asegúrate de conceder permisos de cámara.");
                     modulo.classList.add('hidden');
                 });
             } else {
@@ -370,7 +391,7 @@
             try {
                 const response = await fetch(`${BACKEND_URL}/api/ventas/escanear/${skuParam}`, { method: 'PUT', credentials: 'include' });
                 if (response.ok) {
-                    await reloadCoreData();
+                    await reloadCoreData(); // Actualiza el Kanban y la gráfica en tiempo real
                 }
             } catch (err) { console.error("Fallo cloud."); }
         }

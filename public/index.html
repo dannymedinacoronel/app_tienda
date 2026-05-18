@@ -7,7 +7,9 @@
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Seychelles Core">
+    <meta name="apple-mobile-web-app-title" content="Seychelles">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3081/3081559.png">
+    <link rel="manifest" href="/manifest.json">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -251,16 +253,23 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div class="card-bg border p-6 rounded-3xl shadow-xl lg:col-span-2">
-                <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento Comercial</h3>
-                <div class="w-full h-48 md:h-60 relative" id="contenedor-canvas-grafica">
+            <div class="card-bg border p-6 rounded-3xl shadow-xl lg:col-span-1">
+                <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento</h3>
+                <div class="w-full h-48 relative" id="contenedor-canvas-grafica">
                     <canvas id="graficaTendencias"></canvas>
                 </div>
             </div>
+
+            <div class="card-bg border p-6 rounded-3xl shadow-xl lg:col-span-1">
+                <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📊 Distribución de Ventas</h3>
+                <div class="w-full h-48 relative flex items-center justify-center" id="contenedor-canvas-tarta">
+                    <canvas id="graficaTartaCategorias"></canvas>
+                </div>
+            </div>
             
-            <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[300px]">
+            <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[240px] lg:col-span-1">
                 <h3 class="text-xs font-black text-indigo-400 uppercase mb-3 tracking-wider flex justify-between">
-                    📜 AUDITORÍA DEL NÚCLEO <span>HISTORIAL EN VIVO</span>
+                    📜 AUDITORÍA DEL NÚCLEO <span>LIVE</span>
                 </h3>
                 <div id="contenedor-logs-auditoria" class="flex-1 overflow-y-auto space-y-2 pr-1 text-[11px] font-mono opacity-80">
                     <div class="italic opacity-50">Sincronizando operaciones cloud...</div>
@@ -312,6 +321,7 @@
         const BACKEND_URL = '';
         let BASE_DATOS = [];
         let INSTANCIA_CHARTS = null;
+        let INSTANCIA_TARTA = null;
         let OBJETO_ESCANER_CAMARA = null;
         let HISTORIAL_TIMESTAMPS_OPERACIONES = [];
         let LECTOR_BLOQUEADO_POR_CAPTURA = false;
@@ -345,7 +355,7 @@
             const activeColors = { dark: 'bg-blue-600 text-white', pink: 'bg-pink-600 text-white', light: 'bg-slate-800 text-white', emerald: 'bg-emerald-500 text-slate-900', purple: 'bg-purple-600 text-white' };
             const currentBtn = document.getElementById(`t-${theme}`); if(currentBtn) currentBtn.className = `px-2.5 py-1 rounded-lg ${activeColors[theme]} shadow-md`;
             localStorage.setItem('seychelles-theme-multi', theme);
-            if(BASE_DATOS.length > 0) dibujarGrafica();
+            if(BASE_DATOS.length > 0) { dibujarGrafica(); dibujarGráficaTarta(); }
         }
 
         function exportarExcel() {
@@ -370,7 +380,6 @@
             }
         }
 
-        // 🛠️ Mantenemos el autocompletado local corregido
         function autocompletarNombreLocalRapido() {
             const cat = document.getElementById('categoria').value;
             const talla = document.getElementById('talla').value;
@@ -492,7 +501,7 @@
         async function ejecutarEliminacionMasiva() {
             if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
             if (confirm("¿Borrar permanentemente?")) {
-                const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }));
+                const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/DELETE`, { method: 'DELETE', credentials: 'include' }));
                 await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
             }
         }
@@ -515,7 +524,7 @@
             const ip = document.getElementById('input-pistola'); if(ip) ip.value = '';
             try {
                 const r = await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: nuevoEstado }) });
-                if(r.ok) { procesarMultiplicadorCombo(); await reloadCoreData(); }
+                if(r.ok) { BlacklyMulti(); await reloadCoreData(); }
             } catch (err) {}
         }
 
@@ -567,7 +576,7 @@
                 document.getElementById('kpi-inversion').innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
                 document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
 
-                renderKanban(); updateTickerWallStreet(); dibujarGrafica(); ejecutarVerificacionAlertasStock(); actualizarVisibilidadPanelMasivo();
+                renderKanban(); updateTickerWallStreet(); dibujarGrafica(); dibujarGráficaTarta(); ejecutarVerificacionAlertasStock(); actualizarVisibilidadPanelMasivo();
                 
                 const contenedorLogs = document.getElementById('contenedor-logs-auditoria');
                 if (contenedorLogs && data.logs && data.logs.length > 0) {
@@ -598,20 +607,56 @@
             });
         }
 
+        // 🔥 NUEVA FUNCIÓN: Generación pasiva del gráfico de quesito (Top Categorías Vendidas)
+        function dibujarGráficaTarta() {
+            const contenedor = document.getElementById('contenedor-canvas-tarta'); if(!contenedor) return;
+            contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
+            const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
+
+            const contadorCategorias = {};
+            BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => {
+                contadorCategorias[v.categoria] = (contadorCategorias[v.categoria] || 0) + (v.cantidad || 1);
+            });
+
+            const etiquetas = Object.keys(contadorCategorias);
+            const datos = etiquetas.map(cat => contadorCategorias[cat]);
+
+            const paletasColor = {
+                dark: ['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#a855f7'],
+                pink: ['#db2777', '#f472b6', '#fbcfe8', '#be185d', '#9d174d'],
+                light: ['#1e293b', '#475569', '#64748b', '#94a3b8', '#cbd5e1'],
+                emerald: ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
+                purple: ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe']
+            };
+            const coloresSeleccionados = paletasColor[currentTheme] || paletasColor.dark;
+            const colorTexto = currentTheme === 'light' || currentTheme === 'pink' ? '#0f172a' : '#f1f5f9';
+
+            INSTANCIA_TARTA = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: etiquetas,
+                    datasets: [{ data: datos, backgroundColor: coloresSeleccionados, borderWidth: 0 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { color: colorTexto, font: { size: 9, family: 'monospace' } } }
+                    }
+                }
+            });
+        }
+
         function renderKanban() {
             const colStock = document.getElementById('col-no-vendido'); const colVendido = document.getElementById('col-vendido'); if(!colStock || !colVendido) return;
             colStock.innerHTML = ''; colVendido.innerHTML = ''; let sCount = 0, vCount = 0;
 
             BASE_DATOS.forEach(v => {
-                const card = document.createElement('div'); card.id = v._id; 
-                card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`);
+                const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`);
                 card.className = "input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] transition-transform flex items-center gap-3 select-none";
 
                 const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
                 const badgeCanal = v.canalVenta && v.canalVenta !== 'Tienda Física' ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
-
-                const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas);
-                const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
+                const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas); const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
 
                 card.innerHTML = `
                     <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0">
@@ -671,6 +716,15 @@
                 if (data.autenticado) { document.getElementById('login-box').classList.add('hidden'); document.getElementById('panel-control').classList.remove('hidden'); document.getElementById('ticker-bar').classList.remove('hidden'); document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario}`; await reloadCoreData(); }
             } catch(e){}
         }, 300);
+
+        // 🔥 REGISTRO MAESTRO DE LA PWA (Service Worker)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('PWA Sincronizada con éxito.'))
+                    .catch(err => console.log('Error de Service Worker pasivo.'));
+            });
+        }
     </script>
 </body>
 </html>

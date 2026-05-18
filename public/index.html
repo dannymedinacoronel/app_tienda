@@ -21,7 +21,6 @@
     </div>
 
     <div id="panel-control" class="hidden max-w-7xl mx-auto px-4 py-6">
-        
         <header class="flex justify-between items-center border-b border-slate-800 pb-4 mb-6">
             <div>
                 <h1 class="text-2xl font-bold tracking-tight text-white uppercase">Consola de Control Financiero</h1>
@@ -57,7 +56,6 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
             <div class="bg-slate-800/60 p-5 rounded-xl border border-slate-700 shadow-2xl self-start">
                 <h2 class="text-md font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">Registrar Nueva Operación</h2>
                 <form id="form-venta" class="space-y-3">
@@ -65,7 +63,6 @@
                         <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Modelo / Descripción del Artículo</label>
                         <input type="text" id="prenda" required placeholder="Ej. Sudadera Crop Seychelles" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
                     </div>
-                    
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Categoría</label>
@@ -84,12 +81,10 @@
                             </select>
                         </div>
                     </div>
-
                     <div>
                         <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Unidades Vendidas</label>
                         <input type="number" id="cantidad" required min="1" value="1" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
                     </div>
-
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-[11px] font-bold uppercase text-slate-400 mb-1">Coste Unidad (€)</label>
@@ -100,7 +95,6 @@
                             <input type="number" id="precioVenta" required step="0.01" placeholder="0.00" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none">
                         </div>
                     </div>
-
                     <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider py-3 rounded-lg shadow-lg transition-all mt-4">💾 Guardar en Base de Datos</button>
                 </form>
             </div>
@@ -118,7 +112,6 @@
                         </select>
                     </div>
                 </div>
-
                 <div class="overflow-x-auto rounded-lg border border-slate-700 bg-slate-900">
                     <table class="min-w-full divide-y divide-slate-700">
                         <thead class="bg-slate-800">
@@ -139,7 +132,7 @@
     </div>
 
     <script>
-        const BACKEND_URL = 'https://app-dwm2.onrender.com';
+        const BACKEND_URL = ''; 
         let BASE_DATOS_VENTAS = []; 
 
         async function handleCredentialResponse(response) {
@@ -157,7 +150,7 @@
                     document.getElementById('panel-control').classList.remove('hidden');
                     await cargarVentas();
                 } else { alert(data.error || 'No autorizado.'); }
-            } catch (err) { alert("Error de comunicación con Render."); }
+            } catch (err) { alert("Error de comunicación con el servidor."); }
         }
 
         async function cargarVentas() {
@@ -199,7 +192,6 @@
                 const row = document.createElement('tr');
                 const esDevuelto = v.estado === 'Devuelto';
                 row.className = esDevuelto ? "bg-rose-950/20 text-slate-500 line-through" : "hover:bg-slate-800/40 text-slate-300";
-                
                 const beneficio = esDevuelto ? -(Number(v.precioCompra) * v.cantidad) : (Number(v.precioVenta) - Number(v.precioCompra)) * v.cantidad;
 
                 row.innerHTML = `
@@ -234,10 +226,7 @@
                     credentials: 'include',
                     body: JSON.stringify(payload)
                 });
-                if (response.ok) { 
-                    document.getElementById('form-venta').reset(); 
-                    await cargarVentas(); 
-                }
+                if (response.ok) { document.getElementById('form-venta').reset(); await cargarVentas(); }
             } catch (error) { alert("Error al subir artículo."); }
         });
 

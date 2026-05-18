@@ -8,31 +8,41 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     
     <style>
         /* DEFINICIÓN DE LOS 5 TEMAS MODERNOS */
         body.theme-dark { background-color: #0f172a; color: #f1f5f9; }
         .theme-dark .card-bg { background-color: #1e293b; border-color: #334155; }
         .theme-dark .input-bg { background-color: #0f172a; border-color: #334155; color: #ffffff; }
+        .theme-dark .dropdown-bg { background-color: #1e293b; border-color: #475569; }
+        .theme-dark .dropdown-item-hover:hover { background-color: #334155; }
 
         body.theme-pink { background-color: #fce7f3; color: #831843; }
         .theme-pink .card-bg { background-color: #ffffff; border-color: #fbcfe8; color: #831843; box-shadow: 0 4px 20px rgba(219, 39, 119, 0.08); }
         .theme-pink .input-bg { background-color: #fff1f2; border-color: #f9a8d4; color: #831843; }
         .theme-pink .btn-primary { background-color: #db2777; color: white; }
         .theme-pink .btn-primary:hover { background-color: #be185d; }
+        .theme-pink .dropdown-bg { background-color: #ffffff; border-color: #fbcfe8; }
+        .theme-pink .dropdown-item-hover:hover { background-color: #fce7f3; }
 
         body.theme-light { background-color: #f8fafc; color: #0f172a; }
         .theme-light .card-bg { background-color: #ffffff; border-color: #e2e8f0; color: #0f172a; box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
         .theme-light .input-bg { background-color: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
+        .theme-light .dropdown-bg { background-color: #ffffff; border-color: #e2e8f0; }
+        .theme-light .dropdown-item-hover:hover { background-color: #f1f5f9; }
 
         body.theme-emerald { background-color: #022c22; color: #e6f4ea; }
         .theme-emerald .card-bg { background-color: #064e3b; border-color: #047857; }
         .theme-emerald .input-bg { background-color: #022c22; border-color: #047857; color: #ffffff; }
+        .theme-emerald .dropdown-bg { background-color: #064e3b; border-color: #047857; }
+        .theme-emerald .dropdown-item-hover:hover { background-color: #047857; }
 
         body.theme-purple { background-color: #1e1b4b; color: #e0e7ff; }
         .theme-purple .card-bg { background-color: #312e81; border-color: #4338ca; }
         .theme-purple .input-bg { background-color: #1e1b4b; border-color: #4338ca; color: #ffffff; }
+        .theme-purple .dropdown-bg { background-color: #312e81; border-color: #4338ca; }
+        .theme-purple .dropdown-item-hover:hover { background-color: #4338ca; }
 
         .drag-over { border: 2px dashed #3b82f6 !important; background-color: rgba(59, 130, 246, 0.1) !important; }
         .modo-edicion { border-color: #3b82f6 !important; box-shadow: 0 0 15px rgba(59, 130, 246, 0.3) !important; }
@@ -63,12 +73,15 @@
             </div>
             
             <div class="flex flex-wrap items-center justify-center lg:justify-end gap-3 w-full lg:w-auto">
-                <div class="flex items-center gap-2 w-full sm:w-auto">
-                    <form id="form-escaner-pistola" class="relative flex-1 sm:w-56">
-                        <input type="text" id="input-pistola" placeholder="💥 Barras / QR / Pistola..." class="w-full bg-black/20 border border-current/20 rounded-xl px-4 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40">
-                    </form>
-                    <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md" title="Escanear con Cámara">
-                        📷 <span class="hidden sm:inline">Escanear</span>
+                <div class="relative w-full sm:w-64 flex items-center gap-2">
+                    <div class="relative flex-1">
+                        <form id="form-escaner-pistola" autocomplete="off">
+                            <input type="text" id="input-pistola" oninput="filtrarProductosMenu(this.value)" placeholder="🔍 Buscar modelo o escanear..." class="w-full bg-black/20 border border-current/20 rounded-xl px-4 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40">
+                        </form>
+                        <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-full dropdown-bg border rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto p-1 font-sans text-xs"></div>
+                    </div>
+                    <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md">
+                        📷
                     </button>
                 </div>
 
@@ -88,12 +101,12 @@
         <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500/50 p-4 rounded-3xl shadow-2xl mb-8 max-w-md mx-auto text-center transition-all">
             <div class="flex justify-between items-center mb-2">
                 <span class="text-xs font-black uppercase text-blue-400 font-mono flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> Lector Barras y QR Activo
+                    <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> Lector QR y Barras
                 </span>
                 <button onclick="cerrarCamara()" class="text-xs font-bold opacity-50 hover:opacity-100 bg-black/20 px-2 py-0.5 rounded-lg">Cerrar ✕</button>
             </div>
             <div id="reader" class="overflow-hidden rounded-2xl bg-black/40 w-full aspect-video border border-current/10"></div>
-            <p class="text-[10px] opacity-50 font-mono mt-2">Enfoca un código QR o un Código de Barras</p>
+            <p class="text-[10px] opacity-50 font-mono mt-2">Coloca el código QR o de barras centrado en la pantalla</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -122,11 +135,11 @@
                     <input type="hidden" id="edit-id" value="">
                     <div>
                         <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Código de Barras / SKU / QR</label>
-                        <input type="text" id="sku" placeholder="Código identificador" class="input-bg border w-full rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/40">
+                        <input type="text" id="sku" placeholder="Código identificador" class="input-bg border w-full rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none">
                     </div>
                     <div>
                         <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Modelo / Descripción</label>
-                        <input type="text" id="prenda" required class="input-bg border w-full rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40">
+                        <input type="text" id="prenda" required class="input-bg border w-full rounded-xl px-4 py-2.5 text-sm focus:outline-none">
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
@@ -227,42 +240,126 @@
                 document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario}`;
                 await reloadCoreData();
             }
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#form-escaner-pistola') && !e.target.closest('#dropdown-buscador')) {
+                    document.getElementById('dropdown-buscador').classList.add('hidden');
+                }
+            });
         };
 
-        // ENTRADA PISTOLA
+        function filtrarProductosMenu(valorQuery) {
+            const dropdown = document.getElementById('dropdown-buscador');
+            const query = valorQuery.toLowerCase().trim();
+
+            if (!query) {
+                dropdown.innerHTML = '';
+                dropdown.classList.add('hidden');
+                return;
+            }
+
+            const coincidencias = BASE_DATOS.filter(v => 
+                v.prenda.toLowerCase().includes(query) || 
+                (v.sku && v.sku.toLowerCase().includes(query))
+            );
+
+            if (coincidencias.length === 0) {
+                dropdown.innerHTML = `<div class="p-3 opacity-50 italic">Sin resultados. Pulsa Enter para indexar como nuevo.</div>`;
+                dropdown.classList.remove('hidden');
+                return;
+            }
+
+            let htmlItems = '';
+            coincidencias.slice(0, 8).forEach(item => {
+                const esVendido = item.estado === 'Vendido';
+                const badgeEstado = esVendido 
+                    ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded text-[9px] font-bold">💰 VENDIDO</span>` 
+                    : `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[9px] font-bold">📦 STOCK</span>`;
+
+                htmlItems += `
+                    <div class="dropdown-item-hover p-2 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 cursor-pointer transition-all border border-transparent border-b-current/5 last:border-b-0">
+                        <div>
+                            <p class="font-bold uppercase tracking-wide text-current">${item.prenda} <span class="opacity-50 font-mono text-[10px]">(${item.talla})</span></p>
+                            <p class="text-[10px] font-mono opacity-40">${item.sku ? `🆔 ${item.sku}` : 'Sin código'} • ${parseFloat(item.precioVenta).toFixed(2)}€</p>
+                        </div>
+                        <div class="flex items-center gap-2 self-end sm:self-auto">
+                            ${badgeEstado}
+                            <div class="flex gap-1">
+                                <button onclick="ejecutarAccionDesplegable('${item._id}', '${esVendido ? 'No Vendido' : 'Vendido'}')" class="bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white px-2 py-1 rounded-lg font-bold text-[10px] transition-all">
+                                    ${esVendido ? '↩️ Re-Stock' : '✅ Vender'}
+                                </button>
+                                <button onclick="editItem('${item._id}'); document.getElementById('dropdown-buscador').classList.add('hidden');" class="bg-current/5 hover:bg-current/20 px-2 py-1 rounded-lg font-bold text-[10px]">
+                                    ✏️
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            dropdown.innerHTML = htmlItems;
+            dropdown.classList.remove('hidden');
+        }
+
+        async function ejecutarAccionDesplegable(id, nuevoEstado) {
+            document.getElementById('dropdown-buscador').classList.add('hidden');
+            document.getElementById('input-pistola').value = '';
+            try {
+                await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ estado: nuevoEstado })
+                });
+                await reloadCoreData();
+            } catch (err) { alert("Error de red."); }
+        }
+
         document.getElementById('form-escaner-pistola').onsubmit = async (e) => {
             e.preventDefault();
             const skuInput = document.getElementById('input-pistola').value.trim();
+            document.getElementById('dropdown-buscador').classList.add('hidden');
             if(!skuInput) return;
             await ejecutarLogicaEscaneo(skuInput);
             document.getElementById('input-pistola').value = '';
         };
 
-        // ENTRADA CÁMARA MÓVIL
+        // 🛠️ FUNCIÓN DE CÁMARA CORREGIDA CON CONFIGURACIÓN DE PARSEO NATIVA
         function toggleEscanerCamara() {
             const modulo = document.getElementById('modulo-camara');
             if (modulo.classList.contains('hidden')) {
                 modulo.classList.remove('hidden');
-                OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader");
                 
-                const formatosConfig = { 
-                    formatsToSupport: [ 
+                // Si ya había una instancia previa, la destruimos del DOM para evitar colisiones
+                if (OBJETO_ESCANER_CAMARA) {
+                    try { OBJETO_ESCANER_CAMARA.clear(); } catch(e){}
+                }
+
+                // Instanciar pasando los formatos de lectura admitidos como argumentos nativos separados
+                OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader", {
+                    formatsToSupport: [
                         Html5QrcodeSupportedFormats.QR_CODE,
                         Html5QrcodeSupportedFormats.EAN_13,
                         Html5QrcodeSupportedFormats.EAN_8,
                         Html5QrcodeSupportedFormats.CODE_128
-                    ] 
-                };
+                    ]
+                });
 
+                // Lanzar stream de la cámara trasera de manera limpia
                 OBJETO_ESCANER_CAMARA.start(
                     { facingMode: "environment" }, 
-                    { fps: 20, qrbox: { width: 260, height: 140 }, videoConstraints: formatsConfig },
+                    { 
+                        fps: 20, 
+                        qrbox: { width: 260, height: 140 }
+                    },
                     async (codigoMapeado) => {
                         cerrarCamara();
                         await ejecutarLogicaEscaneo(codigoMapeado);
                     },
-                    (error) => {}
-                ).catch(err => alert("Error abriendo cámara trasera."));
+                    (error) => {} // Silenciar escaneos fallidos por segundo
+                ).catch(err => {
+                    alert("No se pudo iniciar la cámara trasera. Comprueba los permisos de privacidad del sitio web.");
+                    modulo.classList.add('hidden');
+                });
             } else {
                 cerrarCamara();
             }
@@ -315,11 +412,8 @@
             dibujarGrafica();
         }
 
-        // 🛠️ FIX DE AUTOREFRESCO CON RECREACIÓN DE LIENZO CANVAS
         function dibujarGrafica() {
             const contenedor = document.getElementById('contenedor-canvas-grafica');
-            
-            // Destrucción total del canvas para evitar sobreescritura en caché de Chart.js
             contenedor.innerHTML = '<canvas id="graficaTendencias"></canvas>';
             
             const ctx = document.getElementById('graficaTendencias').getContext('2d');

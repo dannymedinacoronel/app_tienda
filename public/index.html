@@ -36,22 +36,18 @@
             <div class="bg-blue-600 p-5 rounded-xl shadow-xl border border-blue-500 relative overflow-hidden">
                 <p class="text-xs font-bold text-blue-100 uppercase tracking-widest">Facturación Bruta</p>
                 <p class="text-3xl font-black text-white mt-2" id="kpi-ingresos">0.00 €</p>
-                <span class="absolute right-4 bottom-2 text-4xl font-extrabold text-blue-500/40 select-none">€</span>
             </div>
             <div class="bg-emerald-700 p-5 rounded-xl shadow-xl border border-emerald-600 relative overflow-hidden">
                 <p class="text-xs font-bold text-emerald-100 uppercase tracking-widest">Margen de Ganancia Neto</p>
                 <p class="text-3xl font-black text-white mt-2" id="kpi-beneficio">0.00 €</p>
-                <span class="absolute right-4 bottom-2 text-3xl font-extrabold text-emerald-600/40 select-none">📈</span>
             </div>
             <div class="bg-amber-600 p-5 rounded-xl shadow-xl border border-amber-500 relative overflow-hidden">
                 <p class="text-xs font-bold text-amber-100 uppercase tracking-widest">Inversión en Stock</p>
                 <p class="text-3xl font-black text-white mt-2" id="kpi-inversion">0.00 €</p>
-                <span class="absolute right-4 bottom-2 text-3xl font-extrabold text-amber-500/40 select-none">💰</span>
             </div>
             <div class="bg-zinc-800 p-5 rounded-xl shadow-xl border border-zinc-700 relative overflow-hidden">
                 <p class="text-xs font-bold text-zinc-400 uppercase tracking-widest">Prendas Vendidas</p>
                 <p class="text-3xl font-black text-white mt-2" id="kpi-prendas">0</p>
-                <span class="absolute right-4 bottom-2 text-3xl font-extrabold text-zinc-700/50 select-none">📦</span>
             </div>
         </div>
 
@@ -132,7 +128,7 @@
     </div>
 
     <script>
-        const BACKEND_URL = ''; // Ruta relativa unificada
+        const BACKEND_URL = ''; 
         let BASE_DATOS_VENTAS = []; 
 
         async function handleCredentialResponse(response) {
@@ -156,17 +152,34 @@
         async function cargarVentas() {
             try {
                 const response = await fetch(`${BACKEND_URL}/api/ventas`, { method: 'GET', credentials: 'include' });
-                if (response.status === 401 || response.status === 403) return;
+                if (!response.ok) {
+                    resetearPanelesACero();
+                    return;
+                }
                 const data = await response.json();
-                
-                document.getElementById('kpi-ingresos').innerText = `${data.resumen.ingresos.toFixed(2)} €`;
-                document.getElementById('kpi-beneficio').innerText = `${data.resumen.beneficio.toFixed(2)} €`;
-                document.getElementById('kpi-inversion').innerText = `${data.resumen.inversion.toFixed(2)} €`;
-                document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas;
+                if (!data || !data.resumen) {
+                    resetearPanelesACero();
+                    return;
+                }
+
+                document.getElementById('kpi-ingresos').innerText = `${(data.resumen.ingresos || 0).toFixed(2)} €`;
+                document.getElementById('kpi-beneficio').innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
+                document.getElementById('kpi-inversion').innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
+                document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
 
                 BASE_DATOS_VENTAS = data.ventas || [];
                 filtrarYMostrar();
-            } catch (error) { console.error(error); }
+            } catch (error) { 
+                resetearPanelesACero();
+            }
+        }
+
+        function resetearPanelesACero() {
+            document.getElementById('kpi-ingresos').innerText = "0.00 €";
+            document.getElementById('kpi-beneficio').innerText = "0.00 €";
+            document.getElementById('kpi-inversion').innerText = "0.00 €";
+            document.getElementById('kpi-prendas').innerText = "0";
+            document.getElementById('tabla-ventas-body').innerHTML = `<tr><td colspan="6" class="px-4 py-6 text-center text-slate-500 text-xs font-mono">Sincronizando con la base de datos cloud...</td></tr>`;
         }
 
         function filtrarYMostrar() {
@@ -177,6 +190,7 @@
             tbody.innerHTML = '';
 
             const filtradas = BASE_DATOS_VENTAS.filter(v => {
+                if (!v || !v.prenda) return false;
                 const coincideBuscar = v.prenda.toLowerCase().includes(buscar);
                 const coincideCat = cat === 'TODAS' || v.categoria === cat;
                 const coincideTalla = talla === 'TODAS' || v.talla === talla;
@@ -226,8 +240,11 @@
                     credentials: 'include',
                     body: JSON.stringify(payload)
                 });
-                if (response.ok) { document.getElementById('form-venta').reset(); await cargarVentas(); }
-            } catch (error) { alert("Error al subir artículo."); }
+                if (response.ok) { 
+                    document.getElementById('form-venta').reset(); 
+                    await cargarVentas(); 
+                } else { alert("Fallo al guardar. Compruebe los permisos."); }
+            } catch (error) { alert("Error de red."); }
         });
 
         async function ejecutarDevolucion(id) {

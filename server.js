@@ -1,24 +1,25 @@
 require('dotenv').config(); 
 const express = require('express');
 const { OAuth2Client } = require('google-auth-library');
-const session = require('express-session'); // Cambiado a express-session nativo
-const MongoStore = require('connect-mongo'); // Persistencia de sesiones en la nube
+const session = require('express-session'); 
+const MongoStore = require('connect-mongo'); 
 const mongoose = require('mongoose');
 const path = require('path');
 
 const app = express();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+// Confianza en el proxy inverso de Render para cookies seguras HTTPS
 app.set('trust proxy', 1);
 
+// URI con fallback duro e integrado usando tus credenciales reales
 const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb+srv://dannymedinacoronel_db_user:ccVg5uBpXkh5C0eo@cluster0.qnh4rbz.mongodb.net/tienda_ropa?appName=Cluster0";
 
-// Conexión Centralizada de Mongoose
 mongoose.connect(MONGO_URI_FINAL)
-    .then(() => console.log('\x1b[32m[OK]\x1b[0m MongoDB Cloud conectado y listo.'))
-    .catch(err => console.error('Fallo en conexión MongoDB:', err));
+    .then(() => console.log('\x1b[32m[OK]\x1b[0m Conectado correctamente a MongoDB Atlas (tienda_ropa)'))
+    .catch(err => console.error('Error de conexión en MongoDB Atlas:', err));
 
-// Esquema Optimizado
+// Esquema de Datos
 const VentaRopaSchema = new mongoose.Schema({
     fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
     prenda: { type: String, default: 'Artículo General', trim: true },
@@ -31,19 +32,24 @@ const VentaRopaSchema = new mongoose.Schema({
 });
 const VentaRopa = mongoose.model('VentaRopa', VentaRopaSchema);
 
-const ADMIN_WHITELIST = ['dannymedinacoronel@gmail.com', 'juliamugo2001@gmail.com'];
+const ADMIN_WHITELIST = [
+    'dannymedinacoronel@gmail.com',
+    'juliamugo2001@gmail.com'
+];
 
 app.use(express.json());
 
-// BLINDAJE DE SESIONES: Guardadas en Mongo Atlas en lugar de la memoria volatil del servidor
+// RESOLUCIÓN DEL ERROR TYPEERROR: Selector robusto para connect-mongo (CommonJS)
+const mongoStoreBuilder = MongoStore.create ? MongoStore : MongoStore.default;
+
 app.use(session({
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
     resave: false,
     saveUninitialized: false,
-    store: MongoStore.create({
+    store: mongoStoreBuilder.create({
         mongoUrl: MONGO_URI_FINAL,
         collectionName: 'sesiones_activas',
-        ttl: 14 * 24 * 60 * 60 // Las sesiones duran 14 días guardadas aunque Render se reinicie
+        ttl: 14 * 24 * 60 * 60 // 14 días persistentes
     }),
     cookie: {
         secure: true, 
@@ -52,6 +58,7 @@ app.use(session({
     }
 }));
 
+// Servir estáticos desde la carpeta public
 app.use(express.static(path.join(__dirname, 'public')));
 
 function exigeAdmin(req, res, next) {
@@ -59,7 +66,7 @@ function exigeAdmin(req, res, next) {
     return res.status(403).json({ error: 'No autorizado. Inicie sesión.' });
 }
 
-// --- API ---
+// --- API ENDPOINTS ---
 
 app.post('/api/auth/google', async (req, res) => {
     const { token } = req.body;
@@ -80,9 +87,7 @@ app.post('/api/auth/google', async (req, res) => {
 
 app.get('/api/ventas', exigeAdmin, async (req, res) => {
     try {
-        // En el futuro, si el volumen es gigante, aquí aplicaremos .limit()
         const ventas = await VentaRopa.find().sort({ _id: -1 }).lean();
-        
         let ingresos = 0, inversion = 0, prendasVendidas = 0;
 
         ventas.forEach(v => {

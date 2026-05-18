@@ -11,6 +11,7 @@
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     
     <style>
+        /* DEFINICIÓN DE LOS 5 TEMAS MODERNOS */
         body.theme-dark { background-color: #0f172a; color: #f1f5f9; }
         .theme-dark .card-bg { background-color: #1e293b; border-color: #334155; }
         .theme-dark .input-bg { background-color: #0f172a; border-color: #334155; color: #ffffff; }
@@ -64,10 +65,10 @@
             <div class="flex flex-wrap items-center justify-center lg:justify-end gap-3 w-full lg:w-auto">
                 <div class="flex items-center gap-2 w-full sm:w-auto">
                     <form id="form-escaner-pistola" class="relative flex-1 sm:w-56">
-                        <input type="text" id="input-pistola" placeholder="💥 Código o pistola..." class="w-full bg-black/20 border border-current/20 rounded-xl px-4 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40">
+                        <input type="text" id="input-pistola" placeholder="💥 Barras / QR / Pistola..." class="w-full bg-black/20 border border-current/20 rounded-xl px-4 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40">
                     </form>
-                    <button onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md" title="Escanear con Cámara del Móvil">
-                        📷 <span class="hidden sm:inline">Móvil</span>
+                    <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md" title="Escanear con Cámara">
+                        📷 <span class="hidden sm:inline">Escanear</span>
                     </button>
                 </div>
 
@@ -87,12 +88,12 @@
         <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500/50 p-4 rounded-3xl shadow-2xl mb-8 max-w-md mx-auto text-center transition-all">
             <div class="flex justify-between items-center mb-2">
                 <span class="text-xs font-black uppercase text-blue-400 font-mono flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> Visor de Cámara Activo
+                    <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> Lector Barras y QR Activo
                 </span>
                 <button onclick="cerrarCamara()" class="text-xs font-bold opacity-50 hover:opacity-100 bg-black/20 px-2 py-0.5 rounded-lg">Cerrar ✕</button>
             </div>
             <div id="reader" class="overflow-hidden rounded-2xl bg-black/40 w-full aspect-video border border-current/10"></div>
-            <p class="text-[10px] opacity-50 font-mono mt-2">Apunta con la cámara trasera al código de barras de la prenda</p>
+            <p class="text-[10px] opacity-50 font-mono mt-2">Enfoca un código QR o un Código de Barras</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -120,8 +121,8 @@
                 <form id="form-venta" class="space-y-4">
                     <input type="hidden" id="edit-id" value="">
                     <div>
-                        <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Código de Barras / SKU</label>
-                        <input type="text" id="sku" placeholder="Etiqueta lectora" class="input-bg border w-full rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/40">
+                        <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Código de Barras / SKU / QR</label>
+                        <input type="text" id="sku" placeholder="Código identificador" class="input-bg border w-full rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/40">
                     </div>
                     <div>
                         <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Modelo / Descripción</label>
@@ -152,7 +153,7 @@
                         </div>
                     </div>
                     <input type="hidden" id="cantidad" value="1">
-                    <button type="submit" id="btn-submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-4 rounded-xl shadow-md uppercase tracking-widest transition-all">Registrar Artículo</button>
+                    <button type="submit" id="btn-submit" class="w-full bg-blue-600 text-white font-bold text-xs py-4 rounded-xl shadow-md uppercase tracking-widest transition-all">Registrar Artículo</button>
                     <button type="button" id="btn-cancel" onclick="cancelEdit()" class="hidden w-full text-center text-xs uppercase opacity-50 py-1 hover:underline">Cancelar Cambios</button>
                 </form>
             </div>
@@ -171,7 +172,7 @@
 
         <div class="card-bg border p-6 rounded-3xl shadow-xl transition-all">
             <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento Comercial (Subidas y Bajas)</h3>
-            <div class="w-full h-48 md:h-60 relative">
+            <div class="w-full h-48 md:h-60 relative" id="contenedor-canvas-grafica">
                 <canvas id="graficaTendencias"></canvas>
             </div>
         </div>
@@ -188,7 +189,7 @@
         const BACKEND_URL = '';
         let BASE_DATOS = [];
         let INSTANCIA_CHARTS = null;
-        let OBJETO_ESCANER_CAMARA = null; // Guardará la instancia de la cámara activa
+        let OBJETO_ESCANER_CAMARA = null;
 
         function setTheme(theme) {
             const body = document.getElementById('main-body');
@@ -206,8 +207,8 @@
             if (BASE_DATOS.length === 0) return alert("No hay datos disponibles.");
             const formateado = BASE_DATOS.map(v => ({
                 Fecha: v.fecha, 'Código / SKU': v.sku || 'N/A', Artículo: v.prenda, Categoría: v.categoria, Talla: v.talla,
-                'Coste (€)': v.precioCompra.toFixed(2), 'Venta (€)': v.precioVenta.toFixed(2), Estado: v.estado,
-                'Margen Neto (€)': ((v.precioVenta - v.precioCompra) * v.cantidad).toFixed(2)
+                'Coste (€)': parseFloat(v.precioCompra).toFixed(2), 'Venta (€)': parseFloat(v.precioVenta).toFixed(2), Estado: v.estado,
+                'Margen Neto (€)': ((parseFloat(v.precioVenta) - parseFloat(v.precioCompra)) * v.cantidad).toFixed(2)
             }));
             const ws = XLSX.utils.json_to_sheet(formateado);
             const wb = XLSX.utils.book_new();
@@ -228,35 +229,40 @@
             }
         };
 
-        // ESCANER 1: PROCESO PISTOLA DE ESCRITORIO
+        // ENTRADA PISTOLA
         document.getElementById('form-escaner-pistola').onsubmit = async (e) => {
             e.preventDefault();
             const skuInput = document.getElementById('input-pistola').value.trim();
             if(!skuInput) return;
-            await ejecutarVentaPorSku(skuInput);
+            await ejecutarLogicaEscaneo(skuInput);
             document.getElementById('input-pistola').value = '';
         };
 
-        // 🚀 ESCANER 2: PROCESO MÓVIL (GATILLO / APERTURA DE CÁMARA)
+        // ENTRADA CÁMARA MÓVIL
         function toggleEscanerCamara() {
             const modulo = document.getElementById('modulo-camara');
             if (modulo.classList.contains('hidden')) {
                 modulo.classList.remove('hidden');
-                
-                // Inicializamos la librería configurando que busque códigos de barras convencionales (EAN_13, EAN_8, CODE_128)
                 OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader");
                 
-                // Forzar el uso de la cámara trasera ('environment') para enfocar etiquetas
+                const formatosConfig = { 
+                    formatsToSupport: [ 
+                        Html5QrcodeSupportedFormats.QR_CODE,
+                        Html5QrcodeSupportedFormats.EAN_13,
+                        Html5QrcodeSupportedFormats.EAN_8,
+                        Html5QrcodeSupportedFormats.CODE_128
+                    ] 
+                };
+
                 OBJETO_ESCANER_CAMARA.start(
                     { facingMode: "environment" }, 
-                    { fps: 15, qrbox: { width: 250, height: 120 } },
+                    { fps: 20, qrbox: { width: 260, height: 140 }, videoConstraints: formatsConfig },
                     async (codigoMapeado) => {
-                        // Callback de éxito: Qué pasa cuando lee un código
-                        cerrarCamara(); // Cierra visor al cazarlo
-                        await ejecutarVentaPorSku(codigoMapeado); // Mueve a vendido
+                        cerrarCamara();
+                        await ejecutarLogicaEscaneo(codigoMapeado);
                     },
-                    (error) => { /* Silenciar logs continuos de escaneo en vacío */ }
-                ).catch(err => alert("Error al solicitar permisos de cámara trasera. Asegure permisos HTTPS."));
+                    (error) => {}
+                ).catch(err => alert("Error abriendo cámara trasera."));
             } else {
                 cerrarCamara();
             }
@@ -269,15 +275,19 @@
             }
         }
 
-        // FUNCIÓN CENTRALIZADA DE ESCANEO (SE USA PARA MÓVIL Y PARA PISTOLA)
-        async function ejecutarVentaPorSku(skuParam) {
+        async function ejecutarLogicaEscaneo(skuParam) {
             try {
                 const response = await fetch(`${BACKEND_URL}/api/ventas/escanear/${skuParam}`, { method: 'PUT', credentials: 'include' });
+                
                 if (response.ok) {
                     await reloadCoreData();
-                } else {
-                    const errData = await response.json();
-                    alert(errData.error || "Código de barras no indexado en stock disponible.");
+                } else if (response.status === 404) {
+                    const datosError = await response.json();
+                    const skuNuevo = datosError.sku || skuParam;
+                    cancelEdit();
+                    document.getElementById('sku').value = skuNuevo;
+                    document.getElementById('form-title').innerText = "✨ Indexar Nuevo Artículo";
+                    document.getElementById('prenda').focus();
                 }
             } catch (err) { alert("Error de comunicación cloud."); }
         }
@@ -295,23 +305,31 @@
             const data = await res.json();
             BASE_DATOS = data.ventas || [];
 
-            document.getElementById('kpi-ingresos').innerText = `${(data.resumen.ingresos || 0).toFixed(2)} €`;
+            document.getElementById('kpi-ingresos').innerText = `${(data.resumen. ingresos || 0).toFixed(2)} €`;
             document.getElementById('kpi-beneficio').innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
             document.getElementById('kpi-inversion').innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
             document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
 
             renderKanban();
             updateTickerWallStreet();
-            dibujarGrafica();
+            dibujarGrafica(); // 🚀 Fuerza el refresco matemático y visual de la gráfica
         }
 
+        // 🛠️ LA FUNCIÓN DE LA GRÁFICA REPARADA CON DESTRUCCIÓN COMPLETA DE CANVAS
         function dibujarGrafica() {
+            const contenedor = document.getElementById('contenedor-canvas-grafica');
+            
+            // Forzamos el borrado total del nodo HTML del canvas viejo para desvincular la memoria anterior de Chart.js
+            contenedor.innerHTML = '<canvas id="graficaTendencias"></canvas>';
+            
             const ctx = document.getElementById('graficaTendencias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
             
             const datosAgrupados = {};
             BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => {
-                datosAgrupados[v.fecha] = (datosAgrupados[v.fecha] || 0) + (v.precioVenta * v.cantidad);
+                const fVenta = parseFloat(v.precioVenta) || 0;
+                const cQty = parseInt(v.cantidad, 10) || 1;
+                datosAgrupados[v.fecha] = (datosAgrupados[v.fecha] || 0) + (fVenta * cQty);
             });
 
             const fechas = Object.keys(datosAgrupados).sort();
@@ -326,8 +344,6 @@
             };
 
             const cfg = configuracionGraficas[currentTheme] || configuracionGraficas.dark;
-
-            if (INSTANCIA_CHARTS) INSTANCIA_CHARTS.destroy();
 
             INSTANCIA_CHARTS = new Chart(ctx, {
                 type: 'line',
@@ -361,11 +377,13 @@
                 card.ondragstart = (e) => e.dataTransfer.setData("text", e.target.id);
                 card.className = "input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] transition-transform flex justify-between items-center";
 
+                const pVentaFormateado = parseFloat(v.precioVenta) || 0;
+
                 card.innerHTML = `
                     <div>
                         <h4 class="font-bold text-xs uppercase tracking-wide">${v.prenda}</h4>
                         <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
-                        <span class="text-[10px] font-bold block mt-1 font-mono">${v.precioVenta.toFixed(2)} €</span>
+                        <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
                     </div>
                     <div class="flex items-center gap-2">
                         <button onclick="editItem('${v._id}')" class="text-[10px] text-blue-500 font-bold uppercase hover:underline">Editar</button>
@@ -385,7 +403,8 @@
             let txt = '';
             BASE_DATOS.slice(0, 10).forEach(v => {
                 const symbol = v.estado === 'Vendido' ? '<span class="text-emerald-400">▲</span>' : '<span class="text-amber-400">●</span>';
-                txt += `<span class="text-white font-mono uppercase">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400">${v.precioVenta.toFixed(2)}€</b></span>`;
+                const pVentaFormateado = parseFloat(v.precioVenta) || 0;
+                txt += `<span class="text-white font-mono uppercase">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400">${pVentaFormateado.toFixed(2)}€</b></span>`;
             });
             ticker.innerHTML = txt + txt;
         }
@@ -407,10 +426,13 @@
             e.preventDefault();
             const id = document.getElementById('edit-id').value;
             const payload = {
-                sku: document.getElementById('sku').value.trim(), prenda: document.getElementById('prenda').value,
-                categoria: document.getElementById('categoria').value, talla: document.getElementById('talla').value,
+                sku: document.getElementById('sku').value.trim(), 
+                prenda: document.getElementById('prenda').value,
+                categoria: document.getElementById('categoria').value, 
+                talla: document.getElementById('talla').value,
                 cantidad: parseInt(document.getElementById('cantidad').value) || 1,
-                precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0
+                precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, 
+                precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0
             };
             
             if (id) {

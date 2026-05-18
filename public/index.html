@@ -60,14 +60,10 @@
         .ticker-alert-mode { background-color: #991b1b !important; color: #fef2f2 !important; font-weight: 900; animation: blinker 1s linear infinite; }
         @keyframes blinker { 50% { opacity: 0.8; } }
 
-        /* Estilos del contenedor de cámara para forzar el aspect-ratio cuadrado */
-        #reader { border: none !important; width: 100% !important; max-width: 320px; margin: 0 auto; }
+        #reader { border: none !important; width: 100% !important; max-width: 320px; margin: 0 auto; min-height: 320px; }
         #reader__scan_region { display: flex; justify-content: center; align-items: center; }
-        #reader__scan_region video { object-fit: cover !important; width: 100% !important; height: 100% !important; border-radius: 1rem; }
-        
-        /* Limpieza de la interfaz nativa fea de la librería */
-        #reader button { display: none !important; }
-        #reader img { display: none !important; }
+        #reader__scan_region video { object-fit: cover !important; width: 100% !important; height: 100% !important; border-radius: 1.5rem; }
+        #reader button, #reader img { display: none !important; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
@@ -105,7 +101,7 @@
                         <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-full dropdown-bg border rounded-2xl shadow-2xl z-50 max-h-60 overflow-y-auto p-1 font-sans text-xs"></div>
                     </div>
                     <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md">
-                        📷 Escanear
+                        📷 Iniciar Cámara
                     </button>
                 </div>
 
@@ -125,15 +121,14 @@
         <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500 p-5 rounded-3xl shadow-2xl mb-8 max-w-sm mx-auto text-center transition-all">
             <div class="flex justify-between items-center mb-3">
                 <span class="text-xs font-black uppercase text-blue-400 font-mono flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> DISPARADOR MANUAL ACTIVADO
+                    <span id="camara-ping-state" class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> 
+                    <span id="camara-text-state">Lector Listo</span>
                 </span>
                 <button onclick="cerrarCamara()" class="text-xs font-bold opacity-50 hover:opacity-100 bg-black/20 px-2 py-0.5 rounded-lg">Cerrar ✕</button>
             </div>
-            
-            <div id="reader" class="overflow-hidden rounded-2xl bg-black w-full aspect-square border border-current/10 mx-auto"></div>
-            
-            <button type="button" onclick="dispararCapturaManual()" class="w-full mt-4 bg-gradient-to-r from-red-600 to-amber-500 hover:from-red-700 hover:to-amber-600 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all">
-                💥 CAPTURAR CÓDIGO
+            <div id="reader" class="overflow-hidden rounded-2xl bg-slate-950 border border-current/10 mx-auto flex items-center justify-center"></div>
+            <button id="btn-rearmar-escaner" type="button" onclick="rearmarLectorParaSiguientePrenda()" class="hidden w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-xl transition-all">
+                🔄 ESCANEAR OTRA PRENDA
             </button>
         </div>
 
@@ -201,35 +196,54 @@
 
             <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px] transition-all">
-                    <h3 class="text-xs font-black text-amber-500 uppercase mb-4 flex justify-between tracking-wider">📦 STOCK DISPONIBLE <span id="badge-stock" class="opacity-60 font-mono">0</span></h3>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xs font-black text-amber-500 uppercase tracking-wider">📦 STOCK DISPONIBLE <span id="badge-stock" class="opacity-60 font-mono">0</span></h3>
+                        <button onclick="alternarSeleccionColumna('No Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2 py-1 rounded-lg uppercase font-bold opacity-70">Marcar Todo</button>
+                    </div>
                     <div id="col-no-vendido" class="flex-1 space-y-3 p-1" ondragover="allowDrop(event)" ondrop="drop(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
                 </div>
+                
                 <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px] transition-all">
-                    <h3 class="text-xs font-black text-emerald-500 uppercase mb-4 flex justify-between tracking-wider">💰 ARTÍCULOS VENDIDOS <span id="badge-vendido" class="opacity-60 font-mono">0</span></h3>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xs font-black text-emerald-500 uppercase tracking-wider">💰 ARTÍCULOS VENDIDOS <span id="badge-vendido" class="opacity-60 font-mono">0</span></h3>
+                        <button onclick="alternarSeleccionColumna('Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2 py-1 rounded-lg uppercase font-bold opacity-70">Marcar Todo</button>
+                    </div>
                     <div id="col-vendido" class="flex-1 space-y-3 p-1" ondragover="allowDrop(event)" ondrop="drop(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
                 </div>
             </div>
         </div>
 
         <div class="card-bg border p-6 rounded-3xl shadow-xl transition-all">
-            <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento Comercial (Subidas y Bajas)</h3>
+            <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento Comercial</h3>
             <div class="w-full h-48 md:h-60 relative" id="contenedor-canvas-grafica">
                 <canvas id="graficaTendencias"></canvas>
             </div>
         </div>
     </div>
 
-    <div id="modal-qr" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-        <div class="bg-white text-slate-900 p-6 rounded-2xl shadow-2xl border max-w-xs w-full text-center flex flex-col items-center">
-            <h4 class="text-slate-500 uppercase font-mono text-[10px] tracking-widest mb-1">Seychelles Shop</h4>
-            <h3 id="print-prenda" class="font-black text-sm uppercase tracking-tight mb-4">Modelo Prenda</h3>
-            <div id="canvas-generador-qr" class="p-2 border rounded-xl bg-white mb-3"></div>
-            <p id="print-sku" class="font-mono text-xs text-slate-400 mb-1">SKU-CODE</p>
-            <p id="print-precio" class="text-xl font-black text-slate-900 font-mono mb-6">0.00 €</p>
-            <div class="flex gap-2 w-full">
-                <button onclick="document.getElementById('modal-qr').classList.add('hidden')" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 rounded-xl text-xs uppercase">Cerrar</button>
-                <button onclick="window.print()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs uppercase flex items-center justify-center gap-1">🖨️ Imprimir</button>
-            </div>
+    <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-2xl w-[92%] transition-all">
+        <div class="text-xs font-bold font-mono">
+            💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> SELECCIONADOS
+        </div>
+        
+        <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
+        
+        <div class="flex flex-wrap items-center gap-2">
+            <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">💵 Vender Lote</button>
+            <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">📦 Mover a Stock</button>
+            
+            <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                <option value="">📐 Talla...</option>
+                <option value="S">Talla S</option><option value="M">Talla M</option><option value="L">Talla L</option><option value="XL">Talla XL</option><option value="Única">Talla Única</option>
+            </select>
+
+            <select id="categoria-masiva" onchange="ejecutarEdicionMasivaPropiedad('categoria', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                <option value="">👕 Categoría...</option>
+                <option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
+            </select>
+
+            <button onclick="ejecutarEliminacionMasiva()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">🗑️ Eliminar</button>
+            <button onclick="limpiarSeleccionMasiva()" class="text-[10px] underline opacity-50 hover:opacity-100 px-1">Limpiar</button>
         </div>
     </div>
 
@@ -246,6 +260,10 @@
         let INSTANCIA_CHARTS = null;
         let OBJETO_ESCANER_CAMARA = null;
         let HISTORIAL_TIMESTAMPS_OPERACIONES = [];
+        let LECTOR_BLOQUEADO_POR_CAPTURA = false;
+        
+        // 🛠️ Array en memoria para rastrear los IDs marcados masivamente
+        let ITEMS_SELECCIONADOS_MASIVOS = [];
 
         function setTheme(theme) {
             const body = document.getElementById('main-body');
@@ -362,6 +380,115 @@
             document.getElementById('modal-qr').classList.remove('hidden');
         }
 
+        // 🛠️ CONTROL DE CHECKBOXES INDIVIDUALES MASIVOS
+        function manejarSeleccionCheck Masiva(idItem, casillaElemento) {
+            if (casillaElemento.checked) {
+                if(!ITEMS_SELECCIONADOS_MASIVOS.includes(idItem)) ITEMS_SELECCIONADOS_MASIVOS.push(idItem);
+            } else {
+                ITEMS_SELECCIONADOS_MASIVOS = ITEMS_SELECCIONADOS_MASIVOS.filter(id => id !== idItem);
+            }
+            actualizarVisibilidadPanelMasivo();
+        }
+
+        // 🛠️ SELECCIONAR TODO EL CONTENIDO DE UNA COLUMNA KANBAN
+        function alternarSeleccionColumna(estadoColumna) {
+            const filtrados = BASE_DATOS.filter(v => v.estado === estadoColumna);
+            const todosMarcados Ya = filtrados.every(v => ITEMS_SELECCIONADOS_MASIVOS.includes(v._id));
+
+            filtrados.forEach(v => {
+                const docCheck = document.getElementById(`check-${v._id}`);
+                if (todosMarcadosYa) {
+                    ITEMS_SELECCIONADOS_MASIVOS = ITEMS_SELECCIONADOS_MASIVOS.filter(id => id !== v._id);
+                    if(docCheck) docCheck.checked = false;
+                } else {
+                    if(!ITEMS_SELECCIONADOS_MASIVOS.includes(v._id)) ITEMS_SELECCIONADOS_MASIVOS.push(v._id);
+                    if(docCheck) docCheck.checked = true;
+                }
+            });
+            actualizarVisibilidadPanelMasivo();
+        }
+
+        function actualizarVisibilidadPanelMasivo() {
+            const panel = document.getElementById('panel-masivo-flotante');
+            const contador = document.getElementById('contador-masivo-seleccionado');
+            contador.innerText = ITEMS_SELECCIONADOS_MASIVOS.length;
+            
+            if (ITEMS_SELECCIONADOS_MASIVOS.length > 0) {
+                panel.classList.remove('hidden');
+            } else {
+                panel.classList.add('hidden');
+            }
+        }
+
+        function limpiarSeleccionMasiva() {
+            ITEMS_SELECCIONADOS_MASIVOS = [];
+            document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+            actualizarVisibilidadPanelMasivo();
+        }
+
+        // 🛠️ ACCIÓN EN LOTE 1: CAMBIAR ESTADO DE PRENDAS A LA VEZ (VENDIDO / RE-STOCK)
+        async function ejecutarAccionMasivaEstado(nuevoEstado) {
+            if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
+            cantarPorVoz(`Procesando lote de ${ITEMS_SELECCIONADOS_MASIVOS.length} prendas.`);
+            
+            // Recorremos los ítems enviando las promesas en paralelo para acelerar al máximo
+            const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => 
+                fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                    body: JSON.stringify({ estado: nuevoEstado })
+                })
+            );
+
+            await Promise.all(promesas);
+            cantarPorVoz("Lote modificado.");
+            limpiarSeleccionMasiva();
+            await reloadCoreData();
+        }
+
+        // 🛠️ ACCIÓN EN LOTE 2: EDITAR PROPIEDADES EN MASA (TALLA / CATEGORÍA)
+        async function ejecutarEdicionMasivaPropiedad(campo, valor) {
+            if (ITEMS_SELECCIONADOS_MASIVOS.length === 0 || !valor) return;
+            cantarPorVoz("Actualizando lote.");
+
+            const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => {
+                const itemOriginal = BASE_DATOS.find(v => v._id === id);
+                if (!itemOriginal) return Promise.resolve();
+                
+                // Construimos el payload de edición respetando sus datos actuales
+                const payload = {
+                    sku: itemOriginal.sku, prenda: itemOriginal.prenda, precioCompra: itemOriginal.precioCompra,
+                    precioVenta: itemOriginal.precioVenta, cantidad: itemOriginal.cantidad, categoria: itemOriginal.categoria,
+                    talla: itemOriginal.talla, estado: itemOriginal.estado
+                };
+                payload[campo] = valor; // Inyectamos el nuevo valor dinámicamente
+
+                return fetch(`${BACKEND_URL}/api/ventas/${id}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                    body: JSON.stringify(payload)
+                });
+            });
+
+            await Promise.all(promesas);
+            cantarPorVoz("Propiedades actualizadas.");
+            limpiarSeleccionMasiva();
+            await reloadCoreData();
+        }
+
+        // 🛠️ ACCIÓN EN LOTE 3: ELIMINACIÓN MASIVA CLOUD
+        async function ejecutarEliminacionMasiva() {
+            if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
+            if (confirm(`¿Estás seguro de eliminar permanentemente estas ${ITEMS_SELECCIONADOS_MASIVOS.length} prendas de Atlas?`)) {
+                cantarPorVoz("Borrando lote.");
+                const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => 
+                    fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' })
+                );
+                await Promise.all(promesas);
+                cantarPorVoz("Lote eliminado.");
+                limpiarSeleccionMasiva();
+                await reloadCoreData();
+            }
+        }
+
         function filtrarProductosMenu(valorQuery) {
             const dropdown = document.getElementById('dropdown-buscador');
             const query = valorQuery.toLowerCase().trim();
@@ -441,7 +568,6 @@
             document.getElementById('input-pistola').value = '';
         };
 
-        // 📷 ARREGLO INTEGRAL DE INICIALIZACIÓN DE LA CÁMARA
         function toggleEscanerCamara() {
             const modulo = document.getElementById('modulo-camara');
             if (modulo.classList.contains('hidden')) {
@@ -451,27 +577,35 @@
                     try { OBJETO_ESCANER_CAMARA.clear(); } catch(e){}
                 }
 
-                // Instanciamos el lector de manera limpia
                 OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader");
+                LECTOR_BLOQUEADO_POR_CAPTURA = false;
 
-                const configuracionCamaraVisual = { 
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 }, 
-                    videoConstraints: {
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        facingMode: "environment"
-                    }
+                const configuracionNativa = { 
+                    fps: 30, 
+                    qrbox: { width: 260, height: 260 },
+                    formatsToSupport: [ 
+                        Html5QrcodeSupportedFormats.QR_CODE,
+                        Html5QrcodeSupportedFormats.EAN_13,
+                        Html5QrcodeSupportedFormats.EAN_8,
+                        Html5QrcodeSupportedFormats.CODE_128
+                    ]
                 };
 
-                // Inicializar stream visual pasivo sin callback automático en bucle
                 OBJETO_ESCANER_CAMARA.start(
                     { facingMode: "environment" }, 
-                    configuracionCamaraVisual,
-                    () => {}, // Callback de éxito vacío para delegar al botón manual
-                    () => {}  // Ignorar errores de frames vacíos por segundo
+                    configuracionNativa,
+                    async (codigoMapeado) => {
+                        if (!LECTOR_BLOQUEADO_POR_CAPTURA) {
+                            LECTOR_BLOQUEADO_POR_CAPTURA = true;
+                            document.getElementById('camara-ping-state').className = "w-2 h-2 rounded-full bg-amber-500 animate-pulse";
+                            document.getElementById('camara-text-state').innerText = "Código Procesado";
+                            document.getElementById('btn-rearmar-escaner').classList.remove('hidden');
+                            await ejecutarLogicaEscaneo(codigoMapeado);
+                        }
+                    },
+                    () => {}
                 ).catch(err => {
-                    alert("Por favor, asegúrate de dar permisos a la cámara en el navegador.");
+                    alert("Por favor, otorga los permisos de cámara.");
                     modulo.classList.add('hidden');
                 });
             } else {
@@ -479,42 +613,16 @@
             }
         }
 
-        // 🔥 FIJACIÓN DE LA CAPTURA MANUAL POR BOTÓN
-        function dispararCapturaManual() {
-            if (!OBJETO_ESCANER_CAMARA) return;
-
-            const videoElement = document.querySelector("#reader video");
-            if (!videoElement) return alert("Espere a que cargue el stream de vídeo.");
-
-            // Creamos un lienzo fantasma en la memoria del navegador
-            const canvasAux = document.createElement("canvas");
-            canvasAux.width = videoElement.videoWidth;
-            canvasAux.height = videoElement.videoHeight;
-            const contextAux = canvasAux.getContext("2d");
-            
-            // Congelamos el fotograma actual
-            contextAux.drawImage(videoElement, 0, 0, canvasAux.width, canvasAux.height);
-
-            // Escaneamos el lienzo con compatibilidad absoluta
-            OBJETO_ESCANER_CAMARA.scanFile(canvasAux, {
-                formatsToSupport: [
-                    Html5QrcodeSupportedFormats.QR_CODE,
-                    Html5QrcodeSupportedFormats.EAN_13,
-                    Html5QrcodeSupportedFormats.EAN_8,
-                    Html5QrcodeSupportedFormats.CODE_128
-                ]
-            })
-            .then(async (codigoMapeado) => {
-                console.log(`[DISPARADOR] Código capturado: ${codigoMapeado}`);
-                await ejecutarLogicaEscaneo(codigoMapeado);
-            })
-            .catch(err => {
-                cantarPorVoz("Código no detectado. Reenfoca y vuelve a pulsar.");
-            });
+        function rearmarLectorParaSiguientePrenda() {
+            LECTOR_BLOQUEADO_POR_CAPTURA = false;
+            document.getElementById('camara-ping-state').className = "w-2 h-2 rounded-full bg-emerald-500 animate-ping";
+            document.getElementById('camara-text-state').innerText = "Lector Listo";
+            document.getElementById('btn-rearmar-escaner').classList.add('hidden');
         }
 
         function cerrarCamara() {
             document.getElementById('modulo-camara').classList.add('hidden');
+            document.getElementById('btn-rearmar-escaner').classList.add('hidden');
             if (OBJETO_ESCANER_CAMARA) {
                 OBJETO_ESCANER_CAMARA.stop().then(() => { OBJETO_ESCANER_CAMARA = null; }).catch(e => console.error(e));
             }
@@ -549,7 +657,6 @@
                 body: JSON.stringify({ token: response.credential })
             });
             if (res.ok) window.location.reload();
-            else alert("Error de inicio de sesión.");
         }
 
         async function reloadCoreData() {
@@ -566,6 +673,7 @@
             updateTickerWallStreet();
             dibujarGrafica();
             ejecutarVerificacionAlertasStock();
+            actualizarVisibilidadPanelMasivo(); // Sincroniza el panel flotante
         }
 
         function dibujarGrafica() {
@@ -575,15 +683,15 @@
             const ctx = document.getElementById('graficaTendencias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
             
-            const datosAgrapados = {};
+            const datosAgrupados = {};
             BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => {
                 const fVenta = parseFloat(v.precioVenta) || 0;
                 const cQty = parseInt(v.cantidad, 10) || 1;
-                datosAgrapados[v.fecha] = (datosAgrapados[v.fecha] || 0) + (fVenta * cQty);
+                datosAgrupados[v.fecha] = (datosAgrupados[v.fecha] || 0) + (fVenta * cQty);
             });
 
-            const fechas = Object.keys(datosAgrapados).sort();
-            const montos = fechas.map(f => datosAgrapados[f]);
+            const fechas = Object.keys(datosAgrupados).sort();
+            const montos = fechas.map(f => datosAgrupados[f]);
 
             const configuracionGraficas = {
                 dark: { linea: '#3b82f6', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' },
@@ -625,11 +733,14 @@
                 const card = document.createElement('div');
                 card.id = v._id; card.draggable = true;
                 card.ondragstart = (e) => e.dataTransfer.setData("text", e.target.id);
-                card.className = "input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] transition-transform flex justify-between items-center gap-2";
+                card.className = "input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] transition-transform flex items-center gap-3";
 
                 const pVentaFormateado = parseFloat(v.precioVenta) || 0;
+                const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
 
                 card.innerHTML = `
+                    <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0">
+                    
                     <div class="flex-1 min-w-0">
                         <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4>
                         <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>

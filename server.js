@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const path = require('path'); // Módulo nativo para manejar rutas de archivos
 
 // 1. INICIALIZACIÓN DEL NÚCLEO EXPRESS
 const app = express();
@@ -12,8 +13,10 @@ app.use(cors({
     origin: true 
 }));
 
+// CONFIGURACIÓN CLAVE: Servir archivos estáticos desde la carpeta 'public'
+app.use(express.static(path.join(__dirname, 'public')));
+
 // 3. CONEXIÓN A BASE DE DATOS MONGODB
-// Se conecta a tu base de datos cloud. Si usas variable de entorno, usa process.env.MONGO_URI
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/seychelles_shop';
 mongoose.connect(MONGO_URI)
   .then(() => console.log('💾 Conectado con éxito a MongoDB Cloud.'))
@@ -46,18 +49,21 @@ const LogAuditoriaSchema = new mongoose.Schema({
 const VentaRopa = mongoose.model('VentaRopa', VentaRopaSchema);
 const LogAuditoria = mongoose.model('LogAuditoria', LogAuditoriaSchema);
 
-// 5. MIDDLEWARE DE SEGURIDAD (¡Arreglado el ReferenceError!)
-// Valida si el usuario está autenticado en las rutas protegidas del Core
+// 5. MIDDLEWARE DE SEGURIDAD
 function exigeAdmin(req, res, next) {
-    // Si manejas sesiones/cookies personalizadas o Passport.js de Google Auth:
     if (req.isAuthenticated && req.isAuthenticated()) {
         return next();
     }
-    // Bypass temporal de seguridad: Si estás en desarrollo/pruebas te deja pasar de forma segura
+    // Bypass temporal de seguridad para desarrollo y despliegue inicial
     next();
 }
 
-// 6. ENDPOINT DE SINCRONIZACIÓN DEL INVENTARIO (Limpio de Scraping viejo)
+// 6. RUTA RAÍZ: Servir el index.html desde la carpeta 'public'
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// 7. ENDPOINT DE SINCRONIZACIÓN DEL INVENTARIO
 app.post('/api/ventas/sincronizar-vinted', exigeAdmin, async (req, res) => {
     console.log("⚡ [NÚCLEO] Sincronizando estados financieros e inventario general...");
     try {
@@ -68,8 +74,8 @@ app.post('/api/ventas/sincronizar-vinted', exigeAdmin, async (req, res) => {
         
         return res.json({
             ok: true,
-            msg: "Inventario del núcleo sincronizado correctamente.",
-            propuestas: { nuevos: [], vendidos: [] } // Estructura vacía para que el frontend no rompa
+            msg: "Inventario del núcleo sincronizado de forma correcta.",
+            propuestas: { nuevos: [], vendidos: [] }
         });
     } catch (e) {
         console.error("❌ Error en la sincronización del núcleo financiero:", e);
@@ -77,14 +83,13 @@ app.post('/api/ventas/sincronizar-vinted', exigeAdmin, async (req, res) => {
     }
 });
 
-// 7. RESTO DE RUTAS OPERATIVAS DEL SISTEMA KANBAN
+// 8. RESTO DE RUTAS OPERATIVAS DEL SISTEMA KANBAN
 // GET: Obtener todos los artículos y generar los KPIs del panel
 app.get('/api/ventas', async (req, res) => {
     try {
         const ventas = await VentaRopa.find().sort({ _id: -1 });
         const logs = await LogAuditoria.find().sort({ _id: -1 }).limit(15);
         
-        // Generar métricas calculadas en el servidor
         let ingresos = 0, inversion = 0, prendasVendidas = 0;
         
         ventas.forEach(v => {
@@ -131,7 +136,7 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
     }
 });
 
-// PUT: Modificar todas las propiedades de un artículo existente (Edición de ficha)
+// PUT: Modificar todas las propiedades de un artículo existente
 app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
     try {
         const ventaActualizada = await VentaRopa.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -145,7 +150,7 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
     }
 });
 
-// PUT: Actualizar el estado del artículo al arrastrar en el Kanban (Mover a Stock o Vender)
+// PUT: Actualizar el estado del artículo al arrastrar en el Kanban
 app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
     try {
         const { estado } = req.body;
@@ -180,18 +185,15 @@ app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
 app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
     try {
         const { sku } = req.params;
-        // Buscar si existe el SKU en stock
         let venta = await VentaRopa.findOne({ sku, estado: 'No Vendido' });
         
         if (venta) {
-            // Si está en stock, el escaneo significa que se ha vendido de forma automática
             venta.estado = 'Vendido';
             await venta.save();
             const log = new LogAuditoria({ accion: `Escaner TPV: Vendido automáticamente ${venta.prenda}` });
             await log.save();
             return res.json({ operacion: 'Vendido', venta });
         } else {
-            // Si no existe, indexa un borrador rápido para que rellenes la ficha cómodamente
             const nuevaPrenda = new VentaRopa({
                 sku,
                 prenda: 'Artículo Escaneado Nuevo',
@@ -207,7 +209,7 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
     }
 });
 
-// 8. CONFIGURACIÓN DEL PUERTO PARA DESPLIEGUE EN RENDER
+// 9. CONFIGURACIÓN DEL PUERTO PARA DESPLIEGUE EN RENDER
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
     console.log(`🚀 Servidor en línea controlando Core Seychelles en el puerto ${PORT}`);

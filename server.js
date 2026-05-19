@@ -5,6 +5,7 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo'); 
 const mongoose = require('mongoose');
 const path = require('path');
+const { exec } = require('child_process'); // Requerido para invocar el script de Python
 
 const app = express();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -29,7 +30,9 @@ const VentaRopaSchema = new mongoose.Schema({
     gastosEnvio: { type: Number, default: 0 }, 
     canalVenta: { type: String, enum: ['Tienda Física', 'Vinted', 'Wallapop', 'Web'], default: 'Tienda Física' }, 
     rating: { type: Number, default: 0, min: 0, max: 5 },
-    estado: { type: String, enum: ['Vendido', 'No Vendido', 'Devuelto'], default: 'No Vendido' }
+    estado: { type: String, enum: ['Vendido', 'No Vendido', 'Devuelto'], default: 'No Vendido' },
+    comentariosProducto: { type: String, default: '', trim: true },
+    proveedor: { type: String, default: '', trim: true }
 });
 const VentaRopa = mongoose.model('VentaRopa', VentaRopaSchema);
 
@@ -56,6 +59,13 @@ app.use(session({
 app.use(express.static(path.join(__dirname, 'public')));
 
 function exigeAdmin(req, res, next) {
+    // Si la petición viene del propio servidor (localhost), le damos paso libre al script de Python
+    const ip = req.ip || req.connection.remoteAddress;
+    if (ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') {
+        return next();
+    }
+    
+    // Si viene de fuera, comprobamos que sea un administrador autenticado
     if (req.session && req.session.esAdmin) return next();
     return res.status(403).json({ error: 'No autorizado.' });
 }
@@ -86,6 +96,28 @@ app.post('/api/auth/google', async (req, res) => {
         }
         return res.status(401).json({ error: 'Email no autorizado.' });
     } catch (error) { return res.status(400).json({ error: 'Token inválido.' }); }
+});
+
+// ==============================================================================
+// MÓDULO DE SCRAPING DE VINTED CONTROLADO DESDE LA INTERFAZ WEB
+// ==============================================================================
+app.post('/api/ventas/sincronizar-vinted', exigeAdmin, async (req, res) => {
+    console.log("⚡ [NÚCLEO] Disparo manual de scraping Vinted recibido de:", req.session.email);
+    
+    // Ejecuta el script de Python en el entorno local del servidor
+    exec('python3 sincronizador_vinted.py', async (error, stdout, stderr) => {
+        if (error) {
+            console.error(`❌ Error ejecutando el script de Python: ${error.message}`);
+            return res.status(500).json({ ok: false, error: 'Error en el motor de raspado.' });
+        }
+        if (stderr) {
+            print(`⚠️ Alertas del ejecutor: ${stderr}`);
+        }
+        
+        console.log(`✅ Salida de Vinted Scraper: ${stdout}`);
+        await registrarLog(req.session.email, "Disparó manualmente el script de raspado de Vinted");
+        res.json({ ok: true, mensaje: 'Sincronización manual de Vinted finalizada con éxito.' });
+    });
 });
 
 app.get('/api/ventas', exigeAdmin, async (req, res) => {

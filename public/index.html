@@ -148,6 +148,10 @@
                         </div>
                     </div>
 
+                    <button onclick="ejecutarSincronizacionVintedManual(this)" class="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
+                        👗 <span id="txt-btn-vinted">Sincronizar Vinted</span>
+                    </button>
+
                     <button onclick="forceRefreshDataManual()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
                         🔄 <span class="hidden sm:inline">Refrescar</span>
                     </button>
@@ -460,7 +464,7 @@
     </div>
 
     <script>
-        const BACKEND_URL = '';
+        const BACKEND_URL = ''; // Se rellenará automáticamente o heredará la ruta relativa si corre en el mismo host
         let BASE_DATOS = [];
         let CARRITO_CAJA_TPV = []; 
         let INSTANCIA_CHARTS = null;
@@ -525,6 +529,41 @@
             document.getElementById('an-filtro-precio-min').value = '';
             document.getElementById('an-filtro-precio-max').value = '';
             actualizarTodoElBloqueGrafico();
+        }
+
+        // ⚡ SINCRONIZADOR MANUAL DISPARADO DESDE LA WEB
+        async function ejecutarSincronizacionVintedManual(boton) {
+            const textoOriginal = document.getElementById('txt-btn-vinted');
+            
+            boton.disabled = true;
+            boton.classList.add('opacity-50', 'cursor-not-allowed');
+            textoOriginal.innerText = "Raspando Vinted...";
+            cantarPorVoz("Iniciando raspado de Vinted.");
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/ventas/sincronizar-vinted`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.ok) {
+                    cantarPorVoz("Sincronización exitosa.");
+                    await reloadCoreData();
+                } else {
+                    cantarPorVoz("Error en el raspado.");
+                    alert(data.error || "Hubo un problema en el servidor al ejecutar el scraper.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Error de red al conectar con el servidor core.");
+            } finally {
+                boton.disabled = false;
+                boton.classList.remove('opacity-50', 'cursor-not-allowed');
+                textoOriginal.innerText = "Sincronizar Vinted";
+            }
         }
 
         window.allowDrop = function(e) { e.preventDefault(); const col = e.currentTarget; if(col) col.classList.add('drag-over'); };

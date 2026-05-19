@@ -9,7 +9,7 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/3081/3081559.png",
+      "src": "logo.png",
       "sizes": "512 x 512",
       "type": "image/png",
       "purpose": "any maskable"

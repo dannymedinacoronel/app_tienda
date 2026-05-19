@@ -335,7 +335,53 @@
                 </div>
             </div>
 
-            <div id="sec-analitica" class="seccion-app hidden grid grid-cols-1 gap-6 mb-8">
+            <div id="sec-analitica" class="seccion-app hidden flex flex-col gap-6 mb-8">
+                
+                <div class="card-bg border p-4 rounded-3xl shadow-xl">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <h3 class="text-xs font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">🎛️ Filtros Avanzados de Métricas</h3>
+                        <button onclick="limpiarFiltrosAnalitica()" class="text-[10px] opacity-50 hover:opacity-100 underline font-mono">Quitar Filtros</button>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Canal Comercial</label>
+                            <select id="an-filtro-canal" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2 py-1.5 focus:outline-none">
+                                <option value="TODOS">🌐 Todos</option>
+                                <option value="Vinted">👗 Vinted</option>
+                                <option value="Tienda Física">🏬 Tienda</option>
+                                <option value="Wallapop">🤝 Wallapop</option>
+                                <option value="Web">🌐 Web</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Categoría</label>
+                            <select id="an-filtro-categoria" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2 py-1.5 focus:outline-none">
+                                <option value="TODOS">👕 Todas</option>
+                                <option value="Camisetas">Camisetas</option>
+                                <option value="Sudaderas">Sudaderas</option>
+                                <option value="Pantalones">Pantalones</option>
+                                <option value="Vestidos">Vestidos</option>
+                                <option value="Accesorios">Accesorios</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Talla</label>
+                            <select id="an-filtro-talla" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2 py-1.5 focus:outline-none">
+                                <option value="TODOS">📐 Todas</option>
+                                <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Mín (€)</label>
+                            <input type="number" id="an-filtro-precio-min" placeholder="0" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2 py-1 focus:outline-none font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Máx (€)</label>
+                            <input type="number" id="an-filtro-precio-max" placeholder="Max" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2 py-1 focus:outline-none font-mono">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div class="card-bg border p-6 rounded-3xl shadow-xl">
                         <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento</h3>
@@ -441,12 +487,44 @@
             }
             
             if (idSeccion === 'sec-analitica' && BASE_DATOS.length > 0) {
-                setTimeout(() => { 
-                    dibujarGrafica(); 
-                    dibujarGráficaTarta(); 
-                    dibujarMapaCalor(); 
-                }, 50);
+                setTimeout(() => { actualizarTodoElBloqueGrafico(); }, 50);
             }
+        }
+
+        // 🎯 LÓGICA DE FILTRADO INTERNO DE LA PESTAÑA ANALÍTICA
+        function obtenerDatosFiltradosParaAnalitica() {
+            const fCanal = document.getElementById('an-filtro-canal').value;
+            const fCat = document.getElementById('an-filtro-categoria').value;
+            const fTalla = document.getElementById('an-filtro-talla').value;
+            const fMin = parseFloat(document.getElementById('an-filtro-precio-min').value) || 0;
+            const fMax = parseFloat(document.getElementById('an-filtro-precio-max').value) || Infinity;
+
+            return BASE_DATOS.filter(v => {
+                if (v.estado !== 'Vendido') return false;
+                if (fCanal !== 'TODOS' && v.canalVenta !== fCanal) return false;
+                if (fCat !== 'TODOS' && v.categoria !== fCat) return false;
+                if (fTalla !== 'TODOS' && v.talla !== fTalla) return false;
+                
+                const precio = parseFloat(v.precioVenta || 0);
+                if (precio < fMin || precio > fMax) return false;
+
+                return true;
+            });
+        }
+
+        function actualizarTodoElBloqueGrafico() {
+            dibujarGrafica();
+            dibujarGráficaTarta();
+            dibujarMapaCalor();
+        }
+
+        function limpiarFiltrosAnalitica() {
+            document.getElementById('an-filtro-canal').value = 'TODOS';
+            document.getElementById('an-filtro-categoria').value = 'TODOS';
+            document.getElementById('an-filtro-talla').value = 'TODOS';
+            document.getElementById('an-filtro-precio-min').value = '';
+            document.getElementById('an-filtro-precio-max').value = '';
+            actualizarTodoElBloqueGrafico();
         }
 
         window.allowDrop = function(e) { e.preventDefault(); const col = e.currentTarget; if(col) col.classList.add('drag-over'); };
@@ -496,7 +574,7 @@
                 }
             });
 
-            recalcularKPIsLocalesOptimistas(); renderKanban(); dibujarGrafica(); dibujarGráficaTarta(); dibujarMapaCalor();
+            recalcularKPIsLocalesOptimistas(); renderKanban(); actualizarTodoElBloqueGrafico();
 
             try {
                 const promesas = listaIds.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
@@ -589,7 +667,7 @@
             const body = document.getElementById('main-body'); if(!body) return;
             body.className = `theme-${theme} min-h-screen font-sans antialiased pb-24 transition-all duration-300`;
             localStorage.setItem('seychelles-theme-multi', theme);
-            if(BASE_DATOS.length > 0) { dibujarGrafica(); dibujarGráficaTarta(); dibujarMapaCalor(); }
+            if(BASE_DATOS.length > 0) { actualizarTodoElBloqueGrafico(); }
         }
 
         function exportarExcel() {
@@ -828,7 +906,10 @@
                 document.getElementById('kpi-inversion').innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
                 document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
 
-                renderKanban(); updateTickerWallStreet(); dibujarGrafica(); dibujarGráficaTarta(); dibujarMapaCalor(); ejecutarVerificacionAlertasStock(); aplicarFiltrosFrontLineal(); actualizarVisibilidadPanelMasivo();
+                renderKanban(); updateTickerWallStreet(); ejecutarVerificacionAlertasStock(); aplicarFiltrosFrontLineal(); actualizarVisibilidadPanelMasivo();
+                
+                // Refrescar el bloque de analítica respetando los filtros seleccionados
+                actualizarTodoElBloqueGrafico();
                 
                 const contenedorLogs = document.getElementById('contenedor-logs-auditoria');
                 if (contenedorLogs && data.logs && data.logs.length > 0) {
@@ -843,7 +924,11 @@
             contenedor.innerHTML = '<canvas id="graficaTendencias"></canvas>'; const ctx = document.getElementById('graficaTendencias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
             
-            const datosAgrapados = {}; BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => { datosAgrapados[v.fecha] = (datosAgrapados[v.fecha] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1)); });
+            // Usar conjunto de datos filtrado de Analítica
+            const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
+            
+            const datosAgrapados = {}; 
+            datosFiltrados.forEach(v => { datosAgrapados[v.fecha] = (datosAgrapados[v.fecha] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1)); });
             const fechas = Object.keys(datosAgrapados).sort(); const montos = fechas.map(f => datosAgrapados[f]);
 
             const configuracionGraficas = {
@@ -864,8 +949,11 @@
             contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
 
+            // Usar conjunto de datos filtrado de Analítica
+            const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
+
             const contadorCategorias = {};
-            BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => { contadorCategorias[v.categoria] = (contadorCategorias[v.categoria] || 0) + (v.cantidad || 1); });
+            datosFiltrados.forEach(v => { contadorCategorias[v.categoria] = (contadorCategorias[v.categoria] || 0) + (v.cantidad || 1); });
 
             const etiquetas = Object.keys(contadorCategorias); const datos = etiquetas.map(cat => contadorCategorias[cat]);
 
@@ -883,7 +971,6 @@
             });
         }
 
-        // 🔥 FUNCIÓN LÓGICA DEL MAPA DE CALOR (DÍA VS HORA)
         function dibujarMapaCalor() {
             const canvasContenedor = document.querySelector('#graficaMapaCalor');
             if (!canvasContenedor) return;
@@ -896,7 +983,10 @@
             const matrizDatos = Array(7).fill(0).map(() => Array(4).fill(0));
             let maxVentas = 1;
 
-            BASE_DATOS.filter(v => v.estado === 'Vendido').forEach(v => {
+            // Usar conjunto de datos filtrado de Analítica
+            const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
+
+            datosFiltrados.forEach(v => {
                 const fechaObj = v.fecha ? new Date(v.fecha) : new Date();
                 if (isNaN(fechaObj.getTime())) return;
 

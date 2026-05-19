@@ -9,6 +9,7 @@
   "dependencies": {
     "connect-mongo": "^6.0.0",
     "cookie-session": "^2.1.0",
+    "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.2",
     "express-session": "^1.19.0",

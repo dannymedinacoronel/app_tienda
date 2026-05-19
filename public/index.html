@@ -485,7 +485,8 @@
     </div>
 
     <script>
-        const BACKEND_URL = ''; 
+        // CONFIGURACIÓN DINÁMICA: Detecta automáticamente el dominio del servidor en Render
+        const BACKEND_URL = window.location.origin; 
         let BASE_DATOS = [];
         let INSTANCIA_CHARTS = null;
         let INSTANCIA_TARTA = null;
@@ -740,7 +741,7 @@
             if (modulo.classList.contains('hidden')) {
                 modulo.classList.remove('hidden'); if (OBJETO_ESCANER_CAMARA) { try { OBJETO_ESCANER_CAMARA.clear(); } catch(e){} }
                 OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader"); LECTOR_BLOQUEADO_POR_CAPTURA = false;
-                OBJETO_ESCANER_CAMARA.start({ facingMode: "environment" }, { fps: 30, qrbox: { width: 260, height: 260 } }, async (codigoMapeado) => { if (!LECTOR_BLOQUEADO_POR_CAPTURA) { LECTOR_BLOQUEADO_POR_CAPTURA = true; document.getElementById('camara-ping-state').className = "w-2 h-2 rounded-full bg-amber-500 animate-pulse"; document.getElementById('camara-text-state').innerText = "Procesado"; document.getElementById('btn-rearmar-escaner').classList.remove('hidden'); await ejecutarLogicaEscaneo(codigoMapeado); } }, () => {}).catch(err => { modulo.classList.add('hidden'); });
+                OBJETO_ESCANER_CAMARA.start({ facingMode: "environment" }, { fps: 30, qrbox: { width: 260, height: 260 } }, async (codigoMapeado) => { if (!LECTOR_BLOQUEADO_POR_CAPTURA) { LECTOR_BLOADO_POR_CAPTURA = true; document.getElementById('camara-ping-state').className = "w-2 h-2 rounded-full bg-amber-500 animate-pulse"; document.getElementById('camara-text-state').innerText = "Procesado"; document.getElementById('btn-rearmar-escaner').classList.remove('hidden'); await ejecutarLogicaEscaneo(codigoMapeado); } }, () => {}).catch(err => { modulo.classList.add('hidden'); });
             } else { cerrarCamara(); }
         }
         function rearmarLectorParaSiguientePrenda() { LECTOR_BLOQUEADO_POR_CAPTURA = false; document.getElementById('camara-ping-state').className = "w-2 h-2 rounded-full bg-emerald-500 animate-ping"; document.getElementById('camara-text-state').innerText = "Lector Listo"; document.getElementById('btn-rearmar-escaner').classList.add('hidden'); }

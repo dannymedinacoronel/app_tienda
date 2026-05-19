@@ -514,7 +514,7 @@
 
         function actualizarTodoElBloqueGrafico() {
             dibujarGrafica();
-            dibujarGráficaTarta();
+            dibujarGraficaTarta(); // SE ELIMINÓ LA TILDE PARA CONCORDAR CON LA DECLARACIÓN DE ABAJO
             dibujarMapaCalor();
         }
 
@@ -682,7 +682,7 @@
         }
 
         function setFormRating(estrellasSeleccionadas) {
-            document.getElementById('rating').value = estrellasSeleccionadas;
+            document.getElementById('rating').value = starsSelected = estrellasSeleccionadas;
             for (let i = 1; i <= 5; i++) {
                 const starElement = document.getElementById(`star-${i}`);
                 if (starElement) {
@@ -944,7 +944,8 @@
             });
         }
 
-        function dibujarGráficaTarta() {
+        // FUNCIÓN CORREGIDA SIN TILDE EN EL NOMBRE
+        function dibujarGraficaTarta() {
             const contenedor = document.getElementById('contenedor-canvas-tarta'); if(!contenedor) return;
             contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
@@ -1200,7 +1201,8 @@
                 navigator.serviceWorker.register('/sw.js').then(reg => console.log('PWA Sincronizada.')).catch(err => {});
             });
         }
-<h1>hello</h1>
+        
+        // LA ERRATA DE LA DIÉRESIS HA SIDO CORREGIDA AQUÍ
         particlesJS("particles-js", {
             "particles": {
                 "number": { "value": 90, "density": { "enable": true, "value_area": 800 } },

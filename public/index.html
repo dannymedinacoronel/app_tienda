@@ -86,7 +86,7 @@
         .dragging { opacity: 0.3 !important; border-color: #ec4899 !important; }
 
         #particles-js { position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; pointer-events: all; }
-        #wrapper-core { position: relative; z-index: 10; }
+        .wrapper-core { position: relative; z-index: 10; }
         .group:hover .group-hover\:block { display: block; }
 
         @keyframes logoVibrate {
@@ -105,7 +105,7 @@
 
     <div id="particles-js"></div>
 
-    <div id="wrapper-core">
+    <div class="wrapper-core">
         <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4 bg-slate-950/90 backdrop-blur-md">
             <div class="bg-slate-900 p-8 rounded-3xl shadow-2xl text-center border border-slate-800 max-w-sm w-full flex flex-col items-center">
                 <img src="logo.png" alt="Seychelles Logo" class="w-20 h-20 mb-4 rounded-2xl object-cover logo-vibrant shadow-md">
@@ -161,13 +161,10 @@
                         </div>
                     </div>
 
-                    <button onclick="ejecutarSincronizacionVintedManual(this)" class="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
-                        👗 <span id="txt-btn-vinted">Sincronizar Vinted</span>
+                    <button onclick="ejecutarSincronizacionInventarioManual(this)" class="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
+                        🔄 <span id="txt-btn-vinted">Sincronizar Inventario</span>
                     </button>
 
-                    <button onclick="forceRefreshDataManual()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
-                        🔄 <span class="hidden sm:inline">Refrescar</span>
-                    </button>
                     <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600/40 hover:bg-purple-700 border border-purple-500/30 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md">💾 Backup</button>
                     <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md">📊 Excel</button>
                     <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
@@ -303,7 +300,6 @@
                                 </div>
                             </div>
 
-                            <!-- 🏬 SECCIÓN INTEGRADA DE CREACIÓN Y SELECCIÓN DE TIENDAS -->
                             <div>
                                 <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5 flex justify-between">
                                     <span>Tienda / Origen</span>
@@ -436,7 +432,6 @@
             </div>
         </div>
 
-        <!-- 🏬 MODAL INTERACTIVO PARA CREAR TIENDA -->
         <div id="modal-crear-tienda" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
             <div class="bg-slate-900 border border-slate-800 text-white p-6 rounded-2xl shadow-2xl max-w-sm w-full">
                 <h3 class="font-black text-sm uppercase tracking-wider text-indigo-400 mb-1">🏬 Nueva Tienda / Origen</h3>
@@ -471,28 +466,12 @@
             <div class="bg-white text-slate-900 p-6 rounded-2xl shadow-2xl border max-w-xs w-full text-center flex flex-col items-center">
                 <h4 class="text-slate-500 uppercase font-mono text-[10px] tracking-widest mb-1">Seychelles Shop</h4>
                 <h3 id="print-prenda" class="font-black text-sm uppercase tracking-tight mb-4">Modelo Prenda</h3>
-                <div id="canvas-generador-qr" class="p-2 border rounded-xl bg-slate-100 break-all p-3 font-mono text-xs select-all">ID DE ESCANEO ACTIVO</div>
+                <div id="canvas-generador-qr" class="border rounded-xl bg-slate-100 break-all p-3 font-mono text-xs select-all">ID DE ESCANEO ACTIVO</div>
                 <p id="print-sku" class="font-mono text-xs text-slate-400 mb-1">SKU-CODE</p>
                 <p id="print-precio" class="text-xl font-black text-slate-900 font-mono mb-6">0.00 €</p>
                 <div class="flex gap-2 w-full">
                     <button onclick="document.getElementById('modal-qr').classList.add('hidden')" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 rounded-xl text-xs uppercase">Cerrar</button>
                     <button onclick="window.print()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs uppercase">Imprimir</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="modal-asistente-vinted" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[110] flex items-center justify-center p-4">
-            <div class="card-bg border rounded-3xl p-6 max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl animate-fadeIn">
-                <div class="flex justify-between items-center border-b border-current/10 pb-3 mb-4">
-                    <div>
-                        <h3 class="font-black text-sm uppercase tracking-wider text-teal-400">🤖 Asistente Core Seychelles</h3>
-                        <p class="text-[10px] opacity-60 font-mono">Diferencias detectadas en tu escaparate de Vinted</p>
-                    </div>
-                    <button onclick="document.getElementById('modal-asistente-vinted').classList.add('hidden')" class="text-xs opacity-50 hover:opacity-100 bg-black/20 px-2 py-1 rounded-lg">Cerrar ✕</button>
-                </div>
-                <div id="contenedor-propuestas-vinted" class="flex-1 overflow-y-auto space-y-4 pr-1 text-xs"></div>
-                <div class="flex justify-end gap-2 border-t border-current/10 pt-4 mt-4">
-                    <button onclick="document.getElementById('modal-asistente-vinted').classList.add('hidden')" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider">Listo</button>
                 </div>
             </div>
         </div>
@@ -508,7 +487,6 @@
     <script>
         const BACKEND_URL = ''; 
         let BASE_DATOS = [];
-        let CARRITO_CAJA_TPV = []; 
         let INSTANCIA_CHARTS = null;
         let INSTANCIA_TARTA = null;
         let INSTANCIA_MAPA_CALOR = null;
@@ -518,14 +496,12 @@
         let ITEMS_SELECCIONADOS_MASIVOS = [];
         let SOUND_MUTED_GLOBAL = false;
 
-        // 🏬 LOGICA EXCLUSIVA DE GESTIÓN DE TIENDAS LOCALES
         const TIENDAS_PREDEFINIDAS = ["Proveedor General", "Importación Directa", "Stock Inicial"];
         
         function cargarTiendasEstructurales() {
             let locales = localStorage.getItem('seychelles-tiendas-origen');
             let listaTiendas = locales ? JSON.parse(locales) : [...TIENDAS_PREDEFINIDAS];
             
-            // Calcular existencias actuales por cada tienda
             const mapeoContador = {};
             BASE_DATOS.forEach(item => {
                 let t = item.proveedor || "Proveedor General";
@@ -534,7 +510,6 @@
 
             const selectorForm = document.getElementById('proveedor');
             const selectorAnalitica = document.getElementById('an-filtro-tienda');
-            
             let ultimaSeleccion = selectorForm ? selectorForm.value : localStorage.getItem('seychelles-last-tienda');
 
             if(selectorForm) {
@@ -568,13 +543,13 @@
         function guardarNuevaTiendaLocal() {
             const input = document.getElementById('nueva-tienda-nombre');
             const nombre = input.value.trim();
-            if(!nombre) return alert("Escribe un nombre válido para la tienda.");
+            if(!nombre) return alert("Escribe un nombre válido.");
             
             let locales = localStorage.getItem('seychelles-tiendas-origen');
             let listaTiendas = locales ? JSON.parse(locales) : [...TIENDAS_PREDEFINIDAS];
             
             if(listaTiendas.map(t => t.toLowerCase()).includes(nombre.toLowerCase())) {
-                return alert("Esa tienda ya está registrada.");
+                return alert("Esa tienda ya existe.");
             }
             
             listaTiendas.push(nombre);
@@ -618,62 +593,19 @@
         function actualizarTodoElBloqueGrafico() { dibujarGrafica(); dibujarGráficaTarta(); dibujarMapaCalor(); }
         function limpiarFiltrosAnalitica() { document.getElementById('an-filtro-canal').value = 'TODOS'; document.getElementById('an-filtro-categoria').value = 'TODOS'; document.getElementById('an-filtro-tienda').value = 'TODOS'; document.getElementById('an-filtro-precio-min').value = ''; document.getElementById('an-filtro-precio-max').value = ''; actualizarTodoElBloqueGrafico(); }
 
-        async function ejecutarSincronizacionVintedManual(boton) {
+        async function ejecutarSincronizacionInventarioManual(boton) {
             const textoOriginal = document.getElementById('txt-btn-vinted');
             boton.disabled = true; boton.classList.add('opacity-50', 'cursor-not-allowed');
-            textoOriginal.innerText = "Analizando perfil..."; cantarPorVoz("Analizando escaparate de Vinted.");
+            textoOriginal.innerText = "Sincronizando núcleo..."; 
+            cantarPorVoz("Sincronizando inventario central.");
             try {
                 const response = await fetch(`${BACKEND_URL}/api/ventas/sincronizar-vinted`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include' });
-                const data = await response.json();
-                if (response.ok && data.ok) {
-                    const contenedor = document.getElementById('contenedor-propuestas-vinted'); contenedor.innerHTML = ''; 
-                    const nuevos = data.propuestas.nuevos || []; const vendidos = data.propuestas.vendidos || [];
-                    if (nuevos.length === 0 && vendidos.length === 0) { cantarPorVoz("Inventario perfectamente al día."); alert("✨ ¡Tu inventario local ya está perfectamente sincronizado con tu perfil de Vinted!"); return; }
-                    cantarPorVoz("He encontrado discrepancias.");
-                    nuevos.forEach((item, index) => {
-                        const div = document.createElement('div'); div.className = "bg-teal-500/5 border border-teal-500/30 p-4 rounded-2xl space-y-3 animate-fadeIn";
-                        div.innerHTML = `
-                            <div class="flex justify-between items-start flex-wrap gap-2">
-                                <div><span class="bg-teal-500 text-slate-950 font-black px-1.5 py-0.5 rounded text-[8px] uppercase font-mono">✨ NUEVO ONLINE</span><h4 class="font-bold text-xs uppercase tracking-wide mt-1 text-teal-300">${item.prenda}</h4></div>
-                                <button onclick="confirmarAdicionVinted(this, ${JSON.stringify(item).replace(/"/g, '&quot;')})" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-3 py-1.5 rounded-xl text-[10px] uppercase shadow-md">Añadir a Stock</button>
-                            </div>
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                                <div><label class="block text-[8px] opacity-40 uppercase font-bold">Precio Venta (€)</label><input type="number" step="0.01" value="${item.precioVenta}" id="new-precio-${index}" class="w-full bg-black/20 border border-current/20 rounded-lg px-2 py-1 font-mono text-xs focus:outline-none text-current"></div>
-                                <div><label class="block text-[8px] opacity-40 uppercase font-bold">Coste Compra (€)</label><input type="number" step="0.01" value="0.00" id="new-coste-${index}" class="w-full bg-black/20 border border-current/20 rounded-lg px-2 py-1 font-mono text-xs focus:outline-none text-current"></div>
-                                <div><label class="block text-[8px] opacity-40 uppercase font-bold">Talla</label><select id="new-talla-${index}" class="w-full bg-black/20 border border-current/20 rounded-lg px-2 py-1 text-xs focus:outline-none dropdown-bg"><option value="S">S</option><option value="M" selected>M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option></select></div>
-                                <div><label class="block text-[8px] opacity-40 uppercase font-bold">Categoría</label><select id="new-cat-${index}" class="w-full bg-black/20 border border-current/20 rounded-lg px-2 py-1 text-xs focus:outline-none dropdown-bg"><option value="Camisetas" selected>Camisetas</option><option value="Sudaderas">Sudaderas</option><option value="Pantalones">Pantalones</option><option value="Vestidos">Vestidos</option><option value="Accesorios">Accesorios</option></select></div>
-                            </div>`;
-                        contenedor.appendChild(div);
-                    });
-                    vendidos.forEach((item) => {
-                        const div = document.createElement('div'); div.className = "bg-amber-500/5 border border-amber-500/30 p-4 rounded-2xl flex justify-between items-center gap-4 animate-fadeIn";
-                        div.innerHTML = `
-                            <div class="min-w-0"><span class="bg-amber-500 text-slate-950 font-black px-1.5 py-0.5 rounded text-[8px] uppercase font-mono">📉 VENDIDO / RETIRADO</span><h4 class="font-bold text-xs uppercase tracking-wide mt-1 text-amber-300 truncate">${item.prenda}</h4><p class="text-[10px] font-mono opacity-50">Talla ${item.talla} • ${parseFloat(item.precioVenta).toFixed(2)} €</p></div>
-                            <div class="flex gap-1 flex-shrink-0"><button onclick="confirmarVendidoVinted(this, '${item._id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl text-[10px] uppercase shadow-md">💵 Vender</button><button onclick="eliminarArticuloDirecto(this, '${item._id}')" class="bg-rose-600/20 hover:bg-rose-600 border border-rose-500/30 text-rose-400 hover:text-white font-bold px-2 py-2 rounded-xl text-[10px]">🗑️ Borrar</button></div>`;
-                        contenedor.appendChild(div);
-                    });
-                    document.getElementById('modal-asistente-vinted').classList.remove('hidden');
-                } else { cantarPorVoz("Error en el raspado."); alert(data.error || "Hubo un problema al procesar las estadísticas."); }
-            } catch (err) { alert("Error de red al conectar con el asistente."); } finally { boton.disabled = false; boton.classList.remove('opacity-50', 'cursor-not-allowed'); textoOriginal.innerText = "Sincronizar Vinted"; }
+                if (response.ok) {
+                    cantarPorVoz("Núcleo financiero al día.");
+                    await reloadCoreData();
+                } else { alert("Hubo un problema al procesar la sincronización del servidor."); }
+            } catch (err) { alert("Error de red al conectar con el servidor."); } finally { boton.disabled = false; boton.classList.remove('opacity-50', 'cursor-not-allowed'); textoOriginal.innerText = "Sincronizar Inventario"; }
         }
-
-        async function confirmarAdicionVinted(elementoBoton, itemBase) {
-            const tarjeta = elementoBoton.closest('.bg-teal-500/5');
-            const precioVenta = parseFloat(tarjeta.querySelector('input[id^="new-precio-"]').value) || 0;
-            const precioCompra = parseFloat(tarjeta.querySelector('input[id^="new-coste-"]').value) || 0;
-            const talla = tarjeta.querySelector('select[id^="new-talla-"]').value;
-            const categoria = tarjeta.querySelector('select[id^="new-cat-"]').value;
-            const tiendaActiva = document.getElementById('proveedor').value || "Proveedor General";
-
-            const payload = {
-                sku: itemBase.sku, prenda: itemBase.prenda, categoria: categoria, talla: talla, cantidad: 1, precioCompra: precioCompra, precioVenta: precioVenta, gastosEnvio: 0, canalVenta: "Vinted", estado: "No Vendido", comentariosProducto: "Aceptado vía Asistente.", rating: 0, proveedor: tiendaActiva
-            };
-            try { const res = await fetch(`${BACKEND_URL}/api/ventas`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) }); if (res.ok) { tarjeta.remove(); verificarSiModalVacio(); await reloadCoreData(); } } catch (e) {}
-        }
-
-        async function confirmarVendidoVinted(elementoBoton, idItem) { const tarjeta = elementoBoton.closest('.bg-amber-500/5'); try { const res = await fetch(`${BACKEND_URL}/api/ventas/${idItem}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: 'Vendido' }) }); if (res.ok) { tarjeta.remove(); verificarSiModalVacio(); procesarMultiplicadorCombo(); await reloadCoreData(); } } catch (e) {} }
-        async function eliminarArticuloDirecto(elementoBoton, idItem) { if (!confirm("¿Borrar artículo?")) return; const tarjeta = elementoBoton.closest('.bg-amber-500/5'); try { const res = await fetch(`${BACKEND_URL}/api/ventas/${idItem}`, { method: 'DELETE', credentials: 'include' }); if (res.ok) { tarjeta.remove(); verificarSiModalVacio(); await reloadCoreData(); } } catch (e) {} }
-        function verificarSiModalVacio() { const contenedor = document.getElementById('contenedor-propuestas-vinted'); if (contenedor.children.length === 0) { contenedor.innerHTML = `<div class="text-center py-6 opacity-40 italic">Revisión completada.</div>`; } }
 
         window.allowDrop = function(e) { e.preventDefault(); const col = e.currentTarget; if(col) col.classList.add('drag-over'); };
         window.clearDrop = function(e) { const col = e.currentTarget; if(col) col.classList.remove('drag-over'); };
@@ -708,8 +640,6 @@
             if (SOUND_MUTED_GLOBAL) { btn.className = "bg-rose-600/20 text-rose-400 border border-rose-500/30 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md"; txt.innerText = "Muteado"; } 
             else { btn.className = "bg-slate-800 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md"; txt.innerText = "Sonido"; cantarPorVoz("Sonido activo"); }
         }
-
-        async function forceRefreshDataManual() { cantarPorVoz("Sincronizando."); await reloadCoreData(); }
 
         function recalcularKPIsLocalesOptimistas() {
             let ingresos = 0, inversion = 0, prendasVendidas = 0;
@@ -904,7 +834,7 @@
         document.getElementById('form-venta').onsubmit = async (e) => {
             e.preventDefault(); const id = document.getElementById('edit-id').value;
             const tSel = document.getElementById('proveedor').value;
-            localStorage.setItem('seychelles-last-tienda', tSel); // Guardar historial de uso
+            localStorage.setItem('seychelles-last-tienda', tSel);
 
             const payload = {
                 sku: document.getElementById('sku').value.trim(), prenda: document.getElementById('prenda').value, categoria: document.getElementById('categoria').value, talla: document.getElementById('talla').value, cantidad: parseInt(document.getElementById('cantidad').value) || 1, precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0, gastosEnvio: parseFloat(document.getElementById('gastosEnvio').value) || 0, canalVenta: document.getElementById('canalVenta').value, comentariosProducto: document.getElementById('comentariosProducto').value.trim(), rating: parseInt(document.getElementById('rating').value, 10) || 0, proveedor: tSel
@@ -918,7 +848,6 @@
             const item = BASE_DATOS.find(v => v._id === id); if (!item) return;
             document.getElementById('edit-id').value = item._id; document.getElementById('sku').value = item.sku || ''; document.getElementById('prenda').value = item.prenda; document.getElementById('categoria').value = item.categoria; document.getElementById('talla').value = item.talla; document.getElementById('cantidad').value = item.cantidad || 1; document.getElementById('precioCompra').value = item.precioCompra || 0; document.getElementById('precioVenta').value = item.precioVenta || 0; document.getElementById('gastosEnvio').value = item.gastosEnvio || 0; document.getElementById('canalVenta').value = item.canalVenta || 'Vinted'; document.getElementById('comentariosProducto').value = item.comentariosProducto || ''; 
             
-            // Forzar seleccion de tienda al editar
             const selector = document.getElementById('proveedor');
             if(selector) selector.value = item.proveedor || "Proveedor General";
             

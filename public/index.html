@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Seychelles">
-    <link rel="apple-touch-icon" href="logo.png">
+    <link class="apple-touch-icon" href="logo.png">
     <link rel="manifest" href="manifest.json">
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -340,7 +340,6 @@
             </div>
 
             <div id="sec-analitica" class="seccion-app hidden flex flex-col gap-6 mb-8">
-                
                 <div class="card-bg border p-4 rounded-3xl shadow-xl">
                     <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
                         <h3 class="text-xs font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">🎛️ Filtros Avanzados de Métricas</h3>
@@ -455,6 +454,25 @@
             </div>
         </div>
 
+        <div id="modal-asistente-vinted" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+            <div class="card-bg border rounded-3xl p-6 max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl animate-fadeIn">
+                <div class="flex justify-between items-center border-b border-current/10 pb-3 mb-4">
+                    <div>
+                        <h3 class="font-black text-sm uppercase tracking-wider text-teal-400">🤖 Asistente Core Seychelles</h3>
+                        <p class="text-[10px] opacity-60 font-mono">Diferencias detectadas en tu escaparate de Vinted</p>
+                    </div>
+                    <button onclick="document.getElementById('modal-asistente-vinted').classList.add('hidden')" class="text-xs opacity-50 hover:opacity-100 bg-black/20 px-2 py-1 rounded-lg">Cerrar ✕</button>
+                </div>
+                
+                <div id="contenedor-propuestas-vinted" class="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
+                    </div>
+
+                <div class="flex justify-end gap-2 border-t border-current/10 pt-4 mt-4">
+                    <button onclick="document.getElementById('modal-asistente-vinted').classList.add('hidden')" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider">Listo</button>
+                </div>
+            </div>
+        </div>
+
         <footer id="ticker-bar" class="hidden fixed bottom-0 left-0 w-full bg-black h-10 flex items-center z-50 text-[10px] font-mono border-t border-white/5 shadow-2xl transition-colors duration-300">
             <div id="ticker-header-badge" class="bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none">WALL•ST•SEYCHELLES</div>
             <div class="flex-1 overflow-hidden flex">
@@ -464,7 +482,7 @@
     </div>
 
     <script>
-        const BACKEND_URL = ''; // Se rellenará automáticamente o heredará la ruta relativa si corre en el mismo host
+        const BACKEND_URL = ''; 
         let BASE_DATOS = [];
         let CARRITO_CAJA_TPV = []; 
         let INSTANCIA_CHARTS = null;
@@ -476,26 +494,21 @@
         let ITEMS_SELECCIONADOS_MASIVOS = [];
         let SOUND_MUTED_GLOBAL = false;
 
-        // 🗺️ MENÚ DE NAVEGACIÓN ENTRE VISTAS DE LA APP
         function navegarASeccion(idSeccion) {
             document.querySelectorAll('.seccion-app').forEach(sec => sec.classList.add('hidden'));
             document.getElementById(idSeccion).classList.remove('hidden');
-            
             document.querySelectorAll('nav button').forEach(btn => {
                 btn.className = "flex-1 py-2 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100";
             });
-            
             const tabActivo = document.getElementById(`tab-${idSeccion}`);
             if (tabActivo) {
                 tabActivo.className = "flex-1 py-2 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white";
             }
-            
             if (idSeccion === 'sec-analitica' && BASE_DATOS.length > 0) {
                 setTimeout(() => { actualizarTodoElBloqueGrafico(); }, 50);
             }
         }
 
-        // 🎯 LÓGICA DE FILTRADO INTERNO DE LA PESTAÑA ANALÍTICA
         function obtenerDatosFiltradosParaAnalitica() {
             const fCanal = document.getElementById('an-filtro-canal').value;
             const fCat = document.getElementById('an-filtro-categoria').value;
@@ -508,10 +521,8 @@
                 if (fCanal !== 'TODOS' && v.canalVenta !== fCanal) return false;
                 if (fCat !== 'TODOS' && v.categoria !== fCat) return false;
                 if (fTalla !== 'TODOS' && v.talla !== fTalla) return false;
-                
                 const precio = parseFloat(v.precioVenta || 0);
                 if (precio < fMin || precio > fMax) return false;
-
                 return true;
             });
         }
@@ -531,14 +542,14 @@
             actualizarTodoElBloqueGrafico();
         }
 
-        // ⚡ SINCRONIZADOR MANUAL DISPARADO DESDE LA WEB
+        // ⚡ ASISTENTE DE REVISIÓN INTERACTIVO DE VINTED (LÓGICA NUEVA)
         async function ejecutarSincronizacionVintedManual(boton) {
             const textoOriginal = document.getElementById('txt-btn-vinted');
             
             boton.disabled = true;
             boton.classList.add('opacity-50', 'cursor-not-allowed');
-            textoOriginal.innerText = "Raspando Vinted...";
-            cantarPorVoz("Iniciando raspado de Vinted.");
+            textoOriginal.innerText = "Analizando perfil...";
+            cantarPorVoz("Analizando escaparate de Vinted.");
 
             try {
                 const response = await fetch(`${BACKEND_URL}/api/ventas/sincronizar-vinted`, {
@@ -550,19 +561,147 @@
                 const data = await response.json();
 
                 if (response.ok && data.ok) {
-                    cantarPorVoz("Sincronización exitosa.");
-                    await reloadCoreData();
+                    const contenedor = document.getElementById('contenedor-propuestas-vinted');
+                    contenedor.innerHTML = ''; 
+                    
+                    const nuevos = data.propuestas.nuevos || [];
+                    const vendidos = data.propuestas.vendidos || [];
+
+                    if (nuevos.length === 0 && vendidos.length === 0) {
+                        cantarPorVoz("Inventario perfectamente al día.");
+                        alert("✨ ¡Tu inventario local ya está perfectamente sincronizado con tu perfil de Vinted!");
+                        return;
+                    }
+
+                    cantarPorVoz("He encontrado discrepancias.");
+
+                    // Pintar artículos nuevos online editables
+                    nuevos.forEach((item, index) => {
+                        const div = document.createElement('div');
+                        div.className = "bg-teal-500/5 border border-teal-500/30 p-4 rounded-2xl space-y-3 animate-fadeIn";
+                        div.innerHTML = `
+                            <div class="flex justify-between items-start flex-wrap gap-2">
+                                <div>
+                                    <span class="bg-teal-500 text-slate-950 font-black px-1.5 py-0.5 rounded text-[8px] uppercase font-mono">✨ NUEVO ONLINE</span>
+                                    <h4 class="font-bold text-xs uppercase tracking-wide mt-1 text-teal-300">${item.prenda}</h4>
+                                </div>
+                                <button onclick="confirmarAdicionVinted(this, ${JSON.stringify(item).replace(/"/g, '&quot;')})" class="bg-teal-600 hover:bg-teal-700 text-white font-bold px-3 py-1.5 rounded-xl text-[10px] uppercase shadow-md">Añadir a Stock</button>
+                            </div>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                                <div>
+                                    <label class="block text-[8px] opacity-40 uppercase font-bold">Precio Venta (€)</label>
+                                    <input type="number" step="0.01" value="${item.precioVenta}" id="new-precio-${index}" class="w-full bg-black/20 border border-current/20 rounded-lg px-2 py-1 font-mono text-xs focus:outline-none text-current">
+                                </div>
+                                <div>
+                                    <label class="block text-[8px] opacity-40 uppercase font-bold">Coste Compra (€)</label>
+                                    <input type="number" step="0.01" value="0.00" id="new-coste-${index}" class="w-full bg-black/20 border border-current/20 rounded-lg px-2 py-1 font-mono text-xs focus:outline-none text-current">
+                                </div>
+                                <div>
+                                    <label class="block text-[8px] opacity-40 uppercase font-bold">Talla</label>
+                                    <select id="new-talla-${index}" class="w-full bg-black/20 border border-current/20 rounded-lg px-2 py-1 text-xs focus:outline-none dropdown-bg">
+                                        <option value="S">S</option><option value="M" selected>M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[8px] opacity-40 uppercase font-bold">Categoría</label>
+                                    <select id="new-cat-${index}" class="w-full bg-black/20 border border-current/20 rounded-lg px-2 py-1 text-xs focus:outline-none dropdown-bg">
+                                        <option value="Camisetas" selected>Camisetas</option><option value="Sudaderas">Sudaderas</option><option value="Pantalones">Pantalones</option><option value="Vestidos">Vestidos</option><option value="Accesorios">Accesorios</option>
+                                    </select>
+                                </div>
+                            </div>
+                        `;
+                        contenedor.appendChild(div);
+                    });
+
+                    // Pintar artículos desaparecidos online
+                    vendidos.forEach((item) => {
+                        const div = document.createElement('div');
+                        div.className = "bg-amber-500/5 border border-amber-500/30 p-4 rounded-2xl flex justify-between items-center gap-4 animate-fadeIn";
+                        div.innerHTML = `
+                            <div class="min-w-0">
+                                <span class="bg-amber-500 text-slate-950 font-black px-1.5 py-0.5 rounded text-[8px] uppercase font-mono">📉 VENDIDO / RETIRADO</span>
+                                <h4 class="font-bold text-xs uppercase tracking-wide mt-1 text-amber-300 truncate">${item.prenda}</h4>
+                                <p class="text-[10px] font-mono opacity-50">Talla ${item.talla} • Configurado a ${parseFloat(item.precioVenta).toFixed(2)} €</p>
+                            </div>
+                            <div class="flex gap-1 flex-shrink-0">
+                                <button onclick="confirmarVendidoVinted(this, '${item._id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-2 rounded-xl text-[10px] uppercase shadow-md">💵 Vender</button>
+                                <button onclick="eliminarArticuloDirecto(this, '${item._id}')" class="bg-rose-600/20 hover:bg-rose-600 border border-rose-500/30 text-rose-400 hover:text-white font-bold px-2 py-2 rounded-xl text-[10px]">🗑️ Borrar</button>
+                            </div>
+                        `;
+                        contenedor.appendChild(div);
+                    });
+
+                    document.getElementById('modal-asistente-vinted').classList.remove('hidden');
                 } else {
                     cantarPorVoz("Error en el raspado.");
-                    alert(data.error || "Hubo un problema en el servidor al ejecutar el scraper.");
+                    alert(data.error || "Hubo un problema al procesar las estadísticas.");
                 }
             } catch (err) {
                 console.error(err);
-                alert("Error de red al conectar con el servidor core.");
+                alert("Error de red al conectar con el asistente.");
             } finally {
                 boton.disabled = false;
                 boton.classList.remove('opacity-50', 'cursor-not-allowed');
                 textoOriginal.innerText = "Sincronizar Vinted";
+            }
+        }
+
+        async function confirmarAdicionVinted(elementoBoton, itemBase) {
+            const tarjeta = elementoBoton.closest('.bg-teal-500/5');
+            const precioVenta = parseFloat(tarjeta.querySelector('input[id^="new-precio-"]').value) || 0;
+            const precioCompra = parseFloat(tarjeta.querySelector('input[id^="new-coste-"]').value) || 0;
+            const talla = tarjeta.querySelector('select[id^="new-talla-"]').value;
+            const categoria = tarjeta.querySelector('select[id^="new-cat-"]').value;
+
+            const payload = {
+                sku: itemBase.sku, prenda: itemBase.prenda, categoria: categoria, talla: talla, cantidad: 1,
+                precioCompra: precioCompra, precioVenta: precioVenta, gastosEnvio: 0, canalVenta: "Vinted",
+                estado: "No Vendido", comentariosProducto: "Aceptado vía Asistente Interactivo.", rating: 0, proveedor: "Asistente Vinted"
+            };
+
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/ventas`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    tarjeta.style.transition = "all 0.2s ease"; tarjeta.style.opacity = "0";
+                    setTimeout(() => { tarjeta.remove(); verificarSiModalVacio(); }, 200);
+                    await reloadCoreData();
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        async function confirmarVendidoVinted(elementoBoton, idItem) {
+            const tarjeta = elementoBoton.closest('.bg-amber-500/5');
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/ventas/${idItem}/estado`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: 'Vendido' })
+                });
+                if (res.ok) {
+                    tarjeta.style.transition = "all 0.2s ease"; tarjeta.style.opacity = "0";
+                    setTimeout(() => { tarjeta.remove(); verificarSiModalVacio(); }, 200);
+                    procesarMultiplicadorCombo(); await reloadCoreData();
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        async function eliminarArticuloDirecto(elementoBoton, idItem) {
+            if (!confirm("¿Borrar artículo definitivamente?")) return;
+            const tarjeta = elementoBoton.closest('.bg-amber-500/5');
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/ventas/${idItem}`, { method: 'DELETE', credentials: 'include' });
+                if (res.ok) {
+                    tarjeta.style.transition = "all 0.2s ease"; tarjeta.style.opacity = "0";
+                    setTimeout(() => { tarjeta.remove(); verificarSiModalVacio(); }, 200);
+                    await reloadCoreData();
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        function verificarSiModalVacio() {
+            const contenedor = document.getElementById('contenedor-propuestas-vinted');
+            if (contenedor.children.length === 0) {
+                contenedor.innerHTML = `<div class="text-center py-6 opacity-40 italic">Revisión manual completada con éxito.</div>`;
             }
         }
 
@@ -572,13 +711,11 @@
         window.handleDragStart = function(e, id) { 
             e.dataTransfer.effectAllowed = 'move'; 
             e.dataTransfer.setData("text/plain", id); 
-            
             if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) {
                 e.dataTransfer.setData("text/lote-items", JSON.stringify(ITEMS_SELECCIONADOS_MASIVOS));
             } else {
                 e.dataTransfer.setData("text/lote-items", JSON.stringify([id]));
             }
-            
             const card = document.getElementById(id);
             if(card) {
                 setTimeout(() => {
@@ -596,11 +733,9 @@
 
         window.handleDropColumn = async function(e, newState) {
             e.preventDefault(); window.clearDrop(e);
-            
             const loteRaw = e.dataTransfer.getData("text/lote-items");
             if (!loteRaw) return;
             const listaIds = JSON.parse(loteRaw);
-            
             cantarPorVoz(newState === 'Vendido' ? `Lote Vendido` : `Lote a stock`);
             procesarMultiplicadorCombo();
 
@@ -946,8 +1081,6 @@
                 document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
 
                 renderKanban(); updateTickerWallStreet(); ejecutarVerificacionAlertasStock(); aplicarFiltrosFrontLineal(); actualizarVisibilidadPanelMasivo();
-                
-                // Refrescar el bloque de analítica respetando los filtros seleccionados
                 actualizarTodoElBloqueGrafico();
                 
                 const contenedorLogs = document.getElementById('contenedor-logs-auditoria');
@@ -962,10 +1095,7 @@
             const contenedor = document.getElementById('contenedor-canvas-grafica'); if(!contenedor) return;
             contenedor.innerHTML = '<canvas id="graficaTendencias"></canvas>'; const ctx = document.getElementById('graficaTendencias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
-            
-            // Usar conjunto de datos filtrado de Analítica
             const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
-            
             const datosAgrapados = {}; 
             datosFiltrados.forEach(v => { datosAgrapados[v.fecha] = (datosAgrapados[v.fecha] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1)); });
             const fechas = Object.keys(datosAgrapados).sort(); const montos = fechas.map(f => datosAgrapados[f]);
@@ -987,13 +1117,9 @@
             const contenedor = document.getElementById('contenedor-canvas-tarta'); if(!contenedor) return;
             contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
-
-            // Usar conjunto de datos filtrado de Analítica
             const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
-
             const contadorCategorias = {};
             datosFiltrados.forEach(v => { contadorCategorias[v.categoria] = (contadorCategorias[v.categoria] || 0) + (v.cantidad || 1); });
-
             const etiquetas = Object.keys(contadorCategorias); const datos = etiquetas.map(cat => contadorCategorias[cat]);
 
             const paletasColor = {
@@ -1011,10 +1137,8 @@
         }
 
         function dibujarMapaCalor() {
-            const canvasContenedor = document.querySelector('#graficaMapaCalor');
-            if (!canvasContenedor) return;
+            const canvasContenedor = document.querySelector('#graficaMapaCalor'); if (!canvasContenedor) return;
             const ctx = canvasContenedor.getContext('2d');
-
             if (INSTANCIA_MAPA_CALOR) { INSTANCIA_MAPA_CALOR.destroy(); }
 
             const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -1022,33 +1146,22 @@
             const matrizDatos = Array(7).fill(0).map(() => Array(4).fill(0));
             let maxVentas = 1;
 
-            // Usar conjunto de datos filtrado de Analítica
             const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
-
             datosFiltrados.forEach(v => {
-                const fechaObj = v.fecha ? new Date(v.fecha) : new Date();
-                if (isNaN(fechaObj.getTime())) return;
-
-                const diaIndex = fechaObj.getDay(); 
-                const hora = fechaObj.getHours();
-                
+                const fechaObj = v.fecha ? new Date(v.fecha) : new Date(); if (isNaN(fechaObj.getTime())) return;
+                const diaIndex = fechaObj.getDay(); const hora = fechaObj.getHours();
                 let bloqueIndex = 0;
                 if (hora >= 6 && hora < 12) bloqueIndex = 1;
                 else if (hora >= 12 && hora < 18) bloqueIndex = 2;
                 else if (hora >= 18) bloqueIndex = 3;
-
                 matrizDatos[diaIndex][bloqueIndex] += (parseInt(v.cantidad) || 1);
-                if (matrizDatos[diaIndex][bloqueIndex] > maxVentas) {
-                    maxVentas = matrizDatos[diaIndex][bloqueIndex];
-                }
+                if (matrizDatos[diaIndex][bloqueIndex] > maxVentas) { maxVentas = matrizDatos[diaIndex][bloqueIndex]; }
             });
 
             const scatterData = [];
             for (let d = 0; d < 7; d++) {
                 for (let h = 0; h < 4; h++) {
-                    if (matrizDatos[d][h] > 0) {
-                        scatterData.push({ x: d, y: h, v: matrizDatos[d][h] });
-                    }
+                    if (matrizDatos[d][h] > 0) { scatterData.push({ x: d, y: h, v: matrizDatos[d][h] }); }
                 }
             }
 
@@ -1072,38 +1185,15 @@
                             const alpha = Math.min(0.2 + (value / maxVentas) * 0.8, 1);
                             return `rgba(${cfg.base}, ${alpha})`;
                         },
-                        pointStyle: 'rectRounded',
-                        radius: function(context) {
-                            const size = context.chart.width;
-                            return Math.min(size / 24, 30); 
-                        }
+                        pointStyle: 'rectRounded', radius: function(context) { const size = context.chart.width; return Math.min(size / 24, 30); }
                     }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const p = context.raw;
-                                    return ` ${diasSemana[p.x]} (${bloquesHorarios[p.y]}): ${p.v} prenda(s)`;
-                                }
-                            }
-                        }
-                    },
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => ` ${diasSemana[context.raw.x]} (${bloquesHorarios[context.raw.y]}): ${context.raw.v} prendas` } } },
                     scales: {
-                        x: {
-                            type: 'linear', min: -0.5, max: 6.5,
-                            grid: { color: cfg.malla },
-                            ticks: { color: cfg.texto, stepSize: 1, callback: v => diasSemana[v] }
-                        },
-                        y: {
-                            type: 'linear', min: -0.5, max: 3.5,
-                            grid: { color: cfg.malla },
-                            ticks: { color: cfg.texto, stepSize: 1, callback: v => bloquesHorarios[v] }
-                        }
+                        x: { type: 'linear', min: -0.5, max: 6.5, grid: { color: cfg.malla }, ticks: { color: cfg.texto, stepSize: 1, callback: v => diasSemana[v] } },
+                        y: { type: 'linear', min: -0.5, max: 3.5, grid: { color: cfg.malla }, ticks: { color: cfg.texto, stepSize: 1, callback: v => bloquesHorarios[v] } }
                     }
                 }
             });
@@ -1112,22 +1202,18 @@
         function renderKanban() {
             const colStock = document.getElementById('col-no-vendido'); const colVendido = document.getElementById('col-vendido'); if(!colStock || !colVendido) return;
             colStock.innerHTML = ''; colVendido.innerHTML = ''; let sCount = 0, vCount = 0;
-
             const totalStockPorPrendaNombre = {};
             BASE_DATOS.filter(x => x.estado === 'No Vendido').forEach(x => { totalStockPorPrendaNombre[x.prenda] = (totalStockPorPrendaNombre[x.prenda] || 0) + 1; });
 
             BASE_DATOS.forEach(v => {
                 const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
-                
                 const esStockCritico = v.estado === 'No Vendido' && totalStockPorPrendaNombre[v.prenda] < 2;
                 const claseAlertaStock = esStockCritico ? 'alerta-stock-critico border-amber-500/70 bg-amber-500/5' : '';
-
                 card.className = `kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none ${claseAlertaStock}`;
 
                 const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
                 const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
                 const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas); const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
-                
                 const badgeCriticoHtml = esStockCritico ? `<span class="bg-amber-500 text-slate-950 px-1 py-0.5 rounded text-[7px] font-black tracking-widest animate-pulse">RESERVA</span>` : '';
                 const renderComentario = v.comentariosProducto ? `<p class="text-[9px] italic opacity-60 mt-1 bg-black/5 p-1 rounded border border-current/5 truncate">💬 ${v.comentariosProducto}</p>` : '';
 
@@ -1135,8 +1221,7 @@
                     <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0">
                     <div class="flex-1 min-w-0 pointer-events-none">
                         <div class="flex items-center gap-1.5 flex-wrap">
-                            <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
-                            ${badgeCanal} ${badgeCriticoHtml}
+                            <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> ${badgeCanal} ${badgeCriticoHtml}
                         </div>
                         <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
                         <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
@@ -1166,18 +1251,7 @@
         document.getElementById('form-venta').onsubmit = async (e) => {
             e.preventDefault(); const id = document.getElementById('edit-id').value;
             const payload = {
-                sku: document.getElementById('sku').value.trim(), 
-                prenda: document.getElementById('prenda').value, 
-                categoria: document.getElementById('categoria').value, 
-                talla: document.getElementById('talla').value, 
-                cantidad: parseInt(document.getElementById('cantidad').value) || 1, 
-                precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, 
-                precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0, 
-                gastosEnvio: parseFloat(document.getElementById('gastosEnvio').value) || 0, 
-                canalVenta: document.getElementById('canalVenta').value, 
-                comentariosProducto: document.getElementById('comentariosProducto').value.trim(),
-                rating: parseInt(document.getElementById('rating').value, 10) || 0,
-                proveedor: document.getElementById('proveedor').value.trim()
+                sku: document.getElementById('sku').value.trim(), prenda: document.getElementById('prenda').value, categoria: document.getElementById('categoria').value, talla: document.getElementById('talla').value, cantidad: parseInt(document.getElementById('cantidad').value) || 1, precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0, gastosEnvio: parseFloat(document.getElementById('gastosEnvio').value) || 0, canalVenta: document.getElementById('canalVenta').value, comentariosProducto: document.getElementById('comentariosProducto').value.trim(), rating: parseInt(document.getElementById('rating').value, 10) || 0, proveedor: document.getElementById('proveedor').value.trim()
             };
             if (id) { const itemOriginal = BASE_DATOS.find(v => v._id === id); if (itemOriginal) payload.estado = itemOriginal.estado; }
             const url = id ? `${BACKEND_URL}/api/ventas/${id}` : `${BACKEND_URL}/api/ventas`; const method = id ? 'PUT' : 'POST';
@@ -1186,39 +1260,15 @@
 
         function editItem(id) {
             const item = BASE_DATOS.find(v => v._id === id); if (!item) return;
-            document.getElementById('edit-id').value = item._id; 
-            document.getElementById('sku').value = item.sku || ''; 
-            document.getElementById('prenda').value = item.prenda; 
-            document.getElementById('categoria').value = item.categoria; 
-            document.getElementById('talla').value = item.talla; 
-            document.getElementById('cantidad').value = item.cantidad || 1;
-            document.getElementById('precioCompra').value = item.precioCompra || 0; 
-            document.getElementById('precioVenta').value = item.precioVenta || 0; 
-            document.getElementById('gastosEnvio').value = item.gastosEnvio || 0; 
-            document.getElementById('canalVenta').value = item.canalVenta || 'Vinted'; 
-            document.getElementById('comentariosProducto').value = item.comentariosProducto || '';
-            document.getElementById('proveedor').value = item.proveedor || '';
-            setFormRating(item.rating || 0);
-            calcularMargenComercialAlVuelo();
-            document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl modo-edicion"; 
-            document.getElementById('form-title').innerText = "✏️ Editar Artículo"; 
-            document.getElementById('btn-submit').innerText = "Guardar Cambios"; 
-            document.getElementById('btn-cancel').classList.remove('hidden');
+            document.getElementById('edit-id').value = item._id; document.getElementById('sku').value = item.sku || ''; document.getElementById('prenda').value = item.prenda; document.getElementById('categoria').value = item.categoria; document.getElementById('talla').value = item.talla; document.getElementById('cantidad').value = item.cantidad || 1; document.getElementById('precioCompra').value = item.precioCompra || 0; document.getElementById('precioVenta').value = item.precioVenta || 0; document.getElementById('gastosEnvio').value = item.gastosEnvio || 0; document.getElementById('canalVenta').value = item.canalVenta || 'Vinted'; document.getElementById('comentariosProducto').value = item.comentariosProducto || ''; document.getElementById('proveedor').value = item.proveedor || '';
+            setFormRating(item.rating || 0); calcularMargenComercialAlVuelo();
+            document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl modo-edicion"; document.getElementById('form-title').innerText = "✏️ Editar Artículo"; document.getElementById('btn-submit').innerText = "Guardar Cambios"; document.getElementById('btn-cancel').classList.remove('hidden');
         }
 
         function cancelEdit() {
-            document.getElementById('form-venta').reset(); 
-            document.getElementById('edit-id').value = ""; 
-            document.getElementById('gastosEnvio').value = 0; 
-            document.getElementById('cantidad').value = 1;
-            document.getElementById('canalVenta').value = "Vinted"; 
-            document.getElementById('comentariosProducto').value = "";
-            setFormRating(0); 
-            calcularMargenComercialAlVuelo();
-            document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl"; 
-            document.getElementById('form-title').innerText = "Añadir Prenda"; 
-            document.getElementById('btn-submit').innerText = "Registrar Prenda"; 
-            document.getElementById('btn-cancel').classList.add('hidden');
+            document.getElementById('form-venta').reset(); document.getElementById('edit-id').value = ""; document.getElementById('gastosEnvio').value = 0; document.getElementById('cantidad').value = 1; document.getElementById('canalVenta').value = "Vinted"; document.getElementById('comentariosProducto').value = "";
+            setFormRating(0); calcularMargenComercialAlVuelo();
+            document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl"; document.getElementById('form-title').innerText = "Añadir Prenda"; document.getElementById('btn-submit').innerText = "Registrar Prenda"; document.getElementById('btn-cancel').classList.add('hidden');
         }
 
         async function deleteItem(id) { if (confirm("¿Eliminar?")) { await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }); await reloadCoreData(); } }
@@ -1235,9 +1285,7 @@
         }, 300);
 
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').then(reg => console.log('PWA Sincronizada.')).catch(err => {});
-            });
+            window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').then(reg => console.log('PWA Sincronizada.')).catch(err => {}); });
         }
 
         particlesJS("particles-js", {

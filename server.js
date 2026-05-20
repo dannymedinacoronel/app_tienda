@@ -91,13 +91,13 @@ async function registrarLog(usuario, accion) {
 // =================================================================
 
 function iniciarCronBackups() {
-    // Expresión Cron establecida para ejecutarse de forma estricta cada 6 horas
+    // Expresión Cron establecida para ejecutarse cada 6 horas
     cron.schedule('0 */6 * * *', async () => {
         console.log('\x1b[36m[CRON]\x1b[0m Generando volcado de datos Seychelles Shop...');
         
-        // Verificación de seguridad de variables del clúster de Google en el entorno .env
+        // Verificación elástica para evitar que tire abajo el proceso si aún no has rellenado las variables en producción
         if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-            console.log('\x1b[31m[CRON ERROR]\x1b[0m Faltan las claves de Cuenta de Servicio en tu fichero .env');
+            console.log('\x1b[33m[CRON ADVERTENCIA]\x1b[0m Backup omitido temporalmente: Faltan las credenciales de la Cuenta de Servicio en las variables de entorno.');
             return;
         }
 
@@ -154,7 +154,9 @@ function iniciarCronBackups() {
 
         } catch (error) {
             console.error('\x1b[31m[BACKUP CRÍTICO]\x1b[0m Error al procesar copia automatizada:', error);
-            await registrarLog('SISTEMA_CRON', `Fallo al generar copia en Drive: ${error.message}`);
+            try {
+                await registrarLog('SISTEMA_CRON', `Fallo al generar copia en Drive: ${error.message}`);
+            } catch(logErr) {}
         }
     });
     
@@ -177,6 +179,7 @@ app.post('/api/tiendas', exigeAdmin, async (req, res) => {
         const nombreLimpio = req.body.nombre ? req.body.nombre.trim() : "";
         if (!nombreLimpio) return res.status(400).json({ error: 'El nombre es obligatorio.' });
 
+        // CORREGIDO: Se cambió 'nombreLinter' por la variable real 'nombreLimpio'
         const nuevaTienda = new Tienda({ nombre: nombreLimpio });
         await nuevaTienda.save();
         await registrarLog(req.session.email, `Creó la tienda en MongoDB: ${nuevaTienda.nombre}`);

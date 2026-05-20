@@ -22,68 +22,67 @@
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
     
     <style>
-        body.theme-dark { background-color: #0f172a; color: #f1f5f9; }
-        .theme-dark .card-bg { background-color: rgba(30, 41, 59, 0.75); border-color: #334155; backdrop-filter: blur(12px); }
-        .theme-dark .input-bg { background-color: #0f172a; border-color: #334155; color: #ffffff; }
-        .theme-dark .dropdown-bg { background-color: #1e293b; border-color: #475569; color: #f1f5f9; }
-        .theme-dark .dropdown-item-hover:hover { background-color: #334155; }
+        body.theme-dark { background-color: #0b0f19; color: #f1f5f9; }
+        .theme-dark .card-bg { background-color: rgba(22, 30, 49, 0.7); border-color: #1e293b; backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+        .theme-dark .input-bg { background-color: #0b0f19; border-color: #1e293b; color: #ffffff; }
+        .theme-dark .dropdown-bg { background-color: #161e31; border-color: #334155; color: #f1f5f9; }
+        .theme-dark .dropdown-item-hover:hover { background-color: #1e293b; }
 
-        body.theme-pink { background-color: #fce7f3; color: #831843; }
-        .theme-pink .card-bg { background-color: rgba(255, 255, 255, 0.8); border-color: #fbcfe8; color: #831843; box-shadow: 0 4px 20px rgba(219, 39, 119, 0.08); backdrop-filter: blur(12px); }
-        .theme-pink .input-bg { background-color: #fff1f2; border-color: #f9a8d4; color: #831843; }
+        body.theme-pink { background-color: #fff1f2; color: #831843; }
+        .theme-pink .card-bg { background-color: rgba(255, 255, 255, 0.75); border-color: #fbcfe8; color: #831843; box-shadow: 0 10px 30px rgba(219, 39, 119, 0.05); backdrop-filter: blur(14px); }
+        .theme-pink .input-bg { background-color: #fff5f5; border-color: #f9a8d4; color: #831843; }
         .theme-pink .dropdown-bg { background-color: #ffffff; border-color: #fbcfe8; color: #831843; }
         .theme-pink .dropdown-item-hover:hover { background-color: #fce7f3; }
 
-        body.theme-light { background-color: #f8fafc; color: #0f172a; }
-        .theme-light .card-bg { background-color: rgba(255, 255, 255, 0.85); border-color: #e2e8f0; color: #0f172a; box-shadow: 0 4px 15px rgba(0,0,0,0.03); backdrop-filter: blur(12px); }
-        .theme-light .input-bg { background-color: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
+        body.theme-light { background-color: #f1f5f9; color: #0f172a; }
+        .theme-light .card-bg { background-color: rgba(255, 255, 255, 0.8); border-color: #e2e8f0; color: #0f172a; box-shadow: 0 10px 25px rgba(0,0,0,0.03); backdrop-filter: blur(14px); }
+        .theme-light .input-bg { background-color: #f8fafc; border-color: #cbd5e1; color: #0f172a; }
         .theme-light .dropdown-bg { background-color: #ffffff; border-color: #e2e8f0; color: #0f172a; }
         .theme-light .dropdown-item-hover:hover { background-color: #f1f5f9; }
 
         body.theme-emerald { background-color: #022c22; color: #e6f4ea; }
-        .theme-emerald .card-bg { background-color: rgba(6, 78, 59, 0.8); border-color: #047857; backdrop-filter: blur(12px); }
+        .theme-emerald .card-bg { background-color: rgba(6, 60, 46, 0.75); border-color: #047857; backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
         .theme-emerald .input-bg { background-color: #022c22; border-color: #047857; color: #ffffff; }
-        .theme-emerald .dropdown-bg { background-color: #064e3b; border-color: #047857; color: #e6f4ea; }
+        .theme-emerald .dropdown-bg { background-color: #063c2e; border-color: #047857; color: #e6f4ea; }
         .theme-emerald .dropdown-item-hover:hover { background-color: #047857; }
 
-        body.theme-purple { background-color: #1e1b4b; color: #e0e7ff; }
-        .theme-purple .card-bg { background-color: rgba(49, 46, 129, 0.8); border-color: #4338ca; backdrop-filter: blur(12px); }
-        .theme-purple .input-bg { background-color: #1e1b4b; border-color: #4338ca; color: #ffffff; }
-        .theme-purple .dropdown-bg { background-color: #312e81; border-color: #4338ca; color: #e0e7ff; }
+        body.theme-purple { background-color: #0f0c24; color: #e0e7ff; }
+        .theme-purple .card-bg { background-color: rgba(30, 22, 66, 0.75); border-color: #4338ca; backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+        .theme-purple .input-bg { background-color: #0f0c24; border-color: #4338ca; color: #ffffff; }
+        .theme-purple .dropdown-bg { background-color: #1e1642; border-color: #4338ca; color: #e0e7ff; }
         .theme-purple .dropdown-item-hover:hover { background-color: #4338ca; }
 
-        .drag-over { border: 2px dashed #ec4899 !important; background-color: rgba(236, 72, 153, 0.15) !important; }
-        .modo-edicion { border-color: #3b82f6 !important; box-shadow: 0 0 15px rgba(59, 130, 246, 0.3) !important; }
+        .drag-over { border: 2px dashed #3b82f6 !important; background-color: rgba(59, 130, 246, 0.1) !important; }
+        .modo-edicion { border-color: #3b82f6 !important; box-shadow: 0 0 20px rgba(59, 130, 246, 0.4) !important; }
 
         @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
-        .ticker-content { display: flex; white-space: nowrap; animation: ticker 30s linear infinite; }
+        .ticker-content { display: flex; white-space: nowrap; animation: ticker 32s linear infinite; }
         .ticker-content:hover { animation-play-state: paused; }
 
         @keyframes fireGlow {
-            0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); border-color: #f59e0b; }
-            50% { box-shadow: 0 0 35px rgba(239, 68, 68, 0.8); border-color: #ef4444; }
+            0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.3); border-color: #f59e0b; }
+            50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.6); border-color: #ef4444; }
         }
         .combo-fire-active { animation: fireGlow 0.8s infinite ease-in-out !important; }
 
-        .ticker-alert-mode { background-color: #991b1b !important; color: #fef2f2 !important; font-weight: 900; animation: blinker 1s linear infinite; }
-        @keyframes blinker { 50% { opacity: 0.8; } }
+        .ticker-alert-mode { background-color: #7f1d1d !important; color: #fee2e2 !important; font-weight: 900; animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.85; } }
 
         @keyframes pulseBorder {
-            0%, 100% { border-color: rgba(217, 119, 6, 0.3); }
-            50% { border-color: rgba(245, 158, 11, 1); box-shadow: 0 0 8px rgba(245, 158, 11, 0.4); }
+            0%, 100% { border-color: rgba(245, 158, 11, 0.2); }
+            50% { border-color: rgba(245, 158, 11, 0.8); box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); }
         }
         .alerta-stock-critico { animation: pulseBorder 2s infinite ease-in-out !important; }
 
         #reader { border: none !important; width: 100% !important; max-width: 320px; margin: 0 auto; min-height: 320px; }
-        #reader__scan_region { display: flex; justify-content: center; align-items: center; }
         #reader__scan_region video { object-fit: cover !important; width: 100% !important; height: 100% !important; border-radius: 1.5rem; }
         #reader button, #reader img { display: none !important; }
         
-        .star-rating-btn { cursor: pointer; transition: transform 0.1s ease; }
-        .star-rating-btn:hover { transform: scale(1.2); }
+        .star-rating-btn { cursor: pointer; transition: transform 0.15s ease; }
+        .star-rating-btn:hover { transform: scale(1.3); }
         
-        .kanban-card { transition: transform 0.1s ease, box-shadow 0.1s ease; backface-visibility: hidden; }
-        .dragging { opacity: 0.3 !important; border-color: #ec4899 !important; }
+        .kanban-card { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease; backface-visibility: hidden; }
+        .dragging { opacity: 0.25 !important; border-color: #3b82f6 !important; }
 
         #particles-js { position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; pointer-events: all; }
         #wrapper-core { position: relative; z-index: 10; }
@@ -96,9 +95,9 @@
 
     <div id="wrapper-core">
         <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4 bg-slate-950/90 backdrop-blur-md">
-            <div class="bg-slate-900 p-8 rounded-3xl shadow-2xl text-center border border-slate-800 max-w-sm w-full">
-                <h1 class="text-3xl font-black mb-2 uppercase tracking-widest text-white">Seychelles</h1>
-                <p class="text-xs text-slate-500 mb-6 font-mono">FINANCIAL CORE CONTROL</p>
+            <div class="bg-slate-900/80 p-8 rounded-3xl shadow-2xl text-center border border-slate-800 max-w-sm w-full backdrop-blur-md">
+                <h1 class="text-4xl font-black mb-1 uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-pink-500">Seychelles</h1>
+                <p class="text-[10px] text-slate-500 mb-8 font-mono tracking-widest">FINANCIAL CONTROL SYSTEM</p>
                 <div class="flex justify-center">
                     <div id="g_id_onload" data-client_id="463908353578-o70ia5lgf0c7fcce0utp8qqlqnc41iuo.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
                     <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_blue"></div>
@@ -110,33 +109,33 @@
             <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-6">
                 <div class="flex items-center gap-4">
                     <div>
-                        <h1 class="text-3xl font-black uppercase tracking-tight">Seychelles Shop</h1>
+                        <h1 class="text-3xl font-black uppercase tracking-tight bg-gradient-to-r from-current to-blue-400 bg-clip-text text-transparent">Seychelles Shop</h1>
                         <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
                     </div>
-                    <div id="combo-badge" class="hidden bg-amber-500 text-slate-950 font-black px-3 py-1 rounded-xl text-xs uppercase tracking-wider animate-bounce">
+                    <div id="combo-badge" class="hidden bg-amber-500 text-slate-950 font-black px-3 py-1 rounded-xl text-xs uppercase tracking-wider animate-bounce shadow-md">
                         💥 Combo x<span id="combo-count">0</span>
                     </div>
                 </div>
                 
                 <div class="flex flex-wrap items-center justify-center lg:justify-end gap-2.5 w-full lg:w-auto">
-                    <div class="relative w-full sm:w-56 flex items-center gap-2">
+                    <div class="relative w-full sm:w-60 flex items-center gap-2">
                         <div class="relative flex-1">
                             <form id="form-escaner-pistola" autocomplete="off">
-                                <input type="text" id="input-pistola" oninput="filtrarProductosMenu(this.value)" placeholder="🔍 Buscar artículo..." class="w-full bg-black/20 border border-current/20 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40">
+                                <input type="text" id="input-pistola" oninput="filtrarProductosMenu(this.value)" placeholder="🔍 Buscar SKU o prenda..." class="w-full bg-black/20 border border-current/20 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40 transition-all">
                             </form>
-                            <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-72 dropdown-bg border rounded-2xl shadow-2xl z-[200] max-h-56 overflow-y-auto p-1.5 text-xs"></div>
+                            <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-80 dropdown-bg border rounded-2xl shadow-2xl z-[200] max-h-60 overflow-y-auto p-2 text-xs"></div>
                         </div>
-                        <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md flex-shrink-0">
+                        <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md flex-shrink-0 transition-transform active:scale-95">
                             📷 Cámara
                         </button>
                     </div>
 
-                    <button id="btn-mute-volumen" onclick="toggleMuteVolumenGlobal()" class="bg-slate-800 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md" title="Quitar/Poner Volumen">
+                    <button id="btn-mute-volumen" onclick="toggleMuteVolumenGlobal()" class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md transition-colors" title="Quitar/Poner Volumen">
                         🔊 <span id="txt-mute-volumen">Sonido</span>
                     </button>
 
                     <div class="relative group">
-                        <button class="bg-slate-800 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md tracking-wide">
+                        <button class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md tracking-wide">
                             🎨 Temas <span class="text-[9px] opacity-60">▼</span>
                         </button>
                         <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-32 dropdown-bg border rounded-xl shadow-2xl z-[150] p-1 space-y-0.5 animate-fadeIn">
@@ -151,34 +150,33 @@
                     <button onclick="forceRefreshDataManual()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
                         🔄 <span class="hidden sm:inline">Refrescar</span>
                     </button>
-                    
-                    <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600/40 hover:bg-purple-700 border border-purple-500/30 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md">💾 Backup</button>
-                    <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md">📊 Excel</button>
+                    <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600/40 hover:bg-purple-700 border border-purple-500/30 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">💾 Backup</button>
+                    <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">📊 Excel</button>
                     <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
                 </div>
             </header>
 
-            <nav class="flex gap-2 p-1.5 card-bg border rounded-2xl mb-6 text-xs max-w-md">
-                <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white">📦 Panel General</button>
-                <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📊 Analítica</button>
-                <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📜 Auditoría</button>
+            <nav class="flex gap-2 p-1.5 card-bg border rounded-2xl mb-6 text-xs max-w-md shadow-inner">
+                <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white shadow">📦 Panel General</button>
+                <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📊 Analítica</button>
+                <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📜 Auditoría</button>
             </nav>
 
-            <div class="card-bg border p-3 rounded-2xl mb-6 flex flex-wrap gap-3 items-center text-xs">
+            <div id="barra-filtros-generales" class="card-bg border p-3.5 rounded-2xl mb-6 flex flex-wrap gap-3 items-center text-xs">
                 <span class="font-bold uppercase tracking-wider opacity-60 text-[10px]">🎯 Filtros rápidos:</span>
-                <select id="filtro-categoria" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-lg px-2 py-1 focus:outline-none">
+                <select id="filtro-categoria" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2.5 py-1.5 focus:outline-none">
                     <option value="TODOS">👕 Todas las categorías</option>
                     <option value="Camisetas">Camisetas</option><option value="Sudaderas">Sudaderas</option><option value="Pantalones">Pantalones</option><option value="Vestidos">Vestidos</option><option value="Accesorios">Accesorios</option>
                 </select>
-                <select id="filtro-talla" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-lg px-2 py-1 focus:outline-none">
+                <select id="filtro-talla" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2.5 py-1.5 focus:outline-none">
                     <option value="TODOS">📐 Todas las tallas</option>
                     <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
                 </select>
-                <select id="filtro-canal" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-lg px-2 py-1 focus:outline-none">
+                <select id="filtro-canal" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2.5 py-1.5 focus:outline-none">
                     <option value="TODOS">🌐 Todos los canales</option>
                     <option value="Tienda Física">🏬 Tienda Física</option><option value="Vinted">👗 Vinted</option><option value="Wallapop">🤝 Wallapop</option><option value="Web">🌐 Web</option>
                 </select>
-                <button onclick="limpiarFiltrosAvanzados()" class="opacity-50 hover:opacity-100 underline ml-auto text-[11px]">Restablecer</button>
+                <button onclick="limpiarFiltrosAvanzados()" class="opacity-50 hover:opacity-100 underline ml-auto text-[11px] font-medium">Restablecer</button>
             </div>
 
             <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500 p-5 rounded-3xl shadow-2xl mb-8 max-w-sm mx-auto text-center transition-all">
@@ -196,20 +194,20 @@
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="kpi-container-grid">
-                <div class="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-2xl shadow-lg text-white">
-                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Facturación Bruta</p>
+                <div class="bg-gradient-to-br from-blue-600 to-cyan-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Facturación Bruta</p>
                     <p class="text-3xl font-black mt-1" id="kpi-ingresos">0.00 €</p>
                 </div>
-                <div class="bg-gradient-to-br from-pink-600 to-pink-700 p-6 rounded-2xl shadow-lg text-white">
-                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Ganancia Neta Limpia</p>
+                <div class="bg-gradient-to-br from-pink-600 to-purple-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Ganancia Neta Limpia</p>
                     <p class="text-3xl font-black mt-1" id="kpi-beneficio">0.00 €</p>
                 </div>
-                <div class="bg-gradient-to-br from-amber-600 to-amber-700 p-6 rounded-2xl shadow-lg text-white">
-                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Inversión Stock + Envío</p>
+                <div class="bg-gradient-to-br from-amber-600 to-orange-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Inversión Stock + Envío</p>
                     <p class="text-3xl font-black mt-1" id="kpi-inversion">0.00 €</p>
                 </div>
-                <div class="bg-gradient-to-br from-purple-600 to-purple-700 p-6 rounded-2xl shadow-lg text-white">
-                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-80">Prendas Vendidas</p>
+                <div class="bg-gradient-to-br from-purple-600 to-indigo-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Prendas Vendidas</p>
                     <p class="text-3xl font-black mt-1" id="kpi-prendas">0</p>
                 </div>
             </div>
@@ -219,7 +217,7 @@
                     <div id="form-container" class="card-bg border p-5 rounded-3xl shadow-xl transition-all">
                         <div class="flex justify-between items-center mb-3">
                             <h2 id="form-title" class="text-sm font-black uppercase tracking-wide text-indigo-400">Ficha Avanzada</h2>
-                            <button type="button" onclick="autocompletarNombreLocalRapido()" class="text-[9px] bg-slate-800 text-white px-2 py-1 rounded-lg font-bold uppercase hover:bg-slate-700">✨ Auto</button>
+                            <button type="button" onclick="autocompletarNombreLocalRapido()" class="text-[9px] bg-slate-800 text-white px-2 py-1 rounded-lg font-bold uppercase hover:bg-slate-700 transition-colors">✨ Auto</button>
                         </div>
                         <form id="form-venta" class="space-y-3">
                             <input type="hidden" id="edit-id" value="">
@@ -227,17 +225,17 @@
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Código SKU</label>
-                                    <input type="text" id="sku" placeholder="SKU" class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none">
+                                    <input type="text" id="sku" placeholder="SKU" class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500">
                                 </div>
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Unidades Stock</label>
-                                    <input type="number" id="cantidad" value="1" min="1" class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none">
+                                    <input type="number" id="cantidad" value="1" min="1" class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500">
                                 </div>
                             </div>
 
                             <div>
                                 <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Modelo / Descripción</label>
-                                <input type="text" id="prenda" required class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs focus:outline-none">
+                                <input type="text" id="prenda" required class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500">
                             </div>
 
                             <div class="grid grid-cols-2 gap-2">
@@ -258,11 +256,11 @@
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Coste Compra (€)</label>
-                                    <input type="number" id="precioCompra" required step="0.01" oninput="calcularMargenComercialAlVuelo()" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
+                                    <input type="number" id="precioCompra" required step="0.01" oninput="calcularMargenComercialAlVuelo()" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none focus:border-blue-500">
                                 </div>
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Precio Venta (€)</label>
-                                    <input type="number" id="precioVenta" required step="0.01" oninput="calcularMargenComercialAlVuelo()" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
+                                    <input type="number" id="precioVenta" required step="0.01" oninput="calcularMargenComercialAlVuelo()" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none focus:border-blue-500">
                                 </div>
                             </div>
 
@@ -274,18 +272,19 @@
                             <div class="grid grid-cols-1 gap-2">
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Tienda / Origen de Prenda</label>
-                                    <div class="flex gap-2">
+                                    <div class="flex gap-1.5">
                                         <select id="proveedor" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none flex-1 dropdown-bg">
                                             <option value="Sin definir">Selecciona una tienda o crea una...</option>
                                         </select>
-                                        <button type="button" onclick="crearNuevaTiendaEnBaseDatos()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 rounded-xl text-sm font-black transition-transform active:scale-95" title="Crear nueva tienda">+</button>
+                                        <button type="button" onclick="crearNuevaTiendaEnBaseDatos()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 rounded-xl text-sm font-black transition-transform active:scale-95 shadow" title="Crear nueva tienda">+</button>
+                                        <button type="button" onclick="eliminarTiendaSeleccionadaCloud()" class="bg-rose-600/10 hover:bg-rose-600 border border-rose-500/20 text-rose-500 hover:text-white px-2.5 rounded-xl text-xs font-black transition-all shadow" title="Eliminar tienda seleccionada">🗑️</button>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="grid grid-cols-1 gap-2">
                                 <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Canal Comercial</label>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Canal Comercial</label>
                                     <select id="canalVenta" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
                                         <option value="Vinted" selected>👗 Vinted</option>
                                         <option value="Tienda Física">🏬 Tienda</option>
@@ -297,13 +296,13 @@
 
                             <div>
                                 <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Comentarios del Producto</label>
-                                <textarea id="comentariosProducto" rows="2" placeholder="Detalles, estado, imperfecciones..." class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none resize-none"></textarea>
+                                <textarea id="comentariosProducto" rows="2" placeholder="Detalles, estado, imperfecciones..." class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none resize-none focus:border-blue-500"></textarea>
                             </div>
 
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Envío (€)</label>
-                                    <input type="number" id="gastosEnvio" step="0.01" value="0" class="input-bg border w-full rounded-xl p-2 text-xs font-mono focus:outline-none">
+                                    <input type="number" id="gastosEnvio" step="0.01" value="0" class="input-bg border w-full rounded-xl p-2 text-xs font-mono focus:outline-none focus:border-blue-500">
                                 </div>
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Valoración Inicial</label>
@@ -318,41 +317,45 @@
                                 </div>
                             </div>
                             
-                            <button type="submit" id="btn-submit" class="w-full bg-blue-600 text-white font-bold text-xs py-3 rounded-xl shadow-md uppercase tracking-widest transition-all">Registrar Artículo</button>
+                            <button type="submit" id="btn-submit" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs py-3 rounded-xl shadow-md uppercase tracking-widest transition-all active:scale-[0.98]">Registrar Artículo</button>
                             <button type="button" id="btn-cancel" onclick="cancelEdit()" class="hidden w-full text-center text-[10px] uppercase opacity-50 py-0.5 hover:underline">Cancelar Cambios</button>
                         </form>
                     </div>
                 </div>
 
                 <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px] transition-all">
+                    <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[520px] transition-all">
                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-xs font-black text-amber-500 uppercase tracking-wider">📦 STOCK DISPONIBLE <span id="badge-stock" class="opacity-60 font-mono">0</span></h3>
-                            <button onclick="alternarSeleccionColumna('No Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2 py-1 rounded-lg uppercase font-bold opacity-70">Marcar Todo</button>
+                            <h3 class="text-xs font-black text-amber-500 uppercase tracking-wider flex items-center gap-1.5">📦 STOCK DISPONIBLE <span id="badge-stock" class="bg-amber-500/10 text-amber-400 font-mono px-2 py-0.5 rounded-lg text-[10px]">0</span></h3>
+                            <button onclick="alternarSeleccionColumna('No Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2.5 py-1 rounded-xl uppercase font-bold opacity-70 transition-colors">Marcar Todo</button>
                         </div>
-                        <div id="col-no-vendido" class="flex-1 space-y-3 p-1 min-h-[400px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
+                        <div id="col-no-vendido" class="flex-1 space-y-3 p-1 min-h-[400px] overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
                     </div>
                     
-                    <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[500px] transition-all">
+                    <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[520px] transition-all">
                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-xs font-black text-emerald-500 uppercase tracking-wider">💰 ARTÍCULOS VENDIDOS <span id="badge-vendido" class="opacity-60 font-mono">0</span></h3>
-                            <button onclick="alternarSeleccionColumna('Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2 py-1 rounded-lg uppercase font-bold opacity-70">Marcar Todo</button>
+                            <h3 class="text-xs font-black text-emerald-500 uppercase tracking-wider flex items-center gap-1.5">💰 ARTÍCULOS VENDIDOS <span id="badge-vendido" class="bg-emerald-500/10 text-emerald-400 font-mono px-2 py-0.5 rounded-lg text-[10px]">0</span></h3>
+                            <button onclick="alternarSeleccionColumna('Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2.5 py-1 rounded-xl uppercase font-bold opacity-70 transition-colors">Marcar Todo</button>
                         </div>
-                        <div id="col-vendido" class="flex-1 space-y-3 p-1 min-h-[400px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
+                        <div id="col-vendido" class="flex-1 space-y-3 p-1 min-h-[400px] overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
                     </div>
                 </div>
             </div>
 
             <div id="sec-analitica" class="seccion-app hidden flex flex-col gap-6 mb-8">
-                <div class="card-bg border p-4 rounded-3xl shadow-xl">
-                    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-                        <h3 class="text-xs font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">🎛️ Filtros Avanzados de Métricas</h3>
-                        <button onclick="limpiarFiltrosAnalitica()" class="text-[10px] opacity-50 hover:opacity-100 underline font-mono">Quitar Filtros</button>
+                <div class="card-bg border p-5 rounded-3xl shadow-xl">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <h3 class="text-xs font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">🎛️ Centro del Filtro Analítico Global</h3>
+                        <button onclick="limpiarFiltrosAnalitica()" class="text-[10px] opacity-60 hover:opacity-100 underline font-mono">Restablecer Todo</button>
                     </div>
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+                    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Filtrar por Tienda</label>
+                            <select id="an-filtro-tienda" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg"></select>
+                        </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Canal Comercial</label>
-                            <select id="an-filtro-canal" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2 py-1.5 focus:outline-none">
+                            <select id="an-filtro-canal" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none">
                                 <option value="TODOS">🌐 Todos</option>
                                 <option value="Vinted">👗 Vinted</option>
                                 <option value="Tienda Física">🏬 Tienda</option>
@@ -362,7 +365,7 @@
                         </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Categoría</label>
-                            <select id="an-filtro-categoria" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2 py-1.5 focus:outline-none">
+                            <select id="an-filtro-categoria" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none">
                                 <option value="TODOS">👕 Todas</option>
                                 <option value="Camisetas">Camisetas</option>
                                 <option value="Sudaderas">Sudaderas</option>
@@ -373,41 +376,48 @@
                         </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Talla</label>
-                            <select id="an-filtro-talla" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2 py-1.5 focus:outline-none">
+                            <select id="an-filtro-talla" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none">
                                 <option value="TODOS">📐 Todas</option>
                                 <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Mín (€)</label>
-                            <input type="number" id="an-filtro-precio-min" placeholder="0" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2 py-1 focus:outline-none font-mono">
+                            <input type="number" id="an-filtro-precio-min" placeholder="0.00" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono">
                         </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Máx (€)</label>
-                            <input type="number" id="an-filtro-precio-max" placeholder="Max" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2 py-1 focus:outline-none font-mono">
+                            <input type="number" id="an-filtro-precio-max" placeholder="Max" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono">
                         </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div class="card-bg border p-6 rounded-3xl shadow-xl">
-                        <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📈 Curva de Rendimiento</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+                        <h3 class="text-xs font-black uppercase mb-3 tracking-wider text-blue-400">📈 Curva de Rendimiento Diario</h3>
                         <div class="w-full h-64 relative" id="contenedor-canvas-grafica">
                             <canvas id="graficaTendencias"></canvas>
                         </div>
                     </div>
 
-                    <div class="card-bg border p-6 rounded-3xl shadow-xl">
-                        <h3 class="text-xs font-black uppercase mb-4 tracking-wider">📊 Distribución de Ventas</h3>
+                    <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+                        <h3 class="text-xs font-black uppercase mb-3 tracking-wider text-pink-400">📊 Distribución de Ventas</h3>
                         <div class="w-full h-64 relative flex items-center justify-center" id="contenedor-canvas-tarta">
                             <canvas id="graficaTartaCategorias"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+                        <h3 class="text-xs font-black uppercase mb-3 tracking-wider text-purple-400">🏬 Facturación por Proveedor/Tienda</h3>
+                        <div class="w-full h-64 relative flex items-center justify-center" id="contenedor-canvas-barras">
+                            <canvas id="graficaBarrasTiendas"></canvas>
                         </div>
                     </div>
                 </div>
 
                 <div class="card-bg border p-6 rounded-3xl shadow-xl w-full">
-                    <h3 class="text-xs font-black uppercase mb-2 tracking-wider">🔥 Mapa de Calor: Densidad de Ventas (Día vs Hora)</h3>
-                    <p class="text-[10px] opacity-60 mb-4 font-mono">Visualiza rápidamente tus horas pico de mayor facturación.</p>
+                    <h3 class="text-xs font-black uppercase mb-1 tracking-wider text-amber-500">🔥 Mapa de Calor: Densidad Horaria de Operaciones (Día vs Hora)</h3>
+                    <p class="text-[10px] opacity-60 mb-4 font-mono">Localiza de un vistazo las franjas horarias con mayor volumen de transacciones.</p>
                     <div class="w-full h-80 relative">
                         <canvas id="graficaMapaCalor"></canvas>
                     </div>
@@ -415,7 +425,7 @@
             </div>
             
             <div id="sec-auditoria" class="seccion-app hidden grid grid-cols-1 gap-6 mb-8">
-                <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[350px]">
+                <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[400px]">
                     <h3 class="text-xs font-black text-indigo-400 uppercase mb-3 tracking-wider flex justify-between">
                         📜 AUDITORÍA DEL NÚCLEO <span>LIVE</span>
                     </h3>
@@ -426,20 +436,20 @@
             </div>
         </div>
 
-        <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-3xl w-[92%] transition-all">
+        <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-3xl w-[92%] transition-all backdrop-blur-md">
             <div class="text-xs font-bold font-mono">💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> MARCADOS</div>
             <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
             <div class="flex flex-wrap items-center gap-2">
-                <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">👯 Duplicar Lote</button>
-                <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">💵 Vender Lote</button>
-                <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">📦 Mover a Stock</button>
+                <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">👯 Duplicar Lote</button>
+                <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">💵 Vender Lote</button>
+                <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">📦 Mover a Stock</button>
                 <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
                     <option value="">📐 Talla...</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
                 </select>
                 <select id="categoria-masiva" onchange="ejecutarEdicionMasivaPropiedad('categoria', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
                     <option value="">👕 Categoría...</option><option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
                 </select>
-                <button onclick="ejecutarEliminacionMasiva()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg">🗑️ Eliminar</button>
+                <button onclick="ejecutarEliminacionMasiva()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">🗑️ Eliminar</button>
                 <button onclick="limpiarSeleccionMasiva()" class="text-[10px] underline opacity-50 hover:opacity-100 px-1">Limpiar</button>
             </div>
         </div>
@@ -452,8 +462,8 @@
                 <p id="print-sku" class="font-mono text-xs text-slate-400 mb-1">SKU-CODE</p>
                 <p id="print-precio" class="text-xl font-black text-slate-900 font-mono mb-6">0.00 €</p>
                 <div class="flex gap-2 w-full">
-                    <button onclick="document.getElementById('modal-qr').classList.add('hidden')" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 rounded-xl text-xs uppercase">Cerrar</button>
-                    <button onclick="window.print()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs uppercase">Imprimir</button>
+                    <button onclick="document.getElementById('modal-qr').classList.add('hidden')" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 rounded-xl text-xs uppercase transition-colors">Cerrar</button>
+                    <button onclick="window.print()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs uppercase transition-colors">Imprimir</button>
                 </div>
             </div>
         </div>
@@ -469,9 +479,10 @@
     <script>
         const BACKEND_URL = '';
         let BASE_DATOS = [];
-        let CARRITO_CAJA_TPV = []; 
+        let LISTA_TIENDAS_GLOBAL = [];
         let INSTANCIA_CHARTS = null;
         let INSTANCIA_TARTA = null;
+        let INSTANCIA_BARRAS = null;
         let INSTANCIA_MAPA_CALOR = null;
         let OBJETO_ESCANER_CAMARA = null;
         let HISTORIAL_TIMESTAMPS_OPERACIONES = [];
@@ -479,70 +490,94 @@
         let ITEMS_SELECCIONADOS_MASIVOS = [];
         let SOUND_MUTED_GLOBAL = false;
 
-        // 🏬 LOGICA CLOUD DE TIENDAS DESDE MONGODB
+        // 🏬 LÓGICA DE TIENDAS DESDE MONGODB (CON EXTENSIÓN DE ELIMINACIÓN)
         async function refrescarYListarTiendasCloud() {
-            const selectTiendas = document.getElementById('proveedor');
+            const selectForm = document.getElementById('proveedor');
+            const selectFiltro = document.getElementById('an-filtro-tienda');
             try {
                 const res = await fetch(`${BACKEND_URL}/api/tiendas`, { credentials: 'include' });
                 if (!res.ok) throw new Error("Error leyendo backend");
                 const data = await res.json();
-                const listaTiendas = data.tiendas || [];
+                LISTA_TIENDAS_GLOBAL = data.tiendas || [];
                 
-                selectTiendas.innerHTML = '<option value="Sin definir">Selecciona una tienda o crea una...</option>';
-                listaTiendas.forEach(t => {
-                    const option = document.createElement('option');
-                    option.value = t.nombre;
-                    option.textContent = `🏬 ${t.nombre}`;
-                    selectTiendas.appendChild(option);
+                // Rellenar select del formulario
+                selectForm.innerHTML = '<option value="Sin definir">Selecciona una tienda o crea una...</option>';
+                // Rellenar select del filtro avanzado de analítica
+                selectFiltro.innerHTML = '<option value="TODOS">🏬 Todas las tiendas</option>';
+
+                LISTA_TIENDAS_GLOBAL.forEach(t => {
+                    const opt1 = document.createElement('option');
+                    opt1.value = t.nombre; opt1.textContent = `🏬 ${t.nombre}`;
+                    selectForm.appendChild(opt1);
+
+                    const opt2 = document.createElement('option');
+                    opt2.value = t.nombre; opt2.textContent = t.nombre;
+                    selectFiltro.appendChild(opt2);
                 });
             } catch (err) {
-                console.error("Fallo de red cloud, cargando fallback local seguro...", err);
-                selectTiendas.innerHTML = '<option value="Sin definir">Selecciona una tienda o crea una...</option>';
-                const fallback = ["Vinted Stock Room", "Proveedor Principal", "Liquidación Local"];
-                fallback.forEach(t => {
-                    const opt = document.createElement('option'); opt.value = t; opt.textContent = `🏬 ${t}`; selectTiendas.appendChild(opt);
-                });
+                console.error("Fallo de red cloud, cargando fallback...", err);
             }
         }
 
         async function crearNuevaTiendaEnBaseDatos() {
-            const nombreTienda = prompt("Nombre de la nueva tienda que se almacenará en MongoDB:");
+            const nombreTienda = prompt("Nombre del nuevo proveedor/tienda:");
             if (!nombreTienda || nombreTienda.trim() === "") return;
-            
-            const tiendaLimpia = nombreTienda.trim();
             try {
                 const res = await fetch(`${BACKEND_URL}/api/tiendas`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({ nombre: tiendaLimpia })
+                    body: JSON.stringify({ nombre: nombreTienda.trim() })
                 });
-                
                 if (res.ok) {
-                    cantarPorVoz("Tienda sincronizada en base de datos.");
+                    cantarPorVoz("Tienda guardada.");
                     await refrescarYListarTiendasCloud();
-                    document.getElementById('proveedor').value = tiendaLimpia;
+                    document.getElementById('proveedor').value = nombreTienda.trim();
                 } else {
-                    const errData = await res.json();
-                    alert(errData.message || "Error al inyectar la tienda en base de datos.");
+                    const errData = await res.json(); alert(errData.error || "Error al inyectar tienda.");
                 }
-            } catch (err) {
-                alert("Error crítico de comunicación con el backend de MongoDB.");
+            } catch (err) { alert("Error crítico de comunicación."); }
+        }
+
+        async function eliminarTiendaSeleccionadaCloud() {
+            const selectTienda = document.getElementById('proveedor');
+            const nombreSeleccionado = selectTienda.value;
+            if (nombreSeleccionado === "Sin definir") {
+                return alert("Por favor, selecciona una tienda válida del desplegable para poder eliminarla.");
+            }
+            
+            const tiendaObjeto = LISTA_TIENDAS_GLOBAL.find(t => t.nombre === nombreSeleccionado);
+            if (!tiendaObjeto) return;
+
+            if (confirm(`¿Seguro que deseas eliminar permanentemente la tienda "${nombreSeleccionado}"?\nLos artículos asignados a ella pasarán a estar "Sin definir" de forma automática.`)) {
+                try {
+                    const res = await fetch(`${BACKEND_URL}/api/tiendas/${tiendaObjeto._id}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+                    if (res.ok) {
+                        cantarPorVoz("Tienda eliminada del clúster.");
+                        await refrescarYListarTiendasCloud();
+                        await reloadCoreData();
+                    } else {
+                        alert("No se pudo purgar el elemento.");
+                    }
+                } catch(e) { alert("Error al procesar la baja."); }
             }
         }
 
-        // 🗺️ MENÚ DE NAVEGACIÓN
+        // 🗺️ MENÚ DE NAVEGACIÓN ENTRE MÓDULOS SEPARADOS
         function navegarASeccion(idSeccion) {
             document.querySelectorAll('.seccion-app').forEach(sec => sec.classList.add('hidden'));
             document.getElementById(idSeccion).classList.remove('hidden');
             
             document.querySelectorAll('nav button').forEach(btn => {
-                btn.className = "flex-1 py-2 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100";
+                btn.className = "flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100";
             });
             
             const tabActivo = document.getElementById(`tab-${idSeccion}`);
             if (tabActivo) {
-                tabActivo.className = "flex-1 py-2 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white";
+                tabActivo.className = "flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white shadow";
             }
             
             if (idSeccion === 'sec-analitica' && BASE_DATOS.length > 0) {
@@ -550,8 +585,9 @@
             }
         }
 
-        // 🎯 FILTRADO EN PESTAÑA ANALÍTICA
+        // 🎯 MOTOR DE FILTRADO AVANZADO DE MÉTRICAS (MÓDULO ANALÍTICA)
         function obtenerDatosFiltradosParaAnalitica() {
+            const fTienda = document.getElementById('an-filtro-tienda').value;
             const fCanal = document.getElementById('an-filtro-canal').value;
             const fCat = document.getElementById('an-filtro-categoria').value;
             const fTalla = document.getElementById('an-filtro-talla').value;
@@ -560,24 +596,19 @@
 
             return BASE_DATOS.filter(v => {
                 if (v.estado !== 'Vendido') return false;
+                if (fTienda !== 'TODOS' && v.proveedor !== fTienda) return false;
                 if (fCanal !== 'TODOS' && v.canalVenta !== fCanal) return false;
                 if (fCat !== 'TODOS' && v.categoria !== fCat) return false;
                 if (fTalla !== 'TODOS' && v.talla !== fTalla) return false;
                 
                 const precio = parseFloat(v.precioVenta || 0);
                 if (precio < fMin || precio > fMax) return false;
-
                 return true;
             });
         }
 
-        function actualizarTodoElBloqueGrafico() {
-            dibujarGrafica();
-            dibujarGraficaTarta();
-            dibujarMapaCalor();
-        }
-
         function limpiarFiltrosAnalitica() {
+            document.getElementById('an-filtro-tienda').value = 'TODOS';
             document.getElementById('an-filtro-canal').value = 'TODOS';
             document.getElementById('an-filtro-categoria').value = 'TODOS';
             document.getElementById('an-filtro-talla').value = 'TODOS';
@@ -590,95 +621,53 @@
         window.clearDrop = function(e) { const col = e.currentTarget; if(col) col.classList.remove('drag-over'); };
         
         window.handleDragStart = function(e, id) { 
-            e.dataTransfer.effectAllowed = 'move'; 
-            e.dataTransfer.setData("text/plain", id); 
-            
+            e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData("text/plain", id); 
             if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) {
                 e.dataTransfer.setData("text/lote-items", JSON.stringify(ITEMS_SELECCIONADOS_MASIVOS));
-            } else {
-                e.dataTransfer.setData("text/lote-items", JSON.stringify([id]));
-            }
-            
+            } else { e.dataTransfer.setData("text/lote-items", JSON.stringify([id])); }
             const card = document.getElementById(id);
-            if(card) {
-                setTimeout(() => {
-                    if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) {
-                        ITEMS_SELECCIONADOS_MASIVOS.forEach(xId => {
-                            const cNode = document.getElementById(xId);
-                            if(cNode) cNode.classList.add('dragging');
-                        });
-                    } else {
-                        card.classList.add('dragging');
-                    }
-                }, 0);
-            }
+            if(card) { setTimeout(() => { if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) { ITEMS_SELECCIONADOS_MASIVOS.forEach(xId => { const cNode = document.getElementById(xId); if(cNode) cNode.classList.add('dragging'); }); } else { card.classList.add('dragging'); } }, 0); }
         };
 
         window.handleDropColumn = async function(e, newState) {
             e.preventDefault(); window.clearDrop(e);
-            const loteRaw = e.dataTransfer.getData("text/lote-items");
-            if (!loteRaw) return;
+            const loteRaw = e.dataTransfer.getData("text/lote-items"); if (!loteRaw) return;
             const listaIds = JSON.parse(loteRaw);
             
             cantarPorVoz(newState === 'Vendido' ? `Lote Vendido` : `Lote a stock`);
             procesarMultiplicadorCombo();
 
             const copiasEstadosAnteriores = {};
-            listaIds.forEach(id => {
-                const idx = BASE_DATOS.findIndex(x => x._id === id);
-                if (idx !== -1) {
-                    copiasEstadosAnteriores[id] = BASE_DATOS[idx].estado;
-                    BASE_DATOS[idx].estado = newState;
-                }
-            });
-
-            recalcularKPIsLocalesOptimistas(); renderKanban(); actualizarTodoElBloqueGrafico();
+            listaIds.forEach(id => { const idx = BASE_DATOS.findIndex(x => x._id === id); if (idx !== -1) { copiasEstadosAnteriores[id] = BASE_DATOS[idx].estado; BASE_DATOS[idx].estado = newState; } });
+            recalcularKPIsLocalesOptimistas(); renderKanban();
 
             try {
-                const promesas = listaIds.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
-                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: newState })
-                }));
-                await Promise.all(promesas);
-                limpiarSeleccionMasiva();
-                await reloadCoreData();
+                const promesas = listaIds.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: newState }) }));
+                await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
             } catch(err) {
-                listaIds.forEach(id => {
-                    const idx = BASE_DATOS.findIndex(x => x._id === id);
-                    if (idx !== -1) BASE_DATOS[idx].estado = copiasEstadosAnteriores[id];
-                });
-                reloadCoreData();
-                alert("Error de red. Rollback completado.");
+                listaIds.forEach(id => { const idx = BASE_DATOS.findIndex(x => x._id === id); if (idx !== -1) BASE_DATOS[idx].estado = copiasEstadosAnteriores[id]; });
+                reloadCoreData(); alert("Fallo de red.");
             }
         };
 
         function toggleMuteVolumenGlobal() {
             SOUND_MUTED_GLOBAL = !SOUND_MUTED_GLOBAL;
-            const btn = document.getElementById('btn-mute-volumen');
-            const txt = document.getElementById('txt-mute-volumen');
+            const btn = document.getElementById('btn-mute-volumen'); const txt = document.getElementById('txt-mute-volumen');
             if (SOUND_MUTED_GLOBAL) {
-                btn.className = "bg-rose-600/20 text-rose-400 border border-rose-500/30 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md";
-                txt.innerText = "Muteado";
+                btn.className = "bg-rose-600/20 text-rose-400 border border-rose-500/30 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md"; txt.innerText = "Muteado";
             } else {
-                btn.className = "bg-slate-800 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md";
-                txt.innerText = "Sonido";
-                cantarPorVoz("Sonido activo");
+                btn.className = "bg-slate-800 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md"; txt.innerText = "Sonido"; cantarPorVoz("Sonido activo");
             }
         }
 
-        async function forceRefreshDataManual() {
-            cantarPorVoz("Sincronizando.");
-            await reloadCoreData();
-        }
+        async function forceRefreshDataManual() { cantarPorVoz("Sincronizando."); await reloadCoreData(); }
 
         function recalcularKPIsLocalesOptimistas() {
             let ingresos = 0, inversion = 0, prendasVendidas = 0;
             BASE_DATOS.forEach(v => {
                 const cant = parseInt(v.cantidad, 10) || 1; const pCompra = parseFloat(v.precioCompra) || 0; const pVenta = parseFloat(v.precioVenta) || 0; const gEnvio = parseFloat(v.gastosEnvio) || 0;
                 inversion += ((pCompra + gEnvio) * cant);
-                if (v.estado === 'Vendido') {
-                    let comision = (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') ? (pVenta * 0.05) : 0;
-                    ingresos += ((pVenta - comision) * cant); prendasVendidas += cant;
-                }
+                if (v.estado === 'Vendido') { let comision = (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') ? (pVenta * 0.05) : 0; ingresos += ((pVenta - comision) * cant); prendasVendidas += cant; }
             });
             document.getElementById('kpi-ingresos').innerText = `${ingresos.toFixed(2)} €`;
             document.getElementById('kpi-beneficio').innerText = `${(ingresos - inversion).toFixed(2)} €`;
@@ -691,12 +680,10 @@
             const venta = parseFloat(document.getElementById('precioVenta').value) || 0;
             const indicator = document.getElementById('txt-margen-calculado');
             if (compra <= 0 || venta <= 0) { indicator.innerText = "0.00%"; indicator.className = "font-bold text-slate-400"; return; }
-            const beneficio = venta - compra;
-            const porcentaje = (beneficio / venta) * 100;
-            indicator.innerText = `${porcentaje.toFixed(2)}%`;
-            if (porcentaje <= 0) { indicator.className = "font-bold text-rose-500 animate-pulse"; }
-            else if (porcentaje < 30) { indicator.className = "font-bold text-amber-500"; }
-            else { indicator.className = "font-bold text-emerald-400"; }
+            const porcentaje = ((venta - compra) / venta) * 100; indicator.innerText = `${porcentaje.toFixed(2)}%`;
+            if (porcentaje <= 0) indicator.className = "font-bold text-rose-500 animate-pulse";
+            else if (porcentaje < 30) indicator.className = "font-bold text-amber-500";
+            else indicator.className = "font-bold text-emerald-400";
         }
 
         function aplicarFiltrosFrontLineal() {
@@ -704,8 +691,7 @@
             const talla = document.getElementById('filtro-talla').value;
             const canal = document.getElementById('filtro-canal').value;
             BASE_DATOS.forEach(v => {
-                const card = document.getElementById(v._id);
-                if (!card) return;
+                const card = document.getElementById(v._id); if (!card) return;
                 let cumple = true;
                 if (cat !== 'TODOS' && v.categoria !== cat) cumple = false;
                 if (talla !== 'TODOS' && v.talla !== talla) cumple = false;
@@ -752,8 +738,8 @@
 
         function autocompletarNombreLocalRapido() {
             const cat = document.getElementById('categoria').value; const talla = document.getElementById('talla').value;
-            const singular = cat.endsWith('s') ? cat.slice(0, -1) : cat; const nombreGenerado = `Nueva ${singular} - Talla ${talla}`;
-            document.getElementById('prenda').value = nombreGenerado; cantarPorVoz("Nombre asignado.");
+            const singular = cat.endsWith('s') ? cat.slice(0, -1) : cat;
+            document.getElementById('prenda').value = `Nueva ${singular} - Talla ${talla}`; cantarPorVoz("Asignado.");
         }
 
         function descargarBackupSeguridadLocal() {
@@ -766,10 +752,7 @@
 
         function cantarPorVoz(mensajeTexto) {
             if (!SOUND_MUTED_GLOBAL && 'speechSynthesis' in window) { 
-                window.speechSynthesis.cancel(); 
-                const frase = new SpeechSynthesisUtterance(mensajeTexto); 
-                frase.lang = 'es-ES'; 
-                window.speechSynthesis.speak(frase); 
+                window.speechSynthesis.cancel(); const frase = new SpeechSynthesisUtterance(mensajeTexto); frase.lang = 'es-ES'; window.speechSynthesis.speak(frase); 
             }
         }
 
@@ -940,8 +923,8 @@
             try {
                 const response = await fetch(`${BACKEND_URL}/api/ventas/escanear/${skuParam}`, { method: 'PUT', credentials: 'include' });
                 if (response.ok) {
-                    const resJson = await response.json(); if(resJson.operacion === "Vendido") cantarPorVoz(`Vendido`);
-                    else if (resJson.operacion === "Creado") { cantarPorVoz(`Indexado.`); cancelEdit(); document.getElementById('sku').value = resJson.venta.sku; document.getElementById('prenda').focus(); }
+                    const resJson = await response.json(); if(resJson.operacion === "Vendido") cantarPorVoz("Vendido");
+                    else if (resJson.operacion === "Creado") { cantarPorVoz("Indexado."); cancelEdit(); document.getElementById('sku').value = resJson.venta.sku; document.getElementById('prenda').focus(); }
                     procesarMultiplicadorCombo(); await reloadCoreData();
                 }
             } catch (err) {}
@@ -965,7 +948,11 @@
                 document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
 
                 renderKanban(); updateTickerWallStreet(); ejecutarVerificacionAlertasStock(); aplicarFiltrosFrontLineal(); actualizarVisibilidadPanelMasivo();
-                actualizarTodoElBloqueGrafico();
+                
+                // Si estamos en la sección de analítica, refrescamos el bloque de gráficos
+                if (!document.getElementById('sec-analitica').classList.contains('hidden')) {
+                    actualizarTodoElBloqueGrafico();
+                }
                 
                 const contenedorLogs = document.getElementById('contenedor-logs-auditoria');
                 if (contenedorLogs && data.logs && data.logs.length > 0) {
@@ -975,25 +962,26 @@
             } catch(e) {}
         }
 
+        // --- SISTEMA GRAFICO MEJORADO ---
         function dibujarGrafica() {
             const contenedor = document.getElementById('contenedor-canvas-grafica'); if(!contenedor) return;
             contenedor.innerHTML = '<canvas id="graficaTendencias"></canvas>'; const ctx = document.getElementById('graficaTendencias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
             
             const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
-            const datosAgrapados = {}; 
-            datosFiltrados.forEach(v => { datosAgrapados[v.fecha] = (datosAgrapados[v.fecha] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1)); });
-            const fechas = Object.keys(datosAgrapados).sort(); const montos = fechas.map(f => datosAgrapados[f]);
+            const datosAgrupados = {}; 
+            datosFiltrados.forEach(v => { datosAgrupados[v.fecha] = (datosAgrapados[v.fecha] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1)); });
+            const fechas = Object.keys(datosAgrupados).sort(); const montos = fechas.map(f => datosAgrupados[f]);
 
             const configuracionGraficas = {
-                dark: { linea: '#ec4899', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' }, pink: { linea: '#db2777', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
+                dark: { linea: '#3b82f6', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' }, pink: { linea: '#db2777', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
                 light: { linea: '#0f172a', texto: '#475569', malla: 'rgba(0,0,0,0.05)' }, emerald: { linea: '#10b981', texto: '#e6f4ea', malla: 'rgba(255,255,255,0.05)' },
                 purple: { linea: '#a855f7', texto: '#e0e7ff', malla: 'rgba(255,255,255,0.05)' }
             };
             const cfg = configuracionGraficas[currentTheme] || configuracionGraficas.dark;
 
             INSTANCIA_CHARTS = new Chart(ctx, {
-                type: 'line', data: { labels: fechas.map(f => f.split('-').reverse().slice(0,2).join('/')), datasets: [{ data: montos, borderColor: cfg.linea, borderWidth: 3, pointBackgroundColor: cfg.linea, tension: 0.25, fill: false }] },
+                type: 'line', data: { labels: fechas.map(f => f.split('-').reverse().slice(0,2).join('/')), datasets: [{ data: montos, borderColor: cfg.linea, borderWidth: 3, pointBackgroundColor: cfg.linea, tension: 0.2, fill: false }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: cfg.malla }, ticks: { color: cfg.texto } }, y: { grid: { color: cfg.malla }, ticks: { color: cfg.texto, callback: v => v + '€' } } } }
             });
         }
@@ -1010,7 +998,7 @@
             const etiquetas = Object.keys(contadorCategorias); const datos = etiquetas.map(cat => contadorCategorias[cat]);
 
             const paletasColor = {
-                dark: ['#ec4899', '#f472b6', '#3b82f6', '#10b981', '#f59e0b'], pink: ['#db2777', '#f472b6', '#fbcfe8', '#be185d', '#9d174d'],
+                dark: ['#3b82f6', '#60a5fa', '#ec4899', '#10b981', '#f59e0b'], pink: ['#db2777', '#f472b6', '#fbcfe8', '#be185d', '#9d174d'],
                 light: ['#1e293b', '#475569', '#64748b', '#94a3b8', '#cbd5e1'], emerald: ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
                 purple: ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe']
             };
@@ -1023,20 +1011,56 @@
             });
         }
 
+        // NUEVO GRÁFICO: FACTURACIÓN BRUTA COMPARATIVA POR PROVEEDOR
+        function dibujarGraficaBarrasTiendas() {
+            const contenedor = document.getElementById('contenedor-canvas-barras'); if(!contenedor) return;
+            contenedor.innerHTML = '<canvas id="graficaBarrasTiendas"></canvas>'; const ctx = document.getElementById('graficaBarrasTiendas').getContext('2d');
+            const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
+
+            const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
+            const facturacionTiendas = {};
+            
+            datosFiltrados.forEach(v => {
+                const nombreTienda = v.proveedor || 'Sin definir';
+                facturacionTiendas[nombreTienda] = (facturacionTiendas[nombreTienda] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1));
+            });
+
+            const etiquetas = Object.keys(facturacionTiendas); const datos = etiquetas.map(t => facturacionTiendas[t]);
+
+            const paletasColor = {
+                dark: '#ec4899', pink: '#db2777', light: '#475569', emerald: '#10b981', purple: '#8b5cf6'
+            };
+            const colorBarra = paletasColor[currentTheme] || paletasColor.dark;
+            const colorTexto = currentTheme === 'light' || currentTheme === 'pink' ? '#475569' : '#94a3b8';
+
+            INSTANCIA_BARRAS = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: etiquetas,
+                    datasets: [{ data: datos, backgroundColor: colorBarra, borderRadius: 6, maxBarThickness: 30 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: colorTexto, font: { size: 9 } }, grid: { display: false } },
+                        y: { ticks: { color: colorTexto, callback: v => v + '€' }, grid: { color: 'rgba(255,255,255,0.03)' } }
+                    }
+                }
+            });
+        }
+
         function dibujarMapaCalor() {
             const canvasContenedor = document.querySelector('#graficaMapaCalor'); if (!canvasContenedor) return;
-            const ctx = canvasContenedor.getContext('2d');
-            if (INSTANCIA_MAPA_CALOR) { INSTANCIA_MAPA_CALOR.destroy(); }
+            const ctx = canvasContenedor.getContext('2d'); if (INSTANCIA_MAPA_CALOR) { INSTANCIA_MAPA_CALOR.destroy(); }
 
             const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             const bloquesHorarios = ['00:00-06:00', '06:00-12:00', '12:00-18:00', '18:00-00:00'];
-            const matrizDatos = Array(7).fill(0).map(() => Array(4).fill(0));
-            let maxVentas = 1;
+            const matrizDatos = Array(7).fill(0).map(() => Array(4).fill(0)); let maxVentas = 1;
 
             const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
             datosFiltrados.forEach(v => {
-                const fechaObj = v.fecha ? new Date(v.fecha) : new Date();
-                if (isNaN(fechaObj.getTime())) return;
+                const fechaObj = v.fecha ? new Date(v.fecha) : new Date(); if (isNaN(fechaObj.getTime())) return;
                 const diaIndex = fechaObj.getDay(); const hora = fechaObj.getHours();
                 let bloqueIndex = 0;
                 if (hora >= 6 && hora < 12) bloqueIndex = 1;
@@ -1047,18 +1071,12 @@
             });
 
             const scatterData = [];
-            for (let d = 0; d < 7; d++) {
-                for (let h = 0; h < 4; h++) {
-                    if (matrizDatos[d][h] > 0) scatterData.push({ x: d, y: h, v: matrizDatos[d][h] });
-                }
-            }
+            for (let d = 0; d < 7; d++) { for (let h = 0; h < 4; h++) { if (matrizDatos[d][h] > 0) scatterData.push({ x: d, y: h, v: matrizDatos[d][h] }); } }
 
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
             const paletasTema = {
-                dark: { base: '236, 72, 153', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' },
-                pink: { base: '219, 39, 119', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
-                light: { base: '15, 23, 42', texto: '#475569', malla: 'rgba(0,0,0,0.05)' },
-                emerald: { base: '16, 185, 129', texto: '#e6f4ea', malla: 'rgba(255,255,255,0.05)' },
+                dark: { base: '59, 130, 246', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' }, pink: { base: '219, 39, 119', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
+                light: { base: '15, 23, 42', texto: '#475569', malla: 'rgba(0,0,0,0.05)' }, emerald: { base: '16, 185, 129', texto: '#e6f4ea', malla: 'rgba(255,255,255,0.05)' },
                 purple: { base: '168, 85, 247', texto: '#e0e7ff', malla: 'rgba(255,255,255,0.05)' }
             };
             const cfg = paletasTema[currentTheme] || paletasTema.dark;
@@ -1068,21 +1086,13 @@
                 data: {
                     datasets: [{
                         data: scatterData,
-                        backgroundColor: function(context) {
-                            const value = context.raw ? context.raw.v : 0;
-                            const alpha = Math.min(0.2 + (value / maxVentas) * 0.8, 1);
-                            return `rgba(${cfg.base}, ${alpha})`;
-                        },
-                        pointStyle: 'rectRounded',
-                        radius: function(context) { return Math.min(context.chart.width / 24, 30); }
+                        backgroundColor: function(context) { const value = context.raw ? context.raw.v : 0; const alpha = Math.min(0.2 + (value / maxVentas) * 0.8, 1); return `rgba(${cfg.base}, ${alpha})`; },
+                        pointStyle: 'rectRounded', radius: function(context) { return Math.min(context.chart.width / 24, 28); }
                     }]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { callbacks: { label: context => ` ${diasSemana[context.raw.x]} (${bloquesHorarios[context.raw.y]}): ${context.raw.v} prenda(s)` } }
-                    },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => ` ${diasSemana[context.raw.x]} (${bloquesHorarios[context.raw.y]}): ${context.raw.v} prenda(s)` } } },
                     scales: {
                         x: { type: 'linear', min: -0.5, max: 6.5, grid: { color: cfg.malla }, ticks: { color: cfg.texto, stepSize: 1, callback: v => diasSemana[v] } },
                         y: { type: 'linear', min: -0.5, max: 3.5, grid: { color: cfg.malla }, ticks: { color: cfg.texto, stepSize: 1, callback: v => bloquesHorarios[v] } }
@@ -1182,15 +1192,9 @@
             document.getElementById('gastosEnvio').value = item.gastosEnvio || 0; 
             document.getElementById('canalVenta').value = item.canalVenta || 'Vinted'; 
             document.getElementById('comentariosProducto').value = item.comentariosProducto || '';
-            
-            if(item.proveedor) {
-                document.getElementById('proveedor').value = item.proveedor;
-            } else {
-                document.getElementById('proveedor').value = 'Sin definir';
-            }
+            document.getElementById('proveedor').value = item.proveedor || 'Sin definir';
 
-            setFormRating(item.rating || 0);
-            calcularMargenComercialAlVuelo();
+            setFormRating(item.rating || 0); calcularMargenComercialAlVuelo();
             document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl modo-edicion"; 
             document.getElementById('form-title').innerText = "✏️ Editar Artículo"; 
             document.getElementById('btn-submit').innerText = "Guardar Cambios"; 
@@ -1198,18 +1202,12 @@
         }
 
         function cancelEdit() {
-            document.getElementById('form-venta').reset(); 
-            document.getElementById('edit-id').value = ""; 
-            document.getElementById('gastosEnvio').value = 0; 
-            document.getElementById('cantidad').value = 1;
-            document.getElementById('canalVenta').value = "Vinted"; 
-            document.getElementById('comentariosProducto').value = "";
-            document.getElementById('proveedor').value = "Sin definir"; 
-            setFormRating(0); 
-            calcularMargenComercialAlVuelo();
+            document.getElementById('form-venta').reset(); document.getElementById('edit-id').value = ""; 
+            document.getElementById('gastosEnvio').value = 0; document.getElementById('cantidad').value = 1;
+            document.getElementById('canalVenta').value = "Vinted"; document.getElementById('comentariosProducto').value = "";
+            document.getElementById('proveedor').value = "Sin definir"; setFormRating(0); calcularMargenComercialAlVuelo();
             document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl"; 
-            document.getElementById('form-title').innerText = "Añadir Prenda"; 
-            document.getElementById('btn-submit').innerText = "Registrar Prenda"; 
+            document.getElementById('form-title').innerText = "Ficha Avanzada"; document.getElementById('btn-submit').innerText = "Registrar Artículo"; 
             document.getElementById('btn-cancel').classList.add('hidden');
         }
 
@@ -1227,25 +1225,19 @@
             } catch(e){}
         }, 300);
 
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').then(reg => console.log('PWA Sincronizada.')).catch(err => {}); });
-        }
+        if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(err => {}); }); }
         
         particlesJS("particles-js", {
             "particles": {
-                "number": { "value": 90, "density": { "enable": true, "value_area": 800 } },
-                "color": { "value": ["#ec4899", "#f472b6", "#3b82f6"] },
-                "shape": { "type": ["circle", "polygon"], "polygon": { "nb_sides": 5 } },
-                "opacity": { "value": 0.4, "random": true },
-                "size": { "value": 4, "random": true },
-                "line_linked": { "enable": true, "distance": 120, "color": "#ec4899", "opacity": 0.15, "width": 1 },
-                "move": { "enable": true, "speed": 2, "direction": "none", "random": true, "out_mode": "out" }
+                "number": { "value": 80, "density": { "enable": true, "value_area": 800 } },
+                "color": { "value": ["#3b82f6", "#ec4899", "#8b5cf6"] },
+                "shape": { "type": ["circle"] },
+                "opacity": { "value": 0.3, "random": true },
+                "size": { "value": 3.5, "random": true },
+                "line_linked": { "enable": true, "distance": 110, "color": "#3b82f6", "opacity": 0.1, "width": 1 },
+                "move": { "enable": true, "speed": 1.5, "direction": "none", "random": true, "out_mode": "out" }
             },
-            "interactivity": {
-                "detect_on": "canvas",
-                "events": { "onhover": { "enable": true, "mode": "grab" }, "onclick": { "enable": true, "mode": "push" }, "resize": true },
-                "modes": { "grab": { "distance": 140, "line_linked": { "opacity": 0.4 } }, "push": { "particles_nb": 4 } }
-            },
+            "interactivity": { "events": { "onhover": { "enable": true, "mode": "grab" }, "resize": true } },
             "retina_detect": true
         });
     </script>

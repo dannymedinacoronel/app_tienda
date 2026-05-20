@@ -1,18 +1,20 @@
 {
   "name": "panel-admin-oauth",
   "version": "1.0.0",
-  "description": "Panel de administración protegido con Google OAuth2",
+  "description": "Panel de administración protegido con Google OAuth2 y Backups automáticos",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "@googleapis/drive": "^8.0.0",
     "connect-mongo": "^6.0.0",
     "cookie-session": "^2.1.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-session": "^1.19.0",
     "google-auth-library": "^9.10.0",
-    "mongoose": "^9.6.2"
+    "mongoose": "^9.6.2",
+    "node-cron": "^3.0.3"
   }
 }

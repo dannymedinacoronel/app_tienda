@@ -102,6 +102,40 @@ app.post('/api/tiendas', exigeAdmin, async (req, res) => {
     }
 });
 
+// NUEVA RUTA INTEGRADA: BAJA SEGURA DE TIENDA CON REASIGNACIÓN EN CASCADA
+app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // 1. Buscamos u obtenemos el nodo comodín por defecto "Sin definir"
+        let tiendaDefecto = await Tienda.findOne({ nombre: 'Sin definir' });
+        if (!tiendaDefecto) {
+            tiendaDefecto = new Tienda({ nombre: 'Sin definir' });
+            await tiendaDefecto.save();
+        }
+
+        // Evitamos que borres la tienda base por error
+        if (id === tiendaDefecto._id.toString()) {
+            return res.status(400).json({ error: 'No se permite la remoción de la tienda base del sistema.' });
+        }
+
+        const tiendaPorBorrar = await Tienda.findById(id);
+        if (!tiendaPorBorrar) return res.status(404).json({ error: 'La tienda no existe.' });
+
+        // 2. Mover de forma masiva los productos enlazados a "Sin definir" antes de la purga
+        await VentaRopa.updateMany({ tienda: id }, { tienda: tiendaDefecto._id });
+
+        // 3. Eliminación limpia de la colección
+        await Tienda.findByIdAndDelete(id);
+
+        await registrarLog(req.session.email, `Eliminó la tienda "${tiendaPorBorrar.nombre}". Productos reasignados a "Sin definir"`);
+        return res.sendStatus(200);
+    } catch (err) {
+        console.error("Error al borrar tienda:", err);
+        return res.status(500).json({ error: 'Fallo crítico al purgar la tienda.' });
+    }
+});
+
 // --- Rutas de Auth ---
 
 app.get('/api/auth/verificar', (req, res) => {
@@ -176,11 +210,7 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
         
         let tiendaDoc = await Tienda.findOne({ nombre: proveedor });
         if (!tiendaDoc) {
-            tiendaDoc = await Tienda.findOne({ nombre: 'Sin definir' });
-            if (!tiendaDoc) {
-                tiendaDoc = new Tienda({ nombre: 'Sin definir' });
-                await tiendaDoc.save();
-            }
+            tiendaDoc = await Tienda.findOne({ nombre: 'Sin definir' }) || await new Tienda({ nombre: 'Sin definir' }).save();
         }
 
         const nuevaVenta = new VentaRopa({ 

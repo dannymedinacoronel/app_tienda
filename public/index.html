@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Core Financiero - Seychelles Shop</title>
 
-    <link class="apple-touch-icon" href="logo.png">
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="shortcut icon" type="image/png" href="logo.png">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Seychelles">
+    <link rel="apple-touch-icon" href="logo.png">
     <link rel="manifest" href="manifest.json">
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -148,10 +148,6 @@
                         </div>
                     </div>
 
-                    <button onclick="ejecutarSincronizacionVintedManual(this)" class="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
-                        👗 <span id="txt-btn-vinted">Sincronizar Vinted</span>
-                    </button>
-
                     <button onclick="forceRefreshDataManual()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
                         🔄 <span class="hidden sm:inline">Refrescar</span>
                     </button>
@@ -280,8 +276,13 @@
                                     <input type="number" id="gastosEnvio" step="0.01" value="0" class="input-bg border w-full rounded-xl p-2 text-xs font-mono focus:outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Proveedor / Origen</label>
-                                    <input type="text" id="proveedor" placeholder="Origen prenda" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Tienda / Origen</label>
+                                    <div class="flex gap-1.5">
+                                        <select id="proveedor" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none flex-1 dropdown-bg">
+                                            <option value="Sin definir">Elegir tienda...</option>
+                                        </select>
+                                        <button type="button" onclick="crearNuevaTiendaAlVuelo()" class="bg-blue-600 hover:bg-blue-700 text-white px-2.5 rounded-xl text-xs font-black transition-transform active:scale-95" title="Crear tienda nueva">+</button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -464,8 +465,7 @@
     </div>
 
     <script>
-        // Cambia esto para que use automáticamente el dominio actual en Render
-        const BACKEND_URL = window.location.origin; 
+        const BACKEND_URL = '';
         let BASE_DATOS = [];
         let CARRITO_CAJA_TPV = []; 
         let INSTANCIA_CHARTS = null;
@@ -477,6 +477,49 @@
         let ITEMS_SELECCIONADOS_MASIVOS = [];
         let SOUND_MUTED_GLOBAL = false;
 
+        // 🏬 SISTEMA DINÁMICO DE SELECCIÓN Y CREACIÓN DE TIENDAS LOCALES
+        function inicializarYListarTiendas() {
+            const selectTiendas = document.getElementById('proveedor');
+            // Inicializamos con un set predeterminado de tiendas si está vacío
+            let tiendasLocales = JSON.parse(localStorage.getItem('seychelles-tiendas-v2'));
+            if (!tiendasLocales || tiendasLocales.length === 0) {
+                tiendasLocales = ["Vinted Stock Room", "Proveedor Madrid", "Outlet Local", "Tienda Central"];
+                localStorage.setItem('seychelles-tiendas-v2', JSON.stringify(tiendasLocales));
+            }
+            
+            // Reconstruimos las opciones de forma limpia
+            selectTiendas.innerHTML = '<option value="Sin definir">Elegir tienda...</option>';
+            tiendasLocales.sort().forEach(tienda => {
+                const option = document.createElement('option');
+                option.value = tienda;
+                option.textContent = `🏬 ${tienda}`;
+                selectTiendas.appendChild(option);
+            });
+        }
+
+        function crearNuevaTiendaAlVuelo() {
+            const nombreTienda = prompt("Introduce el nombre del nuevo punto de venta / tienda origen:");
+            if (!nombreTienda || nombreTienda.trim() === "") return;
+            
+            const tiendaLimpia = nombreTienda.trim();
+            let tiendasLocales = JSON.parse(localStorage.getItem('seychelles-tiendas-v2')) || [];
+            
+            if (tiendasLocales.map(t => t.toLowerCase()).includes(tiendaLimpia.toLowerCase())) {
+                alert("Esta tienda ya está registrada en el sistema.");
+                document.getElementById('proveedor').value = tiendasLocales.find(t => t.toLowerCase() === tiendaLimpia.toLowerCase());
+                return;
+            }
+            
+            tiendasLocales.push(tiendaLimpia);
+            localStorage.setItem('seychelles-tiendas-v2', JSON.stringify(tiendasLocales));
+            
+            // Refrescar selector y auto-seleccionar la recién creada
+            inicializarYListarTiendas();
+            document.getElementById('proveedor').value = tiendaLimpia;
+            cantarPorVoz("Nueva tienda indexada.");
+        }
+
+        // 🗺️ MENÚ DE NAVEGACIÓN ENTRE VISTAS DE LA APP
         function navegarASeccion(idSeccion) {
             document.querySelectorAll('.seccion-app').forEach(sec => sec.classList.add('hidden'));
             document.getElementById(idSeccion).classList.remove('hidden');
@@ -495,6 +538,7 @@
             }
         }
 
+        // 🎯 LÓGICA DE FILTRADO INTERNO DE LA PESTAÑA ANALÍTICA
         function obtenerDatosFiltradosParaAnalitica() {
             const fCanal = document.getElementById('an-filtro-canal').value;
             const fCat = document.getElementById('an-filtro-categoria').value;
@@ -517,7 +561,7 @@
 
         function actualizarTodoElBloqueGrafico() {
             dibujarGrafica();
-            dibujarGráficaTarta();
+            dibujarGraficaTarta();
             dibujarMapaCalor();
         }
 
@@ -528,40 +572,6 @@
             document.getElementById('an-filtro-precio-min').value = '';
             document.getElementById('an-filtro-precio-max').value = '';
             actualizarTodoElBloqueGrafico();
-        }
-
-        async function ejecutarSincronizacionVintedManual(boton) {
-            const textoOriginal = document.getElementById('txt-btn-vinted');
-            
-            boton.disabled = true;
-            boton.classList.add('opacity-50', 'cursor-not-allowed');
-            textoOriginal.innerText = "Raspando Vinted...";
-            cantarPorVoz("Iniciando raspado de Vinted.");
-
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/ventas/sincronizar-vinted`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include'
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.ok) {
-                    cantarPorVoz("Sincronización exitosa.");
-                    await reloadCoreData();
-                } else {
-                    cantarPorVoz("Error en el raspado.");
-                    alert(data.error || "Hubo un problema en el servidor al ejecutar el scraper.");
-                }
-            } catch (err) {
-                console.error(err);
-                alert("Error de red al conectar con el servidor core.");
-            } finally {
-                boton.disabled = false;
-                boton.classList.remove('opacity-50', 'cursor-not-allowed');
-                textoOriginal.innerText = "Sincronizar Vinted";
-            }
         }
 
         window.allowDrop = function(e) { e.preventDefault(); const col = e.currentTarget; if(col) col.classList.add('drag-over'); };
@@ -712,7 +722,7 @@
             const formateado = BASE_DATOS.map(v => ({
                 Fecha: v.fecha, SKU: v.sku || 'N/A', Artículo: v.prenda, Categoría: v.categoria, Talla: v.talla,
                 'Coste (€)': parseFloat(v.precioCompra || 0).toFixed(2), 'Venta (€)': parseFloat(v.precioVenta || 0).toFixed(2), 
-                'Envío (€)': parseFloat(v.gastosEnvio || 0).toFixed(2), Canal: v.canalVenta || 'Vinted', Comentarios: v.comentariosProducto || '', Rating: v.rating || 0, Estado: v.estado
+                'Envío (€)': parseFloat(v.gastosEnvio || 0).toFixed(2), Canal: v.canalVenta || 'Vinted', Comentarios: v.comentariosProducto || '', Rating: v.rating || 0, TiendaOrigen: v.proveedor || 'Sin definir', Estado: v.estado
             }));
             const ws = XLSX.utils.json_to_sheet(formateado); const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Inventario"); XLSX.writeFile(wb, `Seychelles_Core_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -753,7 +763,7 @@
         }
 
         function procesarMultiplicadorCombo() {
-            const tAhora = Date.now(); HISTORIAL_TIMESTAMPS_OPERACIONES = HISTORIAL_TIMESTAMPS_OPERACIONES.filter(t => (tAgora - t) < 180000); HISTORIAL_TIMESTAMPS_OPERACIONES.push(tAhora);
+            const tAhora = Date.now(); HISTORIAL_TIMESTAMPS_OPERACIONES = HISTORIAL_TIMESTAMPS_OPERACIONES.filter(t => (tAhora - t) < 180000); HISTORIAL_TIMESTAMPS_OPERACIONES.push(tAhora);
             const totalCombos = HISTORIAL_TIMESTAMPS_OPERACIONES.length; const bBadge = document.getElementById('combo-badge'); const bCards = document.querySelectorAll('#kpi-container-grid > div');
             if (totalCombos >= 3) {
                 const cc = document.getElementById('combo-count'); if(cc) cc.innerText = totalCombos;
@@ -786,7 +796,7 @@
                         categoria: original.categoria, talla: original.talla, cantidad: original.cantidad || 1,
                         precioCompra: original.precioCompra || 0, precioVenta: original.precioVenta || 0,
                         gastosEnvio: original.gastosEnvio || 0, canalVenta: original.canalVenta || 'Vinted', rating: original.rating || 0, estado: 'No Vendido',
-                        comentariosProducto: original.comentariosProducto || '', proveedor: original.proveedor || ''
+                        comentariosProducto: original.comentariosProducto || '', proveedor: original.proveedor || 'Sin definir'
                     })
                 });
                 cantarPorVoz("Duplicado."); await reloadCoreData();
@@ -804,7 +814,7 @@
                         categoria: original.categoria, talla: original.talla, cantidad: original.cantidad || 1,
                         precioCompra: original.precioCompra || 0, precioVenta: original.precioVenta || 0,
                         gastosEnvio: original.gastosEnvio || 0, canalVenta: original.canalVenta || 'Vinted', rating: original.rating || 0, estado: 'No Vendido',
-                        comentariosProducto: original.comentariosProducto || '', proveedor: original.proveedor || ''
+                        comentariosProducto: original.comentariosProducto || '', proveedor: original.proveedor || 'Sin definir'
                     })
                 });
             });
@@ -845,7 +855,7 @@
             if (ITEMS_SELECCIONADOS_MASIVOS.length === 0 || !valor) return;
             const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => {
                 const itemOriginal = BASE_DATOS.find(v => v._id === id); if (!itemOriginal) return Promise.resolve();
-                const payload = { sku: itemOriginal.sku, prenda: itemOriginal.prenda, precioCompra: itemOriginal.precioCompra || 0, precioVenta: itemOriginal.precioVenta || 0, cantidad: itemOriginal.cantidad || 1, categoria: itemOriginal.categoria, talla: itemOriginal.talla, estado: itemOriginal.estado, gastosEnvio: itemOriginal.gastosEnvio || 0, canalVenta: itemOriginal.canalVenta || 'Vinted', rating: itemOriginal.rating || 0, comentariosProducto: itemOriginal.comentariosProducto || '', proveedor: itemOriginal.proveedor || '' };
+                const payload = { sku: itemOriginal.sku, prenda: itemOriginal.prenda, precioCompra: itemOriginal.precioCompra || 0, precioVenta: itemOriginal.precioVenta || 0, cantidad: itemOriginal.cantidad || 1, categoria: itemOriginal.categoria, talla: itemOriginal.talla, estado: itemOriginal.estado, gastosEnvio: itemOriginal.gastosEnvio || 0, canalVenta: itemOriginal.canalVenta || 'Vinted', rating: itemOriginal.rating || 0, comentariosProducto: itemOriginal.comentariosProducto || '', proveedor: itemOriginal.proveedor || 'Sin definir' };
                 payload[campo] = valor; return fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
             });
             await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
@@ -853,7 +863,7 @@
 
         async function ejecutarEliminacionMasiva() {
             if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
-            if (confirm("¿Borrar permanentemente?")) {
+            if (confirm("¿Borrar permanentemente el lote seleccionado?")) {
                 const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }));
                 await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
             }
@@ -978,7 +988,7 @@
             });
         }
 
-        function dibujarGráficaTarta() {
+        function dibujarGraficaTarta() {
             const contenedor = document.getElementById('contenedor-canvas-tarta'); if(!contenedor) return;
             contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
@@ -1119,6 +1129,7 @@
 
                 const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
                 const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
+                const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">🏬 ${v.proveedor.toUpperCase()}</span>` : '';
                 const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas); const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
                 
                 const badgeCriticoHtml = esStockCritico ? `<span class="bg-amber-500 text-slate-950 px-1 py-0.5 rounded text-[7px] font-black tracking-widest animate-pulse">RESERVA</span>` : '';
@@ -1129,7 +1140,7 @@
                     <div class="flex-1 min-w-0 pointer-events-none">
                         <div class="flex items-center gap-1.5 flex-wrap">
                             <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
-                            ${badgeCanal} ${badgeCriticoHtml}
+                            ${badgeCanal} ${badgeTienda} ${badgeCriticoHtml}
                         </div>
                         <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
                         <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
@@ -1170,7 +1181,7 @@
                 canalVenta: document.getElementById('canalVenta').value, 
                 comentariosProducto: document.getElementById('comentariosProducto').value.trim(),
                 rating: parseInt(document.getElementById('rating').value, 10) || 0,
-                proveedor: document.getElementById('proveedor').value.trim()
+                proveedor: document.getElementById('proveedor').value // ENVIADO CORRECTAMENTE AL SERVIDOR
             };
             if (id) { const itemOriginal = BASE_DATOS.find(v => v._id === id); if (itemOriginal) payload.estado = itemOriginal.estado; }
             const url = id ? `${BACKEND_URL}/api/ventas/${id}` : `${BACKEND_URL}/api/ventas`; const method = id ? 'PUT' : 'POST';
@@ -1190,7 +1201,20 @@
             document.getElementById('gastosEnvio').value = item.gastosEnvio || 0; 
             document.getElementById('canalVenta').value = item.canalVenta || 'Vinted'; 
             document.getElementById('comentariosProducto').value = item.comentariosProducto || '';
-            document.getElementById('proveedor').value = item.proveedor || '';
+            
+            // Verificación para asegurar que si la tienda no existe localmente, se añada dinámicamente
+            if(item.proveedor && item.proveedor !== 'Sin definir') {
+                let tiendasLocales = JSON.parse(localStorage.getItem('seychelles-tiendas-v2')) || [];
+                if(!tiendasLocales.includes(item.proveedor)) {
+                    tiendasLocales.push(item.proveedor);
+                    localStorage.setItem('seychelles-tiendas-v2', JSON.stringify(tiendasLocales));
+                    inicializarYListarTiendas();
+                }
+                document.getElementById('proveedor').value = item.proveedor;
+            } else {
+                document.getElementById('proveedor').value = 'Sin definir';
+            }
+
             setFormRating(item.rating || 0);
             calcularMargenComercialAlVuelo();
             document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl modo-edicion"; 
@@ -1206,6 +1230,7 @@
             document.getElementById('cantidad').value = 1;
             document.getElementById('canalVenta').value = "Vinted"; 
             document.getElementById('comentariosProducto').value = "";
+            document.getElementById('proveedor').value = "Sin definir";
             setFormRating(0); 
             calcularMargenComercialAlVuelo();
             document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl"; 
@@ -1214,11 +1239,14 @@
             document.getElementById('btn-cancel').classList.add('hidden');
         }
 
-        async function deleteItem(id) { if (confirm("¿Eliminar?")) { await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }); await reloadCoreData(); } }
+        async function deleteItem(id) { if (confirm("¿Seguro que deseas eliminar permanentemente este artículo?")) { await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }); await reloadCoreData(); } }
         async function logout() { await fetch(`${BACKEND_URL}/api/logout`, { credentials: 'include' }); window.location.reload(); }
 
         setTimeout(async () => {
             try {
+                // Renderizado inicial del listado de tiendas locales
+                inicializarYListarTiendas();
+                
                 const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' }); const data = await res.json();
                 if (data.autenticado) { 
                     setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
@@ -1232,7 +1260,7 @@
                 navigator.serviceWorker.register('/sw.js').then(reg => console.log('PWA Sincronizada.')).catch(err => {});
             });
         }
-
+        
         particlesJS("particles-js", {
             "particles": {
                 "number": { "value": 90, "density": { "enable": true, "value_area": 800 } },

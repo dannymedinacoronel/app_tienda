@@ -20,7 +20,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
-    <script src="https://apis.google.com/js/api.js"></script>
     
     <style>
         body.theme-dark { background-color: #0f172a; color: #f1f5f9; }
@@ -153,10 +152,6 @@
                         🔄 <span class="hidden sm:inline">Refrescar</span>
                     </button>
                     
-                    <button onclick="autenticarYAbrirSelectorDriveVisual()" class="bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1" title="Elegir carpeta de copias automáticas">
-                        📂 Copias Cloud
-                    </button>
-
                     <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600/40 hover:bg-purple-700 border border-purple-500/30 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md">💾 Backup</button>
                     <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md">📊 Excel</button>
                     <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
@@ -290,7 +285,7 @@
 
                             <div class="grid grid-cols-1 gap-2">
                                 <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Canal Comercial</label>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Canal Comercial</label>
                                     <select id="canalVenta" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
                                         <option value="Vinted" selected>👗 Vinted</option>
                                         <option value="Tienda Física">🏬 Tienda</option>
@@ -483,72 +478,6 @@
         let LECTOR_BLOQUEADO_POR_CAPTURA = false;
         let ITEMS_SELECCIONADOS_MASIVOS = [];
         let SOUND_MUTED_GLOBAL = false;
-
-        // 🔑 CONFIGURACIÓN DINÁMICA DEL SELECTOR VISUAL DE GDRIVE (PICKER API)
-        // Sustituye estos dos valores por tus tokens de la consola de desarrolladores de Google Cloud
-        const DRIVE_CLIENT_ID = "463908353578-o70ia5lgf0c7fcce0utp8qqlqnc41iuo.apps.googleusercontent.com"; 
-        const DRIVE_API_KEY = "AIzaSyA1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q"; 
-        let googlePickerAccessToken = null;
-
-        function autenticarYAbrirSelectorDriveVisual() {
-            // Inicializa la solicitud del token Oauth2 enfocado en ficheros de Drive
-            const tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: DRIVE_CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/drive.file',
-                callback: (response) => {
-                    if (response.error !== undefined) {
-                        console.error("Fallo OAuth Picker:", response);
-                        return;
-                    }
-                    googlePickerAccessToken = response.access_token;
-                    // Lanza el cargador de la librería Picker de Google
-                    gapi.load('picker', construirYMostrarPickerContenedor);
-                },
-            });
-            tokenClient.requestAccessToken({ prompt: 'select_account' });
-        }
-
-        function construirYMostrarPickerContenedor() {
-            // Forzamos la vista exclusiva de carpetas (Folders) para evitar que marques un archivo suelto
-            const vistaCarpetas = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-                .setMimeTypes('application/vnd.google-apps.folder')
-                .setSelectFolderEnabled(true);
-
-            const ventanaPicker = new google.picker.PickerBuilder()
-                .addView(vistaCarpetas)
-                .setOAuthToken(googlePickerAccessToken)
-                .setDeveloperKey(DRIVE_API_KEY)
-                .setCallback(procesarSeleccionCarpetaPicker)
-                .build();
-            
-            ventanaPicker.setVisible(true);
-        }
-
-        async function procesarSeleccionCarpetaPicker(data) {
-            if (data.action === google.picker.Action.PICKED) {
-                const documentoElegido = data.docs[0];
-                const idDeCarpeta = documentoElegido.id; // ID interno de la carpeta cloud de Drive
-                
-                try {
-                    // Enviamos el ID y el Token de Acceso directamente a la nueva ruta segura del server.js
-                    const respuestaBack = await fetch(`${BACKEND_URL}/api/config/backup-drive`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ folderId: idDeCarpeta, accessToken: googlePickerAccessToken })
-                    });
-                    
-                    const resultadoJson = await respuestaBack.json();
-                    if (resultadoJson.status === 'success') {
-                        cantarPorVoz("Ruta de copia en la nube configurada.");
-                        alert(`¡Destino en la nube vinculado! Las copias de seguridad automáticas se guardarán cada 6 horas en la carpeta: "${documentoElegido.name}"`);
-                    } else {
-                        alert(resultadoJson.error || "El servidor rechazó las credenciales de la carpeta.");
-                    }
-                } catch (err) {
-                    alert("Error de comunicación de red al mapear el folderId con el backend.");
-                }
-            }
-        }
 
         // 🏬 LOGICA CLOUD DE TIENDAS DESDE MONGODB
         async function refrescarYListarTiendasCloud() {

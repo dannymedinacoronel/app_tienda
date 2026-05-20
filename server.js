@@ -1,12 +1,10 @@
 require('dotenv').config(); 
 const express = require('express');
-const { OAuth2Client, google } = require('google-auth-library'); 
+const { OAuth2Client } = require('google-auth-library'); 
 const session = require('express-session'); 
 const MongoStore = require('connect-mongo'); 
 const mongoose = require('mongoose');
 const path = require('path');
-const cron = require('node-cron'); 
-const fs = require('fs');
 
 const app = express();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -15,15 +13,8 @@ app.set('trust proxy', 1);
 
 const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb+srv://dannymedinacoronel_db_user:ccVg5uBpXkh5C0eo@cluster0.qnh4rbz.mongodb.net/tienda_ropa?appName=Cluster0";
 
-// ID de la carpeta de Google Drive "Tienda Seychelles shop" fijado de forma estricta
-const CONFIG_GDRIVE_FOLDER_ID = "1C0Lk142hLV6TI3H1NTphRN4-W7s2vTsI";
-
 mongoose.connect(MONGO_URI_FINAL)
-    .then(() => {
-        console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.');
-        // Arranca el planificador automático de copias de seguridad
-        iniciarCronBackups();
-    })
+    .then(() => console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.'))
     .catch(err => console.error('Fallo crítico en Atlas:', err));
 
 // --- Modelos de MongoDB ---
@@ -86,83 +77,6 @@ async function registrarLog(usuario, accion) {
     } catch (e) { console.error("Error al guardar log:", e); }
 }
 
-// =================================================================
-// SCRIPT PLANIFICADO CRON: BACKUPS AUTOMÁTICOS CADA 6 HORAS DIRECTOS
-// =================================================================
-
-function iniciarCronBackups() {
-    // Expresión Cron establecida para ejecutarse cada 6 horas
-    cron.schedule('0 */6 * * *', async () => {
-        console.log('\x1b[36m[CRON]\x1b[0m Generando volcado de datos Seychelles Shop...');
-        
-        // Verificación elástica para evitar que tire abajo el proceso si aún no has rellenado las variables en producción
-        if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-            console.log('\x1b[33m[CRON ADVERTENCIA]\x1b[0m Backup omitido temporalmente: Faltan las credenciales de la Cuenta de Servicio en las variables de entorno.');
-            return;
-        }
-
-        try {
-            // 1. Lectura completa de todas las colecciones desde MongoDB Atlas
-            const tiendas = await Tienda.find().lean();
-            const ventas = await VentaRopa.find().lean();
-            const logs = await LogAuditoria.find().lean();
-
-            const backupData = {
-                fechaGeneracion: new Date().toISOString(),
-                tiendas,
-                ventas,
-                logs
-            };
-
-            // 2. Escritura del archivo JSON temporal local
-            const fileName = `backup_seychelles_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-            const filePath = path.join(__dirname, fileName);
-            fs.writeFileSync(filePath, JSON.stringify(backupData, null, 2));
-
-            // 3. Autenticación con el servicio de la cuenta de Google
-            const auth = new google.auth.JWT(
-                process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-                null,
-                process.env.GOOGLE_SERVICE_ACCOUNT_KEY.replace(/\\n/g, '\n'),
-                ['https://www.googleapis.com/auth/drive.file']
-            );
-
-            const drive = google.drive({ version: 'v3', auth });
-
-            // 4. Inyección de metadatos apuntando a tu ID de carpeta específico
-            const fileMetadata = {
-                name: fileName,
-                parents: [CONFIG_GDRIVE_FOLDER_ID] 
-            };
-
-            const media = {
-                mimeType: 'application/json',
-                body: fs.createReadStream(filePath)
-            };
-
-            const response = await drive.files.create({
-                resource: fileMetadata,
-                media: media,
-                fields: 'id'
-            });
-
-            console.log(`\x1b[32m[BACKUP COMPLETADO]\x1b[0m Subido a Drive ("Tienda Seychelles shop"). ID: ${response.data.id}`);
-            await registrarLog('SISTEMA_CRON', `Copia de seguridad guardada en Drive. ID del archivo: ${response.data.id}`);
-
-            // 5. Purga del archivo del almacenamiento del servidor
-            fs.unlinkSync(filePath);
-
-        } catch (error) {
-            console.error('\x1b[31m[BACKUP CRÍTICO]\x1b[0m Error al procesar copia automatizada:', error);
-            try {
-                await registrarLog('SISTEMA_CRON', `Fallo al generar copia en Drive: ${error.message}`);
-            } catch(logErr) {}
-        }
-    });
-    
-    console.log('\x1b[32m[OK]\x1b[0m Motor Cron listo (Copia automática asignada a tu carpeta cada 6 horas).');
-}
-
 // --- Rutas de Tiendas ---
 
 app.get('/api/tiendas', exigeAdmin, async (req, res) => {
@@ -179,7 +93,6 @@ app.post('/api/tiendas', exigeAdmin, async (req, res) => {
         const nombreLimpio = req.body.nombre ? req.body.nombre.trim() : "";
         if (!nombreLimpio) return res.status(400).json({ error: 'El nombre es obligatorio.' });
 
-        // CORREGIDO: Se cambió 'nombreLinter' por la variable real 'nombreLimpio'
         const nuevaTienda = new Tienda({ nombre: nombreLimpio });
         await nuevaTienda.save();
         await registrarLog(req.session.email, `Creó la tienda en MongoDB: ${nuevaTienda.nombre}`);

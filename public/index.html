@@ -179,20 +179,6 @@
                 <button onclick="limpiarFiltrosAvanzados()" class="opacity-50 hover:opacity-100 underline ml-auto text-[11px] font-medium">Restablecer</button>
             </div>
 
-            <div id="modulo-camara" class="hidden card-bg border-2 border-dashed border-blue-500 p-5 rounded-3xl shadow-2xl mb-8 max-w-sm mx-auto text-center transition-all">
-                <div class="flex justify-between items-center mb-3">
-                    <span class="text-xs font-black uppercase text-blue-400 font-mono flex items-center gap-2">
-                        <span id="camara-ping-state" class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> 
-                        <span id="camara-text-state">Lector Listo</span>
-                    </span>
-                    <button onclick="cerrarCamara()" class="text-xs font-bold opacity-50 hover:opacity-100 bg-black/20 px-2 py-0.5 rounded-lg">Cerrar ✕</button>
-                </div>
-                <div id="reader" class="overflow-hidden rounded-2xl bg-slate-950 border border-current/10 mx-auto flex items-center justify-center"></div>
-                <button id="btn-rearmar-escaner" type="button" onclick="rearmarLectorParaSiguientePrenda()" class="hidden w-full mt-4 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-xl transition-all">
-                    🔄 ESCANEAR OTRA PRENDA
-                </button>
-            </div>
-
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="kpi-container-grid">
                 <div class="bg-gradient-to-br from-blue-600 to-cyan-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
                     <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Facturación Bruta</p>
@@ -345,7 +331,7 @@
             <div id="sec-analitica" class="seccion-app hidden flex flex-col gap-6 mb-8">
                 <div class="card-bg border p-5 rounded-3xl shadow-xl">
                     <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        <h3 class="text-xs font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">🎛️ Centro del Filtro Analítico Global</h3>
+                        <h3 class="text-xs font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">🎛️ Centro de Filtro Analítico Global</h3>
                         <button onclick="limpiarFiltrosAnalitica()" class="text-[10px] opacity-60 hover:opacity-100 underline font-mono">Restablecer Todo</button>
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
@@ -490,7 +476,7 @@
         let ITEMS_SELECCIONADOS_MASIVOS = [];
         let SOUND_MUTED_GLOBAL = false;
 
-        // 🏬 LÓGICA DE TIENDAS DESDE MONGODB (CON EXTENSIÓN DE ELIMINACIÓN)
+        // 🏬 LÓGICA DE TIENDAS DESDE MONGODB
         async function refrescarYListarTiendasCloud() {
             const selectForm = document.getElementById('proveedor');
             const selectFiltro = document.getElementById('an-filtro-tienda');
@@ -500,9 +486,7 @@
                 const data = await res.json();
                 LISTA_TIENDAS_GLOBAL = data.tiendas || [];
                 
-                // Rellenar select del formulario
                 selectForm.innerHTML = '<option value="Sin definir">Selecciona una tienda o crea una...</option>';
-                // Rellenar select del filtro avanzado de analítica
                 selectFiltro.innerHTML = '<option value="TODOS">🏬 Todas las tiendas</option>';
 
                 LISTA_TIENDAS_GLOBAL.forEach(t => {
@@ -556,11 +540,11 @@
                         credentials: 'include'
                     });
                     if (res.ok) {
-                        cantarPorVoz("Tienda eliminada del clúster.");
+                        cantarPorVoz("Tienda eliminada.");
                         await refrescarYListarTiendasCloud();
                         await reloadCoreData();
                     } else {
-                        alert("No se pudo purgar el elemento.");
+                        alert("No se pudo eliminar el elemento.");
                     }
                 } catch(e) { alert("Error al procesar la baja."); }
             }
@@ -736,6 +720,7 @@
             }
         }
 
+        // AUTO-COMPLETADO RÁPIDO
         function autocompletarNombreLocalRapido() {
             const cat = document.getElementById('categoria').value; const talla = document.getElementById('talla').value;
             const singular = cat.endsWith('s') ? cat.slice(0, -1) : cat;
@@ -949,7 +934,6 @@
 
                 renderKanban(); updateTickerWallStreet(); ejecutarVerificacionAlertasStock(); aplicarFiltrosFrontLineal(); actualizarVisibilidadPanelMasivo();
                 
-                // Si estamos en la sección de analítica, refrescamos el bloque de gráficos
                 if (!document.getElementById('sec-analitica').classList.contains('hidden')) {
                     actualizarTodoElBloqueGrafico();
                 }
@@ -962,15 +946,25 @@
             } catch(e) {}
         }
 
-        // --- SISTEMA GRAFICO MEJORADO ---
+        // --- SISTEMA GRÁFICO CORREGIDO 100% ---
+        function actualizarTodoElBloqueGrafico() {
+            dibujarGrafica();
+            dibujarGraficaTarta();
+            dibujarGraficaBarrasTiendas();
+            dibujarMapaCalor();
+        }
+
         function dibujarGrafica() {
             const contenedor = document.getElementById('contenedor-canvas-grafica'); if(!contenedor) return;
+            if (INSTANCIA_CHARTS) { INSTANCIA_CHARTS.destroy(); }
+            
             contenedor.innerHTML = '<canvas id="graficaTendencias"></canvas>'; const ctx = document.getElementById('graficaTendencias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
             
             const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
             const datosAgrupados = {}; 
-            datosFiltrados.forEach(v => { datosAgrupados[v.fecha] = (datosAgrapados[v.fecha] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1)); });
+            
+            datosFiltrados.forEach(v => { datosAgrupados[v.fecha] = (datosAgrupados[v.fecha] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1)); });
             const fechas = Object.keys(datosAgrupados).sort(); const montos = fechas.map(f => datosAgrupados[f]);
 
             const configuracionGraficas = {
@@ -988,6 +982,8 @@
 
         function dibujarGraficaTarta() {
             const contenedor = document.getElementById('contenedor-canvas-tarta'); if(!contenedor) return;
+            if (INSTANCIA_TARTA) { INSTANCIA_TARTA.destroy(); }
+            
             contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
 
@@ -1011,9 +1007,10 @@
             });
         }
 
-        // NUEVO GRÁFICO: FACTURACIÓN BRUTA COMPARATIVA POR PROVEEDOR
         function dibujarGraficaBarrasTiendas() {
             const contenedor = document.getElementById('contenedor-canvas-barras'); if(!contenedor) return;
+            if (INSTANCIA_BARRAS) { INSTANCIA_BARRAS.destroy(); }
+            
             contenedor.innerHTML = '<canvas id="graficaBarrasTiendas"></canvas>'; const ctx = document.getElementById('graficaBarrasTiendas').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
 

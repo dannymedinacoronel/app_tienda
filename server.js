@@ -23,7 +23,7 @@ const TiendaSchema = new mongoose.Schema({
     nombre: { type: String, required: true, unique: true, trim: true },
     fechaCreacion: { type: Date, default: Date.now }
 });
-const Tienda = mongoose.model('Tienda', TiendaSchema);
+const Tienda = mongoose.models.Tienda || mongoose.model('Tienda', TiendaSchema);
 
 const VentaRopaSchema = new mongoose.Schema({
     fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
@@ -38,16 +38,17 @@ const VentaRopaSchema = new mongoose.Schema({
     canalVenta: { type: String, enum: ['Tienda Física', 'Vinted', 'Wallapop', 'Web'], default: 'Tienda Física' }, 
     rating: { type: Number, default: 0, min: 0, max: 5 },
     estado: { type: String, enum: ['Vendido', 'No Vendido', 'Devuelto'], default: 'No Vendido' },
-    tienda: { type: mongoose.Schema.Types.ObjectId, ref: 'Tienda', required: true } // Relación añadida
+    comentariosProducto: { type: String, default: '', trim: true },
+    tienda: { type: mongoose.Schema.Types.ObjectId, ref: 'Tienda', required: true }
 });
-const VentaRopa = mongoose.model('VentaRopa', VentaRopaSchema);
+const VentaRopa = mongoose.models.VentaRopa || mongoose.model('VentaRopa', VentaRopaSchema);
 
 const LogAuditoriaSchema = new mongoose.Schema({
     fechaHora: { type: Date, default: Date.now },
     usuario: { type: String, required: true },
     accion: { type: String, required: true }
 });
-const LogAuditoria = mongoose.model('LogAuditoria', LogAuditoriaSchema);
+const LogAuditoria = mongoose.models.LogAuditoria || mongoose.model('LogAuditoria', LogAuditoriaSchema);
 
 const ADMIN_WHITELIST = ['dannymedinacoronel@gmail.com', 'juliamugo2001@gmail.com'];
 
@@ -55,6 +56,7 @@ app.use(express.json());
 
 const mongoStoreBuilder = MongoStore.create ? MongoStore : MongoStore.default;
 app.use(session({
+    secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
     resave: false,
     saveUninitialized: false,
@@ -79,18 +81,25 @@ async function registrarLog(usuario, accion) {
 // --- Rutas de Tiendas ---
 
 app.get('/api/tiendas', exigeAdmin, async (req, res) => {
-    const tiendas = await Tienda.find().lean();
-    res.json(tiendas);
+    try {
+        const tiendas = await Tienda.find().sort({ nombre: 1 }).lean();
+        res.json({ tiendas });
+    } catch (e) {
+        res.status(500).json({ error: 'Fallo al recuperar tiendas.' });
+    }
 });
 
 app.post('/api/tiendas', exigeAdmin, async (req, res) => {
     try {
-        const nuevaTienda = new Tienda({ nombre: req.body.nombre });
+        const nombreLimpio = req.body.nombre ? req.body.nombre.trim() : "";
+        if (!nombreLimpio) return res.status(400).json({ error: 'El nombre es obligatorio.' });
+
+        const nuevaTienda = new Tienda({ nombre: nombreLimpio });
         await nuevaTienda.save();
-        await registrarLog(req.session.email, `Creó la tienda: ${nuevaTienda.nombre}`);
+        await registrarLog(req.session.email, `Creó la tienda en MongoDB: ${nuevaTienda.nombre}`);
         res.json({ status: 'success', tienda: nuevaTienda });
     } catch (e) {
-        res.status(400).json({ error: 'La tienda ya existe o hay un error.' });
+        res.status(400).json({ error: 'La tienda ya existe o hay un error de validación.' });
     }
 });
 
@@ -117,16 +126,19 @@ app.post('/api/auth/google', async (req, res) => {
     } catch (error) { return res.status(400).json({ error: 'Token inválido.' }); }
 });
 
-// --- Rutas de Ventas ---
+// --- Rutas de Ventas / Inventario ---
 
 app.get('/api/ventas', exigeAdmin, async (req, res) => {
     try {
-        const ventas = await VentaRopa.find().populate('tienda').sort({ _id: -1 }).lean();
+        const ventasRaw = await VentaRopa.find().populate('tienda').sort({ _id: -1 }).lean();
         const logs = await LogAuditoria.find().sort({ _id: -1 }).limit(50).lean(); 
         
         let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0;
         
-        ventas.forEach(v => {
+        // Mapeamos los datos para adaptarlos a la propiedad plana 'proveedor' que espera el frontend
+        const ventas = ventasRaw.map(v => {
+            const proveedorNombre = v.tienda ? v.tienda.nombre : 'Sin definir';
+            
             const cant = parseInt(v.cantidad, 10) || 0;
             const pCompra = parseFloat(v.precioCompra) || 0;
             const pVenta = parseFloat(v.precioVenta) || 0;
@@ -143,6 +155,11 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
                 ingresos += ((pVenta - comisionPlataforma) * cant);
                 prendasVendidas += cant;
             }
+
+            return {
+                ...v,
+                proveedor: proveedorNombre // Inyecta el texto plano para que el JS del Kanban pinte el badge correctamente
+            };
         });
 
         const beneficioNeto = ingresos - inversion - gastosTotalesEnvio;
@@ -157,16 +174,114 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
 
 app.post('/api/ventas', exigeAdmin, async (req, res) => {
     try {
-        // Se espera que req.body contenga tiendaId
-        const { tiendaId, ...datosVenta } = req.body;
-        const nuevaVenta = new VentaRopa({ ...datosVenta, tienda: tiendaId });
+        const { proveedor, ...datosVenta } = req.body;
+        
+        // Buscamos dinámicamente la tienda basada en el string enviado por el selector del front
+        let tiendaDoc = await Tienda.findOne({ nombre: proveedor });
+        if (!tiendaDoc) {
+            // Si por algún motivo no existe en la BD o viene vacío, lo asignamos a una por defecto o creamos una genérica
+            tiendaDoc = await Tienda.findOne({ nombre: 'Sin definir' });
+            if (!tiendaDoc) {
+                tiendaDoc = new Tienda({ nombre: 'Sin definir' });
+                await tiendaDoc.save();
+            }
+        }
+
+        const nuevaVenta = new VentaRopa({ 
+            ...datosVenta, 
+            tienda: tiendaDoc._id 
+        });
         await nuevaVenta.save(); 
-        await registrarLog(req.session.email, `Añadió artículo a tienda ${tiendaId}: ${nuevaVenta.prenda}`);
+        await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`);
         return res.json({ status: "success", venta: nuevaVenta });
-    } catch (error) { return res.status(500).json({ error: 'Error al registrar.' }); }
+    } catch (error) { 
+        console.error("Fallo inyección POST:", error);
+        return res.status(500).json({ error: 'Error al registrar artículo.' }); 
+    }
 });
 
-// (Resto de métodos PUT/DELETE similares, manteniendo la lógica de administración)
+// Modificación completa del registro (Ficha de Edición)
+app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { proveedor, ...datosVenta } = req.body;
+
+        let tiendaDoc = await Tienda.findOne({ nombre: proveedor });
+        if (!tiendaDoc) {
+            tiendaDoc = await Tienda.findOne({ nombre: 'Sin definir' }) || new Tienda({ nombre: 'Sin definir' });
+            if (!tiendaDoc._id) await tiendaDoc.save();
+        }
+
+        const ventaActualizada = await VentaRopa.findByIdAndUpdate(
+            id, 
+            { ...datosVenta, tienda: tiendaDoc._id }, 
+            { new: true }
+        );
+
+        await registrarLog(req.session.email, `Modificó datos de la prenda ID: ${id} (${ventaActualizada.prenda})`);
+        return res.json({ status: "success", venta: ventaActualizada });
+    } catch (error) {
+        return res.status(500).json({ error: 'Error al actualizar registro.' });
+    }
+});
+
+// Cambio rápido de estado para operaciones de Drag & Drop en el Kanban
+app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { estado } = req.body;
+
+        const ventaActualizada = await VentaRopa.findByIdAndUpdate(id, { estado }, { new: true });
+        await registrarLog(req.session.email, `Cambió estado de la prenda [${ventaActualizada.prenda}] a: ${estado}`);
+        return res.json({ status: "success", venta: ventaActualizada });
+    } catch (error) {
+        return res.status(500).json({ error: 'Error en la actualización de la columna Kanban.' });
+    }
+});
+
+// Lógica inteligente para escaneo de pistola / Cámara Web (Inversión automática de estado)
+app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
+    try {
+        const { sku } = req.params;
+        let venta = await VentaRopa.findOne({ sku: sku });
+
+        if (!venta) {
+            // Si el código SKU no existe en la nube, pre-crea el artículo en modo borrador
+            const tiendaDefecto = await Tienda.findOne({ nombre: 'Sin definir' }) || await new Tienda({ nombre: 'Sin definir' }).save();
+            venta = new VentaRopa({
+                sku: sku,
+                prenda: 'Artículo Escaneado Nuevo',
+                estado: 'No Vendido',
+                tienda: tiendaDefecto._id
+            });
+            await venta.save();
+            await registrarLog(req.session.email, `Código SKU [${sku}] no indexado. Creado borrador base.`);
+            return res.json({ operacion: "Creado", venta });
+        } else {
+            // Si ya existe, conmuta automáticamente su estado para agilizar la caja
+            const nuevoEstado = venta.estado === 'Vendido' ? 'No Vendido' : 'Vendido';
+            venta.estado = nuevoEstado;
+            await venta.save();
+            await registrarLog(req.session.email, `Escaneo rápido SKU [${sku}]. Conmutado a ${nuevoEstado}`);
+            return res.json({ operacion: nuevoEstado, venta });
+        }
+    } catch (error) {
+        return res.status(500).json({ error: 'Fallo en la llamada del decodificador del escáner.' });
+    }
+});
+
+app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const ventaEliminada = await VentaRopa.findByIdAndDelete(id);
+        if (ventaEliminada) {
+            await registrarLog(req.session.email, `Eliminó permanentemente la prenda: ${ventaEliminada.prenda}`);
+        }
+        return res.sendStatus(200);
+    } catch (error) {
+        return res.status(500).json({ error: 'Error al purgar elemento de la base de datos.' });
+    }
+});
 
 app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(200)); });
 app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });

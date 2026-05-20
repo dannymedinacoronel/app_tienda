@@ -256,11 +256,11 @@
 
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Coste Compra (€)</label>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Coste Compra (€)</label>
                                     <input type="number" id="precioCompra" required step="0.01" oninput="calcularMargenComercialAlVuelo()" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Precio Venta (€)</label>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Venta (€)</label>
                                     <input type="number" id="precioVenta" required step="0.01" oninput="calcularMargenComercialAlVuelo()" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
                                 </div>
                             </div>
@@ -514,7 +514,7 @@
 
         function actualizarTodoElBloqueGrafico() {
             dibujarGrafica();
-            dibujarGraficaTarta(); // SE ELIMINÓ LA TILDE PARA CONCORDAR CON LA DECLARACIÓN DE ABAJO
+            dibujarGraficaTarta(); // Sincronizado sin tilde
             dibujarMapaCalor();
         }
 
@@ -682,7 +682,7 @@
         }
 
         function setFormRating(estrellasSeleccionadas) {
-            document.getElementById('rating').value = starsSelected = estrellasSeleccionadas;
+            document.getElementById('rating').value = estrellasSeleccionadas;
             for (let i = 1; i <= 5; i++) {
                 const starElement = document.getElementById(`star-${i}`);
                 if (starElement) {
@@ -908,7 +908,7 @@
 
                 renderKanban(); updateTickerWallStreet(); ejecutarVerificacionAlertasStock(); aplicarFiltrosFrontLineal(); actualizarVisibilidadPanelMasivo();
                 
-                // Refrescar el bloque de analítica respetando los filtros seleccionados
+                // Refrescar analíticas respetando los filtros avanzados
                 actualizarTodoElBloqueGrafico();
                 
                 const contenedorLogs = document.getElementById('contenedor-logs-auditoria');
@@ -924,7 +924,6 @@
             contenedor.innerHTML = '<canvas id="graficaTendencias"></canvas>'; const ctx = document.getElementById('graficaTendencias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
             
-            // Usar conjunto de datos filtrado de Analítica
             const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
             
             const datosAgrapados = {}; 
@@ -944,13 +943,11 @@
             });
         }
 
-        // FUNCIÓN CORREGIDA SIN TILDE EN EL NOMBRE
         function dibujarGraficaTarta() {
             const contenedor = document.getElementById('contenedor-canvas-tarta'); if(!contenedor) return;
             contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
 
-            // Usar conjunto de datos filtrado de Analítica
             const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
 
             const contadorCategorias = {};
@@ -984,7 +981,6 @@
             const matrizDatos = Array(7).fill(0).map(() => Array(4).fill(0));
             let maxVentas = 1;
 
-            // Usar conjunto de datos filtrado de Analítica
             const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
 
             datosFiltrados.forEach(v => {
@@ -1201,8 +1197,6 @@
                 navigator.serviceWorker.register('/sw.js').then(reg => console.log('PWA Sincronizada.')).catch(err => {});
             });
         }
-        
-        // LA ERRATA DE LA DIÉRESIS HA SIDO CORREGIDA AQUÍ
         particlesJS("particles-js", {
             "particles": {
                 "number": { "value": 90, "density": { "enable": true, "value_area": 800 } },
@@ -1223,4 +1217,3 @@
     </script>
 </body>
 </html>
-<h1>dasdsad</h1>

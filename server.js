@@ -11,11 +11,16 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 app.set('trust proxy', 1);
 
-const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb+srv://dannymedinacoronel_db_user:ccVg5uBpXkh5C0eo@cluster0.qnh4rbz.mongodb.net/tienda_ropa?appName=Cluster0";
+// 🔒 CONEXIÓN DEPURADA: Purgadas las credenciales del código fuente
+const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI;
+
+if (!MONGO_URI_FINAL) {
+    console.error('\x1b[31m[ERROR]\x1b[0m No se detectó la variable MONGODB_URI en el entorno.');
+}
 
 mongoose.connect(MONGO_URI_FINAL)
     .then(() => console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.'))
-    .catch(err => console.error('Fallo crítico en Atlas:', err));
+    .catch(err => console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err));
 
 // --- Modelos de MongoDB ---
 
@@ -107,14 +112,12 @@ app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         
-        // 1. Buscamos u obtenemos el nodo comodín por defecto "Sin definir"
         let tiendaDefecto = await Tienda.findOne({ nombre: 'Sin definir' });
         if (!tiendaDefecto) {
             tiendaDefecto = new Tienda({ nombre: 'Sin definir' });
             await tiendaDefecto.save();
         }
 
-        // Evitamos que borres la tienda base por error
         if (id === tiendaDefecto._id.toString()) {
             return res.status(400).json({ error: 'No se permite la remoción de la tienda base del sistema.' });
         }
@@ -122,10 +125,7 @@ app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
         const tiendaPorBorrar = await Tienda.findById(id);
         if (!tiendaPorBorrar) return res.status(404).json({ error: 'La tienda no existe.' });
 
-        // 2. Mover de forma masiva los productos enlazados a "Sin definir" antes de la purga
         await VentaRopa.updateMany({ tienda: id }, { tienda: tiendaDefecto._id });
-
-        // 3. Eliminación limpia de la colección
         await Tienda.findByIdAndDelete(id);
 
         await registrarLog(req.session.email, `Eliminó la tienda "${tiendaPorBorrar.nombre}". Productos reasignados a "Sin definir"`);
@@ -188,10 +188,7 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
                 prendasVendidas += cant;
             }
 
-            return {
-                ...v,
-                proveedor: proveedorNombre 
-            };
+            return { ...v, proveedor: proveedorNombre };
         });
 
         const beneficioNeto = ingresos - inversion - gastosTotalesEnvio;
@@ -213,10 +210,7 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
             tiendaDoc = await Tienda.findOne({ nombre: 'Sin definir' }) || await new Tienda({ nombre: 'Sin definir' }).save();
         }
 
-        const nuevaVenta = new VentaRopa({ 
-            ...datosVenta, 
-            tienda: tiendaDoc._id 
-        });
+        const nuevaVenta = new VentaRopa({ ...datosVenta, tienda: tiendaDoc._id });
         await nuevaVenta.save(); 
         await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`);
         return res.json({ status: "success", venta: nuevaVenta });

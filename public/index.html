@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Core Financiero - Seychelles Shop</title>
 
+    <link class="apple-touch-icon" href="logo.png">
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="shortcut icon" type="image/png" href="logo.png">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Seychelles">
-    <link rel="apple-touch-icon" href="logo.png">
     <link rel="manifest" href="manifest.json">
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -148,6 +148,10 @@
                         </div>
                     </div>
 
+                    <button onclick="ejecutarSincronizacionVintedManual(this)" class="bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-600 hover:to-cyan-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
+                        👗 <span id="txt-btn-vinted">Sincronizar Vinted</span>
+                    </button>
+
                     <button onclick="forceRefreshDataManual()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
                         🔄 <span class="hidden sm:inline">Refrescar</span>
                     </button>
@@ -256,11 +260,11 @@
 
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Coste Compra (€)</label>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Coste Compra (€)</label>
                                     <input type="number" id="precioCompra" required step="0.01" oninput="calcularMargenComercialAlVuelo()" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Venta (€)</label>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Precio Venta (€)</label>
                                     <input type="number" id="precioVenta" required step="0.01" oninput="calcularMargenComercialAlVuelo()" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
                                 </div>
                             </div>
@@ -460,7 +464,8 @@
     </div>
 
     <script>
-        const BACKEND_URL = '';
+        // Cambia esto para que use automáticamente el dominio actual en Render
+        const BACKEND_URL = window.location.origin; 
         let BASE_DATOS = [];
         let CARRITO_CAJA_TPV = []; 
         let INSTANCIA_CHARTS = null;
@@ -472,7 +477,6 @@
         let ITEMS_SELECCIONADOS_MASIVOS = [];
         let SOUND_MUTED_GLOBAL = false;
 
-        // 🗺️ MENÚ DE NAVEGACIÓN ENTRE VISTAS DE LA APP
         function navegarASeccion(idSeccion) {
             document.querySelectorAll('.seccion-app').forEach(sec => sec.classList.add('hidden'));
             document.getElementById(idSeccion).classList.remove('hidden');
@@ -491,7 +495,6 @@
             }
         }
 
-        // 🎯 LÓGICA DE FILTRADO INTERNO DE LA PESTAÑA ANALÍTICA
         function obtenerDatosFiltradosParaAnalitica() {
             const fCanal = document.getElementById('an-filtro-canal').value;
             const fCat = document.getElementById('an-filtro-categoria').value;
@@ -514,7 +517,7 @@
 
         function actualizarTodoElBloqueGrafico() {
             dibujarGrafica();
-            dibujarGraficaTarta(); // Sincronizado sin tilde
+            dibujarGráficaTarta();
             dibujarMapaCalor();
         }
 
@@ -525,6 +528,40 @@
             document.getElementById('an-filtro-precio-min').value = '';
             document.getElementById('an-filtro-precio-max').value = '';
             actualizarTodoElBloqueGrafico();
+        }
+
+        async function ejecutarSincronizacionVintedManual(boton) {
+            const textoOriginal = document.getElementById('txt-btn-vinted');
+            
+            boton.disabled = true;
+            boton.classList.add('opacity-50', 'cursor-not-allowed');
+            textoOriginal.innerText = "Raspando Vinted...";
+            cantarPorVoz("Iniciando raspado de Vinted.");
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/ventas/sincronizar-vinted`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.ok) {
+                    cantarPorVoz("Sincronización exitosa.");
+                    await reloadCoreData();
+                } else {
+                    cantarPorVoz("Error en el raspado.");
+                    alert(data.error || "Hubo un problema en el servidor al ejecutar el scraper.");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Error de red al conectar con el servidor core.");
+            } finally {
+                boton.disabled = false;
+                boton.classList.remove('opacity-50', 'cursor-not-allowed');
+                textoOriginal.innerText = "Sincronizar Vinted";
+            }
         }
 
         window.allowDrop = function(e) { e.preventDefault(); const col = e.currentTarget; if(col) col.classList.add('drag-over'); };
@@ -716,7 +753,7 @@
         }
 
         function procesarMultiplicadorCombo() {
-            const tAhora = Date.now(); HISTORIAL_TIMESTAMPS_OPERACIONES = HISTORIAL_TIMESTAMPS_OPERACIONES.filter(t => (tAhora - t) < 180000); HISTORIAL_TIMESTAMPS_OPERACIONES.push(tAhora);
+            const tAhora = Date.now(); HISTORIAL_TIMESTAMPS_OPERACIONES = HISTORIAL_TIMESTAMPS_OPERACIONES.filter(t => (tAgora - t) < 180000); HISTORIAL_TIMESTAMPS_OPERACIONES.push(tAhora);
             const totalCombos = HISTORIAL_TIMESTAMPS_OPERACIONES.length; const bBadge = document.getElementById('combo-badge'); const bCards = document.querySelectorAll('#kpi-container-grid > div');
             if (totalCombos >= 3) {
                 const cc = document.getElementById('combo-count'); if(cc) cc.innerText = totalCombos;
@@ -907,8 +944,6 @@
                 document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
 
                 renderKanban(); updateTickerWallStreet(); ejecutarVerificacionAlertasStock(); aplicarFiltrosFrontLineal(); actualizarVisibilidadPanelMasivo();
-                
-                // Refrescar analíticas respetando los filtros avanzados
                 actualizarTodoElBloqueGrafico();
                 
                 const contenedorLogs = document.getElementById('contenedor-logs-auditoria');
@@ -943,7 +978,7 @@
             });
         }
 
-        function dibujarGraficaTarta() {
+        function dibujarGráficaTarta() {
             const contenedor = document.getElementById('contenedor-canvas-tarta'); if(!contenedor) return;
             contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
             const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
@@ -1197,6 +1232,7 @@
                 navigator.serviceWorker.register('/sw.js').then(reg => console.log('PWA Sincronizada.')).catch(err => {});
             });
         }
+
         particlesJS("particles-js", {
             "particles": {
                 "number": { "value": 90, "density": { "enable": true, "value_area": 800 } },

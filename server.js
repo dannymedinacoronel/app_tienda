@@ -1,308 +1,1242 @@
-require('dotenv').config(); 
-const express = require('express');
-const { OAuth2Client } = require('google-auth-library'); 
-const session = require('express-session'); 
-const MongoStore = require('connect-mongo'); 
-const mongoose = require('mongoose');
-const path = require('path');
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Core Financiero - Seychelles Shop</title>
 
-const app = express();
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+    <link rel="icon" type="image/png" href="logo.png">
+    <link rel="shortcut icon" type="image/png" href="logo.png">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Seychelles">
+    <link rel="apple-touch-icon" href="logo.png">
+    <link rel="manifest" href="manifest.json">
 
-app.set('trust proxy', 1);
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
+    
+    <style>
+        body.theme-dark { background-color: #0b0f19; color: #f1f5f9; }
+        .theme-dark .card-bg { background-color: rgba(22, 30, 49, 0.7); border-color: #1e293b; backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+        .theme-dark .input-bg { background-color: #0b0f19; border-color: #1e293b; color: #ffffff; }
+        .theme-dark .dropdown-bg { background-color: #161e31; border-color: #334155; color: #f1f5f9; }
+        .theme-dark .dropdown-item-hover:hover { background-color: #1e293b; }
 
-const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb+srv://dannymedinacoronel_db_user:ccVg5uBpXkh5C0eo@cluster0.qnh4rbz.mongodb.net/tienda_ropa?appName=Cluster0";
+        body.theme-pink { background-color: #fff1f2; color: #831843; }
+        .theme-pink .card-bg { background-color: rgba(255, 255, 255, 0.75); border-color: #fbcfe8; color: #831843; box-shadow: 0 10px 30px rgba(219, 39, 119, 0.05); backdrop-filter: blur(14px); }
+        .theme-pink .input-bg { background-color: #fff5f5; border-color: #f9a8d4; color: #831843; }
+        .theme-pink .dropdown-bg { background-color: #ffffff; border-color: #fbcfe8; color: #831843; }
+        .theme-pink .dropdown-item-hover:hover { background-color: #fce7f3; }
 
-mongoose.connect(MONGO_URI_FINAL)
-    .then(() => console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.'))
-    .catch(err => console.error('Fallo crítico en Atlas:', err));
+        body.theme-light { background-color: #f1f5f9; color: #0f172a; }
+        .theme-light .card-bg { background-color: rgba(255, 255, 255, 0.8); border-color: #e2e8f0; color: #0f172a; box-shadow: 0 10px 25px rgba(0,0,0,0.03); backdrop-filter: blur(14px); }
+        .theme-light .input-bg { background-color: #f8fafc; border-color: #cbd5e1; color: #0f172a; }
+        .theme-light .dropdown-bg { background-color: #ffffff; border-color: #e2e8f0; color: #0f172a; }
+        .theme-light .dropdown-item-hover:hover { background-color: #f1f5f9; }
 
-// --- Modelos de MongoDB ---
+        body.theme-emerald { background-color: #022c22; color: #e6f4ea; }
+        .theme-emerald .card-bg { background-color: rgba(6, 60, 46, 0.75); border-color: #047857; backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .theme-emerald .input-bg { background-color: #022c22; border-color: #047857; color: #ffffff; }
+        .theme-emerald .dropdown-bg { background-color: #063c2e; border-color: #047857; color: #e6f4ea; }
+        .theme-emerald .dropdown-item-hover:hover { background-color: #047857; }
 
-const TiendaSchema = new mongoose.Schema({
-    nombre: { type: String, required: true, unique: true, trim: true },
-    fechaCreacion: { type: Date, default: Date.now }
-});
-const Tienda = mongoose.models.Tienda || mongoose.model('Tienda', TiendaSchema);
+        body.theme-purple { background-color: #0f0c24; color: #e0e7ff; }
+        .theme-purple .card-bg { background-color: rgba(30, 22, 66, 0.75); border-color: #4338ca; backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+        .theme-purple .input-bg { background-color: #0f0c24; border-color: #4338ca; color: #ffffff; }
+        .theme-purple .dropdown-bg { background-color: #1e1642; border-color: #4338ca; color: #e0e7ff; }
+        .theme-purple .dropdown-item-hover:hover { background-color: #4338ca; }
 
-const VentaRopaSchema = new mongoose.Schema({
-    fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
-    sku: { type: String, default: '', trim: true },
-    prenda: { type: String, default: 'Artículo Escaneado', trim: true },
-    categoria: { type: String, default: 'Camisetas' },
-    talla: { type: String, default: 'M' },
-    cantidad: { type: Number, default: 1 },
-    precioCompra: { type: Number, default: 0 },
-    precioVenta: { type: Number, default: 0 },
-    gastosEnvio: { type: Number, default: 0 }, 
-    canalVenta: { type: String, enum: ['Tienda Física', 'Vinted', 'Wallapop', 'Web'], default: 'Tienda Física' }, 
-    rating: { type: Number, default: 0, min: 0, max: 5 },
-    estado: { type: String, enum: ['Vendido', 'No Vendido', 'Devuelto'], default: 'No Vendido' },
-    comentariosProducto: { type: String, default: '', trim: true },
-    tienda: { type: mongoose.Schema.Types.ObjectId, ref: 'Tienda', required: true }
-});
-const VentaRopa = mongoose.models.VentaRopa || mongoose.model('VentaRopa', VentaRopaSchema);
+        .drag-over { border: 2px dashed #3b82f6 !important; background-color: rgba(59, 130, 246, 0.1) !important; }
+        .modo-edicion { border-color: #3b82f6 !important; box-shadow: 0 0 20px rgba(59, 130, 246, 0.4) !important; }
 
-const LogAuditoriaSchema = new mongoose.Schema({
-    fechaHora: { type: Date, default: Date.now },
-    usuario: { type: String, required: true },
-    accion: { type: String, required: true }
-});
-const LogAuditoria = mongoose.models.LogAuditoria || mongoose.model('LogAuditoria', LogAuditoriaSchema);
+        @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
+        .ticker-content { display: flex; white-space: nowrap; animation: ticker 32s linear infinite; }
+        .ticker-content:hover { animation-play-state: paused; }
 
-const ADMIN_WHITELIST = ['dannymedinacoronel@gmail.com', 'juliamugo2001@gmail.com'];
-
-app.use(express.json());
-
-const mongoStoreBuilder = MongoStore.create ? MongoStore : MongoStore.default;
-app.use(session({
-    secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
-    resave: false,
-    saveUninitialized: false,
-    store: mongoStoreBuilder.create({ mongoUrl: MONGO_URI_FINAL, collectionName: 'sesiones_activas', ttl: 14 * 24 * 60 * 60 }),
-    cookie: { secure: true, sameSite: 'lax', maxAge: 14 * 24 * 60 * 60 * 1000 }
-}));
-
-app.use(express.static(path.join(__dirname, 'public')));
-
-function exigeAdmin(req, res, next) {
-    if (req.session && req.session.esAdmin) return next();
-    return res.status(403).json({ error: 'No autorizado.' });
-}
-
-async function registrarLog(usuario, accion) {
-    try {
-        const nuevoLog = new LogAuditoria({ usuario, accion });
-        await nuevoLog.save();
-    } catch (e) { console.error("Error al guardar log:", e); }
-}
-
-// --- Rutas de Tiendas ---
-
-app.get('/api/tiendas', exigeAdmin, async (req, res) => {
-    try {
-        const tiendas = await Tienda.find().sort({ nombre: 1 }).lean();
-        res.json({ tiendas });
-    } catch (e) {
-        res.status(500).json({ error: 'Fallo al recuperar tiendas.' });
-    }
-});
-
-app.post('/api/tiendas', exigeAdmin, async (req, res) => {
-    try {
-        const nombreLimpio = req.body.nombre ? req.body.nombre.trim() : "";
-        if (!nombreLimpio) return res.status(400).json({ error: 'El nombre es obligatorio.' });
-
-        const nuevaTienda = new Tienda({ nombre: nombreLimpio });
-        await nuevaTienda.save();
-        await registrarLog(req.session.email, `Creó la tienda en MongoDB: ${nuevaTienda.nombre}`);
-        res.json({ status: 'success', tienda: nuevaTienda });
-    } catch (e) {
-        res.status(400).json({ error: 'La tienda ya existe o hay un error de validación.' });
-    }
-});
-
-// NUEVA RUTA INTEGRADA: BAJA SEGURA DE TIENDA CON REASIGNACIÓN EN CASCADA
-app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        // 1. Buscamos u obtenemos el nodo comodín por defecto "Sin definir"
-        let tiendaDefecto = await Tienda.findOne({ nombre: 'Sin definir' });
-        if (!tiendaDefecto) {
-            tiendaDefecto = new Tienda({ nombre: 'Sin definir' });
-            await tiendaDefecto.save();
+        @keyframes fireGlow {
+            0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.3); border-color: #f59e0b; }
+            50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.6); border-color: #ef4444; }
         }
+        .combo-fire-active { animation: fireGlow 0.8s infinite ease-in-out !important; }
 
-        // Evitamos que borres la tienda base por error
-        if (id === tiendaDefecto._id.toString()) {
-            return res.status(400).json({ error: 'No se permite la remoción de la tienda base del sistema.' });
+        .ticker-alert-mode { background-color: #7f1d1d !important; color: #fee2e2 !important; font-weight: 900; animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.85; } }
+
+        @keyframes pulseBorder {
+            0%, 100% { border-color: rgba(245, 158, 11, 0.2); }
+            50% { border-color: rgba(245, 158, 11, 0.8); box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); }
         }
+        .alerta-stock-critico { animation: pulseBorder 2s infinite ease-in-out !important; }
 
-        const tiendaPorBorrar = await Tienda.findById(id);
-        if (!tiendaPorBorrar) return res.status(404).json({ error: 'La tienda no existe.' });
-
-        // 2. Mover de forma masiva los productos enlazados a "Sin definir" antes de la purga
-        await VentaRopa.updateMany({ tienda: id }, { tienda: tiendaDefecto._id });
-
-        // 3. Eliminación limpia de la colección
-        await Tienda.findByIdAndDelete(id);
-
-        await registrarLog(req.session.email, `Eliminó la tienda "${tiendaPorBorrar.nombre}". Productos reasignados a "Sin definir"`);
-        return res.sendStatus(200);
-    } catch (err) {
-        console.error("Error al borrar tienda:", err);
-        return res.status(500).json({ error: 'Fallo crítico al purgar la tienda.' });
-    }
-});
-
-// --- Rutas de Auth ---
-
-app.get('/api/auth/verificar', (req, res) => {
-    if (req.session && req.session.esAdmin) return res.json({ autenticado: true, usuario: req.session.email });
-    return res.json({ autenticado: false });
-});
-
-app.post('/api/auth/google', async (req, res) => {
-    const { token } = req.body;
-    try {
-        const ticket = await client.verifyIdToken({ idToken: token, audience: process.env.GOOGLE_CLIENT_ID });
-        const payload = ticket.getPayload();
-        const emailUsuario = payload['email'].toLowerCase().trim();
-        if (ADMIN_WHITELIST.includes(emailUsuario)) {
-            req.session.esAdmin = true;
-            req.session.email = emailUsuario;
-            await registrarLog(emailUsuario, "Inició sesión en el sistema core");
-            return res.json({ status: 'success', usuario: emailUsuario });
-        }
-        return res.status(401).json({ error: 'Email no autorizado.' });
-    } catch (error) { return res.status(400).json({ error: 'Token inválido.' }); }
-});
-
-// --- Rutas de Ventas / Inventario ---
-
-app.get('/api/ventas', exigeAdmin, async (req, res) => {
-    try {
-        const ventasRaw = await VentaRopa.find().populate('tienda').sort({ _id: -1 }).lean();
-        const logs = await LogAuditoria.find().sort({ _id: -1 }).limit(50).lean(); 
+        #reader { border: none !important; width: 100% !important; max-width: 320px; margin: 0 auto; min-height: 320px; }
+        #reader__scan_region video { object-fit: cover !important; width: 100% !important; height: 100% !important; border-radius: 1.5rem; }
+        #reader button, #reader img { display: none !important; }
         
-        let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0;
+        .star-rating-btn { cursor: pointer; transition: transform 0.15s ease; }
+        .star-rating-btn:hover { transform: scale(1.3); }
         
-        const ventas = ventasRaw.map(v => {
-            const proveedorNombre = v.tienda ? v.tienda.nombre : 'Sin definir';
+        .kanban-card { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease; backface-visibility: hidden; }
+        .dragging { opacity: 0.25 !important; border-color: #3b82f6 !important; }
+
+        #particles-js { position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; pointer-events: all; }
+        #wrapper-core { position: relative; z-index: 10; }
+        .group:hover .group-hover\:block { display: block; }
+    </style>
+</head>
+<body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-24 transition-all duration-300">
+
+    <div id="particles-js"></div>
+
+    <div id="wrapper-core">
+        <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4 bg-slate-950/90 backdrop-blur-md">
+            <div class="bg-slate-900/80 p-8 rounded-3xl shadow-2xl text-center border border-slate-800 max-w-sm w-full backdrop-blur-md">
+                <h1 class="text-4xl font-black mb-1 uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-pink-500">Seychelles</h1>
+                <p class="text-[10px] text-slate-500 mb-8 font-mono tracking-widest">FINANCIAL CONTROL SYSTEM</p>
+                <div class="flex justify-center">
+                    <div id="g_id_onload" data-client_id="463908353578-o70ia5lgf0c7fcce0utp8qqlqnc41iuo.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
+                    <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_blue"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="panel-control" class="hidden max-w-7xl mx-auto px-4 py-6">
+            <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-6">
+                <div class="flex items-center gap-4">
+                    <div>
+                        <h1 class="text-3xl font-black uppercase tracking-tight bg-gradient-to-r from-current to-blue-400 bg-clip-text text-transparent">Seychelles Shop</h1>
+                        <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
+                    </div>
+                    <div id="combo-badge" class="hidden bg-amber-500 text-slate-950 font-black px-3 py-1 rounded-xl text-xs uppercase tracking-wider animate-bounce shadow-md">
+                        💥 Combo x<span id="combo-count">0</span>
+                    </div>
+                </div>
+                
+                <div class="flex flex-wrap items-center justify-center lg:justify-end gap-2.5 w-full lg:w-auto">
+                    <div class="relative w-full sm:w-60 flex items-center gap-2">
+                        <div class="relative flex-1">
+                            <form id="form-escaner-pistola" autocomplete="off">
+                                <input type="text" id="input-pistola" oninput="filtrarProductosMenu(this.value)" placeholder="🔍 Buscar SKU o prenda..." class="w-full bg-black/20 border border-current/20 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40 transition-all">
+                            </form>
+                            <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-80 dropdown-bg border rounded-2xl shadow-2xl z-[200] max-h-60 overflow-y-auto p-2 text-xs"></div>
+                        </div>
+                        <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md flex-shrink-0 transition-transform active:scale-95">
+                            📷 Cámara
+                        </button>
+                    </div>
+
+                    <button id="btn-mute-volumen" onclick="toggleMuteVolumenGlobal()" class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md transition-colors" title="Quitar/Poner Volumen">
+                        🔊 <span id="txt-mute-volumen">Sonido</span>
+                    </button>
+
+                    <div class="relative group">
+                        <button class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md tracking-wide">
+                            🎨 Temas <span class="text-[9px] opacity-60">▼</span>
+                        </button>
+                        <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-32 dropdown-bg border rounded-xl shadow-2xl z-[150] p-1 space-y-0.5 animate-fadeIn">
+                            <button onclick="setTheme('dark')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌌 Oscuro</button>
+                            <button onclick="setTheme('pink')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌸 Rosa</button>
+                            <button onclick="setTheme('light')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">☀️ Claro</button>
+                            <button onclick="setTheme('emerald')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌲 Verde</button>
+                            <button onclick="setTheme('purple')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🔮 Morado</button>
+                        </div>
+                    </div>
+
+                    <button onclick="forceRefreshDataManual()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
+                        🔄 <span class="hidden sm:inline">Refrescar</span>
+                    </button>
+                    <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600/40 hover:bg-purple-700 border border-purple-500/30 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">💾 Backup</button>
+                    <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">📊 Excel</button>
+                    <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
+                </div>
+            </header>
+
+            <nav class="flex gap-2 p-1.5 card-bg border rounded-2xl mb-6 text-xs max-w-md shadow-inner">
+                <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white shadow">📦 Panel General</button>
+                <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📊 Analítica</button>
+                <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📜 Auditoría</button>
+            </nav>
+
+            <div id="barra-filtros-generales" class="card-bg border p-3.5 rounded-2xl mb-6 flex flex-wrap gap-3 items-center text-xs">
+                <span class="font-bold uppercase tracking-wider opacity-60 text-[10px]">🎯 Filtros rápidos:</span>
+                <select id="filtro-categoria" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2.5 py-1.5 focus:outline-none">
+                    <option value="TODOS">👕 Todas las categorías</option>
+                    <option value="Camisetas">Camisetas</option><option value="Sudaderas">Sudaderas</option><option value="Pantalones">Pantalones</option><option value="Vestidos">Vestidos</option><option value="Accesorios">Accesorios</option>
+                </select>
+                <select id="filtro-talla" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2.5 py-1.5 focus:outline-none">
+                    <option value="TODOS">📐 Todas las tallas</option>
+                    <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                </select>
+                <select id="filtro-canal" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2.5 py-1.5 focus:outline-none">
+                    <option value="TODOS">🌐 Todos los canales</option>
+                    <option value="Tienda Física">🏬 Tienda Física</option><option value="Vinted">👗 Vinted</option><option value="Wallapop">🤝 Wallapop</option><option value="Web">🌐 Web</option>
+                </select>
+                <button onclick="limpiarFiltrosAvanzados()" class="opacity-50 hover:opacity-100 underline ml-auto text-[11px] font-medium">Restablecer</button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="kpi-container-grid">
+                <div class="bg-gradient-to-br from-blue-600 to-cyan-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Facturación Bruta</p>
+                    <p class="text-3xl font-black mt-1" id="kpi-ingresos">0.00 €</p>
+                </div>
+                <div class="bg-gradient-to-br from-pink-600 to-purple-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Ganancia Neta Limpia</p>
+                    <p class="text-3xl font-black mt-1" id="kpi-beneficio">0.00 €</p>
+                </div>
+                <div class="bg-gradient-to-br from-amber-600 to-orange-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Inversión Stock + Envío</p>
+                    <p class="text-3xl font-black mt-1" id="kpi-inversion">0.00 €</p>
+                </div>
+                <div class="bg-gradient-to-br from-purple-600 to-indigo-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Prendas Vendidas</p>
+                    <p class="text-3xl font-black mt-1" id="kpi-prendas">0</p>
+                </div>
+            </div>
+
+            <div id="sec-inventario" class="seccion-app grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+                <div class="flex flex-col gap-6 lg:col-span-1">
+                    <div id="form-container" class="card-bg border p-5 rounded-3xl shadow-xl transition-all">
+                        <div class="flex justify-between items-center mb-3">
+                            <h2 id="form-title" class="text-sm font-black uppercase tracking-wide text-indigo-400">Ficha Avanzada</h2>
+                            <button type="button" onclick="autocompletarNombreLocalRapido()" class="text-[9px] bg-slate-800 text-white px-2 py-1 rounded-lg font-bold uppercase hover:bg-slate-700 transition-colors">✨ Auto</button>
+                        </div>
+                        <form id="form-venta" class="space-y-3">
+                            <input type="hidden" id="edit-id" value="">
+                            
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Código SKU</label>
+                                    <input type="text" id="sku" placeholder="SKU" class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Unidades Stock</label>
+                                    <input type="number" id="cantidad" value="1" min="1" class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:border-blue-500">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Modelo / Descripción</label>
+                                <input type="text" id="prenda" required class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Categoría</label>
+                                    <select id="categoria" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
+                                        <option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Talla</label>
+                                    <select id="talla" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
+                                        <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Coste Compra (€)</label>
+                                    <input type="number" id="precioCompra" required step="0.01" oninput="calcularMargenComercialAlVuelo()" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Precio Venta (€)</label>
+                                    <input type="number" id="precioVenta" required step="0.01" oninput="calcularMargenComercialAlVuelo()" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none focus:border-blue-500">
+                                </div>
+                            </div>
+
+                            <div class="text-[10px] font-mono flex justify-between bg-black/10 px-3 py-1.5 rounded-lg border border-current/5">
+                                <span class="opacity-60">Margen neto:</span>
+                                <span id="txt-margen-calculado" class="font-bold text-slate-400">0.00%</span>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-2">
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Tienda / Origen de Prenda</label>
+                                    <div class="flex gap-1.5">
+                                        <select id="proveedor" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none flex-1 dropdown-bg">
+                                            <option value="Sin definir">Selecciona una tienda o crea una...</option>
+                                        </select>
+                                        <button type="button" onclick="crearNuevaTiendaEnBaseDatos()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 rounded-xl text-sm font-black transition-transform active:scale-95 shadow" title="Crear nueva tienda">+</button>
+                                        <button type="button" onclick="eliminarTiendaSeleccionadaCloud()" class="bg-rose-600/10 hover:bg-rose-600 border border-rose-500/20 text-rose-500 hover:text-white px-2.5 rounded-xl text-xs font-black transition-all shadow" title="Eliminar tienda seleccionada">🗑️</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 gap-2">
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Canal Comercial</label>
+                                    <select id="canalVenta" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
+                                        <option value="Vinted" selected>👗 Vinted</option>
+                                        <option value="Tienda Física">🏬 Tienda</option>
+                                        <option value="Wallapop">🤝 Wallapop</option>
+                                        <option value="Web">🌐 Web</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Comentarios del Producto</label>
+                                <textarea id="comentariosProducto" rows="2" placeholder="Detalles, estado, imperfecciones..." class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none resize-none focus:border-blue-500"></textarea>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Envío (€)</label>
+                                    <input type="number" id="gastosEnvio" step="0.01" value="0" class="input-bg border w-full rounded-xl p-2 text-xs font-mono focus:outline-none focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Valoración Inicial</label>
+                                    <input type="hidden" id="rating" value="0">
+                                    <div class="flex items-center gap-1.5 bg-black/10 p-1 rounded-xl border border-current/10 justify-center h-[34px] text-base">
+                                        <span onclick="setFormRating(1)" id="star-1" class="star-rating-btn text-slate-500">☆</span>
+                                        <span onclick="setFormRating(2)" id="star-2" class="star-rating-btn text-slate-500">☆</span>
+                                        <span onclick="setFormRating(3)" id="star-3" class="star-rating-btn text-slate-500">☆</span>
+                                        <span onclick="setFormRating(4)" id="star-4" class="star-rating-btn text-slate-500">☆</span>
+                                        <span onclick="setFormRating(5)" id="star-5" class="star-rating-btn text-slate-500">☆</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" id="btn-submit" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs py-3 rounded-xl shadow-md uppercase tracking-widest transition-all active:scale-[0.98]">Registrar Artículo</button>
+                            <button type="button" id="btn-cancel" onclick="cancelEdit()" class="hidden w-full text-center text-[10px] uppercase opacity-50 py-0.5 hover:underline">Cancelar Cambios</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[520px] transition-all">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xs font-black text-amber-500 uppercase tracking-wider flex items-center gap-1.5">📦 STOCK DISPONIBLE <span id="badge-stock" class="bg-amber-500/10 text-amber-400 font-mono px-2 py-0.5 rounded-lg text-[10px]">0</span></h3>
+                            <button onclick="alternarSeleccionColumna('No Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2.5 py-1 rounded-xl uppercase font-bold opacity-70 transition-colors">Marcar Todo</button>
+                        </div>
+                        <div id="col-no-vendido" class="flex-1 space-y-3 p-1 min-h-[400px] overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
+                    </div>
+                    
+                    <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[520px] transition-all">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xs font-black text-emerald-500 uppercase tracking-wider flex items-center gap-1.5">💰 ARTÍCULOS VENDIDOS <span id="badge-vendido" class="bg-emerald-500/10 text-emerald-400 font-mono px-2 py-0.5 rounded-lg text-[10px]">0</span></h3>
+                            <button onclick="alternarSeleccionColumna('Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2.5 py-1 rounded-xl uppercase font-bold opacity-70 transition-colors">Marcar Todo</button>
+                        </div>
+                        <div id="col-vendido" class="flex-1 space-y-3 p-1 min-h-[400px] overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="sec-analitica" class="seccion-app hidden flex flex-col gap-6 mb-8">
+                <div class="card-bg border p-5 rounded-3xl shadow-xl">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <h3 class="text-xs font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">🎛️ Centro de Filtro Analítico Global</h3>
+                        <button onclick="limpiarFiltrosAnalitica()" class="text-[10px] opacity-60 hover:opacity-100 underline font-mono">Restablecer Todo</button>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Filtrar por Tienda</label>
+                            <select id="an-filtro-tienda" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg"></select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Canal Comercial</label>
+                            <select id="an-filtro-canal" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none">
+                                <option value="TODOS">🌐 Todos</option>
+                                <option value="Vinted">👗 Vinted</option>
+                                <option value="Tienda Física">🏬 Tienda</option>
+                                <option value="Wallapop">🤝 Wallapop</option>
+                                <option value="Web">🌐 Web</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Categoría</label>
+                            <select id="an-filtro-categoria" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none">
+                                <option value="TODOS">👕 Todas</option>
+                                <option value="Camisetas">Camisetas</option>
+                                <option value="Sudaderas">Sudaderas</option>
+                                <option value="Pantalones">Pantalones</option>
+                                <option value="Vestidos">Vestidos</option>
+                                <option value="Accesorios">Accesorios</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Talla</label>
+                            <select id="an-filtro-talla" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none">
+                                <option value="TODOS">📐 Todas</option>
+                                <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Mín (€)</label>
+                            <input type="number" id="an-filtro-precio-min" placeholder="0.00" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Máx (€)</label>
+                            <input type="number" id="an-filtro-precio-max" placeholder="Max" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+                        <h3 class="text-xs font-black uppercase mb-3 tracking-wider text-blue-400">📈 Curva de Rendimiento Diario</h3>
+                        <div class="w-full h-64 relative" id="contenedor-canvas-grafica">
+                            <canvas id="graficaTendencias"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+                        <h3 class="text-xs font-black uppercase mb-3 tracking-wider text-pink-400">📊 Distribución de Ventas</h3>
+                        <div class="w-full h-64 relative flex items-center justify-center" id="contenedor-canvas-tarta">
+                            <canvas id="graficaTartaCategorias"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col justify-between">
+                        <h3 class="text-xs font-black uppercase mb-3 tracking-wider text-purple-400">🏬 Facturación por Proveedor/Tienda</h3>
+                        <div class="w-full h-64 relative flex items-center justify-center" id="contenedor-canvas-barras">
+                            <canvas id="graficaBarrasTiendas"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-bg border p-6 rounded-3xl shadow-xl w-full">
+                    <h3 class="text-xs font-black uppercase mb-1 tracking-wider text-amber-500">🔥 Mapa de Calor: Densidad Horaria de Operaciones (Día vs Hora)</h3>
+                    <p class="text-[10px] opacity-60 mb-4 font-mono">Localiza de un vistazo las franjas horarias con mayor volumen de transacciones.</p>
+                    <div class="w-full h-80 relative">
+                        <canvas id="graficaMapaCalor"></canvas>
+                    </div>
+                </div>
+            </div>
             
-            const cant = parseInt(v.cantidad, 10) || 0;
-            const pCompra = parseFloat(v.precioCompra) || 0;
-            const pVenta = parseFloat(v.precioVenta) || 0;
-            const gEnvio = parseFloat(v.gastosEnvio) || 0;
+            <div id="sec-auditoria" class="seccion-app hidden grid grid-cols-1 gap-6 mb-8">
+                <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[400px]">
+                    <h3 class="text-xs font-black text-indigo-400 uppercase mb-3 tracking-wider flex justify-between">
+                        📜 AUDITORÍA DEL NÚCLEO <span>LIVE</span>
+                    </h3>
+                    <div id="contenedor-logs-auditoria" class="flex-1 overflow-y-auto space-y-2 pr-1 text-[11px] font-mono opacity-80">
+                        <div class="italic opacity-50">Sincronizando operaciones cloud...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-            inversion += (pCompra * cant);
-            gastosTotalesEnvio += (gEnvio * cant);
+        <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-3xl w-[92%] transition-all backdrop-blur-md">
+            <div class="text-xs font-bold font-mono">💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> MARCADOS</div>
+            <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
+            <div class="flex flex-wrap items-center gap-2">
+                <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">👯 Duplicar Lote</button>
+                <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">💵 Vender Lote</button>
+                <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">📦 Mover a Stock</button>
+                <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                    <option value="">📐 Talla...</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                </select>
+                <select id="categoria-masiva" onchange="ejecutarEdicionMasivaPropiedad('categoria', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                    <option value="">👕 Categoría...</option><option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
+                </select>
+                <button onclick="ejecutarEliminacionMasiva()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">🗑️ Eliminar</button>
+                <button onclick="limpiarSeleccionMasiva()" class="text-[10px] underline opacity-50 hover:opacity-100 px-1">Limpiar</button>
+            </div>
+        </div>
 
-            if (v.estado === 'Vendido') {
-                let comisionPlataforma = 0;
-                if (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') {
-                    comisionPlataforma = (pVenta * 0.05); 
-                }
-                ingresos += ((pVenta - comisionPlataforma) * cant);
-                prendasVendidas += cant;
+        <div id="modal-qr" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div class="bg-white text-slate-900 p-6 rounded-2xl shadow-2xl border max-w-xs w-full text-center flex flex-col items-center">
+                <h4 class="text-slate-500 uppercase font-mono text-[10px] tracking-widest mb-1">Seychelles Shop</h4>
+                <h3 id="print-prenda" class="font-black text-sm uppercase tracking-tight mb-4">Modelo Prenda</h3>
+                <div id="canvas-generador-qr" class="p-2 border rounded-xl bg-slate-100 break-all p-3 font-mono text-xs select-all">ID DE ESCANEO ACTIVO</div>
+                <p id="print-sku" class="font-mono text-xs text-slate-400 mb-1">SKU-CODE</p>
+                <p id="print-precio" class="text-xl font-black text-slate-900 font-mono mb-6">0.00 €</p>
+                <div class="flex gap-2 w-full">
+                    <button onclick="document.getElementById('modal-qr').classList.add('hidden')" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 rounded-xl text-xs uppercase transition-colors">Cerrar</button>
+                    <button onclick="window.print()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs uppercase transition-colors">Imprimir</button>
+                </div>
+            </div>
+        </div>
+
+        <footer id="ticker-bar" class="hidden fixed bottom-0 left-0 w-full bg-black h-10 flex items-center z-50 text-[10px] font-mono border-t border-white/5 shadow-2xl transition-colors duration-300">
+            <div id="ticker-header-badge" class="bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none">WALL•ST•SEYCHELLES</div>
+            <div class="flex-1 overflow-hidden flex">
+                <div class="ticker-content flex items-center gap-12" id="ticker-content"></div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        const BACKEND_URL = '';
+        let BASE_DATOS = [];
+        let LISTA_TIENDAS_GLOBAL = [];
+        let INSTANCIA_CHARTS = null;
+        let INSTANCIA_TARTA = null;
+        let INSTANCIA_BARRAS = null;
+        let INSTANCIA_MAPA_CALOR = null;
+        let OBJETO_ESCANER_CAMARA = null;
+        let HISTORIAL_TIMESTAMPS_OPERACIONES = [];
+        let LECTOR_BLOQUEADO_POR_CAPTURA = false;
+        let ITEMS_SELECCIONADOS_MASIVOS = [];
+        let SOUND_MUTED_GLOBAL = false;
+
+        // 🏬 LÓGICA DE TIENDAS DESDE MONGODB
+        async function refrescarYListarTiendasCloud() {
+            const selectForm = document.getElementById('proveedor');
+            const selectFiltro = document.getElementById('an-filtro-tienda');
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/tiendas`, { credentials: 'include' });
+                if (!res.ok) throw new Error("Error leyendo backend");
+                const data = await res.json();
+                LISTA_TIENDAS_GLOBAL = data.tiendas || [];
+                
+                selectForm.innerHTML = '<option value="Sin definir">Selecciona una tienda o crea una...</option>';
+                selectFiltro.innerHTML = '<option value="TODOS">🏬 Todas las tiendas</option>';
+
+                LISTA_TIENDAS_GLOBAL.forEach(t => {
+                    const opt1 = document.createElement('option');
+                    opt1.value = t.nombre; opt1.textContent = `🏬 ${t.nombre}`;
+                    selectForm.appendChild(opt1);
+
+                    const opt2 = document.createElement('option');
+                    opt2.value = t.nombre; opt2.textContent = t.nombre;
+                    selectFiltro.appendChild(opt2);
+                });
+            } catch (err) {
+                console.error("Fallo de red cloud, cargando fallback...", err);
             }
-
-            return {
-                ...v,
-                proveedor: proveedorNombre 
-            };
-        });
-
-        const beneficioNeto = ingresos - inversion - gastosTotalesEnvio;
-
-        return res.json({ 
-            resumen: { ingresos, beneficio: beneficioNeto, inversion: inversion + gastosTotalesEnvio, prendasVendidas }, 
-            ventas,
-            logs 
-        });
-    } catch (error) { return res.status(500).json({ error: 'Fallo analíticas.' }); }
-});
-
-app.post('/api/ventas', exigeAdmin, async (req, res) => {
-    try {
-        const { proveedor, ...datosVenta } = req.body;
-        
-        let tiendaDoc = await Tienda.findOne({ nombre: proveedor });
-        if (!tiendaDoc) {
-            tiendaDoc = await Tienda.findOne({ nombre: 'Sin definir' }) || await new Tienda({ nombre: 'Sin definir' }).save();
         }
 
-        const nuevaVenta = new VentaRopa({ 
-            ...datosVenta, 
-            tienda: tiendaDoc._id 
-        });
-        await nuevaVenta.save(); 
-        await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`);
-        return res.json({ status: "success", venta: nuevaVenta });
-    } catch (error) { 
-        return res.status(500).json({ error: 'Error al registrar artículo.' }); 
-    }
-});
-
-app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { proveedor, ...datosVenta } = req.body;
-
-        let tiendaDoc = await Tienda.findOne({ nombre: proveedor });
-        if (!tiendaDoc) {
-            tiendaDoc = await Tienda.findOne({ nombre: 'Sin definir' }) || new Tienda({ nombre: 'Sin definir' });
-            if (!tiendaDoc._id) await tiendaDoc.save();
+        async function crearNuevaTiendaEnBaseDatos() {
+            const nombreTienda = prompt("Nombre del nuevo proveedor/tienda:");
+            if (!nombreTienda || nombreTienda.trim() === "") return;
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/tiendas`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ nombre: nombreTienda.trim() })
+                });
+                if (res.ok) {
+                    cantarPorVoz("Tienda guardada.");
+                    await refrescarYListarTiendasCloud();
+                    document.getElementById('proveedor').value = nombreTienda.trim();
+                } else {
+                    const errData = await res.json(); alert(errData.error || "Error al inyectar tienda.");
+                }
+            } catch (err) { alert("Error crítico de comunicación."); }
         }
 
-        const ventaActualizada = await VentaRopa.findByIdAndUpdate(
-            id, 
-            { ...datosVenta, tienda: tiendaDoc._id }, 
-            { new: true }
-        );
+        async function eliminarTiendaSeleccionadaCloud() {
+            const selectTienda = document.getElementById('proveedor');
+            const nombreSeleccionado = selectTienda.value;
+            if (nombreSeleccionado === "Sin definir") {
+                return alert("Por favor, selecciona una tienda válida del desplegable para poder eliminarla.");
+            }
+            
+            const tiendaObjeto = LISTA_TIENDAS_GLOBAL.find(t => t.nombre === nombreSeleccionado);
+            if (!tiendaObjeto) return;
 
-        await registrarLog(req.session.email, `Modificó datos de la prenda ID: ${id} (${ventaActualizada.prenda})`);
-        return res.json({ status: "success", venta: ventaActualizada });
-    } catch (error) {
-        return res.status(500).json({ error: 'Error al actualizar registro.' });
-    }
-});
+            if (confirm(`¿Seguro que deseas eliminar permanentemente la tienda "${nombreSeleccionado}"?\nLos artículos asignados a ella pasarán a estar "Sin definir" de forma automática.`)) {
+                try {
+                    const res = await fetch(`${BACKEND_URL}/api/tiendas/${tiendaObjeto._id}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+                    if (res.ok) {
+                        cantarPorVoz("Tienda eliminada.");
+                        await refrescarYListarTiendasCloud();
+                        await reloadCoreData();
+                    } else {
+                        alert("No se pudo eliminar el elemento.");
+                    }
+                } catch(e) { alert("Error al procesar la baja."); }
+            }
+        }
 
-app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { estado } = req.body;
-
-        const ventaActualizada = await VentaRopa.findByIdAndUpdate(id, { estado }, { new: true });
-        await registrarLog(req.session.email, `Cambió estado de la prenda [${ventaActualizada.prenda}] a: ${estado}`);
-        return res.json({ status: "success", venta: ventaActualizada });
-    } catch (error) {
-        return res.status(500).json({ error: 'Error en la actualización de la columna Kanban.' });
-    }
-});
-
-app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
-    try {
-        const { sku } = req.params;
-        let venta = await VentaRopa.findOne({ sku: sku });
-
-        if (!venta) {
-            const tiendaDefecto = await Tienda.findOne({ nombre: 'Sin definir' }) || await new Tienda({ nombre: 'Sin definir' }).save();
-            venta = new VentaRopa({
-                sku: sku,
-                prenda: 'Artículo Escaneado Nuevo',
-                estado: 'No Vendido',
-                tienda: tiendaDefecto._id
+        // 🗺️ MENÚ DE NAVEGACIÓN ENTRE MÓDULOS SEPARADOS
+        function navegarASeccion(idSeccion) {
+            document.querySelectorAll('.seccion-app').forEach(sec => sec.classList.add('hidden'));
+            document.getElementById(idSeccion).classList.remove('hidden');
+            
+            document.querySelectorAll('nav button').forEach(btn => {
+                btn.className = "flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100";
             });
-            await venta.save();
-            return res.json({ operacion: "Creado", venta });
-        } else {
-            const nuevoEstado = venta.estado === 'Vendido' ? 'No Vendido' : 'Vendido';
-            venta.estado = nuevoEstado;
-            await venta.save();
-            return res.json({ operacion: nuevoEstado, venta });
+            
+            const tabActivo = document.getElementById(`tab-${idSeccion}`);
+            if (tabActivo) {
+                tabActivo.className = "flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white shadow";
+            }
+            
+            if (idSeccion === 'sec-analitica' && BASE_DATOS.length > 0) {
+                setTimeout(() => { actualizarTodoElBloqueGrafico(); }, 50);
+            }
         }
-    } catch (error) {
-        return res.status(500).json({ error: 'Fallo en la llamada del decodificador del escáner.' });
-    }
-});
 
-app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const ventaEliminada = await VentaRopa.findByIdAndDelete(id);
-        if (ventaEliminada) {
-            await registrarLog(req.session.email, `Eliminó permanentemente la prenda: ${ventaEliminada.prenda}`);
+        // 🎯 MOTOR DE FILTRADO AVANZADO DE MÉTRICAS (MÓDULO ANALÍTICA)
+        function obtenerDatosFiltradosParaAnalitica() {
+            const fTienda = document.getElementById('an-filtro-tienda').value;
+            const fCanal = document.getElementById('an-filtro-canal').value;
+            const fCat = document.getElementById('an-filtro-categoria').value;
+            const fTalla = document.getElementById('an-filtro-talla').value;
+            const fMin = parseFloat(document.getElementById('an-filtro-precio-min').value) || 0;
+            const fMax = parseFloat(document.getElementById('an-filtro-precio-max').value) || Infinity;
+
+            return BASE_DATOS.filter(v => {
+                if (v.estado !== 'Vendido') return false;
+                if (fTienda !== 'TODOS' && v.proveedor !== fTienda) return false;
+                if (fCanal !== 'TODOS' && v.canalVenta !== fCanal) return false;
+                if (fCat !== 'TODOS' && v.categoria !== fCat) return false;
+                if (fTalla !== 'TODOS' && v.talla !== fTalla) return false;
+                
+                const precio = parseFloat(v.precioVenta || 0);
+                if (precio < fMin || precio > fMax) return false;
+                return true;
+            });
         }
-        return res.sendStatus(200);
-    } catch (error) {
-        return res.status(500).json({ error: 'Error al purgar elemento de la base de datos.' });
-    }
-});
 
-app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(200)); });
-app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
+        function limpiarFiltrosAnalitica() {
+            document.getElementById('an-filtro-tienda').value = 'TODOS';
+            document.getElementById('an-filtro-canal').value = 'TODOS';
+            document.getElementById('an-filtro-categoria').value = 'TODOS';
+            document.getElementById('an-filtro-talla').value = 'TODOS';
+            document.getElementById('an-filtro-precio-min').value = '';
+            document.getElementById('an-filtro-precio-max').value = '';
+            actualizarTodoElBloqueGrafico();
+        }
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: ${PORT}`));
+        window.allowDrop = function(e) { e.preventDefault(); const col = e.currentTarget; if(col) col.classList.add('drag-over'); };
+        window.clearDrop = function(e) { const col = e.currentTarget; if(col) col.classList.remove('drag-over'); };
+        
+        window.handleDragStart = function(e, id) { 
+            e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData("text/plain", id); 
+            if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) {
+                e.dataTransfer.setData("text/lote-items", JSON.stringify(ITEMS_SELECCIONADOS_MASIVOS));
+            } else { e.dataTransfer.setData("text/lote-items", JSON.stringify([id])); }
+            const card = document.getElementById(id);
+            if(card) { setTimeout(() => { if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) { ITEMS_SELECCIONADOS_MASIVOS.forEach(xId => { const cNode = document.getElementById(xId); if(cNode) cNode.classList.add('dragging'); }); } else { card.classList.add('dragging'); } }, 0); }
+        };
+
+        window.handleDropColumn = async function(e, newState) {
+            e.preventDefault(); window.clearDrop(e);
+            const loteRaw = e.dataTransfer.getData("text/lote-items"); if (!loteRaw) return;
+            const listaIds = JSON.parse(loteRaw);
+            
+            cantarPorVoz(newState === 'Vendido' ? `Lote Vendido` : `Lote a stock`);
+            procesarMultiplicadorCombo();
+
+            const copiasEstadosAnteriores = {};
+            listaIds.forEach(id => { const idx = BASE_DATOS.findIndex(x => x._id === id); if (idx !== -1) { copiasEstadosAnteriores[id] = BASE_DATOS[idx].estado; BASE_DATOS[idx].estado = newState; } });
+            recalcularKPIsLocalesOptimistas(); renderKanban();
+
+            try {
+                const promesas = listaIds.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: newState }) }));
+                await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
+            } catch(err) {
+                listaIds.forEach(id => { const idx = BASE_DATOS.findIndex(x => x._id === id); if (idx !== -1) BASE_DATOS[idx].estado = copiasEstadosAnteriores[id]; });
+                reloadCoreData(); alert("Fallo de red.");
+            }
+        };
+
+        function toggleMuteVolumenGlobal() {
+            SOUND_MUTED_GLOBAL = !SOUND_MUTED_GLOBAL;
+            const btn = document.getElementById('btn-mute-volumen'); const txt = document.getElementById('txt-mute-volumen');
+            if (SOUND_MUTED_GLOBAL) {
+                btn.className = "bg-rose-600/20 text-rose-400 border border-rose-500/30 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md"; txt.innerText = "Muteado";
+            } else {
+                btn.className = "bg-slate-800 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md"; txt.innerText = "Sonido"; cantarPorVoz("Sonido activo");
+            }
+        }
+
+        async function forceRefreshDataManual() { cantarPorVoz("Sincronizando."); await reloadCoreData(); }
+
+        function recalcularKPIsLocalesOptimistas() {
+            let ingresos = 0, inversion = 0, prendasVendidas = 0;
+            BASE_DATOS.forEach(v => {
+                const cant = parseInt(v.cantidad, 10) || 1; const pCompra = parseFloat(v.precioCompra) || 0; const pVenta = parseFloat(v.precioVenta) || 0; const gEnvio = parseFloat(v.gastosEnvio) || 0;
+                inversion += ((pCompra + gEnvio) * cant);
+                if (v.estado === 'Vendido') { let comision = (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') ? (pVenta * 0.05) : 0; ingresos += ((pVenta - comision) * cant); prendasVendidas += cant; }
+            });
+            document.getElementById('kpi-ingresos').innerText = `${ingresos.toFixed(2)} €`;
+            document.getElementById('kpi-beneficio').innerText = `${(ingresos - inversion).toFixed(2)} €`;
+            document.getElementById('kpi-inversion').innerText = `${inversion.toFixed(2)} €`;
+            document.getElementById('kpi-prendas').innerText = prendasVendidas;
+        }
+
+        function calcularMargenComercialAlVuelo() {
+            const compra = parseFloat(document.getElementById('precioCompra').value) || 0;
+            const venta = parseFloat(document.getElementById('precioVenta').value) || 0;
+            const indicator = document.getElementById('txt-margen-calculado');
+            if (compra <= 0 || venta <= 0) { indicator.innerText = "0.00%"; indicator.className = "font-bold text-slate-400"; return; }
+            const porcentaje = ((venta - compra) / venta) * 100; indicator.innerText = `${porcentaje.toFixed(2)}%`;
+            if (porcentaje <= 0) indicator.className = "font-bold text-rose-500 animate-pulse";
+            else if (porcentaje < 30) indicator.className = "font-bold text-amber-500";
+            else indicator.className = "font-bold text-emerald-400";
+        }
+
+        function aplicarFiltrosFrontLineal() {
+            const cat = document.getElementById('filtro-categoria').value;
+            const talla = document.getElementById('filtro-talla').value;
+            const canal = document.getElementById('filtro-canal').value;
+            BASE_DATOS.forEach(v => {
+                const card = document.getElementById(v._id); if (!card) return;
+                let cumple = true;
+                if (cat !== 'TODOS' && v.categoria !== cat) cumple = false;
+                if (talla !== 'TODOS' && v.talla !== talla) cumple = false;
+                if (canal !== 'TODOS' && v.canalVenta !== canal) cumple = false;
+                if (cumple) card.classList.remove('hidden'); else card.classList.add('hidden');
+            });
+        }
+
+        function limpiarFiltrosAvanzados() {
+            document.getElementById('filtro-categoria').value = 'TODOS';
+            document.getElementById('filtro-talla').value = 'TODOS';
+            document.getElementById('filtro-canal').value = 'TODOS';
+            aplicarFiltrosFrontLineal();
+        }
+
+        function setTheme(theme) {
+            const body = document.getElementById('main-body'); if(!body) return;
+            body.className = `theme-${theme} min-h-screen font-sans antialiased pb-24 transition-all duration-300`;
+            localStorage.setItem('seychelles-theme-multi', theme);
+            if(BASE_DATOS.length > 0) { actualizarTodoElBloqueGrafico(); }
+        }
+
+        function exportarExcel() {
+            if (BASE_DATOS.length === 0) return alert("Sin datos.");
+            const formateado = BASE_DATOS.map(v => ({
+                Fecha: v.fecha, SKU: v.sku || 'N/A', Artículo: v.prenda, Categoría: v.categoria, Talla: v.talla,
+                'Coste (€)': parseFloat(v.precioCompra || 0).toFixed(2), 'Venta (€)': parseFloat(v.precioVenta || 0).toFixed(2), 
+                'Envío (€)': parseFloat(v.gastosEnvio || 0).toFixed(2), Canal: v.canalVenta || 'Vinted', Comentarios: v.comentariosProducto || '', Rating: v.rating || 0, TiendaOrigen: v.proveedor || 'Sin definir', Estado: v.estado
+            }));
+            const ws = XLSX.utils.json_to_sheet(formateado); const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Inventario"); XLSX.writeFile(wb, `Seychelles_Core_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+        function setFormRating(estrellasSeleccionadas) {
+            document.getElementById('rating').value = estrellasSeleccionadas;
+            for (let i = 1; i <= 5; i++) {
+                const starElement = document.getElementById(`star-${i}`);
+                if (starElement) {
+                    if (i <= estrellasSeleccionadas) { starElement.innerText = "★"; starElement.className = "star-rating-btn text-amber-400 font-bold"; }
+                    else { starElement.innerText = "☆"; starElement.className = "star-rating-btn text-slate-500"; }
+                }
+            }
+        }
+
+        // AUTO-COMPLETADO RÁPIDO
+        function autocompletarNombreLocalRapido() {
+            const cat = document.getElementById('categoria').value; const talla = document.getElementById('talla').value;
+            const singular = cat.endsWith('s') ? cat.slice(0, -1) : cat;
+            document.getElementById('prenda').value = `Nueva ${singular} - Talla ${talla}`; cantarPorVoz("Asignado.");
+        }
+
+        function descargarBackupSeguridadLocal() {
+            if (BASE_DATOS.length === 0) return alert("Sin datos.");
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(BASE_DATOS, null, 2));
+            const downloadAnchor = document.createElement('a'); downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `Backup_Seychelles_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor); downloadAnchor.click(); downloadAnchor.remove();
+        }
+
+        function cantarPorVoz(mensajeTexto) {
+            if (!SOUND_MUTED_GLOBAL && 'speechSynthesis' in window) { 
+                window.speechSynthesis.cancel(); const frase = new SpeechSynthesisUtterance(mensajeTexto); frase.lang = 'es-ES'; window.speechSynthesis.speak(frase); 
+            }
+        }
+
+        function procesarMultiplicadorCombo() {
+            const tAhora = Date.now(); HISTORIAL_TIMESTAMPS_OPERACIONES = HISTORIAL_TIMESTAMPS_OPERACIONES.filter(t => (tAhora - t) < 180000); HISTORIAL_TIMESTAMPS_OPERACIONES.push(tAhora);
+            const totalCombos = HISTORIAL_TIMESTAMPS_OPERACIONES.length; const bBadge = document.getElementById('combo-badge'); const bCards = document.querySelectorAll('#kpi-container-grid > div');
+            if (totalCombos >= 3) {
+                const cc = document.getElementById('combo-count'); if(cc) cc.innerText = totalCombos;
+                if(bBadge) bBadge.classList.remove('hidden'); bCards.forEach(card => card.classList.add('combo-fire-active'));
+            } else { if(bBadge) bBadge.classList.add('hidden'); bCards.forEach(card => card.classList.remove('combo-fire-active')); }
+        }
+
+        function ejecutarVerificacionAlertasStock() {
+            const resumenContador = {}; BASE_DATOS.filter(v => v.estado === 'No Vendido').forEach(v => { resumenContador[v.categoria] = (resumenContador[v.categoria] || 0) + (parseInt(v.cantidad) || 1); });
+            const categoriesCriticas = Object.keys(resumenContador).filter(cat => resumenContador[cat] < 2);
+            const footerBar = document.getElementById('ticker-bar'); const footerBadge = document.getElementById('ticker-header-badge');
+            if (categoriesCriticas.length > 0 && footerBar && footerBadge) { footerBar.classList.add('ticker-alert-mode'); footerBadge.innerText = `🚨 ALERTA RESERVAS: ${categoriesCriticas.join(' / ').toUpperCase()}`; }
+            else if (footerBar && footerBadge) { footerBar.classList.remove('ticker-alert-mode'); footerBadge.className = "bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none"; footerBadge.innerText = "WALL•ST•SEYCHELLES"; }
+        }
+
+        function lanzarModalImpresionEtiqueta(idElemento) {
+            const v = BASE_DATOS.find(item => item._id === idElemento); if(!v) return;
+            document.getElementById('print-prenda').innerText = v.prenda; document.getElementById('print-sku').innerText = v.sku ? `SKU: ${v.sku}` : 'GENERAL';
+            document.getElementById('print-precio').innerText = `${parseFloat(v.precioVenta || 0).toFixed(2)} €`; document.getElementById('canvas-generador-qr').innerText = v.sku || v._id;
+            document.getElementById('modal-qr').classList.remove('hidden');
+        }
+
+        async function duplicarPrendaIndividual(idItem) {
+            const original = BASE_DATOS.find(v => v._id === idItem); if (!original) return;
+            try {
+                await fetch(`${BACKEND_URL}/api/ventas`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                    body: JSON.stringify({
+                        sku: original.sku ? `${original.sku}-CLON` : '', prenda: `${original.prenda} (Copia)`,
+                        categoria: original.categoria, talla: original.talla, cantidad: original.cantidad || 1,
+                        precioCompra: original.precioCompra || 0, precioVenta: original.precioVenta || 0,
+                        gastosEnvio: original.gastosEnvio || 0, canalVenta: original.canalVenta || 'Vinted', rating: original.rating || 0, estado: 'No Vendido',
+                        comentariosProducto: original.comentariosProducto || '', proveedor: original.proveedor || 'Sin definir'
+                    })
+                });
+                cantarPorVoz("Duplicado."); await reloadCoreData();
+            } catch(e) {}
+        }
+
+        async function ejecutarDuplicadoMasivo() {
+            if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
+            const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => {
+                const original = BASE_DATOS.find(v => v._id === id); if (!original) return Promise.resolve();
+                return fetch(`${BACKEND_URL}/api/ventas`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                    body: JSON.stringify({
+                        sku: original.sku ? `${original.sku}-CLON` : '', prenda: `${original.prenda} (Copia)`,
+                        categoria: original.categoria, talla: original.talla, cantidad: original.cantidad || 1,
+                        precioCompra: original.precioCompra || 0, precioVenta: original.precioVenta || 0,
+                        gastosEnvio: original.gastosEnvio || 0, canalVenta: original.canalVenta || 'Vinted', rating: original.rating || 0, estado: 'No Vendido',
+                        comentariosProducto: original.comentariosProducto || '', proveedor: original.proveedor || 'Sin definir'
+                    })
+                });
+            });
+            await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
+        }
+
+        function manejarSeleccionCheckMasiva(idItem, casillaElemento) {
+            if (casillaElemento.checked) { if(!ITEMS_SELECCIONADOS_MASIVOS.includes(idItem)) ITEMS_SELECCIONADOS_MASIVOS.push(idItem); }
+            else { ITEMS_SELECCIONADOS_MASIVOS = ITEMS_SELECCIONADOS_MASIVOS.filter(id => id !== idItem); }
+            actualizarVisibilidadPanelMasivo();
+        }
+
+        function alternarSeleccionColumna(estadoColumna) {
+            const filtrados = BASE_DATOS.filter(v => v.estado === estadoColumna); const todosMarcadosYa = filtrados.every(v => ITEMS_SELECCIONADOS_MASIVOS.includes(v._id));
+            filtrados.forEach(v => {
+                const docCheck = document.getElementById(`check-${v._id}`);
+                if (todosMarcadosYa) { ITEMS_SELECCIONADOS_MASIVOS = ITEMS_SELECCIONADOS_MASIVOS.filter(id => id !== v._id); if(docCheck) docCheck.checked = false; }
+                else { if(!ITEMS_SELECCIONADOS_MASIVOS.includes(v._id)) ITEMS_SELECCIONADOS_MASIVOS.push(v._id); if(docCheck) docCheck.checked = true; }
+            });
+            actualizarVisibilidadPanelMasivo();
+        }
+
+        function actualizarVisibilidadPanelMasivo() {
+            const panel = document.getElementById('panel-masivo-flotante'); const contador = document.getElementById('contador-masivo-seleccionado');
+            if(contador) contador.innerText = ITEMS_SELECCIONADOS_MASIVOS.length;
+            if (ITEMS_SELECCIONADOS_MASIVOS.length > 0 && panel) panel.classList.remove('hidden'); else if(panel) panel.classList.add('hidden');
+        }
+
+        function limpiarSeleccionMasiva() { ITEMS_SELECCIONADOS_MASIVOS = []; document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false); actualizarVisibilidadPanelMasivo(); }
+
+        async function ejecutarAccionMasivaEstado(nuevoEstado) {
+            if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
+            const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: nuevoEstado }) }));
+            await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
+        }
+
+        async function ejecutarEdicionMasivaPropiedad(campo, valor) {
+            if (ITEMS_SELECCIONADOS_MASIVOS.length === 0 || !valor) return;
+            const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => {
+                const itemOriginal = BASE_DATOS.find(v => v._id === id); if (!itemOriginal) return Promise.resolve();
+                const payload = { sku: itemOriginal.sku, prenda: itemOriginal.prenda, precioCompra: itemOriginal.precioCompra || 0, precioVenta: itemOriginal.precioVenta || 0, cantidad: itemOriginal.cantidad || 1, categoria: itemOriginal.categoria, talla: itemOriginal.talla, estado: itemOriginal.estado, gastosEnvio: itemOriginal.gastosEnvio || 0, canalVenta: itemOriginal.canalVenta || 'Vinted', rating: itemOriginal.rating || 0, comentariosProducto: itemOriginal.comentariosProducto || '', proveedor: itemOriginal.proveedor || 'Sin definir' };
+                payload[campo] = valor; return fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
+            });
+            await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
+        }
+
+        async function ejecutarEliminacionMasiva() {
+            if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
+            if (confirm("¿Borrar permanentemente el lote seleccionado?")) {
+                const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }));
+                await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
+            }
+        }
+
+        function filtrarProductosMenu(valorQuery) {
+            const dropdown = document.getElementById('dropdown-buscador'); const query = valorQuery.toLowerCase().trim();
+            if (!query && dropdown) { dropdown.innerHTML = ''; dropdown.classList.add('hidden'); return; }
+            const coincidencias = BASE_DATOS.filter(v => v.prenda.toLowerCase().includes(query) || (v.sku && v.sku.toLowerCase().includes(query)));
+            if (coincidencias.length === 0 && dropdown) { dropdown.innerHTML = `<div class="p-2 opacity-50 italic text-[10px]">Sin resultados.</div>`; dropdown.classList.remove('hidden'); return; }
+            let htmlItems = '';
+            coincidencias.slice(0, 8).forEach(item => {
+                const esVendido = item.estado === 'Vendido'; 
+                const badgeEstado = esVendido ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.5 rounded text-[8px] font-bold">💰 VENDIDO</span>` : `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-bold">📦 STOCK</span>`;
+                htmlItems += `
+                    <div class="dropdown-item-hover p-2 rounded-xl flex justify-between items-center gap-2 cursor-pointer transition-all border-b border-current/5 last:border-b-0">
+                        <div class="min-w-0 flex-1">
+                            <p class="font-bold uppercase truncate text-[11px] text-current">${item.prenda} <span class="opacity-60 font-mono text-[9px]">(${item.talla})</span></p>
+                            <p class="text-[9px] font-mono opacity-40 truncate">${item.sku ? `🆔 ${item.sku}` : 'Sin SKU'} • ${parseFloat(item.precioVenta || 0).toFixed(2)}€</p>
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            ${badgeEstado}
+                            <div class="flex gap-1">
+                                <button onclick="ejecutarAccionDesplegable('${item._id}', '${esVendido ? 'No Vendido' : 'Vendido'}')" class="bg-blue-600 text-white font-bold text-[9px] px-2 py-0.5 rounded shadow-sm">${esVendido ? 'Stock' : 'Vender'}</button>
+                                <button onclick="editItem('${item._id}'); document.getElementById('dropdown-buscador').classList.add('hidden');" class="bg-current/10 hover:bg-current/20 px-1.5 py-0.5 rounded text-[9px]">✏️</button>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+            if(dropdown) { dropdown.innerHTML = htmlItems; dropdown.classList.remove('hidden'); }
+        }
+
+        async function ejecutarAccionDesplegable(id, nuevoEstado) {
+            const dbb = document.getElementById('dropdown-buscador'); if(dbb) dbb.classList.add('hidden');
+            const ip = document.getElementById('input-pistola'); if(ip) ip.value = '';
+            try {
+                const r = await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: nuevoEstado }) });
+                if(r.ok) { procesarMultiplicadorCombo(); await reloadCoreData(); }
+            } catch (err) {}
+        }
+
+        document.getElementById('form-escaner-pistola').onsubmit = async (e) => { e.preventDefault(); const ip = document.getElementById('input-pistola'); const skuInput = ip ? ip.value.trim() : ''; if(!skuInput) return; await ejecutarLogicaEscaneo(skuInput); if(ip) ip.value = ''; };
+
+        function toggleEscanerCamara() {
+            const modulo = document.getElementById('modulo-camara'); if(!modulo) return;
+            if (modulo.classList.contains('hidden')) {
+                modulo.classList.remove('hidden'); if (OBJETO_ESCANER_CAMARA) { try { OBJETO_ESCANER_CAMARA.clear(); } catch(e){} }
+                OBJETO_ESCANER_CAMARA = new Html5Qrcode("reader"); LECTOR_BLOQUEADO_POR_CAPTURA = false;
+                OBJETO_ESCANER_CAMARA.start({ facingMode: "environment" }, { fps: 30, qrbox: { width: 260, height: 260 } }, async (codigoMapeado) => {
+                    if (!LECTOR_BLOQUEADO_POR_CAPTURA) {
+                        LECTOR_BLOQUEADO_POR_CAPTURA = true; document.getElementById('camara-ping-state').className = "w-2 h-2 rounded-full bg-amber-500 animate-pulse";
+                        document.getElementById('camara-text-state').innerText = "Procesado"; document.getElementById('btn-rearmar-escaner').classList.remove('hidden');
+                        await ejecutarLogicaEscaneo(codigoMapeado);
+                    }
+                }, () => {}).catch(err => { modulo.classList.add('hidden'); });
+            } else { cerrarCamara(); }
+        }
+
+        function rearmarLectorParaSiguientePrenda() { LECTOR_BLOQUEADO_POR_CAPTURA = false; document.getElementById('camara-ping-state').className = "w-2 h-2 rounded-full bg-emerald-500 animate-ping"; document.getElementById('camara-text-state').innerText = "Lector Listo"; document.getElementById('btn-rearmar-escaner').classList.add('hidden'); }
+        function cerrarCamara() { const modulo = document.getElementById('modulo-camara'); if(modulo) modulo.classList.add('hidden'); if (OBJETO_ESCANER_CAMARA) { OBJETO_ESCANER_CAMARA.stop().then(() => { OBJETO_ESCANER_CAMARA = null; }).catch(e => {}); } }
+
+        async function ejecutarLogicaEscaneo(skuParam) {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/ventas/escanear/${skuParam}`, { method: 'PUT', credentials: 'include' });
+                if (response.ok) {
+                    const resJson = await response.json(); if(resJson.operacion === "Vendido") cantarPorVoz("Vendido");
+                    else if (resJson.operacion === "Creado") { cantarPorVoz("Indexado."); cancelEdit(); document.getElementById('sku').value = resJson.venta.sku; document.getElementById('prenda').focus(); }
+                    procesarMultiplicadorCombo(); await reloadCoreData();
+                }
+            } catch (err) {}
+        }
+
+        async function handleCredentialResponse(response) {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/auth/google`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ token: response.credential }) });
+                if (res.ok) window.location.reload();
+            } catch(e) {}
+        }
+
+        async function reloadCoreData() {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/ventas`, { credentials: 'include' }); if(!res.ok) return;
+                const data = await res.json(); BASE_DATOS = data.ventas || [];
+
+                document.getElementById('kpi-ingresos').innerText = `${(data.resumen.ingresos || 0).toFixed(2)} €`;
+                document.getElementById('kpi-beneficio').innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
+                document.getElementById('kpi-inversion').innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
+                document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
+
+                renderKanban(); updateTickerWallStreet(); ejecutarVerificacionAlertasStock(); aplicarFiltrosFrontLineal(); actualizarVisibilidadPanelMasivo();
+                
+                if (!document.getElementById('sec-analitica').classList.contains('hidden')) {
+                    actualizarTodoElBloqueGrafico();
+                }
+                
+                const contenedorLogs = document.getElementById('contenedor-logs-auditoria');
+                if (contenedorLogs && data.logs && data.logs.length > 0) {
+                    let htmlLogs = ''; data.logs.forEach(l => { const horaFormateada = new Date(l.fechaHora).toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'}); htmlLogs += `<div class="border-b border-white/5 pb-1"><span class="text-indigo-400">[${horaFormateada}]</span> <b>${l.usuario.split('@')[0]}:</b> ${l.accion}</div>`; });
+                    contenedorLogs.innerHTML = htmlLogs;
+                }
+            } catch(e) {}
+        }
+
+        // --- SISTEMA GRÁFICO CORREGIDO 100% ---
+        function actualizarTodoElBloqueGrafico() {
+            dibujarGrafica();
+            dibujarGraficaTarta();
+            dibujarGraficaBarrasTiendas();
+            dibujarMapaCalor();
+        }
+
+        function dibujarGrafica() {
+            const contenedor = document.getElementById('contenedor-canvas-grafica'); if(!contenedor) return;
+            if (INSTANCIA_CHARTS) { INSTANCIA_CHARTS.destroy(); }
+            
+            contenedor.innerHTML = '<canvas id="graficaTendencias"></canvas>'; const ctx = document.getElementById('graficaTendencias').getContext('2d');
+            const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
+            
+            const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
+            const datosAgrupados = {}; 
+            
+            datosFiltrados.forEach(v => { datosAgrupados[v.fecha] = (datosAgrupados[v.fecha] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1)); });
+            const fechas = Object.keys(datosAgrupados).sort(); const montos = fechas.map(f => datosAgrupados[f]);
+
+            const configuracionGraficas = {
+                dark: { linea: '#3b82f6', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' }, pink: { linea: '#db2777', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
+                light: { linea: '#0f172a', texto: '#475569', malla: 'rgba(0,0,0,0.05)' }, emerald: { linea: '#10b981', texto: '#e6f4ea', malla: 'rgba(255,255,255,0.05)' },
+                purple: { linea: '#a855f7', texto: '#e0e7ff', malla: 'rgba(255,255,255,0.05)' }
+            };
+            const cfg = configuracionGraficas[currentTheme] || configuracionGraficas.dark;
+
+            INSTANCIA_CHARTS = new Chart(ctx, {
+                type: 'line', data: { labels: fechas.map(f => f.split('-').reverse().slice(0,2).join('/')), datasets: [{ data: montos, borderColor: cfg.linea, borderWidth: 3, pointBackgroundColor: cfg.linea, tension: 0.2, fill: false }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: cfg.malla }, ticks: { color: cfg.texto } }, y: { grid: { color: cfg.malla }, ticks: { color: cfg.texto, callback: v => v + '€' } } } }
+            });
+        }
+
+        function dibujarGraficaTarta() {
+            const contenedor = document.getElementById('contenedor-canvas-tarta'); if(!contenedor) return;
+            if (INSTANCIA_TARTA) { INSTANCIA_TARTA.destroy(); }
+            
+            contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
+            const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
+
+            const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
+            const contadorCategorias = {};
+            datosFiltrados.forEach(v => { contadorCategorias[v.categoria] = (contadorCategorias[v.categoria] || 0) + (v.cantidad || 1); });
+
+            const etiquetas = Object.keys(contadorCategorias); const datos = etiquetas.map(cat => contadorCategorias[cat]);
+
+            const paletasColor = {
+                dark: ['#3b82f6', '#60a5fa', '#ec4899', '#10b981', '#f59e0b'], pink: ['#db2777', '#f472b6', '#fbcfe8', '#be185d', '#9d174d'],
+                light: ['#1e293b', '#475569', '#64748b', '#94a3b8', '#cbd5e1'], emerald: ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
+                purple: ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe']
+            };
+            const coloresSeleccionados = paletasColor[currentTheme] || paletasColor.dark;
+            const colorTexto = currentTheme === 'light' || currentTheme === 'pink' ? '#0f172a' : '#f1f5f9';
+
+            INSTANCIA_TARTA = new Chart(ctx, {
+                type: 'doughnut', data: { labels: etiquetas, datasets: [{ data: datos, backgroundColor: coloresSeleccionados, borderWidth: 0 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: colorTexto, font: { size: 9, family: 'monospace' } } } } }
+            });
+        }
+
+        function dibujarGraficaBarrasTiendas() {
+            const contenedor = document.getElementById('contenedor-canvas-barras'); if(!contenedor) return;
+            if (INSTANCIA_BARRAS) { INSTANCIA_BARRAS.destroy(); }
+            
+            contenedor.innerHTML = '<canvas id="graficaBarrasTiendas"></canvas>'; const ctx = document.getElementById('graficaBarrasTiendas').getContext('2d');
+            const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
+
+            const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
+            const facturacionTiendas = {};
+            
+            datosFiltrados.forEach(v => {
+                const nombreTienda = v.proveedor || 'Sin definir';
+                facturacionTiendas[nombreTienda] = (facturacionTiendas[nombreTienda] || 0) + (parseFloat(v.precioVenta || 0) * (v.cantidad || 1));
+            });
+
+            const etiquetas = Object.keys(facturacionTiendas); const datos = etiquetas.map(t => facturacionTiendas[t]);
+
+            const paletasColor = {
+                dark: '#ec4899', pink: '#db2777', light: '#475569', emerald: '#10b981', purple: '#8b5cf6'
+            };
+            const colorBarra = paletasColor[currentTheme] || paletasColor.dark;
+            const colorTexto = currentTheme === 'light' || currentTheme === 'pink' ? '#475569' : '#94a3b8';
+
+            INSTANCIA_BARRAS = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: etiquetas,
+                    datasets: [{ data: datos, backgroundColor: colorBarra, borderRadius: 6, maxBarThickness: 30 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: colorTexto, font: { size: 9 } }, grid: { display: false } },
+                        y: { ticks: { color: colorTexto, callback: v => v + '€' }, grid: { color: 'rgba(255,255,255,0.03)' } }
+                    }
+                }
+            });
+        }
+
+        function dibujarMapaCalor() {
+            const canvasContenedor = document.querySelector('#graficaMapaCalor'); if (!canvasContenedor) return;
+            const ctx = canvasContenedor.getContext('2d'); if (INSTANCIA_MAPA_CALOR) { INSTANCIA_MAPA_CALOR.destroy(); }
+
+            const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const bloquesHorarios = ['00:00-06:00', '06:00-12:00', '12:00-18:00', '18:00-00:00'];
+            const matrizDatos = Array(7).fill(0).map(() => Array(4).fill(0)); let maxVentas = 1;
+
+            const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
+            datosFiltrados.forEach(v => {
+                const fechaObj = v.fecha ? new Date(v.fecha) : new Date(); if (isNaN(fechaObj.getTime())) return;
+                const diaIndex = fechaObj.getDay(); const hora = fechaObj.getHours();
+                let bloqueIndex = 0;
+                if (hora >= 6 && hora < 12) bloqueIndex = 1;
+                else if (hora >= 12 && hora < 18) bloqueIndex = 2;
+                else if (hora >= 18) bloqueIndex = 3;
+                matrizDatos[diaIndex][bloqueIndex] += (parseInt(v.cantidad) || 1);
+                if (matrizDatos[diaIndex][bloqueIndex] > maxVentas) maxVentas = matrizDatos[diaIndex][bloqueIndex];
+            });
+
+            const scatterData = [];
+            for (let d = 0; d < 7; d++) { for (let h = 0; h < 4; h++) { if (matrizDatos[d][h] > 0) scatterData.push({ x: d, y: h, v: matrizDatos[d][h] }); } }
+
+            const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
+            const paletasTema = {
+                dark: { base: '59, 130, 246', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' }, pink: { base: '219, 39, 119', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
+                light: { base: '15, 23, 42', texto: '#475569', malla: 'rgba(0,0,0,0.05)' }, emerald: { base: '16, 185, 129', texto: '#e6f4ea', malla: 'rgba(255,255,255,0.05)' },
+                purple: { base: '168, 85, 247', texto: '#e0e7ff', malla: 'rgba(255,255,255,0.05)' }
+            };
+            const cfg = paletasTema[currentTheme] || paletasTema.dark;
+
+            INSTANCIA_MAPA_CALOR = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        data: scatterData,
+                        backgroundColor: function(context) { const value = context.raw ? context.raw.v : 0; const alpha = Math.min(0.2 + (value / maxVentas) * 0.8, 1); return `rgba(${cfg.base}, ${alpha})`; },
+                        pointStyle: 'rectRounded', radius: function(context) { return Math.min(context.chart.width / 24, 28); }
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => ` ${diasSemana[context.raw.x]} (${bloquesHorarios[context.raw.y]}): ${context.raw.v} prenda(s)` } } },
+                    scales: {
+                        x: { type: 'linear', min: -0.5, max: 6.5, grid: { color: cfg.malla }, ticks: { color: cfg.texto, stepSize: 1, callback: v => diasSemana[v] } },
+                        y: { type: 'linear', min: -0.5, max: 3.5, grid: { color: cfg.malla }, ticks: { color: cfg.texto, stepSize: 1, callback: v => bloquesHorarios[v] } }
+                    }
+                }
+            });
+        }
+
+        function renderKanban() {
+            const colStock = document.getElementById('col-no-vendido'); const colVendido = document.getElementById('col-vendido'); if(!colStock || !colVendido) return;
+            colStock.innerHTML = ''; colVendido.innerHTML = ''; let sCount = 0, vCount = 0;
+
+            const totalStockPorPrendaNombre = {};
+            BASE_DATOS.filter(x => x.estado === 'No Vendido').forEach(x => { totalStockPorPrendaNombre[x.prenda] = (totalStockPorPrendaNombre[x.prenda] || 0) + 1; });
+
+            BASE_DATOS.forEach(v => {
+                const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
+                
+                const esStockCritico = v.estado === 'No Vendido' && totalStockPorPrendaNombre[v.prenda] < 2;
+                const claseAlertaStock = esStockCritico ? 'alerta-stock-critico border-amber-500/70 bg-amber-500/5' : '';
+                card.className = `kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none ${claseAlertaStock}`;
+
+                const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
+                const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
+                const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">🏬 ${v.proveedor.toUpperCase()}</span>` : '';
+                const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas); const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
+                
+                const badgeCriticoHtml = esStockCritico ? `<span class="bg-amber-500 text-slate-950 px-1 py-0.5 rounded text-[7px] font-black tracking-widest animate-pulse">RESERVA</span>` : '';
+                const renderComentario = v.comentariosProducto ? `<p class="text-[9px] italic opacity-60 mt-1 bg-black/5 p-1 rounded border border-current/5 truncate">💬 ${v.comentariosProducto}</p>` : '';
+
+                card.innerHTML = `
+                    <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0">
+                    <div class="flex-1 min-w-0 pointer-events-none">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
+                            ${badgeCanal} ${badgeTienda} ${badgeCriticoHtml}
+                        </div>
+                        <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
+                        <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
+                        ${renderComentario}
+                        <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 flex-shrink-0 text-[11px]">
+                        <button onclick="duplicarPrendaIndividual('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg">👯</button>
+                        <button onclick="lanzarModalImpresionEtiqueta('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg">🖨️</button>
+                        <button onclick="editItem('${v._id}')" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-0.5">Editar</button>
+                        <button onclick="deleteItem('${v._id}')" class="opacity-30 hover:opacity-100 text-xs px-0.5">✕</button>
+                    </div>`;
+
+                if (v.estado === 'Vendido') { colVendido.appendChild(card); vCount += (v.cantidad || 1); }
+                else { colStock.appendChild(card); sCount += (v.cantidad || 1); }
+            });
+            const bs = document.getElementById('badge-stock'); const bv = document.getElementById('badge-vendido');
+            if(bs) bs.innerText = sCount; if(bv) bv.innerText = vCount;
+        }
+
+        function updateTickerWallStreet() {
+            const ticker = document.getElementById('ticker-content'); if(!ticker) return; let txt = '';
+            BASE_DATOS.slice(0, 10).forEach(v => { const symbol = v.estado === 'Vendido' ? '<span class="text-emerald-400">▲</span>' : '<span class="text-amber-400">●</span>'; txt += `<span class="text-white font-mono uppercase">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400">${parseFloat(v.precioVenta || 0).toFixed(2)}€</b></span>`; });
+            ticker.innerHTML = txt + txt;
+        }
+
+        document.getElementById('form-venta').onsubmit = async (e) => {
+            e.preventDefault(); const id = document.getElementById('edit-id').value;
+            const payload = {
+                sku: document.getElementById('sku').value.trim(), 
+                prenda: document.getElementById('prenda').value, 
+                categoria: document.getElementById('categoria').value, 
+                talla: document.getElementById('talla').value, 
+                cantidad: parseInt(document.getElementById('cantidad').value) || 1, 
+                precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, 
+                precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0, 
+                gastosEnvio: parseFloat(document.getElementById('gastosEnvio').value) || 0, 
+                canalVenta: document.getElementById('canalVenta').value, 
+                comentariosProducto: document.getElementById('comentariosProducto').value.trim(),
+                rating: parseInt(document.getElementById('rating').value, 10) || 0,
+                proveedor: document.getElementById('proveedor').value
+            };
+            if (id) { const itemOriginal = BASE_DATOS.find(v => v._id === id); if (itemOriginal) payload.estado = itemOriginal.estado; }
+            const url = id ? `${BACKEND_URL}/api/ventas/${id}` : `${BACKEND_URL}/api/ventas`; const method = id ? 'PUT' : 'POST';
+            try { 
+                const response = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) }); 
+                if (response.ok) { cancelEdit(); await reloadCoreData(); } 
+            } catch (err) { console.error("Fallo al inyectar producto:", err); }
+        };
+
+        function editItem(id) {
+            const item = BASE_DATOS.find(v => v._id === id); if (!item) return;
+            document.getElementById('edit-id').value = item._id; 
+            document.getElementById('sku').value = item.sku || ''; 
+            document.getElementById('prenda').value = item.prenda; 
+            document.getElementById('categoria').value = item.categoria; 
+            document.getElementById('talla').value = item.talla; 
+            document.getElementById('cantidad').value = item.cantidad || 1;
+            document.getElementById('precioCompra').value = item.precioCompra || 0; 
+            document.getElementById('precioVenta').value = item.precioVenta || 0; 
+            document.getElementById('gastosEnvio').value = item.gastosEnvio || 0; 
+            document.getElementById('canalVenta').value = item.canalVenta || 'Vinted'; 
+            document.getElementById('comentariosProducto').value = item.comentariosProducto || '';
+            document.getElementById('proveedor').value = item.proveedor || 'Sin definir';
+
+            setFormRating(item.rating || 0); calcularMargenComercialAlVuelo();
+            document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl modo-edicion"; 
+            document.getElementById('form-title').innerText = "✏️ Editar Artículo"; 
+            document.getElementById('btn-submit').innerText = "Guardar Cambios"; 
+            document.getElementById('btn-cancel').classList.remove('hidden');
+        }
+
+        function cancelEdit() {
+            document.getElementById('form-venta').reset(); document.getElementById('edit-id').value = ""; 
+            document.getElementById('gastosEnvio').value = 0; document.getElementById('cantidad').value = 1;
+            document.getElementById('canalVenta').value = "Vinted"; document.getElementById('comentariosProducto').value = "";
+            document.getElementById('proveedor').value = "Sin definir"; setFormRating(0); calcularMargenComercialAlVuelo();
+            document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl"; 
+            document.getElementById('form-title').innerText = "Ficha Avanzada"; document.getElementById('btn-submit').innerText = "Registrar Artículo"; 
+            document.getElementById('btn-cancel').classList.add('hidden');
+        }
+
+        async function deleteItem(id) { if (confirm("¿Seguro que deseas eliminar permanentemente este artículo?")) { await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }); await reloadCoreData(); } }
+        async function logout() { await fetch(`${BACKEND_URL}/api/logout`, { credentials: 'include' }); window.location.reload(); }
+
+        setTimeout(async () => {
+            try {
+                await refrescarYListarTiendasCloud();
+                const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' }); const data = await res.json();
+                if (data.autenticado) { 
+                    setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
+                    document.getElementById('login-box').classList.add('hidden'); document.getElementById('panel-control').classList.remove('hidden'); document.getElementById('ticker-bar').classList.remove('hidden'); document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario}`; await reloadCoreData(); 
+                }
+            } catch(e){}
+        }, 300);
+
+        if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(err => {}); }); }
+        
+        particlesJS("particles-js", {
+            "particles": {
+                "number": { "value": 80, "density": { "enable": true, "value_area": 800 } },
+                "color": { "value": ["#3b82f6", "#ec4899", "#8b5cf6"] },
+                "shape": { "type": ["circle"] },
+                "opacity": { "value": 0.3, "random": true },
+                "size": { "value": 3.5, "random": true },
+                "line_linked": { "enable": true, "distance": 110, "color": "#3b82f6", "opacity": 0.1, "width": 1 },
+                "move": { "enable": true, "speed": 1.5, "direction": "none", "random": true, "out_mode": "out" }
+            },
+            "interactivity": { "events": { "onhover": { "enable": true, "mode": "grab" }, "resize": true } },
+            "retina_detect": true
+        });
+    </script>
+</body>
+</html>

@@ -270,18 +270,14 @@
                                 <span id="txt-margen-calculado" class="font-bold text-slate-400">0.00%</span>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-2">
+                            <div class="grid grid-cols-1 gap-2">
                                 <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Envío (€)</label>
-                                    <input type="number" id="gastosEnvio" step="0.01" value="0" class="input-bg border w-full rounded-xl p-2 text-xs font-mono focus:outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Tienda / Origen</label>
-                                    <div class="flex gap-1.5">
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Tienda / Origen de Prenda</label>
+                                    <div class="flex gap-2">
                                         <select id="proveedor" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none flex-1 dropdown-bg">
-                                            <option value="Sin definir">Elegir tienda...</option>
+                                            <option value="Sin definir">Selecciona una tienda o crea una...</option>
                                         </select>
-                                        <button type="button" onclick="crearNuevaTiendaAlVuelo()" class="bg-blue-600 hover:bg-blue-700 text-white px-2.5 rounded-xl text-xs font-black transition-transform active:scale-95" title="Crear tienda nueva">+</button>
+                                        <button type="button" onclick="crearNuevaTiendaEnBaseDatos()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 rounded-xl text-sm font-black transition-transform active:scale-95" title="Crear nueva tienda">+</button>
                                     </div>
                                 </div>
                             </div>
@@ -303,15 +299,21 @@
                                 <textarea id="comentariosProducto" rows="2" placeholder="Detalles, estado, imperfecciones..." class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none resize-none"></textarea>
                             </div>
 
-                            <div>
-                                <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Valoración Inicial</label>
-                                <input type="hidden" id="rating" value="0">
-                                <div class="flex items-center gap-1.5 bg-black/10 p-1.5 rounded-xl border border-current/10 justify-center text-lg">
-                                    <span onclick="setFormRating(1)" id="star-1" class="star-rating-btn text-slate-500">☆</span>
-                                    <span onclick="setFormRating(2)" id="star-2" class="star-rating-btn text-slate-500">☆</span>
-                                    <span onclick="setFormRating(3)" id="star-3" class="star-rating-btn text-slate-500">☆</span>
-                                    <span onclick="setFormRating(4)" id="star-4" class="star-rating-btn text-slate-500">☆</span>
-                                    <span onclick="setFormRating(5)" id="star-5" class="star-rating-btn text-slate-500">☆</span>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Envío (€)</label>
+                                    <input type="number" id="gastosEnvio" step="0.01" value="0" class="input-bg border w-full rounded-xl p-2 text-xs font-mono focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Valoración Inicial</label>
+                                    <input type="hidden" id="rating" value="0">
+                                    <div class="flex items-center gap-1.5 bg-black/10 p-1 rounded-xl border border-current/10 justify-center h-[34px] text-base">
+                                        <span onclick="setFormRating(1)" id="star-1" class="star-rating-btn text-slate-500">☆</span>
+                                        <span onclick="setFormRating(2)" id="star-2" class="star-rating-btn text-slate-500">☆</span>
+                                        <span onclick="setFormRating(3)" id="star-3" class="star-rating-btn text-slate-500">☆</span>
+                                        <span onclick="setFormRating(4)" id="star-4" class="star-rating-btn text-slate-500">☆</span>
+                                        <span onclick="setFormRating(5)" id="star-5" class="star-rating-btn text-slate-500">☆</span>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -477,46 +479,56 @@
         let ITEMS_SELECCIONADOS_MASIVOS = [];
         let SOUND_MUTED_GLOBAL = false;
 
-        // 🏬 SISTEMA DINÁMICO DE SELECCIÓN Y CREACIÓN DE TIENDAS LOCALES
-        function inicializarYListarTiendas() {
+        // 🏬 LOGICA CLOUD DE TIENDAS: CONSUME DIRECTAMENTE DESDE MONGODB
+        async function refrescarYListarTiendasCloud() {
             const selectTiendas = document.getElementById('proveedor');
-            // Inicializamos con un set predeterminado de tiendas si está vacío
-            let tiendasLocales = JSON.parse(localStorage.getItem('seychelles-tiendas-v2'));
-            if (!tiendasLocales || tiendasLocales.length === 0) {
-                tiendasLocales = ["Vinted Stock Room", "Proveedor Madrid", "Outlet Local", "Tienda Central"];
-                localStorage.setItem('seychelles-tiendas-v2', JSON.stringify(tiendasLocales));
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/tiendas`, { credentials: 'include' });
+                if (!res.ok) throw new Error("Error leyendo backend");
+                const data = await res.json();
+                const listaTiendas = data.tiendas || [];
+                
+                selectTiendas.innerHTML = '<option value="Sin definir">Selecciona una tienda o crea una...</option>';
+                listaTiendas.forEach(t => {
+                    const option = document.createElement('option');
+                    option.value = t.nombre;
+                    option.textContent = `🏬 ${t.nombre}`;
+                    selectTiendas.appendChild(option);
+                });
+            } catch (err) {
+                console.error("Fallo de red cloud, cargando fallback local seguro...", err);
+                selectTiendas.innerHTML = '<option value="Sin definir">Selecciona una tienda o crea una...</option>';
+                const fallback = ["Vinted Stock Room", "Proveedor Principal", "Liquidación Local"];
+                fallback.forEach(t => {
+                    const opt = document.createElement('option'); opt.value = t; opt.textContent = `🏬 ${t}`; selectTiendas.appendChild(opt);
+                });
             }
-            
-            // Reconstruimos las opciones de forma limpia
-            selectTiendas.innerHTML = '<option value="Sin definir">Elegir tienda...</option>';
-            tiendasLocales.sort().forEach(tienda => {
-                const option = document.createElement('option');
-                option.value = tienda;
-                option.textContent = `🏬 ${tienda}`;
-                selectTiendas.appendChild(option);
-            });
         }
 
-        function crearNuevaTiendaAlVuelo() {
-            const nombreTienda = prompt("Introduce el nombre del nuevo punto de venta / tienda origen:");
+        async function crearNuevaTiendaEnBaseDatos() {
+            const nombreTienda = prompt("Nombre de la nueva tienda que se almacenará en MongoDB:");
             if (!nombreTienda || nombreTienda.trim() === "") return;
             
             const tiendaLimpia = nombreTienda.trim();
-            let tiendasLocales = JSON.parse(localStorage.getItem('seychelles-tiendas-v2')) || [];
-            
-            if (tiendasLocales.map(t => t.toLowerCase()).includes(tiendaLimpia.toLowerCase())) {
-                alert("Esta tienda ya está registrada en el sistema.");
-                document.getElementById('proveedor').value = tiendasLocales.find(t => t.toLowerCase() === tiendaLimpia.toLowerCase());
-                return;
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/tiendas`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ nombre: tiendaLimpia })
+                });
+                
+                if (res.ok) {
+                    cantarPorVoz("Tienda sincronizada en base de datos.");
+                    await refrescarYListarTiendasCloud();
+                    document.getElementById('proveedor').value = tiendaLimpia;
+                } else {
+                    const errData = await res.json();
+                    alert(errData.message || "Error al inyectar la tienda en base de datos.");
+                }
+            } catch (err) {
+                alert("Error crítico de comunicación con el backend de MongoDB.");
             }
-            
-            tiendasLocales.push(tiendaLimpia);
-            localStorage.setItem('seychelles-tiendas-v2', JSON.stringify(tiendasLocales));
-            
-            // Refrescar selector y auto-seleccionar la recién creada
-            inicializarYListarTiendas();
-            document.getElementById('proveedor').value = tiendaLimpia;
-            cantarPorVoz("Nueva tienda indexada.");
         }
 
         // 🗺️ MENÚ DE NAVEGACIÓN ENTRE VISTAS DE LA APP
@@ -1181,11 +1193,16 @@
                 canalVenta: document.getElementById('canalVenta').value, 
                 comentariosProducto: document.getElementById('comentariosProducto').value.trim(),
                 rating: parseInt(document.getElementById('rating').value, 10) || 0,
-                proveedor: document.getElementById('proveedor').value // ENVIADO CORRECTAMENTE AL SERVIDOR
+                proveedor: document.getElementById('proveedor').value // Lee limpiamente el valor único sin colisionar
             };
             if (id) { const itemOriginal = BASE_DATOS.find(v => v._id === id); if (itemOriginal) payload.estado = itemOriginal.estado; }
             const url = id ? `${BACKEND_URL}/api/ventas/${id}` : `${BACKEND_URL}/api/ventas`; const method = id ? 'PUT' : 'POST';
-            try { const response = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) }); if (response.ok) { cancelEdit(); await reloadCoreData(); } } catch (err) {}
+            try { 
+                const response = await fetch(url, { method: method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) }); 
+                if (response.ok) { cancelEdit(); await reloadCoreData(); } 
+            } catch (err) {
+                console.error("Fallo al inyectar producto:", err);
+            }
         };
 
         function editItem(id) {
@@ -1202,14 +1219,8 @@
             document.getElementById('canalVenta').value = item.canalVenta || 'Vinted'; 
             document.getElementById('comentariosProducto').value = item.comentariosProducto || '';
             
-            // Verificación para asegurar que si la tienda no existe localmente, se añada dinámicamente
-            if(item.proveedor && item.proveedor !== 'Sin definir') {
-                let tiendasLocales = JSON.parse(localStorage.getItem('seychelles-tiendas-v2')) || [];
-                if(!tiendasLocales.includes(item.proveedor)) {
-                    tiendasLocales.push(item.proveedor);
-                    localStorage.setItem('seychelles-tiendas-v2', JSON.stringify(tiendasLocales));
-                    inicializarYListarTiendas();
-                }
+            // Fuerza la asignación en el select dinámico
+            if(item.proveedor) {
                 document.getElementById('proveedor').value = item.proveedor;
             } else {
                 document.getElementById('proveedor').value = 'Sin definir';
@@ -1244,8 +1255,8 @@
 
         setTimeout(async () => {
             try {
-                // Renderizado inicial del listado de tiendas locales
-                inicializarYListarTiendas();
+                // Sincroniza las tiendas desde MongoDB en la carga inicial de la UI
+                await refrescarYListarTiendasCloud();
                 
                 const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' }); const data = await res.json();
                 if (data.autenticado) { 

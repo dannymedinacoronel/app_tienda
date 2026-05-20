@@ -1,10 +1,12 @@
 require('dotenv').config(); 
 const express = require('express');
-const { OAuth2Client } = require('google-auth-library');
+const { OAuth2Client, google } = require('google-auth-library'); 
 const session = require('express-session'); 
 const MongoStore = require('connect-mongo'); 
 const mongoose = require('mongoose');
 const path = require('path');
+const cron = require('node-cron'); 
+const fs = require('fs');
 
 const app = express();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -13,11 +15,18 @@ app.set('trust proxy', 1);
 
 const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb+srv://dannymedinacoronel_db_user:ccVg5uBpXkh5C0eo@cluster0.qnh4rbz.mongodb.net/tienda_ropa?appName=Cluster0";
 
+// ID de la carpeta de Google Drive "Tienda Seychelles shop" fijado de forma estricta
+const CONFIG_GDRIVE_FOLDER_ID = "1C0Lk142hLV6TI3H1NTphRN4-W7s2vTsI";
+
 mongoose.connect(MONGO_URI_FINAL)
-    .then(() => console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.'))
+    .then(() => {
+        console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.');
+        // Arranca el planificador automático de copias de seguridad
+        iniciarCronBackups();
+    })
     .catch(err => console.error('Fallo crítico en Atlas:', err));
 
-// --- Modelos ---
+// --- Modelos de MongoDB ---
 
 const TiendaSchema = new mongoose.Schema({
     nombre: { type: String, required: true, unique: true, trim: true },
@@ -57,7 +66,6 @@ app.use(express.json());
 const mongoStoreBuilder = MongoStore.create ? MongoStore : MongoStore.default;
 app.use(session({
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
-    secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
     resave: false,
     saveUninitialized: false,
     store: mongoStoreBuilder.create({ mongoUrl: MONGO_URI_FINAL, collectionName: 'sesiones_activas', ttl: 14 * 24 * 60 * 60 }),
@@ -76,6 +84,81 @@ async function registrarLog(usuario, accion) {
         const nuevoLog = new LogAuditoria({ usuario, accion });
         await nuevoLog.save();
     } catch (e) { console.error("Error al guardar log:", e); }
+}
+
+// =================================================================
+// SCRIPT PLANIFICADO CRON: BACKUPS AUTOMÁTICOS CADA 6 HORAS DIRECTOS
+// =================================================================
+
+function iniciarCronBackups() {
+    // Expresión Cron establecida para ejecutarse de forma estricta cada 6 horas
+    cron.schedule('0 */6 * * *', async () => {
+        console.log('\x1b[36m[CRON]\x1b[0m Generando volcado de datos Seychelles Shop...');
+        
+        // Verificación de seguridad de variables del clúster de Google en el entorno .env
+        if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+            console.log('\x1b[31m[CRON ERROR]\x1b[0m Faltan las claves de Cuenta de Servicio en tu fichero .env');
+            return;
+        }
+
+        try {
+            // 1. Lectura completa de todas las colecciones desde MongoDB Atlas
+            const tiendas = await Tienda.find().lean();
+            const ventas = await VentaRopa.find().lean();
+            const logs = await LogAuditoria.find().lean();
+
+            const backupData = {
+                fechaGeneracion: new Date().toISOString(),
+                tiendas,
+                ventas,
+                logs
+            };
+
+            // 2. Escritura del archivo JSON temporal local
+            const fileName = `backup_seychelles_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+            const filePath = path.join(__dirname, fileName);
+            fs.writeFileSync(filePath, JSON.stringify(backupData, null, 2));
+
+            // 3. Autenticación con el servicio de la cuenta de Google
+            const auth = new google.auth.JWT(
+                process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+                null,
+                process.env.GOOGLE_SERVICE_ACCOUNT_KEY.replace(/\\n/g, '\n'),
+                ['https://www.googleapis.com/auth/drive.file']
+            );
+
+            const drive = google.drive({ version: 'v3', auth });
+
+            // 4. Inyección de metadatos apuntando a tu ID de carpeta específico
+            const fileMetadata = {
+                name: fileName,
+                parents: [CONFIG_GDRIVE_FOLDER_ID] 
+            };
+
+            const media = {
+                mimeType: 'application/json',
+                body: fs.createReadStream(filePath)
+            };
+
+            const response = await drive.files.create({
+                resource: fileMetadata,
+                media: media,
+                fields: 'id'
+            });
+
+            console.log(`\x1b[32m[BACKUP COMPLETADO]\x1b[0m Subido a Drive ("Tienda Seychelles shop"). ID: ${response.data.id}`);
+            await registrarLog('SISTEMA_CRON', `Copia de seguridad guardada en Drive. ID del archivo: ${response.data.id}`);
+
+            // 5. Purga del archivo del almacenamiento del servidor
+            fs.unlinkSync(filePath);
+
+        } catch (error) {
+            console.error('\x1b[31m[BACKUP CRÍTICO]\x1b[0m Error al procesar copia automatizada:', error);
+            await registrarLog('SISTEMA_CRON', `Fallo al generar copia en Drive: ${error.message}`);
+        }
+    });
+    
+    console.log('\x1b[32m[OK]\x1b[0m Motor Cron listo (Copia automática asignada a tu carpeta cada 6 horas).');
 }
 
 // --- Rutas de Tiendas ---
@@ -135,7 +218,6 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
         
         let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0;
         
-        // Mapeamos los datos para adaptarlos a la propiedad plana 'proveedor' que espera el frontend
         const ventas = ventasRaw.map(v => {
             const proveedorNombre = v.tienda ? v.tienda.nombre : 'Sin definir';
             
@@ -158,7 +240,7 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
 
             return {
                 ...v,
-                proveedor: proveedorNombre // Inyecta el texto plano para que el JS del Kanban pinte el badge correctamente
+                proveedor: proveedorNombre 
             };
         });
 
@@ -176,10 +258,8 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
     try {
         const { proveedor, ...datosVenta } = req.body;
         
-        // Buscamos dinámicamente la tienda basada en el string enviado por el selector del front
         let tiendaDoc = await Tienda.findOne({ nombre: proveedor });
         if (!tiendaDoc) {
-            // Si por algún motivo no existe en la BD o viene vacío, lo asignamos a una por defecto o creamos una genérica
             tiendaDoc = await Tienda.findOne({ nombre: 'Sin definir' });
             if (!tiendaDoc) {
                 tiendaDoc = new Tienda({ nombre: 'Sin definir' });
@@ -195,12 +275,10 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
         await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`);
         return res.json({ status: "success", venta: nuevaVenta });
     } catch (error) { 
-        console.error("Fallo inyección POST:", error);
         return res.status(500).json({ error: 'Error al registrar artículo.' }); 
     }
 });
 
-// Modificación completa del registro (Ficha de Edición)
 app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
     try {
         const { id } = req.params;
@@ -225,7 +303,6 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
     }
 });
 
-// Cambio rápido de estado para operaciones de Drag & Drop en el Kanban
 app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
     try {
         const { id } = req.params;
@@ -239,14 +316,12 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
     }
 });
 
-// Lógica inteligente para escaneo de pistola / Cámara Web (Inversión automática de estado)
 app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
     try {
         const { sku } = req.params;
         let venta = await VentaRopa.findOne({ sku: sku });
 
         if (!venta) {
-            // Si el código SKU no existe en la nube, pre-crea el artículo en modo borrador
             const tiendaDefecto = await Tienda.findOne({ nombre: 'Sin definir' }) || await new Tienda({ nombre: 'Sin definir' }).save();
             venta = new VentaRopa({
                 sku: sku,
@@ -255,14 +330,11 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
                 tienda: tiendaDefecto._id
             });
             await venta.save();
-            await registrarLog(req.session.email, `Código SKU [${sku}] no indexado. Creado borrador base.`);
             return res.json({ operacion: "Creado", venta });
         } else {
-            // Si ya existe, conmuta automáticamente su estado para agilizar la caja
             const nuevoEstado = venta.estado === 'Vendido' ? 'No Vendido' : 'Vendido';
             venta.estado = nuevoEstado;
             await venta.save();
-            await registrarLog(req.session.email, `Escaneo rápido SKU [${sku}]. Conmutado a ${nuevoEstado}`);
             return res.json({ operacion: nuevoEstado, venta });
         }
     } catch (error) {

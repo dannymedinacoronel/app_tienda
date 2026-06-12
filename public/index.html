@@ -267,22 +267,25 @@
                                 <input type="text" id="prenda" required class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500">
                             </div>
 
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Categoría</label>
-                                    <div class="flex gap-1.5">
-                                        <select id="categoria" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none flex-1 dropdown-bg"></select>
-                                        <button type="button" onclick="crearNuevaCategoriaDB()" class="bg-blue-600 hover:bg-blue-700 text-white px-2.5 rounded-xl text-sm font-black shadow transition-transform active:scale-95" title="Añadir categoría">+</button>
-                                        <button type="button" onclick="editarCategoriaSeleccionadaDB()" class="bg-amber-600/20 hover:bg-amber-600 text-amber-500 border border-amber-500/20 px-2 rounded-xl text-xs shadow transition-all" title="Editar categoría">✏️</button>
-                                        <button type="button" onclick="eliminarCategoriaSeleccionadaDB()" class="bg-rose-600/10 hover:bg-rose-600 text-rose-500 border border-rose-500/20 px-2 rounded-xl text-xs shadow transition-all" title="Eliminar categoría">🗑️</button>
+                            <!-- CATEGORÍA: Fila completa para máxima legibilidad -->
+                            <div>
+                                <label class="block text-[9px] font-bold uppercase opacity-60 mb-1.5 ml-1">Categoría del Artículo</label>
+                                <div class="flex gap-2">
+                                    <select id="categoria" class="input-bg border w-full rounded-2xl px-4 py-3 text-sm font-black focus:outline-none flex-1 dropdown-bg shadow-sm appearance-none"></select>
+                                    <div class="flex gap-1 flex-shrink-0">
+                                        <button type="button" onclick="crearNuevaCategoriaDB()" class="bg-blue-600 hover:bg-blue-700 text-white w-11 h-11 rounded-2xl text-xl font-black shadow-md transition-all active:scale-90 flex items-center justify-center" title="Añadir">+</button>
+                                        <button type="button" onclick="editarCategoriaSeleccionadaDB()" class="bg-amber-500/10 hover:bg-amber-600 text-amber-500 hover:text-white border border-amber-500/20 w-11 h-11 rounded-2xl text-base shadow-sm transition-all flex items-center justify-center" title="Editar">✏️</button>
+                                        <button type="button" onclick="eliminarCategoriaSeleccionadaDB()" class="bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 w-11 h-11 rounded-2xl text-base shadow-sm transition-all flex items-center justify-center" title="Eliminar">🗑️</button>
                                     </div>
                                 </div>
-                                <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Talla</label>
-                                    <select id="talla" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
-                                        <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
-                                    </select>
-                                </div>
+                            </div>
+
+                            <!-- TALLA: Movida a su propia fila para no apretar el menú anterior -->
+                            <div>
+                                <label class="block text-[9px] font-bold uppercase opacity-60 mb-1 ml-1">Talla / Medida</label>
+                                <select id="talla" class="input-bg border w-full rounded-2xl px-4 py-2.5 text-sm font-bold focus:outline-none appearance-none">
+                                    <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                                </select>
                             </div>
 
                             <div class="grid grid-cols-2 gap-2">
@@ -303,13 +306,13 @@
 
                             <div class="grid grid-cols-1 gap-2">
                                 <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Tienda / Origen de Prenda</label>
-                                    <div class="flex gap-1.5">
-                                        <select id="proveedor" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none flex-1 dropdown-bg">
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-1.5 ml-1">Tienda / Origen de Prenda</label>
+                                    <div class="flex gap-2">
+                                        <select id="proveedor" class="input-bg border w-full rounded-2xl px-4 py-3 text-sm font-black focus:outline-none flex-1 dropdown-bg shadow-sm appearance-none">
                                             <option value="Sin definir">Selecciona una tienda o crea una...</option>
                                         </select>
-                                        <button type="button" onclick="crearNuevaTiendaEnBaseDatos()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 rounded-xl text-sm font-black transition-transform active:scale-95 shadow" title="Crear nueva tienda">+</button>
-                                        <button type="button" onclick="eliminarTiendaSeleccionadaCloud()" class="bg-rose-600/10 hover:bg-rose-600 border border-rose-500/20 text-rose-500 hover:text-white px-2.5 rounded-xl text-xs font-black transition-all shadow" title="Eliminar tienda seleccionada">🗑️</button>
+                                        <button type="button" onclick="crearNuevaTiendaEnBaseDatos()" class="bg-blue-600 hover:bg-blue-700 text-white w-11 h-11 rounded-2xl text-xl font-black shadow-md transition-all active:scale-90 flex items-center justify-center" title="Añadir">+</button>
+                                        <button type="button" onclick="eliminarTiendaSeleccionadaCloud()" class="bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 w-11 h-11 rounded-2xl text-base shadow-sm transition-all flex items-center justify-center" title="Eliminar">🗑️</button>
                                     </div>
                                 </div>
                             </div>

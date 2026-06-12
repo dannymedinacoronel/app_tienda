@@ -2668,6 +2668,7 @@
                 const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
                 
                 const esStockCritico = v.estado === 'No Vendido' && totalStockPorPrendaNombre[v.prenda] < 2;
+                const thumb = v.imagen ? `<img src="${v.imagen}" class="card-img-mini flex-shrink-0 border border-white/10 shadow-lg">` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20">N/A</div>`;
                 
                 // Cálculo de antigüedad (Stock Frío > 21 días)
                 const fechaRegistro = new Date(v.fecha);

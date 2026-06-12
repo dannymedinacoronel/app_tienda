@@ -419,12 +419,12 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
         const logs = await LogAuditoria.find().sort({ _id: -1 }).limit(50).lean(); 
         const gastosExtra = await Gasto.find().lean();
         
-        let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, totalGastosOperativos = 0;
+        let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, totalGastosOperativos = 0, costeVendidos = 0;
         
         gastosExtra.forEach(g => totalGastosOperativos += g.monto);
 
         const ventas = ventasRaw.map(v => {
-            const proveedorNombre = v.tienda ? v.tienda.nombre : 'Sin definir';
+            const proveedorNombre = v.tienda ? v.tienda.nombre : '';
             
             const cant = parseInt(v.cantidad, 10) || 0;
             const pCompra = parseFloat(v.precioCompra) || 0;

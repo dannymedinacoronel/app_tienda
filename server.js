@@ -190,7 +190,7 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
         const ventasRaw = await VentaRopa.find().populate('tienda').sort({ _id: -1 }).lean();
         const logs = await LogAuditoria.find().sort({ _id: -1 }).limit(50).lean(); 
         
-        let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0;
+        let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, costeVendidos = 0;
         
         const ventas = ventasRaw.map(v => {
             const proveedorNombre = v.tienda ? v.tienda.nombre : 'Sin definir';
@@ -210,15 +210,17 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
                 }
                 ingresos += ((pVenta - comisionPlataforma) * cant);
                 prendasVendidas += cant;
+                costeVendidos += (pCompra * cant);
             }
 
             return { ...v, proveedor: proveedorNombre };
         });
 
         const beneficioNeto = ingresos - inversion - gastosTotalesEnvio;
+        const roi = inversion > 0 ? (beneficioNeto / (inversion + gastosTotalesEnvio)) * 100 : 0;
 
         return res.json({ 
-            resumen: { ingresos, beneficio: beneficioNeto, inversion: inversion + gastosTotalesEnvio, prendasVendidas }, 
+            resumen: { ingresos, beneficio: beneficioNeto, inversion: inversion + gastosTotalesEnvio, prendasVendidas, roi }, 
             ventas,
             logs 
         });

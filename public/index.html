@@ -182,18 +182,22 @@
                 <button onclick="limpiarFiltrosAvanzados()" class="opacity-50 hover:opacity-100 underline ml-auto text-[11px] font-medium">Restablecer</button>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="kpi-container-grid">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-8" id="kpi-container-grid">
                 <div class="bg-gradient-to-br from-blue-600 to-cyan-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
                     <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Facturación Bruta</p>
                     <p class="text-3xl font-black mt-1" id="kpi-ingresos">0.00 €</p>
                 </div>
                 <div class="bg-gradient-to-br from-pink-600 to-purple-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
-                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Ganancia Neta Limpia</p>
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Ganancia Neta</p>
                     <p class="text-3xl font-black mt-1" id="kpi-beneficio">0.00 €</p>
                 </div>
                 <div class="bg-gradient-to-br from-amber-600 to-orange-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
                     <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Inversión Stock + Envío</p>
                     <p class="text-3xl font-black mt-1" id="kpi-inversion">0.00 €</p>
+                </div>
+                <div class="bg-gradient-to-br from-emerald-600 to-teal-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Retorno (ROI)</p>
+                    <p class="text-3xl font-black mt-1" id="kpi-roi">0%</p>
                 </div>
                 <div class="bg-gradient-to-br from-purple-600 to-indigo-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
                     <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Prendas Vendidas</p>
@@ -312,7 +316,7 @@
                     </div>
                 </div>
 
-                <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <!-- COLUMNA 1: STOCK -->
                     <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
                         <div class="flex flex-col gap-2 mb-4">
@@ -330,24 +334,8 @@
                         </div>
                         <div id="col-no-vendido" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
                     </div>
-                    
-                    <!-- COLUMNA 2: DEVOLUCIONES (NUEVA) -->
-                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
-                        <div class="flex flex-col gap-2 mb-4">
-                            <div class="flex justify-between items-center">
-                                <h3 class="text-[10px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-1.5">⚠️ INCIDENCIAS <span id="badge-devuelto" class="bg-rose-500/10 px-1.5 py-0.5 rounded">0</span></h3>
-                                <button onclick="alternarSeleccionColumna('Devuelto')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
-                            </div>
-                            <select onchange="cambiarOrdenColumna('Devuelto', this.value)" class="bg-black/20 border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none">
-                                <option value="reciente">🕒 Orden</option>
-                                <option value="precio-desc">Precio</option>
-                            </select>
-                            <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Filtrar incidencias..." class="bg-black/10 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30">
-                        </div>
-                        <div id="col-devuelto" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
-                    </div>
 
-                    <!-- COLUMNA 3: VENDIDO -->
+                    <!-- COLUMNA 2: VENDIDO -->
                     <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
                         <div class="flex flex-col gap-2 mb-4">
                             <div class="flex justify-between items-center">
@@ -361,6 +349,24 @@
                             <input type="text" oninput="cambiarFiltroColumna('Vendido', this.value)" placeholder="Filtrar vendidos..." class="bg-black/10 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30">
                         </div>
                         <div id="col-vendido" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
+                    </div>
+                </div>
+
+                <!-- SECCIÓN INCIDENCIAS ABAJO -->
+                <div class="lg:col-span-3">
+                    <div class="card-bg border rounded-3xl p-6 flex flex-col min-h-[300px] transition-all">
+                        <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+                            <h3 class="text-xs font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">⚠️ Gestión de Incidencias <span id="badge-devuelto" class="bg-rose-500/10 px-2 py-0.5 rounded text-[10px]">0</span></h3>
+                            <div class="flex items-center gap-3">
+                                <select onchange="cambiarOrdenColumna('Devuelto', this.value)" class="bg-black/20 border border-current/10 text-[10px] font-bold uppercase rounded-xl px-3 py-1.5 focus:outline-none">
+                                    <option value="reciente">🕒 Orden</option>
+                                    <option value="precio-desc">Precio: Mayor</option>
+                                </select>
+                                <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Buscar en incidencias..." class="bg-black/20 border border-current/10 text-[10px] rounded-xl px-4 py-1.5 focus:outline-none placeholder-current/30 w-48">
+                                <button onclick="alternarSeleccionColumna('Devuelto')" class="text-[10px] bg-rose-600 hover:bg-rose-700 text-white px-4 py-1.5 rounded-xl font-bold uppercase shadow-sm transition-all">Marcar Columna</button>
+                            </div>
+                        </div>
+                        <div id="col-devuelto" class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-1 overflow-y-auto max-h-[800px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
                     </div>
                 </div>
             </div>
@@ -474,6 +480,13 @@
                 </select>
                 <select id="categoria-masiva" onchange="ejecutarEdicionMasivaPropiedad('categoria', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
                     <option value="">👕 Categoría...</option><option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
+                </select>
+                <select id="canal-masivo" onchange="ejecutarEdicionMasivaPropiedad('canalVenta', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                    <option value="">🌐 Canal...</option>
+                    <option value="Tienda Física">🏬 Tienda Física</option><option value="Vinted">👗 Vinted</option><option value="Wallapop">🤝 Wallapop</option><option value="Web">🌐 Web</option>
+                </select>
+                <select id="tienda-masiva" onchange="ejecutarEdicionMasivaPropiedad('proveedor', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                    <option value="">🏬 Tienda...</option>
                 </select>
                 <button onclick="ejecutarEliminacionMasiva()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">🗑️ Eliminar</button>
                 <button onclick="limpiarSeleccionMasiva()" class="text-[10px] underline opacity-50 hover:opacity-100 px-1">Limpiar</button>
@@ -998,6 +1011,7 @@
         async function refrescarYListarTiendasCloud() {
             const selectForm = document.getElementById('proveedor');
             const selectFiltro = document.getElementById('an-filtro-tienda');
+            const selectMasivo = document.getElementById('tienda-masiva');
             try {
                 const res = await fetch(`${BACKEND_URL}/api/tiendas`, { credentials: 'include' });
                 if (!res.ok) throw new Error("Error leyendo backend");
@@ -1006,6 +1020,7 @@
                 
                 selectForm.innerHTML = '<option value="Sin definir">Selecciona una tienda o crea una...</option>';
                 selectFiltro.innerHTML = '<option value="TODOS">🏬 Todas las tiendas</option>';
+                if(selectMasivo) selectMasivo.innerHTML = '<option value="">🏬 Tienda...</option>';
 
                 LISTA_TIENDAS_GLOBAL.forEach(t => {
                     const opt1 = document.createElement('option');
@@ -1015,6 +1030,12 @@
                     const opt2 = document.createElement('option');
                     opt2.value = t.nombre; opt2.textContent = t.nombre;
                     selectFiltro.appendChild(opt2);
+
+                    if(selectMasivo) {
+                        const opt3 = document.createElement('option');
+                        opt3.value = t.nombre; opt3.textContent = t.nombre;
+                        selectMasivo.appendChild(opt3);
+                    }
                 });
             } catch (err) {
                 console.error("Fallo de red cloud, cargando fallback...", err);
@@ -1531,6 +1552,7 @@
                 document.getElementById('kpi-beneficio').innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
                 document.getElementById('kpi-inversion').innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
                 document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
+                document.getElementById('kpi-roi').innerText = `${(data.resumen.roi || 0).toFixed(1)}%`;
 
                 renderKanban(); updateTickerWallStreet(); ejecutarVerificacionAlertasStock(); aplicarFiltrosFrontLineal(); actualizarVisibilidadPanelMasivo();
                 
@@ -1735,6 +1757,12 @@
                 const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
                 
                 const esStockCritico = v.estado === 'No Vendido' && totalStockPorPrendaNombre[v.prenda] < 2;
+                
+                // Cálculo de antigüedad (Stock Frío > 21 días)
+                const fechaRegistro = new Date(v.fecha);
+                const diasEnStock = Math.floor((new Date() - fechaRegistro) / (1000 * 60 * 60 * 24));
+                const esStockFrio = v.estado === 'No Vendido' && diasEnStock > 21;
+
                 const claseAlertaStock = esStockCritico ? 'alerta-stock-critico border-amber-500/70 bg-amber-500/5' : '';
                 card.className = `kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none ${claseAlertaStock}`;
 
@@ -1744,6 +1772,7 @@
                 const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas); const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
                 
                 const badgeCriticoHtml = esStockCritico ? `<span class="bg-amber-500 text-slate-950 px-1 py-0.5 rounded text-[7px] font-black tracking-widest animate-pulse">RESERVA</span>` : '';
+                const badgeStockFrio = esStockFrio ? `<span class="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded text-[7px] font-black tracking-widest flex items-center gap-0.5" title="Artículo en stock más de 21 días">❄️ ANTIGUO</span>` : '';
                 const renderComentario = v.comentariosProducto ? `<p class="text-[9px] italic opacity-60 mt-1 bg-black/5 p-1 rounded border border-current/5 truncate">💬 ${v.comentariosProducto}</p>` : '';
 
                 card.innerHTML = `
@@ -1751,7 +1780,7 @@
                     <div class="flex-1 min-w-0 pointer-events-none">
                         <div class="flex items-center gap-1.5 flex-wrap">
                             <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
-                            ${badgeCanal} ${badgeTienda} ${badgeCriticoHtml}
+                            ${badgeCanal} ${badgeTienda} ${badgeCriticoHtml} ${badgeStockFrio}
                         </div>
                         <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
                         <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>

@@ -55,7 +55,8 @@ const VentaRopaSchema = new mongoose.Schema({
     comentariosProducto: { type: String, default: '', trim: true },
     tienda: { type: mongoose.Schema.Types.ObjectId, ref: 'Tienda', required: true },
     imagen: { type: String, default: '' },
-    fechaVenta: { type: String, default: '' }
+    fechaVenta: { type: String, default: '' },
+    facturado: { type: Boolean, default: false }
 });
 const VentaRopa = mongoose.models.VentaRopa || mongoose.model('VentaRopa', VentaRopaSchema);
 

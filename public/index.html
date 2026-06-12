@@ -17,6 +17,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
@@ -210,6 +212,7 @@
             <nav class="flex gap-2 p-1.5 card-bg border rounded-2xl mb-6 text-xs max-w-md shadow-inner">
                 <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white shadow">📦 Panel</button>
                 <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📊 Analítica</button>
+                <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📋 Gestión</button>
                 <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📜 Logs</button>
             </nav>
 
@@ -452,8 +455,11 @@
             <div id="sec-analitica" class="seccion-app hidden flex flex-col gap-6 mb-8">
                 <div class="card-bg border p-5 rounded-3xl shadow-xl">
                     <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        <h3 class="text-xs font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">🎛️ Centro de Filtro Analítico Global</h3>
-                        <button onclick="limpiarFiltrosAnalitica()" class="text-[10px] opacity-60 hover:opacity-100 underline font-mono">Restablecer Todo</button>
+                        <h3 class="text-xs font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">🎛️ Centro de Control Analítico</h3>
+                        <div class="flex gap-2">
+                            <button onclick="generarInformePDF()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">📄 Descargar Informe PDF</button>
+                            <button onclick="limpiarFiltrosAnalitica()" class="text-[10px] opacity-60 hover:opacity-100 underline font-mono">Restablecer Todo</button>
+                        </div>
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
                         <div>
@@ -526,6 +532,81 @@
                 </div>
             </div>
             
+            <!-- SECCIÓN GESTIÓN / FACTURACIÓN -->
+            <div id="sec-gestion" class="seccion-app hidden flex flex-col gap-6 mb-8">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Formulario de Datos -->
+                    <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col gap-4">
+                        <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                            <span class="bg-blue-500/20 p-1.5 rounded-lg">📝</span> Datos de Facturación
+                        </h3>
+                        
+                        <div class="space-y-4">
+                            <div class="bg-black/20 p-3 rounded-2xl border border-white/5">
+                                <p class="text-[9px] font-black uppercase opacity-40 mb-2 tracking-tighter">Mi Información (Vendedor)</p>
+                                <input type="text" id="fac-vendedor-nombre" placeholder="Tu Nombre o Empresa" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
+                                <input type="text" id="fac-vendedor-cif" placeholder="NIF / CIF" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
+                                <textarea id="fac-vendedor-dir" placeholder="Dirección Fiscal Completa" rows="2" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none resize-none"></textarea>
+                            </div>
+                            
+                            <div class="bg-black/20 p-3 rounded-2xl border border-white/5">
+                                <p class="text-[9px] font-black uppercase opacity-40 mb-2 tracking-tighter">Información del Cliente</p>
+                                <input type="text" id="fac-cliente-nombre" placeholder="Nombre del Comprador" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
+                                <input type="text" id="fac-cliente-nif" placeholder="NIF / CIF / DNI" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
+                                <textarea id="fac-cliente-dir" placeholder="Dirección de Envío / Fiscal" rows="2" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none resize-none"></textarea>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <div class="flex-1">
+                                    <p class="text-[9px] font-black uppercase opacity-40 mb-1">Nº Factura</p>
+                                    <input type="text" id="fac-numero" placeholder="FAC-2024-001" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] font-mono focus:outline-none">
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-[9px] font-black uppercase opacity-40 mb-1">Impuesto IVA (%)</p>
+                                    <input type="number" id="fac-iva" value="21" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] font-mono focus:outline-none">
+                                </div>
+                            </div>
+                            
+                            <button onclick="generarFacturaPDF()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black py-4 rounded-2xl shadow-xl uppercase text-[10px] tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
+                                📄 Emitir Factura PDF
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Selección de Artículos -->
+                    <div class="lg:col-span-2 card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[680px]">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                                <span class="bg-indigo-500/20 p-1.5 rounded-lg">🛒</span> Artículos Vendidos Disponibles
+                            </h3>
+                            <div class="flex items-center gap-3">
+                                <input type="text" oninput="filtrarListaFacturacion(this.value)" placeholder="Filtrar por prenda o SKU..." class="bg-black/20 border border-white/5 rounded-xl px-4 py-1.5 text-[10px] focus:outline-none w-48 font-mono">
+                                <button onclick="renderGestionFacturas()" class="text-[10px] opacity-60 hover:opacity-100 underline font-mono">Refrescar</button>
+                            </div>
+                        </div>
+                        <div id="lista-articulos-factura" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                            <!-- Inyectado via JS -->
+                        </div>
+                        <div class="mt-4 pt-6 border-t border-white/10 flex justify-between items-end">
+                            <div class="flex gap-6">
+                                <div>
+                                    <p class="text-[9px] uppercase opacity-40 font-black tracking-widest">Seleccionados</p>
+                                    <p class="text-3xl font-black text-blue-400" id="fac-count-total">0</p>
+                                </div>
+                                <div>
+                                    <p class="text-[9px] uppercase opacity-40 font-black tracking-widest">Base Imponible</p>
+                                    <p class="text-2xl font-black opacity-80" id="fac-base-total">0.00 €</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-[9px] uppercase opacity-40 font-black tracking-widest">Importe Total (con IVA)</p>
+                                <p class="text-4xl font-black text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.2)]" id="fac-monto-total">0.00 €</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="sec-auditoria" class="seccion-app hidden flex flex-col gap-6 mb-8">
                 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     <!-- Feed Live -->
@@ -1450,6 +1531,10 @@
             if (idSeccion === 'sec-inventario') {
                 setTimeout(() => { renderCalendarioStock(); }, 50);
             }
+
+            if (idSeccion === 'sec-gestion') {
+                setTimeout(() => { renderGestionFacturas(); }, 50);
+            }
         }
 
         function navegarCalendarioStock(delta) {
@@ -1513,6 +1598,111 @@
                         </div>
                     </div>`;
             }
+        }
+
+        // --- LÓGICA DE GESTIÓN DE FACTURAS ---
+        function renderGestionFacturas() {
+            const container = document.getElementById('lista-articulos-factura');
+            if(!container) return;
+            
+            const vendidos = BASE_DATOS.filter(v => v.estado === 'Vendido');
+            
+            if(vendidos.length === 0) {
+                container.innerHTML = '<div class="py-20 text-center opacity-30 italic font-mono text-xs">No hay artículos vendidos disponibles para facturar en el sistema.</div>';
+                return;
+            }
+
+            container.innerHTML = vendidos.map(v => `
+                <div class="p-3 bg-black/10 border border-white/5 rounded-2xl flex items-center gap-4 hover:bg-white/5 transition-all group cursor-pointer" onclick="this.querySelector('input').click()">
+                    <input type="checkbox" class="fac-check-item w-6 h-6 rounded-lg border-slate-700 bg-black/40 text-blue-600 focus:ring-0 cursor-pointer" 
+                           data-id="${v._id}" data-precio="${v.precioVenta}" data-prenda="${v.prenda}"
+                           onclick="event.stopPropagation()" onchange="recalcularTotalesFactura()">
+                    <div class="min-w-0 flex-1">
+                        <p class="font-black uppercase truncate text-[11px] tracking-wide">${v.prenda}</p>
+                        <p class="text-[9px] font-mono opacity-40 uppercase">${v.fechaVenta || v.fecha} • SKU: ${v.sku || 'S/N'} • ${v.canalVenta}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-black text-indigo-400 text-sm font-mono">${parseFloat(v.precioVenta || 0).toFixed(2)}€</p>
+                    </div>
+                </div>
+            `).join('');
+            
+            recalcularTotalesFactura();
+        }
+
+        function recalcularTotalesFactura() {
+            const checks = document.querySelectorAll('.fac-check-item:checked');
+            const ivaPorcentaje = parseFloat(document.getElementById('fac-iva').value) || 0;
+            let subtotal = 0;
+            
+            checks.forEach(c => subtotal += parseFloat(c.dataset.precio || 0));
+            
+            const totalConIVA = subtotal * (1 + (ivaPorcentaje / 100));
+            
+            document.getElementById('fac-count-total').innerText = checks.length;
+            document.getElementById('fac-base-total').innerText = subtotal.toFixed(2) + ' €';
+            document.getElementById('fac-monto-total').innerText = totalConIVA.toFixed(2) + ' €';
+        }
+
+        function filtrarListaFacturacion(query) {
+            const q = query.toLowerCase();
+            document.querySelectorAll('#lista-articulos-factura > div').forEach(el => {
+                const text = el.innerText.toLowerCase();
+                el.classList.toggle('hidden', !text.includes(q));
+            });
+        }
+
+        async function generarFacturaPDF() {
+            const { jsPDF } = window.jspdf;
+            const checks = document.querySelectorAll('.fac-check-item:checked');
+            if(checks.length === 0) return alert("Por favor, selecciona al menos un artículo para facturar.");
+
+            const doc = new jsPDF();
+            const vendedor = {
+                nombre: document.getElementById('fac-vendedor-nombre').value || 'Seychelles Shop',
+                cif: document.getElementById('fac-vendedor-cif').value || '---',
+                dir: document.getElementById('fac-vendedor-dir').value || '---'
+            };
+            const cliente = {
+                nombre: document.getElementById('fac-cliente-nombre').value || 'Cliente Final',
+                nif: document.getElementById('fac-cliente-nif').value || '---',
+                dir: document.getElementById('fac-cliente-dir').value || '---'
+            };
+            const facNum = document.getElementById('fac-numero').value || `FAC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+            const ivaP = parseFloat(document.getElementById('fac-iva').value) || 0;
+
+            // Diseño PDF
+            doc.setFillColor(20, 83, 136); doc.rect(0, 0, 210, 40, 'F');
+            doc.setFontSize(28); doc.setTextColor(255, 255, 255); doc.text('FACTURA', 15, 28);
+            
+            doc.setFontSize(10); doc.text(`Nº DOCUMENTO: ${facNum}`, 140, 20);
+            doc.text(`FECHA EMISIÓN: ${new Date().toLocaleDateString('es-ES')}`, 140, 27);
+
+            doc.setTextColor(0); doc.setFontSize(11); doc.setFont(undefined, 'bold');
+            doc.text('DATOS DEL EMISOR', 15, 55); doc.text('DATOS DEL CLIENTE', 110, 55);
+            
+            doc.setFont(undefined, 'normal'); doc.setFontSize(9);
+            doc.text([vendedor.nombre, `CIF/NIF: ${vendedor.cif}`, vendedor.dir], 15, 62, { maxWidth: 80 });
+            doc.text([cliente.nombre, `NIF/CIF: ${cliente.nif}`, cliente.dir], 110, 62, { maxWidth: 80 });
+
+            const tableData = Array.from(checks).map(c => [c.dataset.prenda, '1', `${parseFloat(c.dataset.precio).toFixed(2)} €`, `${parseFloat(c.dataset.precio).toFixed(2)} €`]);
+            
+            doc.autoTable({ startY: 85, head: [['DESCRIPCIÓN ARTÍCULO', 'CANT.', 'P. UNITARIO', 'TOTAL']], body: tableData, theme: 'grid', headStyles: { fillColor: [20, 83, 136] }, styles: { fontSize: 8 } });
+
+            const finalY = doc.lastAutoTable.finalY + 10;
+            let sub = 0; checks.forEach(c => sub += parseFloat(c.dataset.precio));
+            const valIva = sub * (ivaP / 100);
+            const total = sub + valIva;
+
+            doc.setFontSize(10); doc.text(`SUBTOTAL (Base Imponible):`, 130, finalY); doc.text(`${sub.toFixed(2)} €`, 190, finalY, { align: 'right' });
+            doc.text(`IVA (${ivaP}%):`, 130, finalY + 7); doc.text(`${valIva.toFixed(2)} €`, 190, finalY + 7, { align: 'right' });
+            doc.setFontSize(14); doc.setFont(undefined, 'bold'); doc.setTextColor(20, 83, 136);
+            doc.text(`TOTAL FACTURA:`, 130, finalY + 18); doc.text(`${total.toFixed(2)} €`, 190, finalY + 18, { align: 'right' });
+
+            doc.save(`${facNum}_Seychelles_Shop.pdf`);
+            cantarPorVoz("Factura emitida y guardada.");
+            
+            localStorage.setItem('seychelles-fac-vendedor', JSON.stringify(vendedor));
         }
 
         function verDetalleStockDia(dia) {
@@ -1638,6 +1828,148 @@
                 }).join('');
             }
             modal.classList.remove('hidden');
+        }
+
+        async function generarInformePDF() {
+            const btn = document.querySelector('#sec-analitica button.bg-red-600');
+            const originalBtnText = btn.innerHTML;
+            btn.innerHTML = 'Generando...';
+            btn.disabled = true;
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('p', 'mm', 'a4'); // Portrait, millimeters, A4 size
+                let y = 10; // Y-coordinate for content
+
+                // --- Título y Fecha ---
+                doc.setFontSize(22);
+                doc.text('Informe de Rendimiento - Seychelles Shop', 10, y);
+                y += 10;
+                doc.setFontSize(10);
+                doc.text(`Fecha del Informe: ${new Date().toLocaleDateString('es-ES')}`, 10, y);
+                y += 10;
+
+                // --- Resumen de KPIs ---
+                doc.setFontSize(14);
+                doc.text('Resumen Financiero', 10, y);
+                y += 7;
+                doc.setFontSize(10);
+                doc.text(`Facturación Bruta: ${document.getElementById('kpi-ingresos').innerText}`, 10, y); y += 5;
+                doc.text(`Ganancia Neta: ${document.getElementById('kpi-beneficio').innerText}`, 10, y); y += 5;
+                doc.text(`Inversión Total: ${document.getElementById('kpi-inversion').innerText}`, 10, y); y += 5;
+                doc.text(`Retorno (ROI): ${document.getElementById('kpi-roi').innerText}`, 10, y); y += 5;
+                doc.text(`Prendas Vendidas: ${document.getElementById('kpi-prendas').innerText}`, 10, y); y += 10;
+
+                // --- Productos Vendidos ---
+                doc.setFontSize(14);
+                doc.text('Productos Vendidos', 10, y);
+                y += 7;
+                doc.setFontSize(9);
+                const vendidos = obtenerDatosFiltradosParaAnalitica(); // These are already 'Vendido'
+                if (vendidos.length > 0) {
+                    const headers = [['SKU', 'Prenda', 'Categoría', 'Talla', 'Venta (€)', 'Canal', 'Fecha Venta']];
+                    const data = vendidos.map(v => [
+                        v.sku || 'N/A',
+                        v.prenda,
+                        v.categoria,
+                        v.talla,
+                        parseFloat(v.precioVenta || 0).toFixed(2),
+                        v.canalVenta || 'N/A',
+                        v.fechaVenta || 'N/A'
+                    ]);
+                    doc.autoTable({
+                        startY: y,
+                        head: headers,
+                        body: data,
+                        theme: 'grid',
+                        styles: { fontSize: 8, cellPadding: 1, overflow: 'linebreak' },
+                        headStyles: { fillColor: [20, 83, 136], textColor: [255, 255, 255] },
+                        alternateRowStyles: { fillColor: [240, 240, 240] }
+                    });
+                    y = doc.autoTable.previous.finalY + 10;
+                } else {
+                    doc.text('No hay productos vendidos en el rango de filtros actual.', 10, y);
+                    y += 10;
+                }
+
+                // --- Productos en Stock ---
+                doc.setFontSize(14);
+                doc.text('Productos en Stock', 10, y);
+                y += 7;
+                doc.setFontSize(9);
+                const enStock = BASE_DATOS.filter(v => v.estado === 'No Vendido' &&
+                    (document.getElementById('an-filtro-tienda').value === 'TODOS' || v.proveedor === document.getElementById('an-filtro-tienda').value) &&
+                    (document.getElementById('an-filtro-canal').value === 'TODOS' || v.canalVenta === document.getElementById('an-filtro-canal').value) &&
+                    (document.getElementById('an-filtro-categoria').value === 'TODOS' || v.categoria === document.getElementById('an-filtro-categoria').value) &&
+                    (document.getElementById('an-filtro-talla').value === 'TODOS' || v.talla === document.getElementById('an-filtro-talla').value) &&
+                    (parseFloat(v.precioVenta || 0) >= (parseFloat(document.getElementById('an-filtro-precio-min').value) || 0)) &&
+                    (parseFloat(v.precioVenta || 0) <= (parseFloat(document.getElementById('an-filtro-precio-max').value) || Infinity))
+                );
+                if (enStock.length > 0) {
+                    const headers = [['SKU', 'Prenda', 'Categoría', 'Talla', 'Compra (€)', 'Venta (€)', 'Tienda', 'Fecha Alta']];
+                    const data = enStock.map(v => [
+                        v.sku || 'N/A',
+                        v.prenda,
+                        v.categoria,
+                        v.talla,
+                        parseFloat(v.precioCompra || 0).toFixed(2),
+                        parseFloat(v.precioVenta || 0).toFixed(2),
+                        v.proveedor || 'N/A',
+                        v.fecha || 'N/A'
+                    ]);
+                    doc.autoTable({
+                        startY: y,
+                        head: headers,
+                        body: data,
+                        theme: 'grid',
+                        styles: { fontSize: 8, cellPadding: 1, overflow: 'linebreak' },
+                        headStyles: { fillColor: [20, 83, 136], textColor: [255, 255, 255] },
+                        alternateRowStyles: { fillColor: [240, 240, 240] }
+                    });
+                    y = doc.autoTable.previous.finalY + 10;
+                } else {
+                    doc.text('No hay productos en stock en el rango de filtros actual.', 10, y);
+                    y += 10;
+                }
+
+                // --- Gráficos ---
+                doc.setFontSize(14);
+                doc.text('Gráficos de Análisis', 10, y);
+                y += 7;
+
+                const addChartToPdf = (chartInstance, title, startY) => {
+                    if (chartInstance) {
+                        const imgData = chartInstance.toBase64Image();
+                        const imgWidth = 180; // mm
+                        const imgHeight = (chartInstance.canvas.height * imgWidth) / chartInstance.canvas.width;
+
+                        if (startY + imgHeight > doc.internal.pageSize.height - 20) { // Check if new page is needed
+                            doc.addPage();
+                            startY = 20;
+                        }
+                        doc.setFontSize(12);
+                        doc.text(title, 10, startY);
+                        doc.addImage(imgData, 'PNG', 10, startY + 5, imgWidth, imgHeight);
+                        return startY + imgHeight + 15;
+                    }
+                    return startY;
+                };
+
+                y = addChartToPdf(INSTANCIA_CHARTS, 'Curva de Rendimiento Diario', y);
+                y = addChartToPdf(INSTANCIA_TARTA, 'Distribución de Ventas por Categoría', y);
+                y = addChartToPdf(INSTANCIA_BARRAS, 'Facturación por Proveedor/Tienda', y);
+                y = addChartToPdf(INSTANCIA_MAPA_CALOR, 'Mapa de Calor: Densidad Horaria de Operaciones', y);
+
+                doc.save(`Informe_Seychelles_${new Date().toISOString().split('T')[0]}.pdf`);
+                cantarPorVoz("Informe PDF generado.");
+
+            } catch (error) {
+                console.error("Error al generar PDF:", error);
+                alert("Error al generar el informe PDF: " + error.message);
+            } finally {
+                btn.innerHTML = originalBtnText;
+                btn.disabled = false;
+            }
         }
 
         // 🎯 MOTOR DE FILTRADO AVANZADO DE MÉTRICAS (MÓDULO ANALÍTICA)

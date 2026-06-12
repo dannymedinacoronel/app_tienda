@@ -39,6 +39,24 @@ const CategoriaSchema = new mongoose.Schema({
 });
 const Categoria = mongoose.models.Categoria || mongoose.model('Categoria', CategoriaSchema);
 
+const ClienteSchema = new mongoose.Schema({
+    nombre: { type: String, required: true, trim: true },
+    nif: { type: String, trim: true },
+    email: { type: String, trim: true },
+    telefono: { type: String, trim: true },
+    direccion: { type: String, trim: true },
+    fechaRegistro: { type: Date, default: Date.now }
+});
+const Cliente = mongoose.models.Cliente || mongoose.model('Cliente', ClienteSchema);
+
+const GastoSchema = new mongoose.Schema({
+    fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
+    concepto: { type: String, required: true },
+    monto: { type: Number, required: true },
+    categoria: { type: String, default: 'General' }
+});
+const Gasto = mongoose.models.Gasto || mongoose.model('Gasto', GastoSchema);
+
 const VentaRopaSchema = new mongoose.Schema({
     fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
     sku: { type: String, default: '', trim: true },
@@ -56,7 +74,8 @@ const VentaRopaSchema = new mongoose.Schema({
     tienda: { type: mongoose.Schema.Types.ObjectId, ref: 'Tienda' },
     imagen: { type: String, default: '' },
     fechaVenta: { type: String, default: '' },
-    facturado: { type: Boolean, default: false }
+    facturado: { type: Boolean, default: false },
+    cliente: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente' }
 });
 const VentaRopa = mongoose.models.VentaRopa || mongoose.model('VentaRopa', VentaRopaSchema);
 
@@ -356,13 +375,54 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar logs.' }); }
 });
 
+// --- Rutas de Clientes (CRM) ---
+app.get('/api/clientes', exigeAdmin, async (req, res) => {
+    try { res.json(await Cliente.find().sort({ nombre: 1 })); } catch (e) { res.status(500).send(e); }
+});
+app.post('/api/clientes', exigeAdmin, async (req, res) => {
+    try {
+        const nuevo = new Cliente(req.body);
+        await nuevo.save();
+        await registrarLog(req.session.email, `Registró cliente: ${nuevo.nombre}`);
+        res.json(nuevo);
+    } catch (e) { res.status(400).send(e); }
+});
+app.delete('/api/clientes/:id', exigeAdmin, async (req, res) => {
+    try {
+        await Cliente.findByIdAndDelete(req.params.id);
+        res.sendStatus(200);
+    } catch (e) { res.status(500).send(e); }
+});
+
+// --- Rutas de Gastos Operativos ---
+app.get('/api/gastos', exigeAdmin, async (req, res) => {
+    try { res.json(await Gasto.find().sort({ fecha: -1 })); } catch (e) { res.status(500).send(e); }
+});
+app.post('/api/gastos', exigeAdmin, async (req, res) => {
+    try {
+        const nuevo = new Gasto(req.body);
+        await nuevo.save();
+        await registrarLog(req.session.email, `Registró gasto: ${nuevo.concepto} (${nuevo.monto}€)`);
+        res.json(nuevo);
+    } catch (e) { res.status(400).send(e); }
+});
+app.delete('/api/gastos/:id', exigeAdmin, async (req, res) => {
+    try {
+        await Gasto.findByIdAndDelete(req.params.id);
+        res.sendStatus(200);
+    } catch (e) { res.status(500).send(e); }
+});
+
 app.get('/api/ventas', exigeAdmin, async (req, res) => {
     try {
         const ventasRaw = await VentaRopa.find().populate('tienda').sort({ _id: -1 }).lean();
         const logs = await LogAuditoria.find().sort({ _id: -1 }).limit(50).lean(); 
+        const gastosExtra = await Gasto.find().lean();
         
-        let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, costeVendidos = 0;
+        let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, totalGastosOperativos = 0;
         
+        gastosExtra.forEach(g => totalGastosOperativos += g.monto);
+
         const ventas = ventasRaw.map(v => {
             const proveedorNombre = v.tienda ? v.tienda.nombre : 'Sin definir';
             
@@ -387,11 +447,11 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
             return { ...v, proveedor: proveedorNombre };
         });
 
-        const beneficioNeto = ingresos - inversion - gastosTotalesEnvio;
-        const roi = inversion > 0 ? (beneficioNeto / (inversion + gastosTotalesEnvio)) * 100 : 0;
+        const beneficioNeto = ingresos - inversion - gastosTotalesEnvio - totalGastosOperativos;
+        const roi = (inversion + totalGastosOperativos) > 0 ? (beneficioNeto / (inversion + gastosTotalesEnvio + totalGastosOperativos)) * 100 : 0;
 
         return res.json({ 
-            resumen: { ingresos, beneficio: beneficioNeto, inversion: inversion + gastosTotalesEnvio, prendasVendidas, roi }, 
+            resumen: { ingresos, beneficio: beneficioNeto, inversion: inversion + gastosTotalesEnvio + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos }, 
             ventas,
             logs 
         });

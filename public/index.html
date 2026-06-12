@@ -107,6 +107,11 @@
         .calendario-log-item:hover { white-space: normal; position: relative; z-index: 50; background: rgba(0,0,0,0.9); }
         #grid-calendario-audit::-webkit-scrollbar { width: 4px; }
 
+        /* Estilos Imágenes */
+        .preview-foto { width: 100%; height: 120px; object-fit: cover; border-radius: 1rem; border: 2px dashed rgba(255,255,255,0.1); cursor: pointer; transition: all 0.2s; }
+        .preview-foto:hover { border-color: #3b82f6; background-color: rgba(59, 130, 246, 0.05); }
+        .card-img-mini { width: 45px; height: 45px; object-fit: cover; border-radius: 10px; background-color: #000; }
+
         /* Estilos Notas */
         #canvas-notas-global { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 500; }
         .sticky-note { pointer-events: auto; }
@@ -265,6 +270,17 @@
                         <form id="form-venta" class="space-y-3">
                             <input type="hidden" id="edit-id" value="">
                             
+                            <!-- CARGA DE FOTO CON COMPRESIÓN -->
+                            <div class="relative mb-4">
+                                <input type="file" id="input-foto-file" accept="image/*" class="hidden" onchange="procesarYComprimirFoto(event)">
+                                <img id="preview-foto-form" src="" class="preview-foto hidden" onclick="document.getElementById('input-foto-file').click()">
+                                <div id="placeholder-foto" onclick="document.getElementById('input-foto-file').click()" class="preview-foto flex flex-col items-center justify-center bg-black/20 gap-1">
+                                    <span class="text-2xl">📸</span>
+                                    <span class="text-[9px] font-bold uppercase opacity-40">Añadir Foto (Auto-comprimida)</span>
+                                </div>
+                                <input type="hidden" id="foto-base64" value="">
+                            </div>
+
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Código SKU</label>
@@ -550,7 +566,10 @@
                             </div>
                             
                             <div class="bg-black/20 p-3 rounded-2xl border border-white/5">
-                                <p class="text-[9px] font-black uppercase opacity-40 mb-2 tracking-tighter">Información del Cliente</p>
+                                <div class="flex justify-between items-center mb-2">
+                                    <p class="text-[9px] font-black uppercase opacity-40 tracking-tighter">Información del Cliente</p>
+                                    <button onclick="lanzarModalCRM()" class="text-[8px] bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded-lg border border-blue-500/30">Cargar de CRM</button>
+                                </div>
                                 <input type="text" id="fac-cliente-nombre" placeholder="Nombre del Comprador" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
                                 <input type="text" id="fac-cliente-nif" placeholder="NIF / CIF / DNI" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
                                 <textarea id="fac-cliente-dir" placeholder="Dirección de Envío / Fiscal" rows="2" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none resize-none"></textarea>
@@ -603,6 +622,33 @@
                                 <p class="text-4xl font-black text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.2)]" id="fac-monto-total">0.00 €</p>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN GASTOS (NUEVA) -->
+            <div id="sec-gastos" class="seccion-app hidden grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col gap-4">
+                    <h3 class="text-xs font-black text-rose-400 uppercase tracking-widest flex items-center gap-2">🧾 Registrar Gasto Operativo</h3>
+                    <div class="space-y-3">
+                        <input type="text" id="gas-concepto" placeholder="Concepto (Alquiler, Luz, Ads...)" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
+                        <input type="number" id="gas-monto" placeholder="Importe (€)" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none font-mono">
+                        <select id="gas-categoria" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
+                            <option value="Suministros">🔌 Suministros</option>
+                            <option value="Local">🏢 Local/Alquiler</option>
+                            <option value="Marketing">📢 Marketing/Publicidad</option>
+                            <option value="Logística">📦 Packaging/Bolsas</option>
+                            <option value="Otros">⚙️ Otros</option>
+                        </select>
+                        <button onclick="registrarGastoDB()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-black py-3 rounded-xl shadow-lg uppercase text-[10px] tracking-widest transition-all">Añadir Gasto</button>
+                    </div>
+                </div>
+                <div class="lg:col-span-2 card-bg border p-6 rounded-3xl shadow-xl h-[400px] flex flex-col">
+                    <h3 class="text-xs font-black text-rose-400 uppercase tracking-widest mb-4">📜 Historial de Gastos Fijos</h3>
+                    <div id="lista-gastos-negocio" class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs"></div>
+                    <div class="mt-4 pt-4 border-t border-white/5 flex justify-between items-center">
+                        <span class="text-[10px] font-bold opacity-40 uppercase">Total Gastos OpEx:</span>
+                        <span id="txt-total-gastos-opex" class="text-xl font-black text-rose-400">0.00 €</span>
                     </div>
                 </div>
             </div>
@@ -2646,6 +2692,7 @@
 
                 card.innerHTML = `
                     <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0">
+                    ${thumb}
                     <div class="flex-1 min-w-0 pointer-events-none">
                         <div class="flex items-center gap-1.5 flex-wrap">
                             <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
@@ -2691,6 +2738,7 @@
                 precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0, 
                 gastosEnvio: parseFloat(document.getElementById('gastosEnvio').value) || 0, 
                 canalVenta: document.getElementById('canalVenta').value, 
+                imagen: document.getElementById('foto-base64').value,
                 comentariosProducto: document.getElementById('comentariosProducto').value.trim(),
                 rating: parseInt(document.getElementById('rating').value, 10) || 0,
                 proveedor: document.getElementById('proveedor').value
@@ -2717,6 +2765,15 @@
             document.getElementById('canalVenta').value = item.canalVenta || 'Vinted'; 
             document.getElementById('comentariosProducto').value = item.comentariosProducto || '';
             document.getElementById('proveedor').value = item.proveedor || 'Sin definir';
+            
+            if (item.imagen) {
+                document.getElementById('foto-base64').value = item.imagen;
+                document.getElementById('preview-foto-form').src = item.imagen;
+                document.getElementById('preview-foto-form').classList.remove('hidden');
+                document.getElementById('placeholder-foto').classList.add('hidden');
+            } else {
+                cancelFoto();
+            }
 
             setFormRating(item.rating || 0); calcularMargenComercialAlVuelo();
             document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl modo-edicion"; 
@@ -2730,9 +2787,17 @@
             document.getElementById('gastosEnvio').value = 0; document.getElementById('cantidad').value = 1;
             document.getElementById('canalVenta').value = "Vinted"; document.getElementById('comentariosProducto').value = "";
             document.getElementById('proveedor').value = ""; setFormRating(0); calcularMargenComercialAlVuelo();
+            cancelFoto();
             document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl"; 
             document.getElementById('form-title').innerText = "Ficha Avanzada"; document.getElementById('btn-submit').innerText = "Registrar Artículo"; 
             document.getElementById('btn-cancel').classList.add('hidden');
+        }
+
+        function cancelFoto() {
+            document.getElementById('foto-base64').value = "";
+            document.getElementById('preview-foto-form').src = "";
+            document.getElementById('preview-foto-form').classList.add('hidden');
+            document.getElementById('placeholder-foto').classList.remove('hidden');
         }
 
         async function deleteItem(id) { if (confirm("¿Seguro que deseas eliminar permanentemente este artículo?")) { await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }); await reloadCoreData(); } }

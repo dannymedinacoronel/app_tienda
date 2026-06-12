@@ -45,6 +45,11 @@ const ClienteSchema = new mongoose.Schema({
     email: { type: String, trim: true },
     telefono: { type: String, trim: true },
     direccion: { type: String, trim: true },
+    comentarios: { type: String, default: '', trim: true },
+    reservas: [{ 
+        fecha: { type: Date },
+        nota: { type: String, trim: true }
+    }],
     fechaRegistro: { type: Date, default: Date.now }
 });
 const Cliente = mongoose.models.Cliente || mongoose.model('Cliente', ClienteSchema);

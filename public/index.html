@@ -323,7 +323,7 @@
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-1.5 ml-1">Tienda / Origen de Prenda</label>
                                     <div class="flex gap-2">
                                         <select id="proveedor" class="input-bg border w-full rounded-2xl px-4 py-3 text-sm font-black focus:outline-none flex-1 dropdown-bg shadow-sm appearance-none">
-                                            <option value="Sin definir">Selecciona una tienda o crea una...</option>
+                                            <option value="">Sin tienda asignada</option>
                                         </select>
                                         <button type="button" onclick="crearNuevaTiendaEnBaseDatos()" class="bg-blue-600 hover:bg-blue-700 text-white w-11 h-11 rounded-2xl text-xl font-black shadow-md transition-all active:scale-90 flex items-center justify-center" title="Añadir">+</button>
                                         <button type="button" onclick="eliminarTiendaSeleccionadaCloud()" class="bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 w-11 h-11 rounded-2xl text-base shadow-sm transition-all flex items-center justify-center" title="Eliminar">🗑️</button>
@@ -1436,7 +1436,7 @@
                 const data = await res.json();
                 LISTA_TIENDAS_GLOBAL = data.tiendas || [];
                 
-                selectForm.innerHTML = '<option value="Sin definir">Selecciona una tienda o crea una...</option>';
+                selectForm.innerHTML = '<option value="">Sin asignar</option>';
                 selectFiltro.innerHTML = '<option value="TODOS">🏬 Todas las tiendas</option>';
                 if(selectMasivo) selectMasivo.innerHTML = '<option value="">🏬 Tienda...</option>';
 
@@ -1483,14 +1483,14 @@
         async function eliminarTiendaSeleccionadaCloud() {
             const selectTienda = document.getElementById('proveedor');
             const nombreSeleccionado = selectTienda.value;
-            if (nombreSeleccionado === "Sin definir") {
+            if (!nombreSeleccionado) {
                 return alert("Por favor, selecciona una tienda válida del desplegable para poder eliminarla.");
             }
             
             const tiendaObjeto = LISTA_TIENDAS_GLOBAL.find(t => t.nombre === nombreSeleccionado);
             if (!tiendaObjeto) return;
 
-            if (confirm(`¿Seguro que deseas eliminar permanentemente la tienda "${nombreSeleccionado}"?\nLos artículos asignados a ella pasarán a estar "Sin definir" de forma automática.`)) {
+            if (confirm(`¿Seguro que deseas eliminar permanentemente la tienda "${nombreSeleccionado}"?\nLos artículos asignados a ella quedarán sin tienda asignada.`)) {
                 try {
                     const res = await fetch(`${BACKEND_URL}/api/tiendas/${tiendaObjeto._id}`, {
                         method: 'DELETE',
@@ -2729,7 +2729,7 @@
             document.getElementById('form-venta').reset(); document.getElementById('edit-id').value = ""; 
             document.getElementById('gastosEnvio').value = 0; document.getElementById('cantidad').value = 1;
             document.getElementById('canalVenta').value = "Vinted"; document.getElementById('comentariosProducto').value = "";
-            document.getElementById('proveedor').value = "Sin definir"; setFormRating(0); calcularMargenComercialAlVuelo();
+            document.getElementById('proveedor').value = ""; setFormRating(0); calcularMargenComercialAlVuelo();
             document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl"; 
             document.getElementById('form-title').innerText = "Ficha Avanzada"; document.getElementById('btn-submit').innerText = "Registrar Artículo"; 
             document.getElementById('btn-cancel').classList.add('hidden');

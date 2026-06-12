@@ -53,7 +53,7 @@ const VentaRopaSchema = new mongoose.Schema({
     rating: { type: Number, default: 0, min: 0, max: 5 },
     estado: { type: String, enum: ['Vendido', 'No Vendido', 'Devuelto'], default: 'No Vendido' },
     comentariosProducto: { type: String, default: '', trim: true },
-    tienda: { type: mongoose.Schema.Types.ObjectId, ref: 'Tienda', required: true },
+    tienda: { type: mongoose.Schema.Types.ObjectId, ref: 'Tienda' },
     imagen: { type: String, default: '' },
     fechaVenta: { type: String, default: '' },
     facturado: { type: Boolean, default: false }
@@ -241,28 +241,19 @@ app.post('/api/tiendas', exigeAdmin, async (req, res) => {
     }
 });
 
-// BAJA SEGURA DE TIENDA CON REASIGNACIÓN EN CASCADA
+// BAJA DE TIENDA
 app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         
-        let tiendaDefecto = await Tienda.findOne({ nombre: 'Sin definir' });
-        if (!tiendaDefecto) {
-            tiendaDefecto = new Tienda({ nombre: 'Sin definir' });
-            await tiendaDefecto.save();
-        }
-
-        if (id === tiendaDefecto._id.toString()) {
-            return res.status(400).json({ error: 'No se permite la remoción de la tienda base del sistema.' });
-        }
-
         const tiendaPorBorrar = await Tienda.findById(id);
         if (!tiendaPorBorrar) return res.status(404).json({ error: 'La tienda no existe.' });
 
-        await VentaRopa.updateMany({ tienda: id }, { tienda: tiendaDefecto._id });
+        // Desasignar tienda de los productos asociados
+        await VentaRopa.updateMany({ tienda: id }, { $unset: { tienda: 1 } });
         await Tienda.findByIdAndDelete(id);
 
-        await registrarLog(req.session.email, `Eliminó la tienda "${tiendaPorBorrar.nombre}". Productos reasignados a "Sin definir"`);
+        await registrarLog(req.session.email, `Eliminó la tienda "${tiendaPorBorrar.nombre}".`);
         return res.sendStatus(200);
     } catch (err) {
         console.error("Error al borrar tienda:", err);
@@ -318,7 +309,7 @@ app.get('/api/notas', exigeAdmin, async (req, res) => {
 app.post('/api/notas', exigeAdmin, async (req, res) => {
     try {
         const count = await Nota.countDocuments();
-        if (count >= 3) return res.status(400).json({ error: 'Límite de 3 notas alcanzado.' });
+        if (count >= 10) return res.status(400).json({ error: 'Límite de 10 notas alcanzado.' });
         const nuevaNota = new Nota({ ...req.body, usuario: req.session.email });
         await nuevaNota.save();
         res.json(nuevaNota);
@@ -411,12 +402,9 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
     try {
         const { proveedor, ...datosVenta } = req.body;
         
-        let tiendaDoc = await Tienda.findOne({ nombre: proveedor });
-        if (!tiendaDoc) {
-            tiendaDoc = await Tienda.findOne({ nombre: 'Sin definir' }) || await new Tienda({ nombre: 'Sin definir' }).save();
-        }
+        const tiendaDoc = await Tienda.findOne({ nombre: proveedor });
 
-        const nuevaVenta = new VentaRopa({ ...datosVenta, tienda: tiendaDoc._id });
+        const nuevaVenta = new VentaRopa({ ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null });
         await nuevaVenta.save(); 
         await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`);
         return res.json({ status: "success", venta: nuevaVenta });
@@ -430,15 +418,11 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
         const { id } = req.params;
         const { proveedor, ...datosVenta } = req.body;
 
-        let tiendaDoc = await Tienda.findOne({ nombre: proveedor });
-        if (!tiendaDoc) {
-            tiendaDoc = await Tienda.findOne({ nombre: 'Sin definir' }) || new Tienda({ nombre: 'Sin definir' });
-            if (!tiendaDoc._id) await tiendaDoc.save();
-        }
+        const tiendaDoc = await Tienda.findOne({ nombre: proveedor });
 
         const ventaActualizada = await VentaRopa.findByIdAndUpdate(
             id, 
-            { ...datosVenta, tienda: tiendaDoc._id }, 
+            { ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null }, 
             { new: true }
         );
 
@@ -475,12 +459,10 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
         let venta = await VentaRopa.findOne({ sku: sku });
 
         if (!venta) {
-            const tiendaDefecto = await Tienda.findOne({ nombre: 'Sin definir' }) || await new Tienda({ nombre: 'Sin definir' }).save();
             venta = new VentaRopa({
                 sku: sku,
                 prenda: 'Artículo Escaneado Nuevo',
-                estado: 'No Vendido',
-                tienda: tiendaDefecto._id
+                estado: 'No Vendido'
             });
             await venta.save();
             return res.json({ operacion: "Creado", venta });
@@ -590,14 +572,17 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
         const { productos } = req.body; // Array de productos seleccionados en el frontend
         if (!productos || !Array.isArray(productos)) return res.status(400).json({ error: 'Datos de productos no válidos.' });
 
-        const tiendaVinted = await Tienda.findOne({ nombre: 'Vinted' }) || await Tienda.findOne({ nombre: 'Sin definir' });
-        const tiendaId = tiendaVinted ? tiendaVinted._id : (await new Tienda({ nombre: 'Vinted' }).save())._id;
+        let tiendaVinted = await Tienda.findOne({ nombre: 'Vinted' });
+        if (!tiendaVinted) {
+            tiendaVinted = new Tienda({ nombre: 'Vinted' });
+            await tiendaVinted.save();
+        }
 
         const registrosCreados = [];
         for (const prod of productos) {
             const nuevaVenta = new VentaRopa({
                 ...prod,
-                tienda: tiendaId,
+                tienda: tiendaVinted._id,
                 sku: `VNT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
                 comentariosProducto: `Importado automáticamente desde Vinted el ${new Date().toLocaleDateString()}`
             });
@@ -621,11 +606,9 @@ app.post('/api/ventas/bulk', exigeAdmin, async (req, res) => {
         const { productos } = req.body;
         if (!productos || !Array.isArray(productos)) return res.status(400).json({ error: 'Lista de productos no válida.' });
 
-        const tiendaDefecto = await Tienda.findOne({ nombre: 'Sin definir' }) || await new Tienda({ nombre: 'Sin definir' }).save();
-        
         // Mapeamos los productos para asegurar que tengan IDs de tienda válidos
         const productosProcesados = await Promise.all(productos.map(async (p) => {
-            let tiendaId = tiendaDefecto._id;
+            let tiendaId = null;
             if (p.proveedor) {
                 const t = await Tienda.findOne({ nombre: p.proveedor });
                 if (t) tiendaId = t._id;

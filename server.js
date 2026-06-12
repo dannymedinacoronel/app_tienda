@@ -25,11 +25,6 @@ const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI;
 if (!MONGO_URI_FINAL) {
     console.error('\x1b[31m[ERROR]\x1b[0m No se detectó la variable MONGODB_URI en el entorno.');
 }
-
-mongoose.connect(MONGO_URI_FINAL)
-    .then(() => console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.'))
-    .catch(err => console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err));
-
 // --- Modelos de MongoDB ---
 
 const TiendaSchema = new mongoose.Schema({
@@ -84,6 +79,37 @@ const Nota = mongoose.models.Nota || mongoose.model('Nota', NotaSchema);
 const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
 
 const MongoStore = MongoStoreModule.default || MongoStoreModule; // Obtiene la clase MongoStore, manejando el 'default' export si existe
+
+mongoose.connect(MONGO_URI_FINAL)
+    .then(async () => {
+        console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.');
+        
+        // Auto-poblar categorías si la colección está vacía
+        const catCount = await Categoria.countDocuments();
+        if (catCount === 0) {
+            const defaultCats = [
+                '👕 Camisetas', '🧥 Sudaderas', '👖 Pantalones', '👗 Vestidos', '👜 Accesorios',
+                '🩳 Shorts', '👗 Faldas', '🧥 Chaquetas', '🧥 Abrigos', '👟 Zapatos',
+                '👟 Zapatillas', '👙 Ropa Interior', '🩱 Bañadores', '🧢 Gorras', '👒 Sombreros',
+                '💍 Joyas', '👛 Bolsos', '👔 Camisas', '👚 Blusas', '👕 Tops', '🩳 Bermudas',
+                '👖 Leggings', '🧥 Trajes', '💤 Pijamas', '🧣 Bufandas', '🧤 Guantes',
+                '🎗️ Cinturones', '🧦 Calcetines', '⌚ Relojes', '🕶️ Gafas de sol', '👛 Monederos',
+                '👕 Polos', '🧥 Chalecos', '🥾 Botas', '👡 Sandalias', '🥋 Albornoces',
+                '👔 Corbatas', '🎀 Pajaritas', '🧣 Pañuelos', '🎒 Mochilas', '👜 Bolsos de mano',
+                '👖 Vaqueros', '🧥 Rebecas', '👕 Jerséis', '🏃 Ropa Deportiva', '🧘 Leggings Deportivos',
+                '🩱 Bikinis', '🧤 Mitones', '👒 Tocados', '👞 Mocasines', '👢 Botines', '🧤 Calentadores',
+                '👗 Monos', '👗 Petos', '👘 Kimonos', '🧥 Parkas', '🧥 Gabardinas', '🎿 Ropa de Esquí'
+            ];
+            try {
+                await Categoria.insertMany(defaultCats.map(n => ({ nombre: n })));
+                console.log('[INIT] Catálogo maestro de categorías inyectado correctamente.');
+            } catch (err) {
+                console.error("Error inyectando categorías iniciales:", err);
+            }
+        }
+    })
+    .catch(err => console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err));
+
 app.use(session({
     name: 'seychelles.sid', // Nombre único para evitar conflictos
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
@@ -128,6 +154,16 @@ app.post('/api/categorias', exigeAdmin, async (req, res) => {
         await registrarLog(req.session.email, `Creó nueva categoría: ${nombreLimpio}`);
         res.json({ status: 'success', categoria: nueva });
     } catch (e) { res.status(400).json({ error: 'La categoría ya existe.' }); }
+});
+
+app.put('/api/categorias/:id', exigeAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre } = req.body;
+        const cat = await Categoria.findByIdAndUpdate(id, { nombre }, { new: true });
+        await registrarLog(req.session.email, `Modificó categoría: ${nombre}`);
+        res.json(cat);
+    } catch (e) { res.status(400).json({ error: 'Error al actualizar categoría.' }); }
 });
 
 app.delete('/api/categorias/:id', exigeAdmin, async (req, res) => {

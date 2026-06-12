@@ -347,11 +347,11 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
 
         const response = await axios.get(url, {
             headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36', // Updated User-Agent
                 'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
                 'Accept-Encoding': 'gzip, deflate, br',
                 'Referer': 'https://www.vinted.es/',
-                'sec-ch-ua': '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
+                'sec-ch-ua': '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"', // Updated sec-ch-ua
                 'sec-ch-ua-mobile': '?0',
                 'sec-ch-ua-platform': '"Windows"',
                 'Sec-Fetch-Dest': 'document',
@@ -432,6 +432,54 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         console.error('Error en Scraper:', error);
         const msg = error.response && error.response.status === 403 ? 'Acceso denegado por Vinted (403). Intenta de nuevo en unos minutos.' : 'Error al conectar con la web externa.';
         res.status(500).json({ error: msg });
+    }
+});
+
+/**
+ * Analiza datos subidos manualmente (ej. desde un Excel de Instant Data Scraper)
+ */
+app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
+    try {
+        const { productosExtraidos } = req.body;
+        if (!productosExtraidos || !Array.isArray(productosExtraidos)) {
+            return res.status(400).json({ error: 'Datos no válidos.' });
+        }
+
+        const resultados = { discrepancias: [], nuevos: [], identicos: [] };
+        const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
+
+        productosExtraidos.forEach(item => {
+            const titulo = item.titulo || '';
+            const precioWeb = parseFloat(item.precio);
+            const imagen = item.imagen || '';
+
+            if (titulo && !isNaN(precioWeb)) {
+                const coincidencia = productosBD.find(p => 
+                    p.prenda.toLowerCase().includes(titulo.toLowerCase()) || 
+                    titulo.toLowerCase().includes(p.prenda.toLowerCase())
+                );
+
+                if (coincidencia) {
+                    if (Math.abs(coincidencia.precioVenta - precioWeb) > 0.01) {
+                        resultados.discrepancias.push({
+                            idMongo: coincidencia._id, prenda: coincidencia.prenda,
+                            valorAntiguo: coincidencia.precioVenta, valorNuevo: precioWeb, imagen
+                        });
+                    } else {
+                        resultados.identicos.push({
+                            idMongo: coincidencia._id, prenda: coincidencia.prenda, precio: coincidencia.precioVenta, imagen
+                        });
+                    }
+                } else {
+                    resultados.nuevos.push({ prenda: titulo, precioVenta: precioWeb, imagen, canalVenta: 'Vinted', estado: 'No Vendido' });
+                }
+            }
+        });
+
+        res.json(resultados);
+    } catch (error) {
+        console.error('Error en Scraper Manual:', error);
+        res.status(500).json({ error: 'Error al procesar los datos manuales.' });
     }
 });
 

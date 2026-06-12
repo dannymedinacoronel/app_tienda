@@ -468,8 +468,12 @@
 
 
 
-// MODAL DE SCRAPING PARA SINCRONIZAR DATOS DESDE UNA FUENTE WEB (EJ. PERFIL DE VINTED) Y COMPARAR CON LA BASE DE DATOS LOCAL ANTES DE APLICAR CAMBIOS MASIVOS
 
+
+
+
+
+    
 <div id="modal-scraper" class="hidden fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="card-bg border rounded-3xl p-6 w-full max-w-3xl flex flex-col gap-5 shadow-2xl relative">
         <button onclick="cerrarModalScraper()" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-xl">✕</button>
@@ -484,6 +488,15 @@
             <div class="flex gap-2">
                 <input type="text" id="scraper-url" placeholder="https://vinted.es/member/..." class="input-bg border flex-1 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
                 <button onclick="iniciarScraping()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95">Analizar</button>
+            </div>
+            <div class="mt-2 text-center">
+                <span class="text-[10px] opacity-40 uppercase font-bold">— O —</span>
+            </div>
+            <div class="flex flex-col gap-2">
+                <button onclick="document.getElementById('scraper-file-input').click()" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2">
+                    📁 Subir Excel/CSV (Instant Data Scraper)
+                </button>
+                <input type="file" id="scraper-file-input" class="hidden" accept=".xlsx, .xls, .csv" onchange="procesarArchivoManual(event)">
             </div>
         </div>
 
@@ -521,7 +534,10 @@
 
                 <!-- Nuevos -->
                 <div id="container-nuevos" class="hidden">
-                    <h3 class="text-[10px] font-bold text-emerald-500 uppercase mb-2">✨ Detectados en Web (No en Sistema)</h3>
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-[10px] font-bold text-emerald-500 uppercase">✨ Detectados en Web (No en Sistema)</h3>
+                        <input type="checkbox" id="select-all-new-items" class="form-checkbox h-4 w-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500" onchange="toggleSelectAllNewItems(this.checked)"> <label for="select-all-new-items" class="text-[10px] text-emerald-400 ml-1 cursor-pointer">Seleccionar todo</label>
+                    </div>
                     <div id="scraper-grid-nuevos" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
                     <div class="flex justify-end mt-4">
                         <button onclick="importarNuevosScraping()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-xs font-black shadow-lg transition-all active:scale-95">Importar Seleccionados</button>
@@ -547,7 +563,6 @@
     </div>
 </div>
 
-// SCRIPT DE SCRAPING 
 <script>
     let resultadosScraperActual = null;
 
@@ -558,6 +573,7 @@
         document.getElementById('scraper-step-2').classList.add('hidden');
         document.getElementById('scraper-loader').classList.add('hidden');
         document.getElementById('scraper-url').value = '';
+        document.getElementById('scraper-file-input').value = '';
         document.getElementById('badge-scraper-count').classList.add('hidden');
     }
 
@@ -596,9 +612,67 @@
                 badge.classList.remove('hidden');
             }
         } catch (error) {
-            alert("❌ Fallo en el Scraper: " + error.message + "\n\nEsto suele pasar si Vinted bloquea la conexión del servidor. Inténtalo de nuevo en unos minutos.");
+            alert("❌ Fallo en el Scraper: " + error.message + "\n\nPosibles causas:\n1. Vinted ha bloqueado la conexión (intenta de nuevo en unos minutos).\n2. La URL no es válida o no contiene productos listados.\n3. La estructura de la página de Vinted ha cambiado.");
             cerrarModalScraper();
         }
+    }
+
+    // Procesa el archivo Excel/CSV subido manualmente
+    async function procesarArchivoManual(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        document.getElementById('scraper-step-1').classList.add('hidden');
+        document.getElementById('scraper-loader').classList.remove('hidden');
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+                // Mapeo inteligente de columnas (Instant Data Scraper usa nombres variados)
+                const productosMapeados = jsonData.map(row => {
+                    return {
+                        titulo: row.description || row.title || row.nombre || row.prenda || row['item-card-description'],
+                        precio: row.price || row.precio || row.price_val || row['item-card-price'],
+                        imagen: row['image-src'] || row.image || row.foto || row.imagen || row['item-card-image-src']
+                    };
+                });
+
+                const response = await fetch('/api/scraper/analizar-manual', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ productosExtraidos: productosMapeados })
+                });
+
+                if (!response.ok) throw new Error('Error al analizar el archivo.');
+
+                resultadosScraperActual = await response.json();
+                renderizarResultadosScraping(resultadosScraperActual);
+
+                document.getElementById('scraper-loader').classList.add('hidden');
+                document.getElementById('scraper-step-2').classList.remove('hidden');
+                
+                const badge = document.getElementById('badge-scraper-count');
+                const total = (resultadosScraperActual.discrepancias?.length || 0) + (resultadosScraperActual.nuevos?.length || 0) + (resultadosScraperActual.identicos?.length || 0);
+                if (total > 0) {
+                    badge.innerText = `${total} EN ARCHIVO`;
+                    badge.classList.remove('hidden');
+                }
+            } catch (error) {
+                alert("❌ Error al leer el archivo: " + error.message);
+                procesarScraperVinted();
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function toggleSelectAllNewItems(checked) {
+        const checkboxes = document.querySelectorAll('.check-new-scraper');
+        checkboxes.forEach(cb => cb.checked = checked);
     }
 
     function renderizarResultadosScraping(data) {

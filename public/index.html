@@ -581,7 +581,7 @@
         document.getElementById('modal-scraper').classList.add('hidden');
     }
 
-    // Llama al backend para scrapear y comparar
+    // REALIZA EL SCRAPING DESDE EL NAVEGADOR (ORDENADOR LOCAL) PARA EVITAR BLOQUEOS DE IP
     async function iniciarScraping() {
         const url = document.getElementById('scraper-url').value;
         if(!url) return alert('Debes introducir una cuenta o URL.');
@@ -590,16 +590,51 @@
         document.getElementById('scraper-loader').classList.remove('hidden');
 
         try {
-            const response = await fetch('/api/scraper/analizar', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url })
+            // 1. Usamos un Proxy CORS para obtener el HTML de Vinted desde tu IP local
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+            const resProxy = await fetch(proxyUrl);
+            const proxyData = await resProxy.json();
+            
+            if (!proxyData || !proxyData.contents) throw new Error("No se pudo obtener el contenido de la web.");
+
+            // 2. Parseamos el HTML directamente en el navegador
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(proxyData.contents, 'text/html');
+
+            // Selectores robustos basados en la estructura de Vinted
+            const items = doc.querySelectorAll('div[data-testid="item-card"], .feed-grid__item, .web_ui__ItemBox__component, .item-card');
+            
+            const productosExtraidos = [];
+            items.forEach(item => {
+                const titulo = item.querySelector('div[data-testid$="--description"], h4, .web_ui__ItemBox__title, .truncated')?.textContent?.trim();
+                const precioTexto = item.querySelector('div[data-testid$="--price"], h3, .web_ui__ItemBox__price, .price')?.textContent?.trim();
+                const imgTag = item.querySelector('img');
+                const imagen = imgTag?.src || imgTag?.getAttribute('data-src') || imgTag?.getAttribute('srcset')?.split(' ')[0];
+
+                if (titulo && precioTexto) {
+                    // Limpieza de precio para el backend
+                    let cleanPrecio = precioTexto.replace(/[^\d,.]/g, '').trim();
+                    if (cleanPrecio.includes(',') && cleanPrecio.includes('.')) {
+                        cleanPrecio = cleanPrecio.replace(/\./g, '').replace(',', '.');
+                    } else if (cleanPrecio.includes(',')) {
+                        cleanPrecio = cleanPrecio.replace(',', '.');
+                    }
+                    productosExtraidos.push({ titulo, precio: cleanPrecio, imagen });
+                }
             });
 
-            if (!response.ok) throw new Error('Error ejecutando el scraper en el servidor.');
+            if (productosExtraidos.length === 0) throw new Error("No se detectaron productos. Vinted podría estar bloqueando el proxy o la URL es incorrecta.");
+
+            // 3. Enviamos los datos extraídos localmente al servidor para comparar con MongoDB
+            const response = await fetch('/api/scraper/analizar-manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productosExtraidos })
+            });
+
+            if (!response.ok) throw new Error('Error al comparar con la base de datos.');
 
             resultadosScraperActual = await response.json();
-            console.log("Datos recibidos del scraper:", resultadosScraperActual);
             renderizarResultadosScraping(resultadosScraperActual);
 
             document.getElementById('scraper-loader').classList.add('hidden');
@@ -612,8 +647,9 @@
                 badge.classList.remove('hidden');
             }
         } catch (error) {
-            alert("❌ Fallo en el Scraper: " + error.message + "\n\nPosibles causas:\n1. Vinted ha bloqueado la conexión (intenta de nuevo en unos minutos).\n2. La URL no es válida o no contiene productos listados.\n3. La estructura de la página de Vinted ha cambiado.");
-            cerrarModalScraper();
+            alert("❌ Error en Scraper Local: " + error.message);
+            document.getElementById('scraper-loader').classList.add('hidden');
+            document.getElementById('scraper-step-1').classList.remove('hidden');
         }
     }
 

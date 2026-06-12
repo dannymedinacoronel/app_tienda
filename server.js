@@ -52,7 +52,8 @@ const VentaRopaSchema = new mongoose.Schema({
     rating: { type: Number, default: 0, min: 0, max: 5 },
     estado: { type: String, enum: ['Vendido', 'No Vendido', 'Devuelto'], default: 'No Vendido' },
     comentariosProducto: { type: String, default: '', trim: true },
-    tienda: { type: mongoose.Schema.Types.ObjectId, ref: 'Tienda', required: true }
+    tienda: { type: mongoose.Schema.Types.ObjectId, ref: 'Tienda', required: true },
+    imagen: { type: String, default: '' }
 });
 const VentaRopa = mongoose.models.VentaRopa || mongoose.model('VentaRopa', VentaRopaSchema);
 
@@ -330,82 +331,121 @@ app.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: $
 // --- SISTEMA DE SCRAPING WEB --- //
 
 // 1. Analizar cuenta, hacer el scrape y devolver comparativa
+// --- SISTEMA DE SCRAPING MEJORADO --- //
+
+/**
+ * Analiza una URL de Vinted y devuelve una comparativa detallada:
+ * 1. Productos existentes con cambios de precio (discrepancias).
+ * 2. Productos nuevos encontrados en la web que no están en el sistema.
+ */
 app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
     try {
         const { url } = req.body;
         if (!url) return res.status(400).json({ error: 'La URL es obligatoria.' });
 
-        // 1. Obtener el HTML de la página (Vinted/Wallapop suelen bloquear bots, usamos un User-Agent)
+        console.log(`[SCRAPER] Iniciando análisis de: ${url}`);
+
         const response = await axios.get(url, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36' }
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                'Accept-Language': 'es-ES,es;q=0.9',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
         });
 
         const $ = cheerio.load(response.data);
-        const discrepancias = [];
-
-        // 2. Buscar productos actuales de la base de datos para comparar
+        const resultados = { discrepancias: [], nuevos: [] };
         const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
 
-        // 3. Extraer productos de la web (Los selectores de clase varían, esto es una base lógica)
-        // Nota: Vinted suele usar clases como '.feed-grid__item' o '.web_ui__ItemBox__details'
-        $('.feed-grid__item, .web_ui__ItemBox__details').each((i, el) => {
-            const titulo = $(el).find('h4, .web_ui__Text__title').text().trim();
-            const precioTexto = $(el).find('h3, .web_ui__Text__text').text().trim();
+        // Selectores actualizados para Vinted (basados en estructura común de grid)
+        $('.feed-grid__item, [data-testid^="product-item"], .web_ui__ItemBox__details').each((i, el) => {
+            const item = $(el);
+            const titulo = item.find('h4, .web_ui__Text__title, [data-testid$="--description"]').first().text().trim();
+            const precioTexto = item.find('h3, .web_ui__Text__text, [data-testid$="--price"]').first().text().trim();
+            const imagen = item.find('img').attr('src');
+            
             const precioWeb = parseFloat(precioTexto.replace(/[^0-9,.]/g, '').replace(',', '.'));
 
             if (titulo && !isNaN(precioWeb)) {
-                // Intentar encontrar el producto en nuestra BD por el nombre de la prenda
-                const coincidencia = productosBD.find(p => p.prenda.toLowerCase() === titulo.toLowerCase());
+                const coincidencia = productosBD.find(p => p.prenda.toLowerCase().includes(titulo.toLowerCase()) || titulo.toLowerCase().includes(p.prenda.toLowerCase()));
 
-                if (coincidencia && coincidencia.precioVenta !== precioWeb) {
-                    discrepancias.push({
-                        idMongo: coincidencia._id,
-                        sku: coincidencia.sku,
-                        prenda: coincidencia.prenda,
-                        campoModificado: 'precioVenta',
-                        valorAntiguo: coincidencia.precioVenta,
-                        valorNuevo: precioWeb
+                if (coincidencia) {
+                    if (coincidencia.precioVenta !== precioWeb) {
+                        resultados.discrepancias.push({
+                            idMongo: coincidencia._id,
+                            prenda: coincidencia.prenda,
+                            valorAntiguo: coincidencia.precioVenta,
+                            valorNuevo: precioWeb,
+                            imagen
+                        });
+                    }
+                } else {
+                    // Producto no encontrado -> Sugerir adición
+                    resultados.nuevos.push({
+                        prenda: titulo,
+                        precioVenta: precioWeb,
+                        imagen,
+                        canalVenta: 'Vinted',
+                        estado: 'No Vendido'
                     });
                 }
             }
         });
 
-        if (discrepancias.length === 0) {
-            console.log(`[SCRAPER] No se detectaron discrepancias para: ${url}`);
-        }
-
-        res.json(discrepancias);
+        console.log(`[SCRAPER] Análisis finalizado. Discrepancias: ${resultados.discrepancias.length}, Nuevos: ${resultados.nuevos.length}`);
+        res.json(resultados);
     } catch (error) {
-        console.error('Error en ejecución de Scraper:', error);
-        res.status(500).json({ error: 'Fallo al realizar el web scraping' });
+        console.error('Error en Scraper:', error);
+        const msg = error.response && error.response.status === 403 ? 'Acceso denegado por Vinted (403). Intenta de nuevo en unos minutos.' : 'Error al conectar con la web externa.';
+        res.status(500).json({ error: msg });
     }
 });
 
-// 2. Ejecutar directamente las modificaciones autorizadas
+/**
+ * Importa productos nuevos seleccionados por el usuario
+ */
+app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
+    try {
+        const { productos } = req.body; // Array de productos seleccionados en el frontend
+        if (!productos || !Array.isArray(productos)) return res.status(400).json({ error: 'Datos de productos no válidos.' });
+
+        const tiendaVinted = await Tienda.findOne({ nombre: 'Vinted' }) || await Tienda.findOne({ nombre: 'Sin definir' });
+        const tiendaId = tiendaVinted ? tiendaVinted._id : (await new Tienda({ nombre: 'Vinted' }).save())._id;
+
+        const registrosCreados = [];
+        for (const prod of productos) {
+            const nuevaVenta = new VentaRopa({
+                ...prod,
+                tienda: tiendaId,
+                sku: `VNT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                comentariosProducto: `Importado automáticamente desde Vinted el ${new Date().toLocaleDateString()}`
+            });
+            await nuevaVenta.save();
+            registrosCreados.push(nuevaVenta.prenda);
+        }
+
+        await registrarLog(req.session.email, `Importó ${registrosCreados.length} productos desde Vinted: ${registrosCreados.join(', ')}`);
+        res.json({ success: true, count: registrosCreados.length });
+    } catch (error) {
+        console.error('Error en importación:', error);
+        res.status(500).json({ error: 'Fallo al guardar los nuevos productos.' });
+    }
+});
+
+/**
+ * Aplica cambios de precio a productos existentes
+ */
 app.post('/api/scraper/aplicar', exigeAdmin, async (req, res) => {
     try {
         const { cambios } = req.body;
-        
         for (const cambio of cambios) {
-            // Preparamos el objeto de actualización dinámico
-            const updatePayload = {};
-            updatePayload[cambio.campoModificado] = cambio.valorNuevo;
-            
-            // Actualizar producto en la BBDD
-            await VentaRopa.findByIdAndUpdate(cambio.idMongo, updatePayload);
-            
-            // Registrar acción en la Auditoría si la tienes habilitada
-            if (typeof registrarLog === "function") {
-                await registrarLog(
-                    req.session.email || 'Admin', 
-                    `Scraper Autoupdate: ${cambio.prenda} | ${cambio.campoModificado} -> ${cambio.valorNuevo}`
-                );
-            }
+            await VentaRopa.findByIdAndUpdate(cambio.idMongo, { precioVenta: cambio.valorNuevo });
+            await registrarLog(req.session.email, `Sincronización precio: ${cambio.prenda} -> ${cambio.valorNuevo}€`);
         }
-
-        res.json({ success: true, message: 'Cambios sincronizados correctamente' });
+        res.json({ success: true });
     } catch (error) {
-        console.error('Error aplicando updates del scraper:', error);
-        res.status(500).json({ error: 'Fallo al actualizar en MongoDB' });
+        res.status(500).json({ error: 'Error al actualizar precios.' });
     }
 });

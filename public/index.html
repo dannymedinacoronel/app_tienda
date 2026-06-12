@@ -95,7 +95,17 @@
         #grid-calendario-audit::-webkit-scrollbar { width: 4px; }
 
         /* Estilos Notas */
-        #board-notas { height: 160px; position: relative; overflow: hidden; }
+        #board-notas { 
+            height: 160px; 
+            position: relative; 
+            overflow: hidden; 
+            /* Habilita el redimensionado por el usuario */
+            resize: both; 
+            min-height: 120px; 
+            min-width: 280px; 
+            max-height: 500px;
+            max-width: 600px;
+        }
         .sticky-note { 
             position: absolute; 
             width: 130px; 
@@ -157,7 +167,32 @@
                                     📷
                                 </button>
                             </div>
-                            <button onclick="forceRefreshDataManual()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-transform active:scale-95">🔄</button>
+
+                            <button id="btn-mute-volumen" onclick="toggleMuteVolumenGlobal()" class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md transition-colors" title="Quitar/Poner Volumen">
+                                🔊 <span id="txt-mute-volumen">Sonido</span>
+                            </button>
+
+                            <div class="relative group">
+                                <button class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md tracking-wide">
+                                    🎨 Temas <span class="text-[9px] opacity-60">▼</span>
+                                </button>
+                                <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-32 dropdown-bg border rounded-xl shadow-2xl z-[150] p-1 space-y-0.5 animate-fadeIn">
+                                    <button onclick="setTheme('dark')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌌 Oscuro</button>
+                                    <button onclick="setTheme('pink')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌸 Rosa</button>
+                                    <button onclick="setTheme('light')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">☀️ Claro</button>
+                                    <button onclick="setTheme('emerald')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌲 Verde</button>
+                                    <button onclick="setTheme('purple')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🔮 Morado</button>
+                                </div>
+                            </div>
+
+                            <button onclick="forceRefreshDataManual()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
+                                🔄 <span class="hidden sm:inline">Refrescar</span>
+                            </button>
+                            <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600/40 hover:bg-purple-700 border border-purple-500/30 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">💾 Backup</button>
+                            <button onclick="document.getElementById('input-restore-backup').click()" class="bg-slate-700 hover:bg-slate-600 border border-current/10 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">📂 Importar</button>
+                            <input type="file" id="input-restore-backup" class="hidden" accept=".json" onchange="importarBackupJSON(event)">
+                            <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">📊 Excel</button>
+                            <button onclick="procesarScraperVinted()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">👗 Scraper</button>
                             <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
                         </div>
                     </header>
@@ -168,9 +203,9 @@
                         <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📜 Logs</button>
                     </nav>
                 </div>
-                
-                <!-- TABLÓN DE NOTAS A LA DERECHA -->
-                <div id="board-notas" class="card-bg border rounded-3xl w-full lg:w-[320px] relative group overflow-hidden">
+
+                <!-- TABLÓN DE NOTAS REDIMENSIONABLE -->
+                <div id="board-notas" class="card-bg border rounded-3xl w-full lg:w-[320px] relative group">
                     <div class="absolute top-2 left-3 z-20 flex items-center gap-2">
                         <span class="text-[8px] font-black uppercase tracking-widest opacity-30">📌 Notas</span>
                         <button onclick="crearNotaNueva()" class="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white text-[8px] font-bold px-2 py-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">+ Nuevo</button>

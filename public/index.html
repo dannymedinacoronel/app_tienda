@@ -87,6 +87,12 @@
         #particles-js { position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; pointer-events: none; }
         #wrapper-core { position: relative; z-index: 10; }
         .group:hover .group-hover\:block { display: block; }
+
+        /* Estilos Calendario */
+        .calendario-dia { min-height: 100px; transition: all 0.2s; }
+        .calendario-log-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+        .calendario-log-item:hover { white-space: normal; position: relative; z-index: 50; background: rgba(0,0,0,0.9); }
+        #grid-calendario-audit::-webkit-scrollbar { width: 4px; }
     </style>
 </head>
 <body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-24 transition-all duration-300">
@@ -453,13 +459,38 @@
                 </div>
             </div>
             
-            <div id="sec-auditoria" class="seccion-app hidden grid grid-cols-1 gap-6 mb-8">
-                <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[400px]">
-                    <h3 class="text-xs font-black text-indigo-400 uppercase mb-3 tracking-wider flex justify-between">
-                        📜 AUDITORÍA DEL NÚCLEO <span>LIVE</span>
-                    </h3>
-                    <div id="contenedor-logs-auditoria" class="flex-1 overflow-y-auto space-y-2 pr-1 text-[11px] font-mono opacity-80">
-                        <div class="italic opacity-50">Sincronizando operaciones cloud...</div>
+            <div id="sec-auditoria" class="seccion-app hidden flex flex-col gap-6 mb-8">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <!-- Feed Live -->
+                    <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[650px]">
+                        <h3 class="text-xs font-black text-indigo-400 uppercase mb-3 tracking-wider flex justify-between">
+                            📜 LIVE FEED <span>ACTIVE</span>
+                        </h3>
+                        <div id="contenedor-logs-auditoria" class="flex-1 overflow-y-auto space-y-2 pr-1 text-[10px] font-mono opacity-80">
+                            <div class="italic opacity-50">Cargando logs...</div>
+                        </div>
+                    </div>
+
+                    <!-- Calendario Google Style -->
+                    <div class="lg:col-span-3 card-bg border p-6 rounded-3xl shadow-xl flex flex-col">
+                        <div class="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
+                            <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                                📅 Calendario de Actividad Histórica
+                            </h3>
+                            <div class="flex items-center gap-4 bg-black/20 p-1.5 rounded-2xl border border-white/5 shadow-inner">
+                                <button onclick="navegarCalendario(-1)" class="p-2 hover:bg-white/10 rounded-xl transition-all">◀</button>
+                                <span id="txt-calendario-mes" class="text-[11px] font-black uppercase tracking-widest min-w-[140px] text-center">...</span>
+                                <button onclick="navegarCalendario(1)" class="p-2 hover:bg-white/10 rounded-xl transition-all">▶</button>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-7 gap-1 mb-2">
+                            <div class="text-[9px] font-black uppercase opacity-30 text-center">Dom</div><div class="text-[9px] font-black uppercase opacity-30 text-center">Lun</div><div class="text-[9px] font-black uppercase opacity-30 text-center">Mar</div><div class="text-[9px] font-black uppercase opacity-30 text-center">Mié</div><div class="text-[9px] font-black uppercase opacity-30 text-center">Jue</div><div class="text-[9px] font-black uppercase opacity-30 text-center">Vie</div><div class="text-[9px] font-black uppercase opacity-30 text-center">Sáb</div>
+                        </div>
+
+                        <div id="grid-calendario-audit" class="grid grid-cols-7 gap-2 flex-1">
+                            <!-- Días inyectados vía JS -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1006,6 +1037,8 @@
         let SOUND_MUTED_GLOBAL = false;
         let CONFIG_ORDEN_COLUMNAS = { 'No Vendido': 'reciente', 'Vendido': 'reciente', 'Devuelto': 'reciente' };
         let CONFIG_FILTRO_COLUMNAS = { 'No Vendido': '', 'Vendido': '', 'Devuelto': '' };
+        let CALENDARIO_MES = new Date().getMonth() + 1;
+        let CALENDARIO_ANIO = new Date().getFullYear();
 
         // 🏬 LÓGICA DE TIENDAS DESDE MONGODB
         async function refrescarYListarTiendasCloud() {
@@ -1105,6 +1138,72 @@
             
             if (idSeccion === 'sec-analitica' && BASE_DATOS.length > 0) {
                 setTimeout(() => { actualizarTodoElBloqueGrafico(); }, 50);
+            }
+
+            if (idSeccion === 'sec-auditoria') {
+                setTimeout(() => { actualizarCalendarioAuditoria(); }, 50);
+            }
+        }
+
+        async function navegarCalendario(delta) {
+            CALENDARIO_MES += delta;
+            if (CALENDARIO_MES > 12) { CALENDARIO_MES = 1; CALENDARIO_ANIO++; }
+            if (CALENDARIO_MES < 1) { CALENDARIO_MES = 12; CALENDARIO_ANIO--; }
+            await actualizarCalendarioAuditoria();
+        }
+
+        async function actualizarCalendarioAuditoria() {
+            const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+            const txtMes = document.getElementById('txt-calendario-mes');
+            if(txtMes) txtMes.innerText = `${nombresMeses[CALENDARIO_MES-1]} ${CALENDARIO_ANIO}`;
+            
+            const grid = document.getElementById('grid-calendario-audit');
+            if(!grid) return;
+            grid.innerHTML = '<div class="col-span-7 py-20 text-center opacity-50 animate-pulse font-mono text-xs">Sincronizando registros históricos...</div>';
+
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/logs/calendario?mes=${CALENDARIO_MES}&anio=${CALENDARIO_ANIO}`, { credentials: 'include' });
+                const data = await res.json();
+                const logs = data.logs || [];
+
+                const logsPorDia = {};
+                logs.forEach(l => {
+                    const dia = new Date(l.fechaHora).getDate();
+                    if (!logsPorDia[dia]) logsPorDia[dia] = [];
+                    logsPorDia[dia].push(l);
+                });
+
+                const primerDiaMes = new Date(CALENDARIO_ANIO, CALENDARIO_MES - 1, 1).getDay();
+                const diasEnMes = new Date(CALENDARIO_ANIO, CALENDARIO_MES, 0).getDate();
+
+                grid.innerHTML = '';
+                for (let i = 0; i < primerDiaMes; i++) { grid.innerHTML += `<div class="bg-white/5 rounded-2xl opacity-10"></div>`; }
+
+                for (let d = 1; d <= diasEnMes; d++) {
+                    const hoy = new Date();
+                    const esHoy = d === hoy.getDate() && CALENDARIO_MES === (hoy.getMonth() + 1) && CALENDARIO_ANIO === hoy.getFullYear();
+                    
+                    let logsHtml = '';
+                    if (logsPorDia[d]) {
+                        logsPorDia[d].slice(0, 4).forEach(log => {
+                            const hora = new Date(log.fechaHora).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                            logsHtml += `<div class="calendario-log-item text-[7px] mb-0.5 opacity-70" title="${log.accion}">
+                                            <span class="text-indigo-400 font-bold">${hora}</span> ${log.accion}
+                                         </div>`;
+                        });
+                        if (logsPorDia[d].length > 4) { logsHtml += `<div class="text-[6px] opacity-30 text-right">+${logsPorDia[d].length - 4} items</div>`; }
+                    }
+
+                    grid.innerHTML += `
+                        <div class="calendario-dia card-bg border rounded-2xl p-2 flex flex-col gap-1 transition-all hover:scale-[1.02] ${esHoy ? 'border-indigo-500 shadow-[0_0_15px_rgba(79,70,229,0.3)]' : 'border-white/5'}">
+                            <span class="text-[10px] font-black ${esHoy ? 'text-indigo-400' : 'opacity-40'}">${d}</span>
+                            <div class="flex-1 overflow-hidden">
+                                ${logsHtml}
+                            </div>
+                        </div>`;
+                }
+            } catch (err) {
+                grid.innerHTML = '<div class="col-span-7 py-20 text-center text-rose-400 text-xs">Error al conectar con la base de datos de auditoría.</div>';
             }
         }
 

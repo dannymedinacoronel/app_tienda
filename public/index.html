@@ -219,6 +219,7 @@
                 <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all nav-btn-active text-white">📦 Panel</button>
                 <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">📊 Analítica</button>
                 <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">👥 Clientes</button>
+                <button onclick="navegarASeccion('sec-usuarios')" id="tab-sec-usuarios" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">🔑 Acceso</button>
                 <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">📋 Gestión</button>
                 <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">📜 Logs</button>
             </nav>
@@ -536,6 +537,33 @@
                                     <tr><th class="pb-3 px-2">Nombre</th><th class="pb-3 px-2">Contacto</th><th class="pb-3 px-2">Notas</th><th class="pb-3 px-2">Próx. Reservas</th><th class="pb-3 px-2 text-right">Acciones</th></tr>
                                 </thead>
                                 <tbody id="tabla-clientes-crm" class="divide-y divide-white/5"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN GESTIÓN DE USUARIOS AUTORIZADOS -->
+            <div id="sec-usuarios" class="seccion-app hidden flex flex-col gap-6 mb-8">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="card-bg border p-6 rounded-3xl shadow-xl">
+                        <h3 class="text-xs font-black text-blue-400 uppercase mb-4">🔑 Autorizar Nueva Cuenta</h3>
+                        <div class="space-y-4">
+                            <p class="text-[10px] opacity-60">Solo los emails de Gmail añadidos aquí podrán saltar la pantalla de login.</p>
+                            <input type="email" id="user-admin-email" placeholder="ejemplo@gmail.com" class="input-bg border w-full rounded-xl px-4 py-3 text-xs focus:outline-none">
+                            <button onclick="agregarUsuarioAutorizado()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-xl text-[10px] tracking-widest uppercase transition-all shadow-lg">Otorgar Acceso</button>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-2 card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[500px]">
+                        <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest mb-6">👥 Cuentas con Acceso al Core</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-[11px]">
+                                <thead class="opacity-40 uppercase font-black border-b border-white/5">
+                                    <tr><th class="pb-3 px-2">Email Autorizado</th><th class="pb-3 px-2">Fecha Alta</th><th class="pb-3 px-2 text-right">Acciones</th></tr>
+                                </thead>
+                                <tbody id="tabla-usuarios-admin" class="divide-y divide-white/5">
+                                    <!-- Inyectado vía JS -->
+                                </tbody>
                             </table>
                         </div>
                     </div>
@@ -1703,6 +1731,10 @@
             if (idSeccion === 'sec-crm') {
                 setTimeout(() => { refrescarClientesCRM(); }, 50);
             }
+
+            if (idSeccion === 'sec-usuarios') {
+                setTimeout(() => { refrescarUsuariosAdmin(); }, 50);
+            }
         }
 
         function navegarCalendarioStock(delta) {
@@ -1873,6 +1905,114 @@
             localStorage.setItem('seychelles-fac-vendedor', JSON.stringify(vendedor));
         }
 
+        // --- GESTIÓN DE USUARIOS AUTORIZADOS ---
+        async function refrescarUsuariosAdmin() {
+            try {
+                const res = await fetch('/api/usuarios-admin', { credentials: 'include' });
+                const usuarios = await res.json();
+                const tbody = document.getElementById('tabla-usuarios-admin');
+                if(!tbody) return;
+                tbody.innerHTML = usuarios.map(u => `
+                    <tr class="hover:bg-white/5 transition-colors">
+                        <td class="py-4 px-2 font-bold lowercase">${u.email}</td>
+                        <td class="py-4 px-2 opacity-50">${new Date(u.fechaAgregado).toLocaleDateString()}</td>
+                        <td class="py-4 px-2 text-right">
+                            <button onclick="eliminarUsuarioAdmin('${u._id}')" class="text-rose-500 hover:text-rose-400 p-2">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) { console.error("Error cargando usuarios:", e); }
+        }
+
+        async function agregarUsuarioAutorizado() {
+            const emailInput = document.getElementById('user-admin-email');
+            const email = emailInput.value.trim();
+            if(!email) return alert("Introduce un email.");
+            
+            try {
+                const res = await fetch('/api/usuarios-admin', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'include',
+                    body: JSON.stringify({ email })
+                });
+                if(res.ok) {
+                    cantarPorVoz("Acceso concedido");
+                    emailInput.value = '';
+                    refrescarUsuariosAdmin();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || "Error al autorizar.");
+                }
+            } catch(e) { alert("Fallo de conexión."); }
+        }
+
+        async function eliminarUsuarioAdmin(id) {
+            if(!confirm("¿Revocar acceso a esta cuenta? El usuario ya no podrá entrar al sistema.")) return;
+            try {
+                const res = await fetch(`/api/usuarios-admin/${id}`, { method: 'DELETE', credentials: 'include' });
+                if(res.ok) {
+                    cantarPorVoz("Acceso revocado");
+                    refrescarUsuariosAdmin();
+                } else {
+                    const err = await res.json();
+                    alert(err.error || "Error al eliminar.");
+                }
+            } catch(e) { alert("Error de red."); }
+        }
+
+        // --- REPARACIÓN GUARDADO CRM ---
+        async function manejarEnvioCliente(e) {
+            e.preventDefault();
+            const btnSave = e.target.querySelector('button[type="submit"]');
+            const originalText = btnSave.innerText;
+            btnSave.innerText = "Guardando...";
+            btnSave.disabled = true;
+
+            const id = document.getElementById('crm-id').value;
+            const payload = {
+                nombre: document.getElementById('crm-nombre').value.trim(),
+                nif: document.getElementById('crm-nif').value.trim(),
+                email: document.getElementById('crm-email').value.trim(),
+                telefono: document.getElementById('crm-tel').value.trim(),
+                direccion: document.getElementById('crm-dir').value.trim(),
+                comentarios: document.getElementById('crm-comentarios').value.trim(),
+                reservas: RESERVAS_CLIENTE_EDICION
+            };
+
+            if (!payload.nombre) {
+                alert("El nombre del cliente es obligatorio.");
+                btnSave.innerText = originalText; btnSave.disabled = false;
+                return;
+            }
+
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/clientes/${id}` : '/api/clientes';
+
+            try {
+                const res = await fetch(url, { 
+                    method, 
+                    headers: {'Content-Type':'application/json'}, 
+                    credentials:'include', 
+                    body: JSON.stringify(payload) 
+                });
+                
+                if(res.ok) { 
+                    cantarPorVoz("Datos sincronizados"); 
+                    limpiarFormCRM(); 
+                    await refrescarClientesCRM(); 
+                } else {
+                    const err = await res.json();
+                    alert(err.error || "Fallo en el servidor al guardar cliente.");
+                }
+            } catch(err) {
+                alert("Error crítico de comunicación con la base de datos.");
+            } finally {
+                btnSave.innerText = originalText;
+                btnSave.disabled = false;
+            }
+        }
+
         // --- LÓGICA CRM ---
         let RESERVAS_CLIENTE_EDICION = [];
 
@@ -1931,24 +2071,6 @@
                     </td>
                 </tr>
             `).join('');
-        }
-
-        async function manejarEnvioCliente(e) {
-            e.preventDefault();
-            const id = document.getElementById('crm-id').value;
-            const payload = {
-                nombre: document.getElementById('crm-nombre').value,
-                nif: document.getElementById('crm-nif').value,
-                email: document.getElementById('crm-email').value,
-                telefono: document.getElementById('crm-tel').value,
-                direccion: document.getElementById('crm-dir').value,
-                comentarios: document.getElementById('crm-comentarios').value,
-                reservas: RESERVAS_CLIENTE_EDICION
-            };
-            const method = id ? 'PUT' : 'POST';
-            const url = id ? `/api/clientes/${id}` : '/api/clientes';
-            const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload) });
-            if(res.ok) { cantarPorVoz("Cliente guardado"); limpiarFormCRM(); refrescarClientesCRM(); }
         }
 
         async function borrarClienteCRM(id) {

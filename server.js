@@ -39,6 +39,12 @@ const TiendaSchema = new mongoose.Schema({
 });
 const Tienda = mongoose.models.Tienda || mongoose.model('Tienda', TiendaSchema);
 
+const UsuarioAutorizadoSchema = new mongoose.Schema({
+    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    fechaAgregado: { type: Date, default: Date.now }
+});
+const UsuarioAutorizado = mongoose.models.UsuarioAutorizado || mongoose.model('UsuarioAutorizado', UsuarioAutorizadoSchema);
+
 const CategoriaSchema = new mongoose.Schema({
     nombre: { type: String, required: true, unique: true, trim: true }
 });
@@ -333,7 +339,9 @@ app.post('/api/auth/google', async (req, res) => {
         const payload = ticket.getPayload();
         const emailUsuario = payload['email'].toLowerCase().trim();
 
-        if (ADMIN_WHITELIST.includes(emailUsuario)) {
+        const autorizado = await UsuarioAutorizado.findOne({ email: emailUsuario });
+
+        if (autorizado) {
             req.session.esAdmin = true;
             req.session.email = emailUsuario;
             await registrarLog(emailUsuario, "Inició sesión en el sistema core");
@@ -415,6 +423,37 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar logs.' }); }
 });
 
+// --- Rutas de Gestión de Usuarios Autorizados ---
+app.get('/api/usuarios-admin', exigeAdmin, async (req, res) => {
+    try {
+        const usuarios = await UsuarioAutorizado.find().sort({ email: 1 }).lean();
+        res.json(usuarios);
+    } catch (e) { res.status(500).json({ error: 'Error al listar usuarios.' }); }
+});
+
+app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ error: 'Email requerido.' });
+        const nuevo = new UsuarioAutorizado({ email: email.toLowerCase().trim() });
+        await nuevo.save();
+        await registrarLog(req.session.email, `Autorizó acceso a: ${email}`);
+        notificarCambio();
+        res.json(nuevo);
+    } catch (e) { res.status(400).json({ error: 'El usuario ya está autorizado.' }); }
+});
+
+app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
+    try {
+        const user = await UsuarioAutorizado.findById(req.params.id);
+        if (user && user.email === req.session.email) return res.status(400).json({ error: 'No puedes eliminarte a ti mismo.' });
+        await UsuarioAutorizado.findByIdAndDelete(req.params.id);
+        await registrarLog(req.session.email, `Revocó acceso a: ${user ? user.email : 'ID '+req.params.id}`);
+        notificarCambio();
+        res.sendStatus(200);
+    } catch (e) { res.status(500).json({ error: 'Error al eliminar usuario.' }); }
+});
+
 // --- Rutas de Clientes (CRM) ---
 app.get('/api/clientes', exigeAdmin, async (req, res) => {
     try { res.json(await Cliente.find().sort({ nombre: 1 })); } catch (e) { res.status(500).send(e); }
@@ -425,8 +464,8 @@ app.post('/api/clientes', exigeAdmin, async (req, res) => {
         await nuevo.save();
         await registrarLog(req.session.email, `Registró cliente: ${nuevo.nombre}`);
         notificarCambio();
-        res.json(nuevo);
-    } catch (e) { res.status(400).send(e); }
+        res.status(201).json(nuevo);
+    } catch (e) { res.status(400).json({ error: 'Error al crear cliente.' }); }
 });
 app.put('/api/clientes/:id', exigeAdmin, async (req, res) => {
     try {
@@ -434,7 +473,7 @@ app.put('/api/clientes/:id', exigeAdmin, async (req, res) => {
         await registrarLog(req.session.email, `Actualizó datos del cliente: ${cliente.nombre}`);
         notificarCambio();
         res.json(cliente);
-    } catch (e) { res.status(400).send(e); }
+    } catch (e) { res.status(400).json({ error: 'Error al actualizar cliente.' }); }
 });
 app.delete('/api/clientes/:id', exigeAdmin, async (req, res) => {
     try {

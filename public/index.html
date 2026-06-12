@@ -95,13 +95,13 @@
         #grid-calendario-audit::-webkit-scrollbar { width: 4px; }
 
         /* Estilos Notas */
-        #board-notas { height: 180px; position: relative; overflow: hidden; }
+        #board-notas { height: 160px; position: relative; overflow: hidden; }
         .sticky-note { 
             position: absolute; 
-            width: 140px; 
-            padding: 10px; 
+            width: 130px; 
+            padding: 8px; 
             border-radius: 8px; 
-            font-size: 10px; 
+            font-size: 9px; 
             font-weight: bold; 
             box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
             cursor: move; 
@@ -109,8 +109,8 @@
             color: #1e293b;
             transition: transform 0.1s;
         }
-        .sticky-note:active { transform: scale(1.05); z-index: 100; }
-        .sticky-note textarea { background: transparent; border: none; resize: none; width: 100%; height: 50px; outline: none; font-size: 10px; color: inherit; }
+        .sticky-note:active { transform: scale(1.05); z-index: 50; }
+        .sticky-note textarea { background: transparent; border: none; resize: none; width: 100%; height: 40px; outline: none; font-size: 9px; color: inherit; line-height: 1.2; }
         .note-colors { display: none; }
         .sticky-note:hover .note-colors { display: flex; }
     </style>
@@ -132,73 +132,52 @@
         </div>
 
         <div id="panel-control" class="hidden max-w-7xl mx-auto px-4 py-6">
-            <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-6">
-                <div class="flex items-center gap-4">
-                    <div>
-                        <h1 class="text-3xl font-black uppercase tracking-tight bg-gradient-to-r from-current to-blue-400 bg-clip-text text-transparent">Seychelles Shop</h1>
-                        <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
-                    </div>
-                    <div id="combo-badge" class="hidden bg-amber-500 text-slate-950 font-black px-3 py-1 rounded-xl text-xs uppercase tracking-wider animate-bounce shadow-md">
-                        💥 Combo x<span id="combo-count">0</span>
-                    </div>
+            <div class="flex flex-col lg:flex-row gap-6 items-start mb-6">
+                <div class="flex-1 w-full">
+                    <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-6">
+                        <div class="flex items-center gap-4">
+                            <div>
+                                <h1 class="text-3xl font-black uppercase tracking-tight bg-gradient-to-r from-current to-blue-400 bg-clip-text text-transparent">Seychelles Shop</h1>
+                                <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
+                            </div>
+                            <div id="combo-badge" class="hidden bg-amber-500 text-slate-950 font-black px-3 py-1 rounded-xl text-xs uppercase tracking-wider animate-bounce shadow-md">
+                                💥 Combo x<span id="combo-count">0</span>
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-wrap items-center justify-center lg:justify-end gap-2.5 w-full lg:w-auto">
+                            <div class="relative w-full sm:w-60 flex items-center gap-2">
+                                <div class="relative flex-1">
+                                    <form id="form-escaner-pistola" autocomplete="off">
+                                        <input type="text" id="input-pistola" oninput="filtrarProductosMenu(this.value)" placeholder="🔍 Buscar SKU o prenda..." class="w-full bg-black/20 border border-current/20 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40 transition-all">
+                                    </form>
+                                    <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-80 dropdown-bg border rounded-2xl shadow-2xl z-[200] max-h-60 overflow-y-auto p-2 text-xs"></div>
+                                </div>
+                                <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md flex-shrink-0 transition-transform active:scale-95">
+                                    📷
+                                </button>
+                            </div>
+                            <button onclick="forceRefreshDataManual()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-transform active:scale-95">🔄</button>
+                            <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
+                        </div>
+                    </header>
+
+                    <nav class="flex gap-2 p-1.5 card-bg border rounded-2xl text-xs max-w-md shadow-inner">
+                        <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white shadow">📦 Panel</button>
+                        <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📊 Analítica</button>
+                        <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📜 Logs</button>
+                    </nav>
                 </div>
                 
-                <div class="flex flex-wrap items-center justify-center lg:justify-end gap-2.5 w-full lg:w-auto">
-                    <div class="relative w-full sm:w-60 flex items-center gap-2">
-                        <div class="relative flex-1">
-                            <form id="form-escaner-pistola" autocomplete="off">
-                                <input type="text" id="input-pistola" oninput="filtrarProductosMenu(this.value)" placeholder="🔍 Buscar SKU o prenda..." class="w-full bg-black/20 border border-current/20 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40 transition-all">
-                            </form>
-                            <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-80 dropdown-bg border rounded-2xl shadow-2xl z-[200] max-h-60 overflow-y-auto p-2 text-xs"></div>
-                        </div>
-                        <button type="button" onclick="toggleEscanerCamara()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md flex-shrink-0 transition-transform active:scale-95">
-                            📷 Cámara
-                        </button>
+                <!-- TABLÓN DE NOTAS A LA DERECHA -->
+                <div id="board-notas" class="card-bg border rounded-3xl w-full lg:w-[320px] relative group overflow-hidden">
+                    <div class="absolute top-2 left-3 z-20 flex items-center gap-2">
+                        <span class="text-[8px] font-black uppercase tracking-widest opacity-30">📌 Notas</span>
+                        <button onclick="crearNotaNueva()" class="bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white text-[8px] font-bold px-2 py-0.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">+ Nuevo</button>
                     </div>
-
-                    <button id="btn-mute-volumen" onclick="toggleMuteVolumenGlobal()" class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md transition-colors" title="Quitar/Poner Volumen">
-                        🔊 <span id="txt-mute-volumen">Sonido</span>
-                    </button>
-
-                    <div class="relative group">
-                        <button class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md tracking-wide">
-                            🎨 Temas <span class="text-[9px] opacity-60">▼</span>
-                        </button>
-                        <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-32 dropdown-bg border rounded-xl shadow-2xl z-[150] p-1 space-y-0.5 animate-fadeIn">
-                            <button onclick="setTheme('dark')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌌 Oscuro</button>
-                            <button onclick="setTheme('pink')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌸 Rosa</button>
-                            <button onclick="setTheme('light')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">☀️ Claro</button>
-                            <button onclick="setTheme('emerald')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌲 Verde</button>
-                            <button onclick="setTheme('purple')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🔮 Morado</button>
-                        </div>
-                    </div>
-
-                    <button onclick="forceRefreshDataManual()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
-                        🔄 <span class="hidden sm:inline">Refrescar</span>
-                    </button>
-                    <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600/40 hover:bg-purple-700 border border-purple-500/30 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">💾 Backup</button>
-                    <button onclick="document.getElementById('input-restore-backup').click()" class="bg-slate-700 hover:bg-slate-600 border border-current/10 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">📂 Importar</button>
-                    <input type="file" id="input-restore-backup" class="hidden" accept=".json" onchange="importarBackupJSON(event)">
-                    <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">📊 Excel</button>
-                    <button onclick="procesarScraperVinted()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">👗 Scraper</button>
-                    <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
+                    <div id="canvas-notas" class="w-full h-full relative"></div>
                 </div>
-            </header>
-
-            <!-- TABLÓN DE NOTAS -->
-            <div id="board-notas" class="card-bg border rounded-3xl mb-6 relative group overflow-hidden">
-                <div class="absolute top-3 left-4 z-20 flex items-center gap-2">
-                    <span class="text-[9px] font-black uppercase tracking-widest opacity-40">📌 Tablón de Avisos</span>
-                    <button onclick="crearNotaNueva()" class="bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-bold px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">+ Añadir Nota</button>
-                </div>
-                <div id="canvas-notas" class="w-full h-full relative"></div>
             </div>
-
-            <nav class="flex gap-2 p-1.5 card-bg border rounded-2xl mb-6 text-xs max-w-md shadow-inner">
-                <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white shadow">📦 Panel General</button>
-                <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📊 Analítica</button>
-                <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📜 Auditoría</button>
-            </nav>
 
             <div id="barra-filtros-generales" class="card-bg border p-3.5 rounded-2xl mb-6 flex flex-wrap gap-3 items-center text-xs">
                 <span class="font-bold uppercase tracking-wider opacity-60 text-[10px]">🎯 Filtros rápidos:</span>
@@ -1135,25 +1114,22 @@
                     isDragging = true;
                     startX = e.clientX - div.offsetLeft;
                     startY = e.clientY - div.offsetTop;
-                };
 
-                document.onmousemove = (e) => {
-                    if (!isDragging) return;
-                    let newX = e.clientX - startX;
-                    let newY = e.clientY - startY;
-                    
-                    // Límites del board
-                    const board = document.getElementById('board-notas');
-                    newX = Math.max(0, Math.min(newX, board.clientWidth - 140));
-                    newY = Math.max(0, Math.min(newY, board.clientHeight - 80));
+                    const mouseMoveHandler = (moveEvent) => {
+                        if (!isDragging) return;
+                        let newX = moveEvent.clientX - startX;
+                        let newY = moveEvent.clientY - startY;
+                        const board = document.getElementById('board-notas');
+                        newX = Math.max(0, Math.min(newX, board.clientWidth - 130));
+                        newY = Math.max(0, Math.min(newY, board.clientHeight - 60));
+                        div.style.left = `${newX}px`;
+                        div.style.top = `${newY}px`;
+                    };
 
-                    div.style.left = `${newX}px`;
-                    div.style.top = `${newY}px`;
-                };
-
-                document.onmouseup = async () => {
-                    if(isDragging) {
+                    const mouseUpHandler = async () => {
                         isDragging = false;
+                        document.removeEventListener('mousemove', mouseMoveHandler);
+                        document.removeEventListener('mouseup', mouseUpHandler);
                         const x = parseInt(div.style.left);
                         const y = parseInt(div.style.top);
                         await fetch(`/api/notas/${nota._id}`, {
@@ -1162,7 +1138,10 @@
                             credentials: 'include',
                             body: JSON.stringify({ x, y })
                         });
-                    }
+                    };
+
+                    document.addEventListener('mousemove', mouseMoveHandler);
+                    document.addEventListener('mouseup', mouseUpHandler);
                 };
 
                 canvas.appendChild(div);

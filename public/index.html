@@ -203,7 +203,6 @@
                 <span class="font-bold uppercase tracking-wider opacity-60 text-[10px]">🎯 Filtros rápidos:</span>
                 <select id="filtro-categoria" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2.5 py-1.5 focus:outline-none">
                     <option value="TODOS">👕 Todas las categorías</option>
-                    <option value="Camisetas">Camisetas</option><option value="Sudaderas">Sudaderas</option><option value="Pantalones">Pantalones</option><option value="Vestidos">Vestidos</option><option value="Accesorios">Accesorios</option>
                 </select>
                 <select id="filtro-talla" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2.5 py-1.5 focus:outline-none">
                     <option value="TODOS">📐 Todas las tallas</option>
@@ -268,9 +267,11 @@
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Categoría</label>
-                                    <select id="categoria" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
-                                        <option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
-                                    </select>
+                                    <div class="flex gap-1.5">
+                                        <select id="categoria" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none flex-1 dropdown-bg"></select>
+                                        <button type="button" onclick="crearNuevaCategoriaDB()" class="bg-blue-600 hover:bg-blue-700 text-white px-2.5 rounded-xl text-sm font-black shadow transition-transform active:scale-95" title="Añadir categoría">+</button>
+                                        <button type="button" onclick="eliminarCategoriaSeleccionadaDB()" class="bg-rose-600/10 hover:bg-rose-600 text-rose-500 border border-rose-500/20 px-2 rounded-xl text-xs shadow transition-all" title="Eliminar categoría">🗑️</button>
+                                    </div>
                                 </div>
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Talla</label>
@@ -430,11 +431,6 @@
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Categoría</label>
                             <select id="an-filtro-categoria" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none">
                                 <option value="TODOS">👕 Todas</option>
-                                <option value="Camisetas">Camisetas</option>
-                                <option value="Sudaderas">Sudaderas</option>
-                                <option value="Pantalones">Pantalones</option>
-                                <option value="Vestidos">Vestidos</option>
-                                <option value="Accesorios">Accesorios</option>
                             </select>
                         </div>
                         <div>
@@ -1069,6 +1065,7 @@
         const BACKEND_URL = '';
         let BASE_DATOS = [];
         let LISTA_TIENDAS_GLOBAL = [];
+        let LISTA_CATEGORIAS_GLOBAL = [];
         let INSTANCIA_CHARTS = null;
         let INSTANCIA_TARTA = null;
         let INSTANCIA_BARRAS = null;
@@ -1090,6 +1087,72 @@
             const res = await fetch('/api/notas', { credentials: 'include' });
             NOTAS_LOCALES = await res.json();
             renderizarNotas();
+        }
+
+        // 🏷️ LÓGICA DE CATEGORÍAS DINÁMICAS
+        async function refrescarCategoriasCloud() {
+            const selectForm = document.getElementById('categoria');
+            const selectFiltro = document.getElementById('filtro-categoria');
+            const selectAn = document.getElementById('an-filtro-categoria');
+            const selectMasivo = document.getElementById('categoria-masiva');
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/categorias`, { credentials: 'include' });
+                const data = await res.json();
+                LISTA_CATEGORIAS_GLOBAL = data.categorias || [];
+                
+                selectForm.innerHTML = '';
+                if(selectFiltro) selectFiltro.innerHTML = '<option value="TODOS">👕 Todas las categorías</option>';
+                if(selectAn) selectAn.innerHTML = '<option value="TODOS">👕 Todas</option>';
+                if(selectMasivo) selectMasivo.innerHTML = '<option value="">👕 Categoría...</option>';
+
+                LISTA_CATEGORIAS_GLOBAL.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.nombre; opt.textContent = c.nombre;
+                    selectForm.appendChild(opt.cloneNode(true));
+                    if(selectFiltro) selectFiltro.appendChild(opt.cloneNode(true));
+                    if(selectAn) selectAn.appendChild(opt.cloneNode(true));
+                    if(selectMasivo) selectMasivo.appendChild(opt.cloneNode(true));
+                });
+            } catch(e) { console.error("Error cargando categorías:", e); }
+        }
+
+        async function crearNuevaCategoriaDB() {
+            const nombre = prompt("Nombre de la nueva categoría (puedes incluir un emoji al inicio):");
+            if (!nombre || nombre.trim() === "") return;
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/categorias`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ nombre: nombre.trim() })
+                });
+                if (res.ok) {
+                    cantarPorVoz("Categoría añadida.");
+                    await refrescarCategoriasCloud();
+                    document.getElementById('categoria').value = nombre.trim();
+                } else {
+                    const err = await res.json(); alert(err.error || "Error al crear categoría.");
+                }
+            } catch(e) { alert("Fallo de conexión."); }
+        }
+
+        async function eliminarCategoriaSeleccionadaDB() {
+            const nombre = document.getElementById('categoria').value;
+            const cat = LISTA_CATEGORIAS_GLOBAL.find(c => c.nombre === nombre);
+            if (!cat) return alert("Selecciona una categoría válida.");
+
+            if (confirm(`¿Eliminar permanentemente la categoría "${nombre}"?\nNota: Los artículos actuales conservarán su categoría como texto, pero ya no aparecerá en el listado de creación.`)) {
+                try {
+                    const res = await fetch(`${BACKEND_URL}/api/categorias/${cat._id}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+                    if (res.ok) {
+                        cantarPorVoz("Categoría eliminada.");
+                        await refrescarCategoriasCloud();
+                    }
+                } catch(e) { alert("Error al borrar."); }
+            }
         }
 
         async function crearNotaNueva() {
@@ -2170,6 +2233,7 @@
                     
                     // 3. Cargar datos protegidos solo después de confirmar acceso
                     await refrescarYListarTiendasCloud();
+                    await refrescarCategoriasCloud();
                     await reloadCoreData(); 
                     await cargarNotasBoard();
                 } else {

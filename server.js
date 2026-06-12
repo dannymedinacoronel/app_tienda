@@ -38,6 +38,11 @@ const TiendaSchema = new mongoose.Schema({
 });
 const Tienda = mongoose.models.Tienda || mongoose.model('Tienda', TiendaSchema);
 
+const CategoriaSchema = new mongoose.Schema({
+    nombre: { type: String, required: true, unique: true, trim: true }
+});
+const Categoria = mongoose.models.Categoria || mongoose.model('Categoria', CategoriaSchema);
+
 const VentaRopaSchema = new mongoose.Schema({
     fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
     sku: { type: String, default: '', trim: true },
@@ -104,6 +109,37 @@ async function registrarLog(usuario, accion) {
         await nuevoLog.save();
     } catch (e) { console.error("Error al guardar log:", e); }
 }
+
+// --- Rutas de Categorías ---
+
+app.get('/api/categorias', exigeAdmin, async (req, res) => {
+    try {
+        const categorias = await Categoria.find().sort({ nombre: 1 }).lean();
+        res.json({ categorias });
+    } catch (e) { res.status(500).json({ error: 'Fallo al recuperar categorías.' }); }
+});
+
+app.post('/api/categorias', exigeAdmin, async (req, res) => {
+    try {
+        const nombreLimpio = req.body.nombre ? req.body.nombre.trim() : "";
+        if (!nombreLimpio) return res.status(400).json({ error: 'Nombre requerido.' });
+        const nueva = new Categoria({ nombre: nombreLimpio });
+        await nueva.save();
+        await registrarLog(req.session.email, `Creó nueva categoría: ${nombreLimpio}`);
+        res.json({ status: 'success', categoria: nueva });
+    } catch (e) { res.status(400).json({ error: 'La categoría ya existe.' }); }
+});
+
+app.delete('/api/categorias/:id', exigeAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const cat = await Categoria.findById(id);
+        if (!cat) return res.status(404).json({ error: 'No existe.' });
+        await Categoria.findByIdAndDelete(id);
+        await registrarLog(req.session.email, `Eliminó categoría: ${cat.nombre}`);
+        res.sendStatus(200);
+    } catch (e) { res.status(500).json({ error: 'Error al purgar categoría.' }); }
+});
 
 // --- Rutas de Tiendas ---
 

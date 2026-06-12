@@ -69,6 +69,8 @@ const NotaSchema = new mongoose.Schema({
     color: { type: String, default: 'bg-yellow-400' },
     x: { type: Number, default: 20 },
     y: { type: Number, default: 40 },
+    width: { type: Number, default: 150 },
+    height: { type: Number, default: 120 },
     usuario: String,
     fecha: { type: Date, default: Date.now }
 });

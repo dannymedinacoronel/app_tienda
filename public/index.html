@@ -634,11 +634,22 @@
                 const jsonData = XLSX.utils.sheet_to_json(firstSheet);
 
                 // Mapeo inteligente de columnas (Instant Data Scraper usa nombres variados)
+                // Priorizamos los nombres de columna del CSV de ejemplo
                 const productosMapeados = jsonData.map(row => {
+                    const rawPrice = row['web_ui__Text__text 4'] || row.price || row.precio || row.price_val || row['item-card-price'];
+                    let cleanPrice = '';
+                    if (rawPrice) {
+                        cleanPrice = String(rawPrice).replace(/[^\d,.]/g, '').trim(); // Elimina todo excepto números, comas y puntos
+                        if (cleanPrice.includes(',') && cleanPrice.includes('.')) { // Si tiene ambos, asume que el punto es separador de miles y la coma decimal
+                            cleanPrice = cleanPrice.replace(/\./g, '').replace(',', '.');
+                        } else if (cleanPrice.includes(',')) { // Si solo tiene coma, asume que es decimal
+                            cleanPrice = cleanPrice.replace(',', '.');
+                        }
+                    }
                     return {
-                        titulo: row.description || row.title || row.nombre || row.prenda || row['item-card-description'],
-                        precio: row.price || row.precio || row.price_val || row['item-card-price'],
-                        imagen: row['image-src'] || row.image || row.foto || row.imagen || row['item-card-image-src']
+                        titulo: row['web_ui__Text__text'] || row.description || row.title || row.nombre || row.prenda || row['item-card-description'],
+                        precio: cleanPrice, // Enviamos el precio ya limpio al backend
+                        imagen: row['web_ui__Image__content src'] || row['image-src'] || row.image || row.foto || row.imagen || row['item-card-image-src']
                     };
                 });
 

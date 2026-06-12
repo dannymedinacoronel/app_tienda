@@ -347,8 +347,10 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
 
         const response = await axios.get(url, {
             headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 'Accept-Language': 'es-ES,es;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                 'Cache-Control': 'no-cache',
                 'Pragma': 'no-cache'
@@ -356,17 +358,23 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         });
 
         const $ = cheerio.load(response.data);
+        
+        // Verificación de bloqueo por Cloudflare/Vinted
+        if ($('title').text().includes('Cloudflare') || $('title').text().includes('Attention Required')) {
+            return res.status(403).json({ error: 'Bloqueo temporal de Vinted detectado. Intenta más tarde.' });
+        }
+
         const resultados = { discrepancias: [], nuevos: [], identicos: [] };
         const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
 
         // Selectores actualizados para Vinted (basados en estructura común de grid)
         $('.feed-grid__item, [data-testid^="product-item"], .web_ui__ItemBox__details, .grid__item').each((i, el) => {
             const item = $(el);
-            const titulo = item.find('h4, .web_ui__Text__title, [data-testid$="--description"], .web_ui__ItemBox__title').first().text().trim();
-            const precioTexto = item.find('h3, .web_ui__Text__text, [data-testid$="--price"], .web_ui__ItemBox__price').first().text().trim();
-            const imagen = item.find('img').attr('src') || item.find('img').attr('data-src');
+            const titulo = item.find('h4, .web_ui__Text__title, [data-testid$="--description"], .web_ui__ItemBox__title, .truncated').first().text().trim();
+            const precioTexto = item.find('h3, .web_ui__Text__text, [data-testid$="--price"], .web_ui__ItemBox__price, .price').first().text().trim();
+            const imagen = item.find('img').attr('src') || item.find('img').attr('data-src') || item.find('img').attr('srcset')?.split(' ')[0];
             
-            const precioWeb = parseFloat(precioTexto.replace(/[^0-9,.]/g, '').replace(',', '.').replace(' ', ''));
+            const precioWeb = parseFloat(precioTexto.replace(/[^0-9,.]/g, '').replace(',', '.').replace(/\s/g, ''));
 
             if (titulo && !isNaN(precioWeb)) {
                 const coincidencia = productosBD.find(p => p.prenda.toLowerCase().includes(titulo.toLowerCase()) || titulo.toLowerCase().includes(p.prenda.toLowerCase()));
@@ -378,6 +386,14 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
                             prenda: coincidencia.prenda,
                             valorAntiguo: coincidencia.precioVenta,
                             valorNuevo: precioWeb,
+                            imagen
+                        });
+                    } else {
+                        // Producto existe y el precio coincide
+                        resultados.identicos.push({
+                            idMongo: coincidencia._id,
+                            prenda: coincidencia.prenda,
+                            precio: coincidencia.precioVenta,
                             imagen
                         });
                     }

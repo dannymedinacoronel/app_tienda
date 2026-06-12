@@ -597,6 +597,8 @@
         const contExist = document.getElementById('container-existentes');
         const noRes = document.getElementById('scraper-no-results');
 
+        if (!data) return;
+
         tbody.innerHTML = '';
         gridNuevos.innerHTML = '';
         gridExistentes.innerHTML = '';
@@ -649,7 +651,10 @@
                             <p class="text-[9px] font-bold uppercase truncate">${n.prenda}</p>
                             <p class="text-[9px] opacity-50 font-mono">${n.precio}€</p>
                         </div>
-                        <button onclick="cerrarModalScraper(); editItem('${n.idMongo}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
+                        <div class="flex gap-1">
+                            <button onclick="cerrarModalScraper(); editItem('${n.idMongo}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
+                            <button onclick="deleteItemFromScraper('${n.idMongo}')" class="text-[10px] bg-rose-500/10 hover:bg-rose-600 text-rose-500 hover:text-white px-2 py-1 rounded-lg transition-all">🗑️</button>
+                        </div>
                     </div>`;
             });
         }
@@ -705,6 +710,14 @@
 
         } catch (error) {
             alert(error.message);
+        }
+    }
+
+    async function deleteItemFromScraper(id) {
+        if (confirm("¿Seguro que quieres eliminar este artículo del sistema?")) {
+            await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' });
+            cantarPorVoz("Artículo eliminado.");
+            iniciarScraping(); // Refrescar lista
         }
     }
 </script>

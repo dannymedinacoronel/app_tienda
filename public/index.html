@@ -1386,13 +1386,22 @@
 
         setTimeout(async () => {
             try {
-                await refrescarYListarTiendasCloud();
+                // 1. Verificar primero si el usuario está autenticado
                 const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' }); const data = await res.json();
+                
                 if (data.autenticado) { 
+                    // 2. Si está OK, configurar el tema y mostrar el panel
                     setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
-                    document.getElementById('login-box').classList.add('hidden'); document.getElementById('panel-control').classList.remove('hidden'); document.getElementById('ticker-bar').classList.remove('hidden'); document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario}`; await reloadCoreData(); 
+                    document.getElementById('login-box').classList.add('hidden'); 
+                    document.getElementById('panel-control').classList.remove('hidden'); 
+                    document.getElementById('ticker-bar').classList.remove('hidden'); 
+                    document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario}`; 
+                    
+                    // 3. Cargar datos protegidos solo después de confirmar acceso
+                    await refrescarYListarTiendasCloud();
+                    await reloadCoreData(); 
                 }
-            } catch(e){}
+            } catch(e){ console.error("Error en la inicialización:", e); }
         }, 300);
 
         if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(err => {}); }); }

@@ -10,6 +10,7 @@ const app = express();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Detectar si estamos en producción para configurar cookies seguras
+console.log(`[INIT] Modo de ejecución: ${process.env.NODE_ENV || 'development'}`);
 const isProd = process.env.NODE_ENV === 'production';
 
 if (isProd) {

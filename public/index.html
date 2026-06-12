@@ -8,7 +8,6 @@
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="shortcut icon" type="image/png" href="logo.png">
     
-    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Seychelles">
@@ -21,15 +20,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
     
     <style>
-        body.theme-dark { background-color: #020617; color: #f8fafc; }
-        .card-bg { background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(24px); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
-        .input-bg { background-color: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); color: #ffffff; transition: all 0.3s; }
-        .input-bg:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2); outline: none; }
-        .nav-btn-active { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); border: none !important; box-shadow: 0 0 20px rgba(99, 102, 241, 0.4); color: white !important; opacity: 1 !important; }
+        body.theme-dark { background-color: #0b0f19; color: #f1f5f9; }
+        .theme-dark .card-bg { background-color: rgba(22, 30, 49, 0.7); border-color: #1e293b; backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+        .theme-dark .input-bg { background-color: #0b0f19; border-color: #1e293b; color: #ffffff; }
+        .theme-dark .dropdown-bg { background-color: #161e31; border-color: #334155; color: #f1f5f9; }
+        .theme-dark .dropdown-item-hover:hover { background-color: #1e293b; }
 
         body.theme-pink { background-color: #fff1f2; color: #831843; }
         .theme-pink .card-bg { background-color: rgba(255, 255, 255, 0.75); border-color: #fbcfe8; color: #831843; box-shadow: 0 10px 30px rgba(219, 39, 119, 0.05); backdrop-filter: blur(14px); }
@@ -216,11 +215,11 @@
             </header>
 
             <nav class="flex gap-2 p-1.5 card-bg border rounded-2xl mb-6 text-xs max-w-md shadow-inner">
-                <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white shadow">📦 Panel</button>
-                <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📊 Analítica</button>
-                <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">👥 Clientes</button>
-                <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📋 Gestión</button>
-                <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📜 Logs</button>
+                <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all nav-btn-active text-white">📦 Panel</button>
+                <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">📊 Analítica</button>
+                <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">👥 Clientes</button>
+                <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">📋 Gestión</button>
+                <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">📜 Logs</button>
             </nav>
 
             <div id="barra-filtros-generales" class="card-bg border p-3.5 rounded-2xl mb-6 flex flex-wrap gap-3 items-center text-xs">
@@ -349,7 +348,7 @@
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-1 gap-2">
+                            <div class="grid grid-cols-1 gap-2 mb-4">
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Canal Comercial</label>
                                     <select id="canalVenta" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
@@ -360,6 +359,22 @@
                                     </select>
                                 </div>
                             </div>
+                            
+                            <!-- ESTADO: Nuevo selector para Reservado -->
+                            <div class="grid grid-cols-1 gap-2 mb-4">
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Estado</label>
+                                    <select id="estado" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none dropdown-bg">
+                                        <option value="No Vendido">📦 En Stock</option>
+                                        <option value="Reservado">🤝 Reservado</option>
+                                        <option value="Vendido">💰 Vendido</option>
+                                        <option value="Devuelto">⚠️ Devuelto</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <input type="hidden" id="gastosEnvio" value="0">
+                            <input type="hidden" id="comentariosProducto" value="">
 
                             <div>
                                 <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Comentarios del Producto</label>
@@ -386,7 +401,7 @@
                     </div>
                 </div>
 
-                <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <!-- COLUMNA 1: STOCK -->
                     <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
                         <div class="flex flex-col gap-2 mb-4">
@@ -405,6 +420,23 @@
                         <div id="col-no-vendido" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
                     </div>
 
+                    <!-- COLUMNA 2: RESERVADO -->
+                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
+                        <div class="flex flex-col gap-2 mb-4">
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">🤝 RESERVADO <span id="badge-reservado" class="bg-indigo-400/10 px-1.5 py-0.5 rounded">0</span></h3>
+                                <button onclick="alternarSeleccionColumna('Reservado')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
+                            </div>
+                            <select onchange="cambiarOrdenColumna('Reservado', this.value)" class="input-bg border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none dropdown-bg">
+                                <option value="reciente">🕒 Más Recientes</option>
+                                <option value="precio-desc">💰 Precio: Mayor</option>
+                                <option value="nombre">🔤 Nombre</option>
+                            </select>
+                            <input type="text" oninput="cambiarFiltroColumna('Reservado', this.value)" placeholder="Filtrar reservas..." class="input-bg border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30">
+                        </div>
+                        <div id="col-reservado" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Reservado')" ondragleave="clearDrop(event)"></div>
+                    </div>
+
                     <!-- COLUMNA 2: VENDIDO -->
                     <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
                         <div class="flex flex-col gap-2 mb-4">
@@ -412,7 +444,7 @@
                                 <h3 class="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1.5">💰 VENDIDOS <span id="badge-vendido" class="bg-emerald-500/10 px-1.5 py-0.5 rounded">0</span></h3>
                                 <button onclick="alternarSeleccionColumna('Vendido')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
                             </div>
-                            <select onchange="cambiarOrdenColumna('Vendido', this.value)" class="bg-black/20 border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none">
+                            <select onchange="cambiarOrdenColumna('Vendido', this.value)" class="input-bg border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none dropdown-bg">
                                 <option value="reciente">🕒 Más Recientes</option>
                                 <option value="precio-desc">Mayor Precio</option>
                             </select>
@@ -430,7 +462,7 @@
                             <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
                                 <span class="bg-blue-500/20 p-2.5 rounded-2xl shadow-inner text-lg">📅</span> Historial de Stock & Flujos
                             </h3>
-                            <div class="flex items-center gap-4 bg-black/40 p-2 rounded-2xl border border-white/5 shadow-xl">
+                            <div class="flex items-center gap-4 card-bg p-2 rounded-2xl shadow-xl">
                                 <button onclick="navegarCalendarioStock(-1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs font-black">◀</button>
                                 <span id="txt-calendario-stock-mes" class="text-[11px] font-black uppercase tracking-widest min-w-[140px] text-center text-blue-400">...</span>
                                 <button onclick="navegarCalendarioStock(1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs font-black">▶</button>
@@ -452,13 +484,13 @@
                             </h3>
                             <div class="flex flex-col gap-1.5">
                                 <div class="flex items-center gap-2">
-                                    <select onchange="cambiarOrdenColumna('Devuelto', this.value)" class="bg-black/20 border border-current/10 text-[9px] font-bold uppercase rounded-xl px-2 py-1 focus:outline-none">
+                                    <select onchange="cambiarOrdenColumna('Devuelto', this.value)" class="input-bg border border-current/10 text-[9px] font-bold uppercase rounded-xl px-2 py-1 focus:outline-none dropdown-bg">
                                         <option value="reciente">🕒 Orden</option>
                                         <option value="precio-desc">💰 Precio</option>
                                     </select>
                                     <button onclick="alternarSeleccionColumna('Devuelto')" class="text-[8px] bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 rounded-lg font-bold uppercase transition-all shadow-sm">Marcar</button>
                                 </div>
-                                <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Filtrar..." class="bg-black/20 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30 w-full">
+                                <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Filtrar..." class="input-bg border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30 w-full">
                             </div>
                         </div>
                         <div id="col-devuelto" class="grid grid-cols-1 gap-2 p-1 overflow-y-auto max-h-[650px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
@@ -475,7 +507,7 @@
                             <button onclick="limpiarFiltrosAnalitica()" class="text-[10px] opacity-60 hover:opacity-100 underline font-mono">Restablecer Todo</button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
+                    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-[10px]">
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Filtrar por Tienda</label>
                             <select id="an-filtro-tienda" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg"></select>
@@ -505,11 +537,11 @@
                         </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Mín (€)</label>
-                            <input type="number" id="an-filtro-precio-min" placeholder="0.00" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono">
+                            <input type="number" id="an-filtro-precio-min" placeholder="0.00" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono text-[10px]">
                         </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Máx (€)</label>
-                            <input type="number" id="an-filtro-precio-max" placeholder="Max" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono">
+                            <input type="number" id="an-filtro-precio-max" placeholder="Max" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono text-[10px]">
                         </div>
                     </div>
                 </div>
@@ -558,9 +590,9 @@
                         <div class="space-y-4">
                             <div class="bg-black/20 p-3 rounded-2xl border border-white/5">
                                 <p class="text-[9px] font-black uppercase opacity-40 mb-2 tracking-tighter">Mi Información (Vendedor)</p>
-                                <input type="text" id="fac-vendedor-nombre" placeholder="Tu Nombre o Empresa" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
-                                <input type="text" id="fac-vendedor-cif" placeholder="NIF / CIF" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
-                                <textarea id="fac-vendedor-dir" placeholder="Dirección Fiscal Completa" rows="2" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none resize-none"></textarea>
+                                <input type="text" id="fac-vendedor-nombre" placeholder="Tu Nombre o Empresa" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] mb-2">
+                                <input type="text" id="fac-vendedor-cif" placeholder="NIF / CIF" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] mb-2">
+                                <textarea id="fac-vendedor-dir" placeholder="Dirección Fiscal Completa" rows="2" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] resize-none"></textarea>
                             </div>
                             
                             <div class="bg-black/20 p-3 rounded-2xl border border-white/5">
@@ -568,19 +600,19 @@
                                     <p class="text-[9px] font-black uppercase opacity-40 tracking-tighter">Información del Cliente</p>
                                     <button onclick="lanzarModalCRM()" class="text-[8px] bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded-lg border border-blue-500/30">Cargar de CRM</button>
                                 </div>
-                                <input type="text" id="fac-cliente-nombre" placeholder="Nombre del Comprador" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
-                                <input type="text" id="fac-cliente-nif" placeholder="NIF / CIF / DNI" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
-                                <textarea id="fac-cliente-dir" placeholder="Dirección de Envío / Fiscal" rows="2" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none resize-none"></textarea>
+                                <input type="text" id="fac-cliente-nombre" placeholder="Nombre del Comprador" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] mb-2">
+                                <input type="text" id="fac-cliente-nif" placeholder="NIF / CIF / DNI" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] mb-2">
+                                <textarea id="fac-cliente-dir" placeholder="Dirección de Envío / Fiscal" rows="2" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] resize-none"></textarea>
                             </div>
 
                             <div class="flex gap-2">
                                 <div class="flex-1">
                                     <p class="text-[9px] font-black uppercase opacity-40 mb-1">Nº Factura</p>
-                                    <input type="text" id="fac-numero" placeholder="FAC-2024-001" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] font-mono focus:outline-none">
+                                    <input type="text" id="fac-numero" placeholder="FAC-2024-001" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] font-mono">
                                 </div>
                                 <div class="flex-1">
                                     <p class="text-[9px] font-black uppercase opacity-40 mb-1">Impuesto IVA (%)</p>
-                                    <input type="number" id="fac-iva" value="21" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] font-mono focus:outline-none">
+                                    <input type="number" id="fac-iva" value="21" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] font-mono">
                                 </div>
                             </div>
                             
@@ -629,9 +661,9 @@
                 <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col gap-4">
                     <h3 class="text-xs font-black text-rose-400 uppercase tracking-widest flex items-center gap-2">🧾 Registrar Gasto Operativo</h3>
                     <div class="space-y-3">
-                        <input type="text" id="gas-concepto" placeholder="Concepto (Alquiler, Luz, Ads...)" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
-                        <input type="number" id="gas-monto" placeholder="Importe (€)" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none font-mono">
-                        <select id="gas-categoria" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
+                        <input type="text" id="gas-concepto" placeholder="Concepto (Alquiler, Luz, Ads...)" class="input-bg w-full rounded-xl px-3 py-2 text-xs">
+                        <input type="number" id="gas-monto" placeholder="Importe (€)" class="input-bg w-full rounded-xl px-3 py-2 text-xs font-mono">
+                        <select id="gas-categoria" class="input-bg w-full rounded-xl px-3 py-2 text-xs dropdown-bg">
                             <option value="Suministros">🔌 Suministros</option>
                             <option value="Local">🏢 Local/Alquiler</option>
                             <option value="Marketing">📢 Marketing/Publicidad</option>
@@ -669,7 +701,7 @@
                             <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
                                 📅 Calendario de Actividad Histórica
                             </h3>
-                            <div class="flex items-center gap-4 bg-black/20 p-1.5 rounded-2xl border border-white/5 shadow-inner">
+                            <div class="flex items-center gap-4 card-bg p-1.5 rounded-2xl shadow-inner">
                                 <button onclick="navegarCalendario(-1)" class="p-2 hover:bg-white/10 rounded-xl transition-all">◀</button>
                                 <span id="txt-calendario-mes" class="text-[11px] font-black uppercase tracking-widest min-w-[140px] text-center">...</span>
                                 <button onclick="navegarCalendario(1)" class="p-2 hover:bg-white/10 rounded-xl transition-all">▶</button>
@@ -691,7 +723,7 @@
         <!-- MODAL DETALLE CALENDARIO -->
         <div id="modal-audit-detalle" class="hidden fixed inset-0 z-[400] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
             <div class="card-bg border rounded-3xl p-6 w-full max-w-2xl flex flex-col gap-4 shadow-2xl relative max-h-[85vh]">
-                <button onclick="document.getElementById('modal-audit-detalle').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-xl">✕</button>
+                <button onclick="document.getElementById('modal-audit-detalle').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-2xl">✕</button>
                 <div class="border-b border-white/10 pb-4">
                     <h2 class="text-xl font-black uppercase tracking-widest text-indigo-400" id="detalle-dia-titulo">Detalle de Actividad</h2>
                     <p class="text-[10px] opacity-50 font-mono" id="detalle-dia-fecha"></p>
@@ -706,7 +738,7 @@
         <!-- MODAL DETALLE PRODUCTOS DÍA CALENDARIO STOCK -->
         <div id="modal-stock-detalle" class="hidden fixed inset-0 z-[400] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
             <div class="card-bg border rounded-3xl p-6 w-full max-w-2xl flex flex-col gap-4 shadow-2xl relative max-h-[85vh]">
-                <button onclick="document.getElementById('modal-stock-detalle').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-xl">✕</button>
+                <button onclick="document.getElementById('modal-stock-detalle').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-2xl">✕</button>
                 <div class="border-b border-white/10 pb-4">
                     <h2 class="text-xl font-black uppercase tracking-widest text-blue-400" id="detalle-stock-titulo">Movimientos del Día</h2>
                     <p class="text-[10px] opacity-50 font-mono">Resumen de entradas y salidas de stock</p>
@@ -722,27 +754,27 @@
             <div class="text-xs font-bold font-mono">💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> MARCADOS</div>
             <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
             <div class="flex flex-wrap items-center gap-2">
-                <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">👯 Duplicar Lote</button>
-                <button onclick="ejecutarAjustePrecioMasivo()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">💰 Ajustar Precio</button>
-                <button onclick="ejecutarAjusteCosteMasivo()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">📉 Ajustar Coste</button>
-                <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">💵 Vender Lote</button>
-                <button onclick="ejecutarAccionMasivaEstado('Reservado')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">🤝 Reservar Lote</button>
-                <button onclick="ejecutarAccionMasivaEstado('Devuelto')" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">⚠️ Devolución</button>
-                <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">📦 Mover a Stock</button>
-                <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">👯 Duplicar Lote</button>
+                <button onclick="ejecutarAjustePrecioMasivo()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">💰 Ajustar Precio</button>
+                <button onclick="ejecutarAjusteCosteMasivo()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">📉 Ajustar Coste</button>
+                <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">💵 Vender Lote</button>
+                <button onclick="ejecutarAccionMasivaEstado('Reservado')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">🤝 Reservar Lote</button>
+                <button onclick="ejecutarAccionMasivaEstado('Devuelto')" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">⚠️ Devolución</button>
+                <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">📦 Mover a Stock</button>
+                <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="input-bg rounded-xl p-1.5 text-[10px] font-bold focus:outline-none dropdown-bg">
                     <option value="">📐 Talla...</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
                 </select>
-                <select id="categoria-masiva" onchange="ejecutarEdicionMasivaPropiedad('categoria', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                <select id="categoria-masiva" onchange="ejecutarEdicionMasivaPropiedad('categoria', this.value); this.value='';" class="input-bg rounded-xl p-1.5 text-[10px] font-bold focus:outline-none dropdown-bg">
                     <option value="">👕 Categoría...</option><option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
                 </select>
-                <select id="canal-masivo" onchange="ejecutarEdicionMasivaPropiedad('canalVenta', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                <select id="canal-masiva" onchange="ejecutarEdicionMasivaPropiedad('canalVenta', this.value); this.value='';" class="input-bg rounded-xl p-1.5 text-[10px] font-bold focus:outline-none dropdown-bg">
                     <option value="">🌐 Canal...</option>
                     <option value="Tienda Física">🏬 Tienda Física</option><option value="Vinted">👗 Vinted</option><option value="Wallapop">🤝 Wallapop</option><option value="Web">🌐 Web</option>
                 </select>
-                <select id="tienda-masiva" onchange="ejecutarEdicionMasivaPropiedad('proveedor', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                <select id="tienda-masiva" onchange="ejecutarEdicionMasivaPropiedad('proveedor', this.value); this.value='';" class="input-bg rounded-xl p-1.5 text-[10px] font-bold focus:outline-none dropdown-bg">
                     <option value="">🏬 Tienda...</option>
                 </select>
-                <button onclick="ejecutarEliminacionMasiva()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">🗑️ Eliminar</button>
+                <button onclick="ejecutarEliminacionMasiva()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">🗑️ Eliminar</button>
                 <button onclick="limpiarSeleccionMasiva()" class="text-[10px] underline opacity-50 hover:opacity-100 px-1">Limpiar</button>
             </div>
         </div>
@@ -758,19 +790,6 @@
                     <button onclick="document.getElementById('modal-qr').classList.add('hidden')" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 rounded-xl text-xs uppercase transition-colors">Cerrar</button>
                     <button onclick="window.print()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-xl text-xs uppercase transition-colors">Imprimir</button>
                 </div>
-            </div>
-        </div>
-
-        <!-- MODAL SELECCIÓN CRM PARA FACTURA -->
-        <div id="modal-crm-selector" class="hidden fixed inset-0 z-[500] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-            <div class="card-bg border rounded-3xl p-6 w-full max-w-xl flex flex-col gap-4 shadow-2xl relative max-h-[80vh]">
-                <button onclick="document.getElementById('modal-crm-selector').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-2xl">✕</button>
-                <h2 class="text-xl font-black uppercase tracking-widest text-blue-400">Seleccionar Cliente</h2>
-                <div class="flex gap-2">
-                    <input type="text" id="crm-modal-search" oninput="filtrarCRMModal(this.value)" placeholder="Buscar por nombre o NIF..." class="input-bg flex-1 rounded-xl px-4 py-2 text-xs focus:outline-none">
-                </div>
-                <div id="crm-modal-list" class="flex-1 overflow-y-auto space-y-2 pr-2"></div>
-                <button onclick="document.getElementById('modal-crm-selector').classList.add('hidden')" class="w-full bg-slate-800 py-3 rounded-2xl font-bold uppercase text-[10px]">Cerrar</button>
             </div>
         </div>
 
@@ -875,129 +894,6 @@
 
                 <div id="scraper-no-results" class="hidden py-10 text-center">
                     <p class="text-sm opacity-50">No se detectaron cambios ni productos nuevos.</p>
-                </div>
-            </div>
-            
-            <!-- SECCIÓN CRM: GESTIÓN DE CLIENTES -->
-            <div id="sec-crm" class="seccion-app hidden flex flex-col gap-6 mb-8">
-                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    <div class="card-bg border p-6 rounded-3xl shadow-xl">
-                        <h3 id="crm-form-title" class="text-xs font-black text-blue-400 uppercase mb-4">👥 Ficha de Cliente</h3>
-                        <form id="form-cliente" class="space-y-3">
-                            <input type="hidden" id="crm-id">
-                            <input type="text" id="crm-nombre" placeholder="Nombre Completo" required class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
-                            <input type="text" id="crm-nif" placeholder="DNI / NIF" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
-                            <input type="email" id="crm-email" placeholder="Email" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none font-mono">
-                            <input type="tel" id="crm-tel" placeholder="Teléfono" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
-                            <textarea id="crm-dir" placeholder="Dirección completa" rows="2" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none resize-none"></textarea>
-                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-xl text-[10px] tracking-widest uppercase transition-all shadow-lg">Guardar en CRM</button>
-                            <button type="button" onclick="limpiarFormCRM()" class="w-full text-[9px] opacity-40 hover:opacity-100 uppercase underline">Cancelar</button>
-                        </form>
-                    </div>
-                    <div class="lg:col-span-3 card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[600px]">
-                        <div class="flex justify-between items-center mb-6">
-                            <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest">📋 Directorio de Clientes</h3>
-                            <input type="text" oninput="filtrarCRM(this.value)" placeholder="Buscar cliente..." class="bg-black/20 border border-white/5 rounded-xl px-4 py-1.5 text-[10px] focus:outline-none w-64">
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-[11px]">
-                                <thead class="opacity-40 uppercase font-black border-b border-white/5">
-                                    <tr><th class="pb-3">Nombre</th><th class="pb-3">DNI</th><th class="pb-3">Contacto</th><th class="pb-3">Acciones</th></tr>
-                                </thead>
-                                <tbody id="tabla-clientes-crm" class="divide-y divide-white/5"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SECCIÓN GESTIÓN / FACTURACIÓN -->
-            <div id="sec-gestion" class="seccion-app hidden flex flex-col gap-6 mb-8">
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col gap-4">
-                        <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
-                            <span class="bg-blue-500/20 p-1.5 rounded-lg">📝</span> Datos de Facturación
-                        </h3>
-                        <div class="space-y-4">
-                            <div class="bg-black/20 p-3 rounded-2xl border border-white/5">
-                                <p class="text-[9px] font-black uppercase opacity-40 mb-2 tracking-tighter">Mi Información (Vendedor)</p>
-                                <input type="text" id="fac-vendedor-nombre" placeholder="Tu Nombre o Empresa" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] mb-2">
-                                <input type="text" id="fac-vendedor-cif" placeholder="NIF / CIF" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] mb-2">
-                                <textarea id="fac-vendedor-dir" placeholder="Dirección Fiscal Completa" rows="2" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] resize-none"></textarea>
-                            </div>
-                            <div class="bg-black/20 p-3 rounded-2xl border border-white/5">
-                                <div class="flex justify-between items-center mb-2">
-                                    <p class="text-[9px] font-black uppercase opacity-40 tracking-tighter">Información del Cliente</p>
-                                    <button onclick="lanzarModalCRM()" class="text-[8px] bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded-lg border border-blue-500/30">Cargar de CRM</button>
-                                </div>
-                                <input type="text" id="fac-cliente-nombre" placeholder="Nombre del Comprador" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] mb-2">
-                                <input type="text" id="fac-cliente-nif" placeholder="NIF / CIF / DNI" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] mb-2">
-                                <textarea id="fac-cliente-dir" placeholder="Dirección de Envío / Fiscal" rows="2" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] resize-none"></textarea>
-                            </div>
-                            <div class="flex gap-2">
-                                <div class="flex-1">
-                                    <p class="text-[9px] font-black uppercase opacity-40 mb-1">Nº Factura</p>
-                                    <input type="text" id="fac-numero" placeholder="FAC-2024-001" class="input-bg w-full rounded-xl px-3 py-2 text-[11px]">
-                                </div>
-                                <div class="flex-1">
-                                    <p class="text-[9px] font-black uppercase opacity-40 mb-1">Impuesto IVA (%)</p>
-                                    <input type="number" id="fac-iva" value="21" class="input-bg w-full rounded-xl px-3 py-2 text-[11px]">
-                                </div>
-                            </div>
-                            <button onclick="generarFacturaPDF()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black py-4 rounded-2xl shadow-xl uppercase text-[10px] tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2">
-                                📄 Emitir Factura PDF
-                            </button>
-                        </div>
-                    </div>
-                    <div class="lg:col-span-2 card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[680px]">
-                        <div class="flex justify-between items-center mb-6">
-                            <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
-                                <span class="bg-indigo-500/20 p-1.5 rounded-lg">🛒</span> Artículos Vendidos Disponibles
-                            </h3>
-                            <div class="flex items-center gap-3">
-                                <input type="text" oninput="filtrarListaFacturacion(this.value)" placeholder="Filtrar por prenda o SKU..." class="bg-black/20 border border-white/5 rounded-xl px-4 py-1.5 text-[10px] focus:outline-none w-48 font-mono">
-                                <button onclick="renderGestionFacturas()" class="text-[10px] opacity-60 hover:opacity-100 underline font-mono">Refrescar</button>
-                            </div>
-                        </div>
-                        <div id="lista-articulos-factura" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar"></div>
-                        <div class="mt-4 pt-6 border-t border-white/10 flex justify-between items-end">
-                            <div class="flex gap-6">
-                                <div><p class="text-[9px] uppercase opacity-40 font-black tracking-widest">Seleccionados</p><p class="text-3xl font-black text-blue-400" id="fac-count-total">0</p></div>
-                                <div><p class="text-[9px] uppercase opacity-40 font-black tracking-widest">Base Imponible</p><p class="text-2xl font-black opacity-80" id="fac-base-total">0.00 €</p></div>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-[9px] uppercase opacity-40 font-black tracking-widest">Importe Total (con IVA)</p>
-                                <p class="text-4xl font-black text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.2)]" id="fac-monto-total">0.00 €</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SECCIÓN GASTOS OPERATIVOS -->
-            <div id="sec-gastos" class="seccion-app hidden grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col gap-4">
-                    <h3 class="text-xs font-black text-rose-400 uppercase tracking-widest flex items-center gap-2">🧾 Registrar Gasto Operativo</h3>
-                    <div class="space-y-3">
-                        <input type="text" id="gas-concepto" placeholder="Concepto (Alquiler, Luz, Ads...)" class="input-bg w-full rounded-xl px-3 py-2 text-xs">
-                        <input type="number" id="gas-monto" placeholder="Importe (€)" class="input-bg w-full rounded-xl px-3 py-2 text-xs font-mono">
-                        <select id="gas-categoria" class="input-bg w-full rounded-xl px-3 py-2 text-xs">
-                            <option value="Suministros">🔌 Suministros</option>
-                            <option value="Local">🏢 Local/Alquiler</option>
-                            <option value="Marketing">📢 Marketing/Publicidad</option>
-                            <option value="Logística">📦 Packaging/Bolsas</option>
-                            <option value="Otros">⚙️ Otros</option>
-                        </select>
-                        <button onclick="registrarGastoDB()" class="w-full bg-rose-600 hover:bg-rose-700 text-white font-black py-3 rounded-xl shadow-lg uppercase text-[10px] tracking-widest transition-all">Añadir Gasto</button>
-                    </div>
-                </div>
-                <div class="lg:col-span-2 card-bg border p-6 rounded-3xl shadow-xl h-[400px] flex flex-col">
-                    <h3 class="text-xs font-black text-rose-400 uppercase tracking-widest mb-4">📜 Historial de Gastos Fijos</h3>
-                    <div id="lista-gastos-negocio" class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs"></div>
-                    <div class="mt-4 pt-4 border-t border-white/5 flex justify-between items-center">
-                        <span class="text-[10px] font-bold opacity-40 uppercase">Total Gastos OpEx:</span>
-                        <span id="txt-total-gastos-opex" class="text-xl font-black text-rose-400">0.00 €</span>
-                    </div>
                 </div>
             </div>
         </div>

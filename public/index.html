@@ -161,7 +161,7 @@
             <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-6">
                 <div class="flex items-center gap-4">
                     <div>
-                        <h1 class="text-6xl font-black uppercase tracking-tighter logo-premium bg-clip-text text-transparent">Seychelles Shop</h1>
+                        <h1 class="text-6xl font-black uppercase tracking-tighter logo-premium bg-clip-text text-transparent drop-shadow-2xl">Seychelles Shop</h1>
                         <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
                     </div>
                     <button onclick="crearNotaNueva()" class="bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 transition-all">
@@ -1242,10 +1242,10 @@
 
 
     <script>
-        // 1. DEFINICIÓN GLOBAL INMEDIATA PARA GOOGLE
+        // --- 1. BLOQUE DE AUTENTICACIÓN (Prioridad Alta) ---
         window.handleCredentialResponse = async function(response) {
             try {
-                console.log("🚀 Verificando credenciales con Seychelles Server...");
+                console.log("🚀 Iniciando Handshake con Core Server...");
                 const res = await fetch(`/api/auth/google`, { 
                     method: 'POST', 
                     headers: { 'Content-Type': 'application/json' }, 
@@ -1255,11 +1255,22 @@
                 if (res.ok) {
                     window.location.reload();
                 } else {
-                    const data = await res.json();
-                    alert(`Acceso denegado: ${data.error}`);
+                    alert("Acceso denegado: Usuario no autorizado.");
                 }
-            } catch(e) { alert("Error de conexión con el servidor core."); }
+            } catch(e) { alert("Error crítico de conexión."); }
         };
+
+        // --- 2. GESTIÓN DE EVENTOS SEGURA ---
+        function vincularFormularios() {
+            const fVenta = document.getElementById('form-venta');
+            if (fVenta) fVenta.onsubmit = manejarEnvioVenta;
+
+            const fCliente = document.getElementById('form-cliente');
+            if (fCliente) fCliente.onsubmit = manejarEnvioCliente;
+
+            const fPistola = document.getElementById('form-escaner-pistola');
+            if (fPistola) fPistola.onsubmit = manejarEscaneoPistola;
+        }
 
         const BACKEND_URL = '';
         let BASE_DATOS = [];
@@ -2842,8 +2853,9 @@
             ticker.innerHTML = txt + txt;
         }
 
-        document.getElementById('form-venta').onsubmit = async (e) => {
-            e.preventDefault(); const id = document.getElementById('edit-id').value;
+        async function manejarEnvioVenta(e) {
+            e.preventDefault(); 
+            const id = document.getElementById('edit-id').value;
             const payload = {
                 sku: document.getElementById('sku').value.trim(), 
                 prenda: document.getElementById('prenda').value, 
@@ -2927,14 +2939,14 @@
                 const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' }); const data = await res.json();
                 
                 if (data.autenticado) { 
-                    console.log("Sesión activa:", data.usuario);
+                    console.log("✅ Conexión establecida con Seychelles Atlas.");
                     setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
                     document.getElementById('login-box').classList.add('hidden'); 
                     document.getElementById('panel-control').classList.remove('hidden'); 
                     document.getElementById('ticker-bar').classList.remove('hidden'); 
                     document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario}`; 
                     
-                    // 3. Cargar datos protegidos solo después de confirmar acceso
+                    vincularFormularios(); // Vincular eventos solo cuando los elementos existen
                     await refrescarYListarTiendasCloud();
                     await refrescarCategoriasCloud();
                     await reloadCoreData(); 

@@ -9,13 +9,13 @@ const path = require('path');
 const app = express();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-// Detectar si estamos en producción para configurar cookies seguras
-console.log(`[INIT] Modo de ejecución: ${process.env.NODE_ENV || 'development'}`);
+// ⚙️ CONFIGURACIÓN DE ENTORNO
 const isProd = process.env.NODE_ENV === 'production';
+console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
 
-if (isProd) {
-    app.set('trust proxy', 1);
-}
+// Es vital para que las sesiones funcionen en plataformas como Render/Heroku
+app.set('trust proxy', 1);
+app.use(express.json());
 
 // 🔒 CONEXIÓN DEPURADA: Purgadas las credenciales del código fuente
 const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI;
@@ -61,20 +61,22 @@ const LogAuditoriaSchema = new mongoose.Schema({
 });
 const LogAuditoria = mongoose.models.LogAuditoria || mongoose.model('LogAuditoria', LogAuditoriaSchema);
 
-const ADMIN_WHITELIST = ['dannymedinacoronel@gmail.com', 'juliamugo2001@gmail.com'];
-
-app.use(express.json());
+const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
 
 app.use(session({
+    name: 'seychelles.sid', // Nombre único para evitar conflictos
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
-    resave: false,
-    saveUninitialized: false,
+    resave: true, // Forzar guardado para asegurar persistencia en Mongo
+    saveUninitialized: true,
     store: MongoStore.create({ mongoUrl: MONGO_URI_FINAL, collectionName: 'sesiones_activas', ttl: 14 * 24 * 60 * 60 }),
-    cookie: { secure: isProd, sameSite: 'lax', maxAge: 14 * 24 * 60 * 60 * 1000 }
+    cookie: { 
+        secure: isProd, // True solo en HTTPS
+        sameSite: isProd ? 'none' : 'lax', 
+        maxAge: 14 * 24 * 60 * 60 * 1000 
+    }
 }));
 
 app.use(express.static(path.join(__dirname, 'public')));
-
 function exigeAdmin(req, res, next) {
     if (req.session && req.session.esAdmin) return next();
     return res.status(403).json({ error: 'No autorizado.' });

@@ -1386,11 +1386,11 @@
 
         setTimeout(async () => {
             try {
-                // 1. Verificar primero si el usuario está autenticado
+                console.log("Verificando sesión...");
                 const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' }); const data = await res.json();
                 
                 if (data.autenticado) { 
-                    // 2. Si está OK, configurar el tema y mostrar el panel
+                    console.log("Sesión activa:", data.usuario);
                     setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
                     document.getElementById('login-box').classList.add('hidden'); 
                     document.getElementById('panel-control').classList.remove('hidden'); 
@@ -1400,6 +1400,8 @@
                     // 3. Cargar datos protegidos solo después de confirmar acceso
                     await refrescarYListarTiendasCloud();
                     await reloadCoreData(); 
+                } else {
+                    console.log("No hay sesión activa.");
                 }
             } catch(e){ console.error("Error en la inicialización:", e); }
         }, 300);

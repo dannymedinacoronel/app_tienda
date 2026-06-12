@@ -41,7 +41,8 @@ const Tienda = mongoose.models.Tienda || mongoose.model('Tienda', TiendaSchema);
 
 const UsuarioAutorizadoSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, trim: true, lowercase: true },
-    fechaAgregado: { type: Date, default: Date.now }
+    fechaAgregado: { type: Date, default: Date.now },
+    ultimaConexion: { type: Date }
 });
 const UsuarioAutorizado = mongoose.models.UsuarioAutorizado || mongoose.model('UsuarioAutorizado', UsuarioAutorizadoSchema);
 
@@ -342,6 +343,9 @@ app.post('/api/auth/google', async (req, res) => {
         const autorizado = await UsuarioAutorizado.findOne({ email: emailUsuario });
 
         if (autorizado) {
+            autorizado.ultimaConexion = new Date();
+            await autorizado.save();
+
             req.session.esAdmin = true;
             req.session.email = emailUsuario;
             await registrarLog(emailUsuario, "Inició sesión en el sistema core");

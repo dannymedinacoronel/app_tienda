@@ -108,6 +108,20 @@
         .calendario-log-item:hover { white-space: normal; position: relative; z-index: 50; background: rgba(0,0,0,0.9); }
         #grid-calendario-audit::-webkit-scrollbar { width: 4px; }
 
+        /* Estilos Login Espectacular */
+        .login-glow-card {
+            position: relative;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow: hidden;
+        }
+        .login-glow-card::before {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: conic-gradient(from 0deg, transparent, #3b82f6, #ec4899, #8b5cf6, transparent);
+            animation: rotate 6s linear infinite; z-index: -1;
+        }
+        @keyframes rotate { 100% { transform: rotate(360deg); } }
+
         /* Estilos Imágenes */
         .preview-foto { width: 100%; height: 120px; object-fit: cover; border-radius: 1rem; border: 2px dashed rgba(255,255,255,0.1); cursor: pointer; transition: all 0.2s; }
         .preview-foto:hover { border-color: #3b82f6; background-color: rgba(59, 130, 246, 0.05); }
@@ -147,13 +161,19 @@
     <div id="wrapper-core">
         <div id="canvas-notas-global"></div>
 
-        <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4 bg-slate-950/90 backdrop-blur-md">
-            <div class="bg-slate-900/80 p-8 rounded-3xl shadow-2xl text-center border border-slate-800 max-w-sm w-full backdrop-blur-md">
-                <h1 class="text-4xl font-black mb-1 uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-pink-500">Seychelles</h1>
-                <p class="text-[10px] text-slate-500 mb-8 font-mono tracking-widest">FINANCIAL CONTROL SYSTEM</p>
-                <div class="flex justify-center">
-                    <div id="g_id_onload" data-client_id="463908353578-o70ia5lgf0c7fcce0utp8qqlqnc41iuo.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
-                    <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_blue"></div>
+        <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4 bg-[#020617]">
+            <div class="login-glow-card p-[2px] rounded-[2.5rem] shadow-2xl max-w-sm w-full">
+                <div class="bg-slate-950 rounded-[2.4rem] p-10 text-center">
+                    <div class="mb-6">
+                        <span class="text-5xl">🌺</span>
+                        <h1 class="text-4xl font-black mt-4 uppercase tracking-tighter bg-gradient-to-r from-blue-400 via-pink-500 to-purple-600 bg-clip-text text-transparent">Seychelles</h1>
+                        <div class="h-1 w-12 bg-gradient-to-r from-blue-500 to-purple-600 mx-auto mt-2 rounded-full"></div>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mb-10 font-mono tracking-[0.3em] uppercase">Security Gateway v4.0</p>
+                    <div class="flex justify-center scale-110">
+                        <div id="g_id_onload" data-client_id="463908353578-o70ia5lgf0c7fcce0utp8qqlqnc41iuo.apps.googleusercontent.com" data-callback="handleCredentialResponse"></div>
+                        <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_black"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -215,29 +235,30 @@
                 </div>
             </header>
 
-            <nav class="flex gap-2 p-1.5 card-bg border rounded-2xl mb-6 text-xs max-w-md shadow-inner">
-                <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all nav-btn-active text-white">📦 Panel</button>
-                <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">📊 Analítica</button>
-                <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">👥 Clientes</button>
-                <button onclick="navegarASeccion('sec-usuarios')" id="tab-sec-usuarios" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">🔑 Acceso</button>
-                <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">📋 Gestión</button>
-                <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">📜 Logs</button>
-            </nav>
+            <div class="flex flex-col lg:flex-row gap-4 mb-8 items-center">
+                <!-- IZQUIERDA: FILTROS (50%) -->
+                <div id="barra-filtros-generales" class="lg:w-1/2 card-bg p-3.5 rounded-2xl flex flex-wrap gap-3 items-center text-[10px] w-full border border-white/5">
+                    <span class="font-black uppercase opacity-40">🎯 Filtros:</span>
+                    <select id="filtro-categoria" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2 py-1 focus:outline-none"></select>
+                    <select id="filtro-talla" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2 py-1 focus:outline-none">
+                        <option value="TODOS">📐 Talla</option>
+                        <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
+                    </select>
+                    <select id="filtro-canal" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2 py-1 focus:outline-none">
+                        <option value="TODOS">🌐 Canal</option>
+                        <option value="Tienda Física">Tienda</option><option value="Vinted">Vinted</option><option value="Wallapop">Wallapop</option><option value="Web">Web</option>
+                    </select>
+                </div>
 
-            <div id="barra-filtros-generales" class="card-bg border p-3.5 rounded-2xl mb-6 flex flex-wrap gap-3 items-center text-xs">
-                <span class="font-bold uppercase tracking-wider opacity-60 text-[10px]">🎯 Filtros rápidos:</span>
-                <select id="filtro-categoria" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2.5 py-1.5 focus:outline-none">
-                    <option value="TODOS">👕 Todas las categorías</option>
-                </select>
-                <select id="filtro-talla" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2.5 py-1.5 focus:outline-none">
-                    <option value="TODOS">📐 Todas las tallas</option>
-                    <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
-                </select>
-                <select id="filtro-canal" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2.5 py-1.5 focus:outline-none">
-                    <option value="TODOS">🌐 Todos los canales</option>
-                    <option value="Tienda Física">🏬 Tienda Física</option><option value="Vinted">👗 Vinted</option><option value="Wallapop">🤝 Wallapop</option><option value="Web">🌐 Web</option>
-                </select>
-                <button onclick="limpiarFiltrosAvanzados()" class="opacity-50 hover:opacity-100 underline ml-auto text-[11px] font-medium">Restablecer</button>
+                <!-- DERECHA: NAV (50%) -->
+                <nav class="lg:w-1/2 flex gap-1.5 p-1.5 card-bg rounded-2xl text-[9px] w-full border border-white/5">
+                    <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all nav-btn-active text-white">📦 Panel</button>
+                    <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📊 Analítica</button>
+                    <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">👥 CRM</button>
+                    <button onclick="navegarASeccion('sec-usuarios')" id="tab-sec-usuarios" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">🔑 Acceso</button>
+                    <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📋 Fact.</button>
+                    <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📜 Logs</button>
+                </nav>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-8" id="kpi-container-grid">
@@ -559,7 +580,7 @@
                         <div class="overflow-x-auto">
                             <table class="w-full text-left text-[11px]">
                                 <thead class="opacity-40 uppercase font-black border-b border-white/5">
-                                    <tr><th class="pb-3 px-2">Email Autorizado</th><th class="pb-3 px-2">Fecha Alta</th><th class="pb-3 px-2 text-right">Acciones</th></tr>
+                                    <tr><th class="pb-3 px-2">Email Autorizado</th><th class="pb-3 px-2">Última Conexión</th><th class="pb-3 px-2">Alta</th><th class="pb-3 px-2 text-right">Acciones</th></tr>
                                 </thead>
                                 <tbody id="tabla-usuarios-admin" class="divide-y divide-white/5">
                                     <!-- Inyectado vía JS -->
@@ -1700,17 +1721,17 @@
         }
 
         // 🗺️ MENÚ DE NAVEGACIÓN ENTRE MÓDULOS SEPARADOS
-        function navegarASeccion(idSeccion) {
+        window.navegarASeccion = function(idSeccion) {
             document.querySelectorAll('.seccion-app').forEach(sec => sec.classList.add('hidden'));
             document.getElementById(idSeccion).classList.remove('hidden');
             
             document.querySelectorAll('nav button').forEach(btn => {
-                btn.className = "flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100";
+                btn.className = "flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100";
             });
             
             const tabActivo = document.getElementById(`tab-${idSeccion}`);
             if (tabActivo) {
-                tabActivo.className = "flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white shadow";
+                tabActivo.className = "flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all nav-btn-active text-white";
             }
             
             if (idSeccion === 'sec-analitica' && BASE_DATOS.length > 0) {
@@ -1914,8 +1935,13 @@
                 if(!tbody) return;
                 tbody.innerHTML = usuarios.map(u => `
                     <tr class="hover:bg-white/5 transition-colors">
-                        <td class="py-4 px-2 font-bold lowercase">${u.email}</td>
-                        <td class="py-4 px-2 opacity-50">${new Date(u.fechaAgregado).toLocaleDateString()}</td>
+                        <td class="py-4 px-2 font-black lowercase">${u.email}</td>
+                        <td class="py-4 px-2">
+                            <span class="text-[10px] font-mono ${u.ultimaConexion ? 'text-emerald-400' : 'opacity-30'}">
+                                ${u.ultimaConexion ? new Date(u.ultimaConexion).toLocaleString('es-ES', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : 'Nunca'}
+                            </span>
+                        </td>
+                        <td class="py-4 px-2 opacity-50 text-[10px]">${new Date(u.fechaAgregado).toLocaleDateString()}</td>
                         <td class="py-4 px-2 text-right">
                             <button onclick="eliminarUsuarioAdmin('${u._id}')" class="text-rose-500 hover:text-rose-400 p-2">🗑️</button>
                         </td>

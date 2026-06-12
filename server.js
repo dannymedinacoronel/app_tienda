@@ -8,13 +8,8 @@ const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const nodemailer = require('nodemailer');
-const http = require('http');
-const { Server } = require('socket.io');
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // ⚙️ CONFIGURACIÓN DE ENTORNO
@@ -23,8 +18,7 @@ console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
 
 // Es vital para que las sesiones funcionen en plataformas como Render/Heroku
 app.set('trust proxy', 1);
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(express.json());
 
 // 🔒 CONEXIÓN DEPURADA: Purgadas las credenciales del código fuente
 const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI;
@@ -39,13 +33,6 @@ const TiendaSchema = new mongoose.Schema({
     fechaCreacion: { type: Date, default: Date.now }
 });
 const Tienda = mongoose.models.Tienda || mongoose.model('Tienda', TiendaSchema);
-
-const UsuarioAutorizadoSchema = new mongoose.Schema({
-    email: { type: String, required: true, unique: true, trim: true, lowercase: true },
-    fechaAgregado: { type: Date, default: Date.now },
-    ultimaConexion: { type: Date }
-});
-const UsuarioAutorizado = mongoose.models.UsuarioAutorizado || mongoose.model('UsuarioAutorizado', UsuarioAutorizadoSchema);
 
 const CategoriaSchema = new mongoose.Schema({
     nombre: { type: String, required: true, unique: true, trim: true }
@@ -124,6 +111,13 @@ mongoose.connect(MONGO_URI_FINAL)
     .then(async () => {
         console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.');
         
+        // Migrar whitelist inicial si la base de datos está vacía
+        const countUsers = await UsuarioAutorizado.countDocuments();
+        if (countUsers === 0) {
+            const initialEmails = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
+            await UsuarioAutorizado.insertMany(initialEmails.map(e => ({ email: e })));
+            console.log('[INIT] Whitelist inicial migrada a MongoDB.');
+        }
         // Auto-poblar categorías si la colección está vacía
         const catCount = await Categoria.countDocuments();
         if (catCount === 0) {
@@ -176,13 +170,6 @@ async function registrarLog(usuario, accion) {
         await nuevoLog.save();
     } catch (e) { console.error("Error al guardar log:", e); }
 }
-
-// --- Función para notificar cambios en tiempo real ---
-function notificarCambio() {
-    io.emit('cambio_detectado', { timestamp: Date.now() });
-}
-
-io.on('connection', (socket) => { console.log(`[WS] Cliente conectado: ${socket.id}`); });
 
 // --- Utilidades de Imagen ---
 async function downloadAndConvertToBase64(url) {
@@ -250,7 +237,6 @@ app.post('/api/categorias', exigeAdmin, async (req, res) => {
         const nueva = new Categoria({ nombre: nombreLimpio });
         await nueva.save();
         await registrarLog(req.session.email, `Creó nueva categoría: ${nombreLimpio}`);
-        notificarCambio();
         res.json({ status: 'success', categoria: nueva });
     } catch (e) { res.status(400).json({ error: 'La categoría ya existe.' }); }
 });
@@ -261,7 +247,6 @@ app.put('/api/categorias/:id', exigeAdmin, async (req, res) => {
         const { nombre } = req.body;
         const cat = await Categoria.findByIdAndUpdate(id, { nombre }, { new: true });
         await registrarLog(req.session.email, `Modificó categoría: ${nombre}`);
-        notificarCambio();
         res.json(cat);
     } catch (e) { res.status(400).json({ error: 'Error al actualizar categoría.' }); }
 });
@@ -273,7 +258,6 @@ app.delete('/api/categorias/:id', exigeAdmin, async (req, res) => {
         if (!cat) return res.status(404).json({ error: 'No existe.' });
         await Categoria.findByIdAndDelete(id);
         await registrarLog(req.session.email, `Eliminó categoría: ${cat.nombre}`);
-        notificarCambio();
         res.sendStatus(200);
     } catch (e) { res.status(500).json({ error: 'Error al purgar categoría.' }); }
 });
@@ -297,7 +281,6 @@ app.post('/api/tiendas', exigeAdmin, async (req, res) => {
         const nuevaTienda = new Tienda({ nombre: nombreLimpio });
         await nuevaTienda.save();
         await registrarLog(req.session.email, `Creó la tienda en MongoDB: ${nuevaTienda.nombre}`);
-        notificarCambio();
         res.json({ status: 'success', tienda: nuevaTienda });
     } catch (e) {
         res.status(400).json({ error: 'La tienda ya existe o hay un error de validación.' });
@@ -317,7 +300,6 @@ app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
         await Tienda.findByIdAndDelete(id);
 
         await registrarLog(req.session.email, `Eliminó la tienda "${tiendaPorBorrar.nombre}".`);
-        notificarCambio();
         return res.sendStatus(200);
     } catch (err) {
         console.error("Error al borrar tienda:", err);
@@ -341,12 +323,7 @@ app.post('/api/auth/google', async (req, res) => {
         const payload = ticket.getPayload();
         const emailUsuario = payload['email'].toLowerCase().trim();
 
-        const autorizado = await UsuarioAutorizado.findOne({ email: emailUsuario });
-
-        if (autorizado) {
-            autorizado.ultimaConexion = new Date();
-            await autorizado.save();
-
+        if (ADMIN_WHITELIST.includes(emailUsuario)) {
             req.session.esAdmin = true;
             req.session.email = emailUsuario;
             await registrarLog(emailUsuario, "Inició sesión en el sistema core");
@@ -381,7 +358,6 @@ app.post('/api/notas', exigeAdmin, async (req, res) => {
         if (count >= 10) return res.status(400).json({ error: 'Límite de 10 notas alcanzado.' });
         const nuevaNota = new Nota({ ...req.body, usuario: req.session.email });
         await nuevaNota.save();
-        notificarCambio();
         res.json(nuevaNota);
     } catch (e) { res.status(500).json({ error: 'Error al crear nota.' }); }
 });
@@ -390,7 +366,6 @@ app.put('/api/notas/:id', exigeAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const notaActualizada = await Nota.findByIdAndUpdate(id, req.body, { new: true });
-        notificarCambio();
         res.json(notaActualizada);
     } catch (e) { res.status(500).json({ error: 'Error al mover nota.' }); }
 });
@@ -399,7 +374,6 @@ app.delete('/api/notas/:id', exigeAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         await Nota.findByIdAndDelete(id);
-        notificarCambio();
         res.sendStatus(200);
     } catch (e) { res.status(500).json({ error: 'Error al borrar nota.' }); }
 });
@@ -428,49 +402,6 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar logs.' }); }
 });
 
-// --- Ruta de Estado de Almacenamiento DB ---
-app.get('/api/system/storage', exigeAdmin, async (req, res) => {
-    try {
-        const stats = await mongoose.connection.db.stats();
-        const limitMB = parseInt(process.env.MONGO_STORAGE_LIMIT_MB) || 512; // 512MB por defecto para Atlas M0
-        const limitBytes = limitMB * 1024 * 1024;
-        const usedBytes = stats.storageSize || 0; 
-        const percent = Math.min(100, (usedBytes / limitBytes) * 100).toFixed(2);
-        res.json({ used: usedBytes, limit: limitBytes, percent });
-    } catch (e) { res.status(500).json({ error: 'Error al obtener estadísticas de DB.' }); }
-});
-
-// --- Rutas de Gestión de Usuarios Autorizados ---
-app.get('/api/usuarios-admin', exigeAdmin, async (req, res) => {
-    try {
-        const usuarios = await UsuarioAutorizado.find().sort({ email: 1 }).lean();
-        res.json(usuarios);
-    } catch (e) { res.status(500).json({ error: 'Error al listar usuarios.' }); }
-});
-
-app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
-    try {
-        const { email } = req.body;
-        if (!email) return res.status(400).json({ error: 'Email requerido.' });
-        const nuevo = new UsuarioAutorizado({ email: email.toLowerCase().trim() });
-        await nuevo.save();
-        await registrarLog(req.session.email, `Autorizó acceso a: ${email}`);
-        notificarCambio();
-        res.json(nuevo);
-    } catch (e) { res.status(400).json({ error: 'El usuario ya está autorizado.' }); }
-});
-
-app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
-    try {
-        const user = await UsuarioAutorizado.findById(req.params.id);
-        if (user && user.email === req.session.email) return res.status(400).json({ error: 'No puedes eliminarte a ti mismo.' });
-        await UsuarioAutorizado.findByIdAndDelete(req.params.id);
-        await registrarLog(req.session.email, `Revocó acceso a: ${user ? user.email : 'ID '+req.params.id}`);
-        notificarCambio();
-        res.sendStatus(200);
-    } catch (e) { res.status(500).json({ error: 'Error al eliminar usuario.' }); }
-});
-
 // --- Rutas de Clientes (CRM) ---
 app.get('/api/clientes', exigeAdmin, async (req, res) => {
     try { res.json(await Cliente.find().sort({ nombre: 1 })); } catch (e) { res.status(500).send(e); }
@@ -480,22 +411,21 @@ app.post('/api/clientes', exigeAdmin, async (req, res) => {
         const nuevo = new Cliente(req.body);
         await nuevo.save();
         await registrarLog(req.session.email, `Registró cliente: ${nuevo.nombre}`);
-        notificarCambio();
-        res.status(201).json(nuevo);
-    } catch (e) { res.status(400).json({ error: 'Error al crear cliente.' }); }
+        res.json(nuevo);
+    } catch (e) { res.status(400).send(e); }
 });
 app.put('/api/clientes/:id', exigeAdmin, async (req, res) => {
     try {
         const cliente = await Cliente.findByIdAndUpdate(req.params.id, req.body, { new: true });
         await registrarLog(req.session.email, `Actualizó datos del cliente: ${cliente.nombre}`);
-        notificarCambio();
+        notificarCambio(); // Notificar cambio para refrescar la lista de clientes en otros navegadores
         res.json(cliente);
-    } catch (e) { res.status(400).json({ error: 'Error al actualizar cliente.' }); }
+    } catch (e) { res.status(400).send(e); }
 });
 app.delete('/api/clientes/:id', exigeAdmin, async (req, res) => {
     try {
         await Cliente.findByIdAndDelete(req.params.id);
-        notificarCambio();
+        notificarCambio(); // Notificar cambio para refrescar la lista de clientes en otros navegadores
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
 });
@@ -509,14 +439,12 @@ app.post('/api/gastos', exigeAdmin, async (req, res) => {
         const nuevo = new Gasto(req.body);
         await nuevo.save();
         await registrarLog(req.session.email, `Registró gasto: ${nuevo.concepto} (${nuevo.monto}€)`);
-        notificarCambio();
         res.json(nuevo);
     } catch (e) { res.status(400).send(e); }
 });
 app.delete('/api/gastos/:id', exigeAdmin, async (req, res) => {
     try {
         await Gasto.findByIdAndDelete(req.params.id);
-        notificarCambio();
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
 });
@@ -575,7 +503,6 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
         const nuevaVenta = new VentaRopa({ ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null });
         await nuevaVenta.save(); 
         await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`);
-        notificarCambio();
         return res.json({ status: "success", venta: nuevaVenta });
     } catch (error) { 
         return res.status(500).json({ error: 'Error al registrar artículo.' }); 
@@ -596,7 +523,6 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
         );
 
         await registrarLog(req.session.email, `Modificó datos de la prenda ID: ${id} (${ventaActualizada.prenda})`);
-        notificarCambio();
         return res.json({ status: "success", venta: ventaActualizada });
     } catch (error) {
         return res.status(500).json({ error: 'Error al actualizar registro.' });
@@ -618,7 +544,6 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
 
         const ventaActualizada = await VentaRopa.findByIdAndUpdate(id, updateData, { new: true });
         await registrarLog(req.session.email, `Transición de estado: [${ventaActualizada.prenda}] -> ${estado.toUpperCase()}`);
-        notificarCambio();
         return res.json({ status: "success", venta: ventaActualizada });
     } catch (error) {
         return res.status(500).json({ error: 'Error en la actualización de la columna Kanban.' });
@@ -637,7 +562,6 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
                 estado: 'No Vendido'
             });
             await venta.save();
-            notificarCambio();
             return res.json({ operacion: "Creado", venta });
         } else {
             const nuevoEstado = venta.estado === 'Vendido' ? 'No Vendido' : 'Vendido';
@@ -651,7 +575,6 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
                 venta.fechaVenta = '';
             }
             await venta.save();
-            notificarCambio();
             return res.json({ operacion: nuevoEstado, venta });
         }
     } catch (error) {
@@ -665,7 +588,6 @@ app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
         const ventaEliminada = await VentaRopa.findByIdAndDelete(id);
         if (ventaEliminada) {
             await registrarLog(req.session.email, `Eliminó permanentemente la prenda: ${ventaEliminada.prenda}`);
-            notificarCambio();
         }
         return res.sendStatus(200);
     } catch (error) {
@@ -677,7 +599,7 @@ app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(
 app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: ${PORT}`));
+app.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: ${PORT}`));
 
 
 //SCRIPT DE SCRAPING
@@ -768,6 +690,7 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
             await nuevaVenta.save();
             registrosCreados.push(nuevaVenta.prenda);
         }
+        notificarCambio(); // Notificar cambio para refrescar el panel principal
 
         await registrarLog(req.session.email, `Importó ${registrosCreados.length} productos desde Vinted: ${registrosCreados.join(', ')}`);
         res.json({ success: true, count: registrosCreados.length });

@@ -137,7 +137,7 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
     resave: false, 
     saveUninitialized: false, 
-    proxy: true, // Vital para Render/Heroku
+    proxy: isProd, // Solo confiar en proxy en producción
     store: MongoStore.create({ mongoUrl: MONGO_URI_FINAL, collectionName: 'sesiones_activas', ttl: 14 * 24 * 60 * 60 }),
     cookie: { 
         secure: isProd, 

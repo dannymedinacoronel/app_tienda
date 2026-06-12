@@ -348,7 +348,7 @@
                             <div class="grid grid-cols-1 gap-2">
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Canal Comercial</label>
-                                    <select id="canalVenta" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none">
+                                    <select id="canalVenta" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none dropdown-bg">
                                         <option value="Vinted" selected>👗 Vinted</option>
                                         <option value="Tienda Física">🏬 Tienda</option>
                                         <option value="Wallapop">🤝 Wallapop</option>
@@ -365,7 +365,7 @@
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Valoración Inicial</label>
-                                    <input type="hidden" id="rating" value="0">
+                                    <input type="hidden" id="rating" value="0" class="input-bg">
                                     <div class="flex items-center gap-1.5 bg-black/10 p-1 rounded-xl border border-current/10 justify-center h-[34px] text-base">
                                         <span onclick="setFormRating(1)" id="star-1" class="star-rating-btn text-slate-500">☆</span>
                                         <span onclick="setFormRating(2)" id="star-2" class="star-rating-btn text-slate-500">☆</span>
@@ -375,7 +375,7 @@
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <button type="submit" id="btn-submit" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs py-3 rounded-xl shadow-md uppercase tracking-widest transition-all active:scale-[0.98]">Registrar Artículo</button>
                             <button type="button" id="btn-cancel" onclick="cancelEdit()" class="hidden w-full text-center text-[10px] uppercase opacity-50 py-0.5 hover:underline">Cancelar Cambios</button>
                         </form>
@@ -390,7 +390,7 @@
                                 <h3 class="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5">📦 EN STOCK <span id="badge-stock" class="bg-amber-500/10 px-1.5 py-0.5 rounded">0</span></h3>
                                 <button onclick="alternarSeleccionColumna('No Vendido')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
                             </div>
-                            <select onchange="cambiarOrdenColumna('No Vendido', this.value)" class="bg-black/20 border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none">
+                            <select onchange="cambiarOrdenColumna('No Vendido', this.value)" class="input-bg border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none dropdown-bg">
                                 <option value="reciente">🕒 Más Recientes</option>
                                 <option value="precio-desc">💰 Precio: Mayor</option>
                                 <option value="precio-asc">💰 Precio: Menor</option>
@@ -408,7 +408,7 @@
                                 <h3 class="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1.5">💰 VENDIDOS <span id="badge-vendido" class="bg-emerald-500/10 px-1.5 py-0.5 rounded">0</span></h3>
                                 <button onclick="alternarSeleccionColumna('Vendido')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
                             </div>
-                            <select onchange="cambiarOrdenColumna('Vendido', this.value)" class="bg-black/20 border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none">
+                            <select onchange="cambiarOrdenColumna('Vendido', this.value)" class="input-bg border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none dropdown-bg">
                                 <option value="reciente">🕒 Más Recientes</option>
                                 <option value="precio-desc">Mayor Precio</option>
                             </select>
@@ -426,7 +426,7 @@
                             <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
                                 <span class="bg-blue-500/20 p-2.5 rounded-2xl shadow-inner text-lg">📅</span> Historial de Stock & Flujos
                             </h3>
-                            <div class="flex items-center gap-4 bg-black/40 p-2 rounded-2xl border border-white/5 shadow-xl">
+                            <div class="flex items-center gap-4 card-bg p-2 rounded-2xl shadow-xl">
                                 <button onclick="navegarCalendarioStock(-1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs font-black">◀</button>
                                 <span id="txt-calendario-stock-mes" class="text-[11px] font-black uppercase tracking-widest min-w-[140px] text-center text-blue-400">...</span>
                                 <button onclick="navegarCalendarioStock(1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs font-black">▶</button>
@@ -446,15 +446,15 @@
                             <h3 class="text-[8px] font-black text-rose-500 uppercase tracking-tighter flex items-center gap-1">
                                 <span class="bg-rose-500/20 p-1 rounded-lg text-xs">⚠️</span> INCIDENCIAS/DEV/ETC... <span id="badge-devuelto" class="bg-rose-500/10 px-1 py-0.5 rounded text-[7px]">0</span>
                             </h3>
-                            <div class="flex flex-col gap-1.5">
+                            <div class="flex flex-col gap-1.5 mb-4">
                                 <div class="flex items-center gap-2">
-                                    <select onchange="cambiarOrdenColumna('Devuelto', this.value)" class="bg-black/20 border border-current/10 text-[9px] font-bold uppercase rounded-xl px-2 py-1 focus:outline-none">
+                                    <select onchange="cambiarOrdenColumna('Devuelto', this.value)" class="input-bg border border-current/10 text-[9px] font-bold uppercase rounded-xl px-2 py-1 focus:outline-none dropdown-bg">
                                         <option value="reciente">🕒 Orden</option>
                                         <option value="precio-desc">💰 Precio</option>
                                     </select>
                                     <button onclick="alternarSeleccionColumna('Devuelto')" class="text-[8px] bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 rounded-lg font-bold uppercase transition-all shadow-sm">Marcar</button>
                                 </div>
-                                <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Filtrar..." class="bg-black/20 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30 w-full">
+                                <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Filtrar..." class="input-bg border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30 w-full">
                             </div>
                         </div>
                         <div id="col-devuelto" class="grid grid-cols-1 gap-2 p-1 overflow-y-auto max-h-[650px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
@@ -471,14 +471,14 @@
                             <button onclick="limpiarFiltrosAnalitica()" class="text-[10px] opacity-60 hover:opacity-100 underline font-mono">Restablecer Todo</button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-xs">
+                    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-[10px]">
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Filtrar por Tienda</label>
-                            <select id="an-filtro-tienda" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg"></select>
+                            <select id="an-filtro-tienda" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg text-[10px]"></select>
                         </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Canal Comercial</label>
-                            <select id="an-filtro-canal" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none">
+                            <select id="an-filtro-canal" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg text-[10px]">
                                 <option value="TODOS">🌐 Todos</option>
                                 <option value="Vinted">👗 Vinted</option>
                                 <option value="Tienda Física">🏬 Tienda</option>
@@ -488,24 +488,24 @@
                         </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Categoría</label>
-                            <select id="an-filtro-categoria" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none">
+                            <select id="an-filtro-categoria" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg text-[10px]">
                                 <option value="TODOS">👕 Todas</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Talla</label>
-                            <select id="an-filtro-talla" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none">
+                            <select id="an-filtro-talla" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg text-[10px]">
                                 <option value="TODOS">📐 Todas</option>
                                 <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
                             </select>
                         </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Mín (€)</label>
-                            <input type="number" id="an-filtro-precio-min" placeholder="0.00" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono">
+                            <input type="number" id="an-filtro-precio-min" placeholder="0.00" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono text-[10px]">
                         </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Máx (€)</label>
-                            <input type="number" id="an-filtro-precio-max" placeholder="Max" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono">
+                            <input type="number" id="an-filtro-precio-max" placeholder="Max" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono text-[10px]">
                         </div>
                     </div>
                 </div>
@@ -554,9 +554,9 @@
                         <div class="space-y-4">
                             <div class="bg-black/20 p-3 rounded-2xl border border-white/5">
                                 <p class="text-[9px] font-black uppercase opacity-40 mb-2 tracking-tighter">Mi Información (Vendedor)</p>
-                                <input type="text" id="fac-vendedor-nombre" placeholder="Tu Nombre o Empresa" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
-                                <input type="text" id="fac-vendedor-cif" placeholder="NIF / CIF" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
-                                <textarea id="fac-vendedor-dir" placeholder="Dirección Fiscal Completa" rows="2" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none resize-none"></textarea>
+                                <input type="text" id="fac-vendedor-nombre" placeholder="Tu Nombre o Empresa" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
+                                <input type="text" id="fac-vendedor-cif" placeholder="NIF / CIF" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
+                                <textarea id="fac-vendedor-dir" placeholder="Dirección Fiscal Completa" rows="2" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none resize-none"></textarea>
                             </div>
                             
                             <div class="bg-black/20 p-3 rounded-2xl border border-white/5">
@@ -564,19 +564,19 @@
                                     <p class="text-[9px] font-black uppercase opacity-40 tracking-tighter">Información del Cliente</p>
                                     <button onclick="lanzarModalCRM()" class="text-[8px] bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded-lg border border-blue-500/30">Cargar de CRM</button>
                                 </div>
-                                <input type="text" id="fac-cliente-nombre" placeholder="Nombre del Comprador" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
-                                <input type="text" id="fac-cliente-nif" placeholder="NIF / CIF / DNI" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
-                                <textarea id="fac-cliente-dir" placeholder="Dirección de Envío / Fiscal" rows="2" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none resize-none"></textarea>
+                                <input type="text" id="fac-cliente-nombre" placeholder="Nombre del Comprador" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
+                                <input type="text" id="fac-cliente-nif" placeholder="NIF / CIF / DNI" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none mb-2">
+                                <textarea id="fac-cliente-dir" placeholder="Dirección de Envío / Fiscal" rows="2" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] focus:outline-none resize-none"></textarea>
                             </div>
 
                             <div class="flex gap-2">
                                 <div class="flex-1">
                                     <p class="text-[9px] font-black uppercase opacity-40 mb-1">Nº Factura</p>
-                                    <input type="text" id="fac-numero" placeholder="FAC-2024-001" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] font-mono focus:outline-none">
+                                    <input type="text" id="fac-numero" placeholder="FAC-2024-001" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] font-mono focus:outline-none">
                                 </div>
                                 <div class="flex-1">
                                     <p class="text-[9px] font-black uppercase opacity-40 mb-1">Impuesto IVA (%)</p>
-                                    <input type="number" id="fac-iva" value="21" class="input-bg border w-full rounded-xl px-3 py-2 text-[11px] font-mono focus:outline-none">
+                                    <input type="number" id="fac-iva" value="21" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] font-mono focus:outline-none">
                                 </div>
                             </div>
                             
@@ -625,9 +625,9 @@
                 <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col gap-4">
                     <h3 class="text-xs font-black text-rose-400 uppercase tracking-widest flex items-center gap-2">🧾 Registrar Gasto Operativo</h3>
                     <div class="space-y-3">
-                        <input type="text" id="gas-concepto" placeholder="Concepto (Alquiler, Luz, Ads...)" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
-                        <input type="number" id="gas-monto" placeholder="Importe (€)" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none font-mono">
-                        <select id="gas-categoria" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
+                        <input type="text" id="gas-concepto" placeholder="Concepto (Alquiler, Luz, Ads...)" class="input-bg w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
+                        <input type="number" id="gas-monto" placeholder="Importe (€)" class="input-bg w-full rounded-xl px-3 py-2 text-xs focus:outline-none font-mono">
+                        <select id="gas-categoria" class="input-bg w-full rounded-xl px-3 py-2 text-xs focus:outline-none dropdown-bg">
                             <option value="Suministros">🔌 Suministros</option>
                             <option value="Local">🏢 Local/Alquiler</option>
                             <option value="Marketing">📢 Marketing/Publicidad</option>
@@ -665,7 +665,7 @@
                             <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
                                 📅 Calendario de Actividad Histórica
                             </h3>
-                            <div class="flex items-center gap-4 bg-black/20 p-1.5 rounded-2xl border border-white/5 shadow-inner">
+                            <div class="flex items-center gap-4 card-bg p-1.5 rounded-2xl shadow-inner">
                                 <button onclick="navegarCalendario(-1)" class="p-2 hover:bg-white/10 rounded-xl transition-all">◀</button>
                                 <span id="txt-calendario-mes" class="text-[11px] font-black uppercase tracking-widest min-w-[140px] text-center">...</span>
                                 <button onclick="navegarCalendario(1)" class="p-2 hover:bg-white/10 rounded-xl transition-all">▶</button>
@@ -687,7 +687,7 @@
         <!-- MODAL DETALLE CALENDARIO -->
         <div id="modal-audit-detalle" class="hidden fixed inset-0 z-[400] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
             <div class="card-bg border rounded-3xl p-6 w-full max-w-2xl flex flex-col gap-4 shadow-2xl relative max-h-[85vh]">
-                <button onclick="document.getElementById('modal-audit-detalle').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-xl">✕</button>
+                <button onclick="document.getElementById('modal-audit-detalle').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-2xl">✕</button>
                 <div class="border-b border-white/10 pb-4">
                     <h2 class="text-xl font-black uppercase tracking-widest text-indigo-400" id="detalle-dia-titulo">Detalle de Actividad</h2>
                     <p class="text-[10px] opacity-50 font-mono" id="detalle-dia-fecha"></p>
@@ -702,7 +702,7 @@
         <!-- MODAL DETALLE PRODUCTOS DÍA CALENDARIO STOCK -->
         <div id="modal-stock-detalle" class="hidden fixed inset-0 z-[400] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
             <div class="card-bg border rounded-3xl p-6 w-full max-w-2xl flex flex-col gap-4 shadow-2xl relative max-h-[85vh]">
-                <button onclick="document.getElementById('modal-stock-detalle').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-xl">✕</button>
+                <button onclick="document.getElementById('modal-stock-detalle').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-2xl">✕</button>
                 <div class="border-b border-white/10 pb-4">
                     <h2 class="text-xl font-black uppercase tracking-widest text-blue-400" id="detalle-stock-titulo">Movimientos del Día</h2>
                     <p class="text-[10px] opacity-50 font-mono">Resumen de entradas y salidas de stock</p>
@@ -718,27 +718,27 @@
             <div class="text-xs font-bold font-mono">💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> MARCADOS</div>
             <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
             <div class="flex flex-wrap items-center gap-2">
-                <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">👯 Duplicar Lote</button>
-                <button onclick="ejecutarAjustePrecioMasivo()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">💰 Ajustar Precio</button>
-                <button onclick="ejecutarAjusteCosteMasivo()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">📉 Ajustar Coste</button>
-                <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">💵 Vender Lote</button>
-                <button onclick="ejecutarAccionMasivaEstado('Reservado')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">🤝 Reservar Lote</button>
-                <button onclick="ejecutarAccionMasivaEstado('Devuelto')" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">⚠️ Devolución</button>
-                <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">📦 Mover a Stock</button>
-                <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">👯 Duplicar Lote</button>
+                <button onclick="ejecutarAjustePrecioMasivo()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">💰 Ajustar Precio</button>
+                <button onclick="ejecutarAjusteCosteMasivo()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">📉 Ajustar Coste</button>
+                <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">💵 Vender Lote</button>
+                <button onclick="ejecutarAccionMasivaEstado('Reservado')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">🤝 Reservar Lote</button>
+                <button onclick="ejecutarAccionMasivaEstado('Devuelto')" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">⚠️ Devolución</button>
+                <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">📦 Mover a Stock</button>
+                <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="input-bg rounded-xl p-1.5 text-[10px] font-bold focus:outline-none dropdown-bg">
                     <option value="">📐 Talla...</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
                 </select>
-                <select id="categoria-masiva" onchange="ejecutarEdicionMasivaPropiedad('categoria', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                <select id="categoria-masiva" onchange="ejecutarEdicionMasivaPropiedad('categoria', this.value); this.value='';" class="input-bg rounded-xl p-1.5 text-[10px] font-bold focus:outline-none dropdown-bg">
                     <option value="">👕 Categoría...</option><option value="Camisetas">👕 Camisetas</option><option value="Sudaderas">🧥 Sudaderas</option><option value="Pantalones">👖 Pantalones</option><option value="Vestidos">👗 Vestidos</option><option value="Accesorios">👜 Accesorios</option>
                 </select>
-                <select id="canal-masivo" onchange="ejecutarEdicionMasivaPropiedad('canalVenta', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                <select id="canal-masivo" onchange="ejecutarEdicionMasivaPropiedad('canalVenta', this.value); this.value='';" class="input-bg rounded-xl p-1.5 text-[10px] font-bold focus:outline-none dropdown-bg">
                     <option value="">🌐 Canal...</option>
                     <option value="Tienda Física">🏬 Tienda Física</option><option value="Vinted">👗 Vinted</option><option value="Wallapop">🤝 Wallapop</option><option value="Web">🌐 Web</option>
                 </select>
-                <select id="tienda-masiva" onchange="ejecutarEdicionMasivaPropiedad('proveedor', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
+                <select id="tienda-masiva" onchange="ejecutarEdicionMasivaPropiedad('proveedor', this.value); this.value='';" class="input-bg rounded-xl p-1.5 text-[10px] font-bold focus:outline-none dropdown-bg">
                     <option value="">🏬 Tienda...</option>
                 </select>
-                <button onclick="ejecutarEliminacionMasiva()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">🗑️ Eliminar</button>
+                <button onclick="ejecutarEliminacionMasiva()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">🗑️ Eliminar</button>
                 <button onclick="limpiarSeleccionMasiva()" class="text-[10px] underline opacity-50 hover:opacity-100 px-1">Limpiar</button>
             </div>
         </div>
@@ -2943,7 +2943,7 @@
                     setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
                     document.getElementById('login-box').classList.add('hidden'); 
                     document.getElementById('panel-control').classList.remove('hidden'); 
-                    document.getElementById('ticker-bar').classList.remove('hidden'); 
+                    document.getElementById('ticker-bar').classList.remove('hidden');
                     document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario}`; 
                     
                     vincularFormularios(); // Vincular eventos solo cuando los elementos existen

@@ -69,7 +69,7 @@ const VentaRopaSchema = new mongoose.Schema({
     gastosEnvio: { type: Number, default: 0 }, 
     canalVenta: { type: String, enum: ['Tienda Física', 'Vinted', 'Wallapop', 'Web'], default: 'Tienda Física' }, 
     rating: { type: Number, default: 0, min: 0, max: 5 },
-    estado: { type: String, enum: ['Vendido', 'No Vendido', 'Devuelto'], default: 'No Vendido' },
+    estado: { type: String, enum: ['Vendido', 'No Vendido', 'Devuelto', 'Reservado'], default: 'No Vendido' },
     comentariosProducto: { type: String, default: '', trim: true },
     tienda: { type: mongoose.Schema.Types.ObjectId, ref: 'Tienda' },
     imagen: { type: String, default: '' },
@@ -387,6 +387,13 @@ app.post('/api/clientes', exigeAdmin, async (req, res) => {
         res.json(nuevo);
     } catch (e) { res.status(400).send(e); }
 });
+app.put('/api/clientes/:id', exigeAdmin, async (req, res) => {
+    try {
+        const cliente = await Cliente.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        await registrarLog(req.session.email, `Actualizó datos del cliente: ${cliente.nombre}`);
+        res.json(cliente);
+    } catch (e) { res.status(400).send(e); }
+});
 app.delete('/api/clientes/:id', exigeAdmin, async (req, res) => {
     try {
         await Cliente.findByIdAndDelete(req.params.id);
@@ -498,6 +505,7 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
         const { id } = req.params;
         const { estado } = req.body;
 
+        // Si el estado es Reservado, no se registra fechaVenta
         const updateData = { estado };
         if (estado === 'Vendido') {
             updateData.fechaVenta = new Date().toISOString().split('T')[0];
@@ -532,6 +540,9 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
             if (nuevoEstado === 'Vendido') {
                 venta.fechaVenta = new Date().toISOString().split('T')[0];
             } else {
+                // Si se mueve de Vendido a No Vendido o Reservado, se limpia la fecha de venta
+                // Si se mueve de Reservado a No Vendido, también se limpia
+                // Si se mueve de No Vendido a Reservado, no se toca fechaVenta
                 venta.fechaVenta = '';
             }
             await venta.save();
@@ -642,6 +653,7 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
         for (const prod of productos) {
             const nuevaVenta = new VentaRopa({
                 ...prod,
+                imagen: await downloadAndConvertToBase64(prod.imagen), // Descargar y guardar imagen como Base64
                 tienda: tiendaVinted._id,
                 sku: `VNT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
                 comentariosProducto: `Importado automáticamente desde Vinted el ${new Date().toLocaleDateString()}`

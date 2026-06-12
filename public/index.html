@@ -217,6 +217,7 @@
             <nav class="flex gap-2 p-1.5 card-bg border rounded-2xl mb-6 text-xs max-w-md shadow-inner">
                 <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white shadow">📦 Panel</button>
                 <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📊 Analítica</button>
+                <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">👥 Clientes</button>
                 <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📋 Gestión</button>
                 <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📜 Logs</button>
             </nav>
@@ -365,10 +366,6 @@
                             </div>
 
                             <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Envío (€)</label>
-                                    <input type="number" id="gastosEnvio" step="0.01" value="0" class="input-bg border w-full rounded-xl p-2 text-xs font-mono focus:outline-none focus:border-blue-500">
-                                </div>
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Valoración Inicial</label>
                                     <input type="hidden" id="rating" value="0">
@@ -728,6 +725,7 @@
                 <button onclick="ejecutarAjustePrecioMasivo()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">💰 Ajustar Precio</button>
                 <button onclick="ejecutarAjusteCosteMasivo()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">📉 Ajustar Coste</button>
                 <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">💵 Vender Lote</button>
+                <button onclick="ejecutarAccionMasivaEstado('Reservado')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">🤝 Reservar Lote</button>
                 <button onclick="ejecutarAccionMasivaEstado('Devuelto')" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">⚠️ Devolución</button>
                 <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">📦 Mover a Stock</button>
                 <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
@@ -1261,7 +1259,7 @@
         let ITEMS_SELECCIONADOS_MASIVOS = [];
         let SOUND_MUTED_GLOBAL = false;
         let CONFIG_ORDEN_COLUMNAS = { 'No Vendido': 'reciente', 'Vendido': 'reciente', 'Devuelto': 'reciente' };
-        let CONFIG_FILTRO_COLUMNAS = { 'No Vendido': '', 'Vendido': '', 'Devuelto': '' };
+        let CONFIG_FILTRO_COLUMNAS = { 'No Vendido': '', 'Vendido': '', 'Devuelto': '', 'Reservado': '' };
         let CALENDARIO_MES = new Date().getMonth() + 1;
         let CALENDARIO_ANIO = new Date().getFullYear();
         let CAL_STOCK_MES = new Date().getMonth() + 1;
@@ -1581,6 +1579,10 @@
             if (idSeccion === 'sec-gestion') {
                 setTimeout(() => { renderGestionFacturas(); }, 50);
             }
+
+            if (idSeccion === 'sec-crm') {
+                setTimeout(() => { refrescarClientesCRM(); }, 50);
+            }
         }
 
         function navegarCalendarioStock(delta) {
@@ -1749,6 +1751,96 @@
             cantarPorVoz("Factura emitida y guardada.");
             
             localStorage.setItem('seychelles-fac-vendedor', JSON.stringify(vendedor));
+        }
+
+        // --- LÓGICA CRM ---
+        async function refrescarClientesCRM() {
+            const res = await fetch('/api/clientes', { credentials: 'include' });
+            const clientes = await res.json();
+            const tbody = document.getElementById('tabla-clientes-crm');
+            if(!tbody) return;
+            tbody.innerHTML = clientes.map(c => `
+                <tr class="hover:bg-white/5 transition-colors">
+                    <td class="py-3 font-bold uppercase">${c.nombre}</td>
+                    <td class="py-3 font-mono opacity-60">${c.nif || '---'}</td>
+                    <td class="py-3">
+                        <p class="text-[9px] opacity-60">${c.email || ''}</p>
+                        <p class="text-[9px] font-bold">${c.telefono || ''}</p>
+                    </td>
+                    <td class="py-3">
+                        <div class="flex gap-2">
+                            <button onclick="cargarEnFormCRM('${c._id}')" class="text-blue-400 hover:text-blue-300">✏️</button>
+                            <button onclick="borrarClienteCRM('${c._id}')" class="text-rose-500 hover:text-rose-400">🗑️</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        document.getElementById('form-cliente').onsubmit = async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('crm-id').value;
+            const payload = {
+                nombre: document.getElementById('crm-nombre').value,
+                nif: document.getElementById('crm-nif').value,
+                email: document.getElementById('crm-email').value,
+                telefono: document.getElementById('crm-tel').value,
+                direccion: document.getElementById('crm-dir').value
+            };
+            const method = id ? 'PUT' : 'POST';
+            const url = id ? `/api/clientes/${id}` : '/api/clientes';
+            const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(payload) });
+            if(res.ok) { cantarPorVoz("Cliente guardado"); limpiarFormCRM(); refrescarClientesCRM(); }
+        };
+
+        async function borrarClienteCRM(id) {
+            if(confirm("¿Eliminar cliente del CRM?")) { await fetch(`/api/clientes/${id}`, { method: 'DELETE', credentials: 'include' }); refrescarClientesCRM(); }
+        }
+
+        async function cargarEnFormCRM(id) {
+            const res = await fetch('/api/clientes', { credentials: 'include' });
+            const clientes = await res.json();
+            const c = clientes.find(x => x._id === id);
+            if(!c) return;
+            document.getElementById('crm-id').value = c._id;
+            document.getElementById('crm-nombre').value = c.nombre;
+            document.getElementById('crm-nif').value = c.nif;
+            document.getElementById('crm-email').value = c.email;
+            document.getElementById('crm-tel').value = c.telefono;
+            document.getElementById('crm-dir').value = c.direccion;
+            document.getElementById('crm-form-title').innerText = "✏️ Editando Cliente";
+        }
+
+        function limpiarFormCRM() {
+            document.getElementById('form-cliente').reset();
+            document.getElementById('crm-id').value = '';
+            document.getElementById('crm-form-title').innerText = "👥 Ficha de Cliente";
+        }
+
+        async function lanzarModalCRM() {
+            const res = await fetch('/api/clientes', { credentials: 'include' });
+            const clientes = await res.json();
+            const list = document.getElementById('crm-modal-list');
+            list.innerHTML = clientes.map(c => `
+                <div onclick="seleccionarClienteParaFactura('${c._id}')" class="p-3 bg-black/20 border border-white/5 rounded-2xl hover:bg-blue-600/20 cursor-pointer transition-all">
+                    <p class="font-black uppercase text-[11px]">${c.nombre}</p>
+                    <p class="text-[9px] opacity-40 font-mono">${c.nif || '---'}</p>
+                </div>
+            `).join('');
+            document.getElementById('modal-crm-selector').classList.remove('hidden');
+        }
+
+        async function seleccionarClienteParaFactura(id) {
+            const res = await fetch('/api/clientes', { credentials: 'include' });
+            const clientes = await res.json();
+            const c = clientes.find(x => x._id === id);
+            if(c) {
+                document.getElementById('fac-cliente-nombre').value = c.nombre;
+                document.getElementById('fac-cliente-nif').value = c.nif || '';
+                document.getElementById('fac-cliente-dir').value = c.direccion || '';
+                document.getElementById('modal-crm-selector').classList.add('hidden');
+                cantarPorVoz("Cliente cargado");
+            }
         }
 
         function verDetalleStockDia(dia) {
@@ -2028,6 +2120,7 @@
             const fMax = parseFloat(document.getElementById('an-filtro-precio-max').value) || Infinity;
 
             return BASE_DATOS.filter(v => {
+                if (v.estado === 'Reservado') return false; // No incluir reservados en analíticas de venta
                 if (v.estado !== 'Vendido') return false;
                 if (fTienda !== 'TODOS' && v.proveedor !== fTienda) return false;
                 if (fCanal !== 'TODOS' && v.canalVenta !== fCanal) return false;
@@ -2632,13 +2725,14 @@
         }
 
         function renderKanban() {
-            const colStock = document.getElementById('col-no-vendido'); 
-            const colVendido = document.getElementById('col-vendido'); 
+            const colStock = document.getElementById('col-no-vendido');
+            const colReservado = document.getElementById('col-reservado');
+            const colVendido = document.getElementById('col-vendido');
             const colDevuelto = document.getElementById('col-devuelto');
-            if(!colStock || !colVendido || !colDevuelto) return;
+            if(!colStock || !colReservado || !colVendido || !colDevuelto) return;
             
             colStock.innerHTML = ''; colVendido.innerHTML = ''; colDevuelto.innerHTML = '';
-            let sCount = 0, vCount = 0, dCount = 0;
+            let sCount = 0, rCount = 0, vCount = 0, dCount = 0;
 
             const totalStockPorPrendaNombre = {};
             BASE_DATOS.filter(x => x.estado === 'No Vendido').forEach(x => { totalStockPorPrendaNombre[x.prenda] = (totalStockPorPrendaNombre[x.prenda] || 0) + 1; });
@@ -2662,7 +2756,7 @@
                 if (query) { listasOrdenadas[est] = listasOrdenadas[est].filter(v => v.prenda.toLowerCase().includes(query) || (v.sku && v.sku.toLowerCase().includes(query))); }
             });
 
-            const todosOrdenados = [...listasOrdenadas['No Vendido'], ...listasOrdenadas['Devuelto'], ...listasOrdenadas['Vendido']];
+            const todosOrdenados = [...listasOrdenadas['No Vendido'], ...listasOrdenadas['Reservado'], ...listasOrdenadas['Vendido'], ...listasOrdenadas['Devuelto']];
 
             todosOrdenados.forEach(v => {
                 const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
@@ -2697,7 +2791,7 @@
                     <div class="flex-1 min-w-0 pointer-events-none">
                         <div class="flex items-center gap-1.5 flex-wrap">
                             <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
-                            ${badgeCanal} ${badgeTienda} ${badgeCriticoHtml} ${badgeStockFrio}
+                            ${badgeCanal} ${badgeTienda} ${badgeCriticoHtml} ${badgeStockFrio} ${v.estado === 'Reservado' ? '<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-black">RESERVADO</span>' : ''}
                         </div>
                         <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
                         <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
@@ -2713,12 +2807,13 @@
                     </div>`;
 
                 if (v.estado === 'Vendido') { colVendido.appendChild(card); vCount += (v.cantidad || 1); }
+                else if (v.estado === 'Reservado') { colReservado.appendChild(card); rCount += (v.cantidad || 1); }
                 else if (v.estado === 'Devuelto') { colDevuelto.appendChild(card); dCount += (v.cantidad || 1); }
                 else { colStock.appendChild(card); sCount += (v.cantidad || 1); }
             });
             
-            const bs = document.getElementById('badge-stock'); const bv = document.getElementById('badge-vendido'); const bd = document.getElementById('badge-devuelto');
-            if(bs) bs.innerText = sCount; if(bv) bv.innerText = vCount; if(bd) bd.innerText = dCount;
+            const bs = document.getElementById('badge-stock'); const br = document.getElementById('badge-reservado'); const bv = document.getElementById('badge-vendido'); const bd = document.getElementById('badge-devuelto');
+            if(bs) bs.innerText = sCount; if(br) br.innerText = rCount; if(bv) bv.innerText = vCount; if(bd) bd.innerText = dCount;
         }
 
         function updateTickerWallStreet() {
@@ -2759,6 +2854,7 @@
             document.getElementById('prenda').value = item.prenda; 
             document.getElementById('categoria').value = item.categoria; 
             document.getElementById('talla').value = item.talla; 
+            document.getElementById('estado').value = item.estado;
             document.getElementById('cantidad').value = item.cantidad || 1;
             document.getElementById('precioCompra').value = item.precioCompra || 0; 
             document.getElementById('precioVenta').value = item.precioVenta || 0; 
@@ -2787,6 +2883,7 @@
             document.getElementById('form-venta').reset(); document.getElementById('edit-id').value = ""; 
             document.getElementById('gastosEnvio').value = 0; document.getElementById('cantidad').value = 1;
             document.getElementById('canalVenta').value = "Vinted"; document.getElementById('comentariosProducto').value = "";
+            document.getElementById('estado').value = "No Vendido";
             document.getElementById('proveedor').value = ""; setFormRating(0); calcularMargenComercialAlVuelo();
             cancelFoto();
             document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl"; 

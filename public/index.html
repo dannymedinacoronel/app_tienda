@@ -395,15 +395,15 @@
                 </div>
 
                 <div class="lg:col-span-3 grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6 items-stretch">
-                    <!-- CALENDARIO DE MOVIMIENTOS (IZQUIERDA) -->
-                    <div class="lg:col-span-9 card-bg border rounded-3xl p-6 flex flex-col shadow-xl h-full">
+                    <!-- CALENDARIO DE MOVIMIENTOS (IZQUIERDA) - APROX. 80% (10/12) -->
+                    <div class="lg:col-span-10 card-bg border rounded-3xl p-6 flex flex-col shadow-xl h-full">
                         <div class="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
                                 <span class="bg-blue-500/20 p-2 rounded-xl">📅</span> Historial de Stock & Flujos
                             </h3>
                             <div class="flex items-center gap-4 bg-black/20 p-1.5 rounded-2xl border border-white/5">
                                 <button onclick="navegarCalendarioStock(-1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs">◀</button>
-                                <span id="txt-calendario-stock-mes" class="text-[10px] font-black uppercase tracking-widest min-w-[140px] text-center">...</span>
+                                <span id="txt-calendario-stock-mes" class="text-[10px] font-black uppercase tracking-widest min-w-[120px] text-center">...</span>
                                 <button onclick="navegarCalendarioStock(1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs">▶</button>
                             </div>
                         </div>
@@ -415,8 +415,8 @@
                         </div>
                     </div>
 
-                    <!-- GESTIÓN DE INCIDENCIAS (DERECHA) - 25% (3/12) -->
-                    <div class="lg:col-span-3 card-bg border rounded-3xl p-6 flex flex-col transition-all h-full">
+                    <!-- GESTIÓN DE INCIDENCIAS (DERECHA) - APROX. 20% (2/12) -->
+                    <div class="lg:col-span-2 card-bg border rounded-3xl p-6 flex flex-col transition-all h-full">
                         <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
                             <h3 class="text-xs font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">
                                 <span class="bg-rose-500/20 p-2 rounded-xl">⚠️</span> Incidencias/Devoluciones/Etc... <span id="badge-devuelto" class="bg-rose-500/10 px-2 py-0.5 rounded text-[10px]">0</span>
@@ -432,7 +432,7 @@
                                 <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Filtrar incidencias..." class="bg-black/20 border border-current/10 text-[10px] rounded-xl px-3 py-1 focus:outline-none placeholder-current/30">
                             </div>
                         </div>
-                        <div id="col-devuelto" class="grid grid-cols-1 gap-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
+                        <div id="col-devuelto" class="grid grid-cols-1 gap-3 p-1 overflow-y-auto max-h-[600px] text-[10px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
                     </div>
                 </div>
             </div>
@@ -1477,10 +1477,10 @@
                 let info = '';
                 if (addsPorDia[d]) info += `<div class="text-[7px] text-blue-400 font-bold">➕ ${addsPorDia[d]} Alta</div>`;
                 if (salesPorDia[d]) info += `<div class="text-[7px] text-emerald-400 font-bold">💰 ${salesPorDia[d]} Venta</div>`;
-                grid.innerHTML += `
-                    <div onclick="verDetalleStockDia(${d})" class="calendario-dia bg-black/10 border rounded-2xl p-2.5 flex flex-col gap-1.5 transition-all hover:bg-blue-500/10 hover:border-blue-500/40 cursor-pointer min-h-[75px] ${esHoy ? 'border-blue-500 ring-1 ring-blue-500/30' : 'border-white/5'}">
-                        <span class="text-[11px] font-black ${esHoy ? 'text-blue-400' : 'opacity-40'}">${d}</span>
-                        <div class="flex-1 flex flex-col gap-0.5">${info}</div>
+                grid.innerHTML += ` 
+                    <div onclick="verDetalleStockDia(${d})" class="calendario-dia bg-gradient-to-br from-black/10 to-black/5 border rounded-2xl p-3 flex flex-col gap-1.5 transition-all hover:from-blue-500/10 hover:to-blue-500/5 hover:border-blue-500/40 cursor-pointer min-h-[85px] ${esHoy ? 'border-blue-500 ring-1 ring-blue-500/30' : 'border-white/5'}">
+                        <span class="text-base font-black ${esHoy ? 'text-blue-400' : 'opacity-40'}">${d}</span>
+                        <div class="flex-1 flex flex-col gap-1">${info}</div>
                     </div>`;
             }
         }

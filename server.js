@@ -356,17 +356,17 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         });
 
         const $ = cheerio.load(response.data);
-        const resultados = { discrepancias: [], nuevos: [] };
+        const resultados = { discrepancias: [], nuevos: [], identicos: [] };
         const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
 
         // Selectores actualizados para Vinted (basados en estructura común de grid)
-        $('.feed-grid__item, [data-testid^="product-item"], .web_ui__ItemBox__details').each((i, el) => {
+        $('.feed-grid__item, [data-testid^="product-item"], .web_ui__ItemBox__details, .grid__item').each((i, el) => {
             const item = $(el);
-            const titulo = item.find('h4, .web_ui__Text__title, [data-testid$="--description"]').first().text().trim();
-            const precioTexto = item.find('h3, .web_ui__Text__text, [data-testid$="--price"]').first().text().trim();
-            const imagen = item.find('img').attr('src');
+            const titulo = item.find('h4, .web_ui__Text__title, [data-testid$="--description"], .web_ui__ItemBox__title').first().text().trim();
+            const precioTexto = item.find('h3, .web_ui__Text__text, [data-testid$="--price"], .web_ui__ItemBox__price').first().text().trim();
+            const imagen = item.find('img').attr('src') || item.find('img').attr('data-src');
             
-            const precioWeb = parseFloat(precioTexto.replace(/[^0-9,.]/g, '').replace(',', '.'));
+            const precioWeb = parseFloat(precioTexto.replace(/[^0-9,.]/g, '').replace(',', '.').replace(' ', ''));
 
             if (titulo && !isNaN(precioWeb)) {
                 const coincidencia = productosBD.find(p => p.prenda.toLowerCase().includes(titulo.toLowerCase()) || titulo.toLowerCase().includes(p.prenda.toLowerCase()));
@@ -394,7 +394,7 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
             }
         });
 
-        console.log(`[SCRAPER] Análisis finalizado. Discrepancias: ${resultados.discrepancias.length}, Nuevos: ${resultados.nuevos.length}`);
+        console.log(`[SCRAPER] Análisis finalizado. Discrepancias: ${resultados.discrepancias.length}, Nuevos: ${resultados.nuevos.length}, Idénticos: ${resultados.identicos.length}`);
         res.json(resultados);
     } catch (error) {
         console.error('Error en Scraper:', error);

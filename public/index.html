@@ -516,6 +516,12 @@
                     </div>
                 </div>
 
+                <!-- Ya en Sistema (Sin cambios) -->
+                <div id="container-existentes" class="hidden">
+                    <h3 class="text-[10px] font-bold text-slate-500 uppercase mb-2">✅ Ya en Sistema (Detectados)</h3>
+                    <div id="scraper-grid-existentes" class="grid grid-cols-1 sm:grid-cols-2 gap-2 opacity-80"></div>
+                </div>
+
                 <div id="scraper-no-results" class="hidden py-10 text-center">
                     <p class="text-sm opacity-50">No se detectaron cambios ni productos nuevos.</p>
                 </div>
@@ -571,7 +577,7 @@
             document.getElementById('scraper-step-2').classList.remove('hidden');
             
             const badge = document.getElementById('badge-scraper-count');
-            const total = (resultadosScraperActual.discrepancias?.length || 0) + (resultadosScraperActual.nuevos?.length || 0);
+            const total = (resultadosScraperActual.discrepancias?.length || 0) + (resultadosScraperActual.nuevos?.length || 0) + (resultadosScraperActual.identicos?.length || 0);
             if (total > 0) {
                 badge.innerText = `${total} HALLAZGOS`;
                 badge.classList.remove('hidden');
@@ -585,19 +591,24 @@
     function renderizarResultadosScraping(data) {
         const tbody = document.getElementById('scraper-results-body');
         const gridNuevos = document.getElementById('scraper-grid-nuevos');
+        const gridExistentes = document.getElementById('scraper-grid-existentes');
         const contDisc = document.getElementById('container-discrepancias');
         const contNuev = document.getElementById('container-nuevos');
+        const contExist = document.getElementById('container-existentes');
         const noRes = document.getElementById('scraper-no-results');
 
         tbody.innerHTML = '';
         gridNuevos.innerHTML = '';
+        gridExistentes.innerHTML = '';
 
         const discCount = data.discrepancias?.length || 0;
         const nuevoCount = data.nuevos?.length || 0;
+        const identCount = data.identicos?.length || 0;
 
         if (discCount > 0) contDisc.classList.remove('hidden'); else contDisc.classList.add('hidden');
         if (nuevoCount > 0) contNuev.classList.remove('hidden'); else contNuev.classList.add('hidden');
-        if (discCount === 0 && nuevoCount === 0) noRes.classList.remove('hidden'); else noRes.classList.add('hidden');
+        if (identCount > 0) contExist.classList.remove('hidden'); else contExist.classList.add('hidden');
+        if (discCount === 0 && nuevoCount === 0 && identCount === 0) noRes.classList.remove('hidden'); else noRes.classList.add('hidden');
 
         // Renderizar Discrepancias (Cambios de precio)
         if (discCount > 0) {
@@ -624,6 +635,21 @@
                             <p class="text-[10px] font-bold uppercase truncate">${n.prenda}</p>
                             <p class="text-[10px] text-emerald-400 font-mono">${n.precioVenta}€</p>
                         </div>
+                    </div>`;
+            });
+        }
+
+        // Renderizar Idénticos (Ya en sistema sin cambios)
+        if (identCount > 0) {
+            data.identicos.forEach((n, i) => {
+                gridExistentes.innerHTML += `
+                    <div class="flex items-center gap-3 p-2 bg-white/5 border border-white/5 rounded-xl">
+                        <img src="${n.imagen || ''}" class="w-8 h-8 rounded object-cover grayscale" onerror="this.src='https://via.placeholder.com/60'">
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[9px] font-bold uppercase truncate">${n.prenda}</p>
+                            <p class="text-[9px] opacity-50 font-mono">${n.precio}€</p>
+                        </div>
+                        <button onclick="cerrarModalScraper(); editItem('${n.idMongo}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
                     </div>`;
             });
         }

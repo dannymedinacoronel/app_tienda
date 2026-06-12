@@ -203,7 +203,7 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
             inversion += (pCompra * cant);
             gastosTotalesEnvio += (gEnvio * cant);
 
-            if (v.estado === 'Vendido') {
+            if (v.estado === 'Vendido' && v.canalVenta) {
                 let comisionPlataforma = 0;
                 if (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') {
                     comisionPlataforma = (pVenta * 0.05); 
@@ -273,7 +273,7 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
         const { estado } = req.body;
 
         const ventaActualizada = await VentaRopa.findByIdAndUpdate(id, { estado }, { new: true });
-        await registrarLog(req.session.email, `Cambió estado de la prenda [${ventaActualizada.prenda}] a: ${estado}`);
+        await registrarLog(req.session.email, `Transición de estado: [${ventaActualizada.prenda}] -> ${estado.toUpperCase()}`);
         return res.json({ status: "success", venta: ventaActualizada });
     } catch (error) {
         return res.status(500).json({ error: 'Error en la actualización de la columna Kanban.' });
@@ -416,6 +416,39 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
     } catch (error) {
         console.error('Error en importación:', error);
         res.status(500).json({ error: 'Fallo al guardar los nuevos productos.' });
+    }
+});
+
+/**
+ * Inserción masiva de productos (Para restauración de backups o migraciones)
+ */
+app.post('/api/ventas/bulk', exigeAdmin, async (req, res) => {
+    try {
+        const { productos } = req.body;
+        if (!productos || !Array.isArray(productos)) return res.status(400).json({ error: 'Lista de productos no válida.' });
+
+        const tiendaDefecto = await Tienda.findOne({ nombre: 'Sin definir' }) || await new Tienda({ nombre: 'Sin definir' }).save();
+        
+        // Mapeamos los productos para asegurar que tengan IDs de tienda válidos
+        const productosProcesados = await Promise.all(productos.map(async (p) => {
+            let tiendaId = tiendaDefecto._id;
+            if (p.proveedor) {
+                const t = await Tienda.findOne({ nombre: p.proveedor });
+                if (t) tiendaId = t._id;
+            }
+            return {
+                ...p,
+                tienda: tiendaId,
+                sku: p.sku || `BK-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+            };
+        }));
+
+        const insertados = await VentaRopa.insertMany(productosProcesados);
+        await registrarLog(req.session.email, `Restauración masiva: Insertados ${insertados.length} productos.`);
+        res.json({ success: true, count: insertados.length });
+    } catch (error) {
+        console.error("Error en bulk insert:", error);
+        res.status(500).json({ error: 'Fallo al procesar la inserción masiva.' });
     }
 });
 

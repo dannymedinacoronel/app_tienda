@@ -84,7 +84,7 @@
         .kanban-card { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease; backface-visibility: hidden; }
         .dragging { opacity: 0.25 !important; border-color: #3b82f6 !important; }
 
-        #particles-js { position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; pointer-events: all; }
+        #particles-js { position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; pointer-events: none; }
         #wrapper-core { position: relative; z-index: 10; }
         .group:hover .group-hover\:block { display: block; }
     </style>
@@ -151,6 +151,8 @@
                         🔄 <span class="hidden sm:inline">Refrescar</span>
                     </button>
                     <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600/40 hover:bg-purple-700 border border-purple-500/30 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">💾 Backup</button>
+                    <button onclick="document.getElementById('input-restore-backup').click()" class="bg-slate-700 hover:bg-slate-600 border border-current/10 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">📂 Importar</button>
+                    <input type="file" id="input-restore-backup" class="hidden" accept=".json" onchange="importarBackupJSON(event)">
                     <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">📊 Excel</button>
                     <button onclick="procesarScraperVinted()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">👗 Scraper</button>
                     <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
@@ -310,21 +312,55 @@
                     </div>
                 </div>
 
-                <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[520px] transition-all">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-xs font-black text-amber-500 uppercase tracking-wider flex items-center gap-1.5">📦 STOCK DISPONIBLE <span id="badge-stock" class="bg-amber-500/10 text-amber-400 font-mono px-2 py-0.5 rounded-lg text-[10px]">0</span></h3>
-                            <button onclick="alternarSeleccionColumna('No Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2.5 py-1 rounded-xl uppercase font-bold opacity-70 transition-colors">Marcar Todo</button>
+                <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- COLUMNA 1: STOCK -->
+                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
+                        <div class="flex flex-col gap-2 mb-4">
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5">📦 EN STOCK <span id="badge-stock" class="bg-amber-500/10 px-1.5 py-0.5 rounded">0</span></h3>
+                                <button onclick="alternarSeleccionColumna('No Vendido')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
+                            </div>
+                            <select onchange="cambiarOrdenColumna('No Vendido', this.value)" class="bg-black/20 border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none">
+                                <option value="reciente">🕒 Más Recientes</option>
+                                <option value="precio-desc">💰 Precio: Mayor</option>
+                                <option value="precio-asc">💰 Precio: Menor</option>
+                                <option value="nombre">🔤 Nombre</option>
+                            </select>
+                            <input type="text" oninput="cambiarFiltroColumna('No Vendido', this.value)" placeholder="Filtrar stock..." class="bg-black/10 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30">
                         </div>
-                        <div id="col-no-vendido" class="flex-1 space-y-3 p-1 min-h-[400px] overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
+                        <div id="col-no-vendido" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
                     </div>
                     
-                    <div class="card-bg border rounded-3xl p-5 flex flex-col min-h-[520px] transition-all">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-xs font-black text-emerald-500 uppercase tracking-wider flex items-center gap-1.5">💰 ARTÍCULOS VENDIDOS <span id="badge-vendido" class="bg-emerald-500/10 text-emerald-400 font-mono px-2 py-0.5 rounded-lg text-[10px]">0</span></h3>
-                            <button onclick="alternarSeleccionColumna('Vendido')" class="text-[10px] bg-black/20 hover:bg-black/40 px-2.5 py-1 rounded-xl uppercase font-bold opacity-70 transition-colors">Marcar Todo</button>
+                    <!-- COLUMNA 2: DEVOLUCIONES (NUEVA) -->
+                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
+                        <div class="flex flex-col gap-2 mb-4">
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-[10px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-1.5">⚠️ INCIDENCIAS <span id="badge-devuelto" class="bg-rose-500/10 px-1.5 py-0.5 rounded">0</span></h3>
+                                <button onclick="alternarSeleccionColumna('Devuelto')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
+                            </div>
+                            <select onchange="cambiarOrdenColumna('Devuelto', this.value)" class="bg-black/20 border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none">
+                                <option value="reciente">🕒 Orden</option>
+                                <option value="precio-desc">Precio</option>
+                            </select>
+                            <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Filtrar incidencias..." class="bg-black/10 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30">
                         </div>
-                        <div id="col-vendido" class="flex-1 space-y-3 p-1 min-h-[400px] overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
+                        <div id="col-devuelto" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
+                    </div>
+
+                    <!-- COLUMNA 3: VENDIDO -->
+                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
+                        <div class="flex flex-col gap-2 mb-4">
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1.5">💰 VENDIDOS <span id="badge-vendido" class="bg-emerald-500/10 px-1.5 py-0.5 rounded">0</span></h3>
+                                <button onclick="alternarSeleccionColumna('Vendido')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
+                            </div>
+                            <select onchange="cambiarOrdenColumna('Vendido', this.value)" class="bg-black/20 border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none">
+                                <option value="reciente">🕒 Más Recientes</option>
+                                <option value="precio-desc">Mayor Precio</option>
+                            </select>
+                            <input type="text" oninput="cambiarFiltroColumna('Vendido', this.value)" placeholder="Filtrar vendidos..." class="bg-black/10 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30">
+                        </div>
+                        <div id="col-vendido" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
                     </div>
                 </div>
             </div>
@@ -428,7 +464,10 @@
             <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
             <div class="flex flex-wrap items-center gap-2">
                 <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">👯 Duplicar Lote</button>
+                <button onclick="ejecutarAjustePrecioMasivo()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">💰 Ajustar Precio</button>
+                <button onclick="ejecutarAjusteCosteMasivo()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">📉 Ajustar Coste</button>
                 <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">💵 Vender Lote</button>
+                <button onclick="ejecutarAccionMasivaEstado('Devuelto')" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">⚠️ Devolución</button>
                 <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-lg transition-colors">📦 Mover a Stock</button>
                 <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="bg-slate-950 border border-slate-700 rounded-lg p-1.5 text-[10px] font-bold focus:outline-none">
                     <option value="">📐 Talla...</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
@@ -952,6 +991,8 @@
         let LECTOR_BLOQUEADO_POR_CAPTURA = false;
         let ITEMS_SELECCIONADOS_MASIVOS = [];
         let SOUND_MUTED_GLOBAL = false;
+        let CONFIG_ORDEN_COLUMNAS = { 'No Vendido': 'reciente', 'Vendido': 'reciente', 'Devuelto': 'reciente' };
+        let CONFIG_FILTRO_COLUMNAS = { 'No Vendido': '', 'Vendido': '', 'Devuelto': '' };
 
         // 🏬 LÓGICA DE TIENDAS DESDE MONGODB
         async function refrescarYListarTiendasCloud() {
@@ -1103,13 +1144,68 @@
             recalcularKPIsLocalesOptimistas(); renderKanban();
 
             try {
-                const promesas = listaIds.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: newState }) }));
+                const promesas = listaIds.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { 
+                    method: 'PUT', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    credentials: 'include', 
+                    body: JSON.stringify({ estado: newState }) 
+                }));
                 await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
             } catch(err) {
                 listaIds.forEach(id => { const idx = BASE_DATOS.findIndex(x => x._id === id); if (idx !== -1) BASE_DATOS[idx].estado = copiasEstadosAnteriores[id]; });
                 reloadCoreData(); alert("Fallo de red.");
             }
         };
+
+        function cambiarOrdenColumna(estado, criterio) {
+            CONFIG_ORDEN_COLUMNAS[estado] = criterio;
+            renderKanban();
+        }
+
+        function cambiarFiltroColumna(estado, query) {
+            CONFIG_FILTRO_COLUMNAS[estado] = query.toLowerCase();
+            renderKanban();
+        }
+
+        async function ejecutarAjustePrecioMasivo() {
+            if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
+            const variacion = prompt("Indica cuánto quieres sumar o restar al precio de venta (ej: 5 para subir 5€, -5 para bajar 5€):");
+            const valorAjuste = parseFloat(variacion);
+            if (isNaN(valorAjuste)) return;
+
+            if (confirm(`Se va a modificar el precio de ${ITEMS_SELECCIONADOS_MASIVOS.length} artículos en ${valorAjuste}€. ¿Continuar?`)) {
+                const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => {
+                    const item = BASE_DATOS.find(v => v._id === id);
+                    if (!item) return Promise.resolve();
+                    const nuevoPrecio = Math.max(0, (parseFloat(item.precioVenta) || 0) + valorAjuste);
+                    return fetch(`${BACKEND_URL}/api/ventas/${id}`, { 
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', 
+                        body: JSON.stringify({ ...item, precioVenta: nuevoPrecio, proveedor: item.proveedor }) 
+                    });
+                });
+                await Promise.all(promesas); cantarPorVoz("Precios actualizados."); limpiarSeleccionMasiva(); await reloadCoreData();
+            }
+        }
+
+        async function ejecutarAjusteCosteMasivo() {
+            if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
+            const variacion = prompt("Indica cuánto quieres sumar o restar al precio de COMPRA (ej: 1 para subir 1€, -1 para bajar 1€):");
+            const valorAjuste = parseFloat(variacion);
+            if (isNaN(valorAjuste)) return;
+
+            if (confirm(`Se va a modificar el coste de ${ITEMS_SELECCIONADOS_MASIVOS.length} artículos en ${valorAjuste}€. ¿Continuar?`)) {
+                const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => {
+                    const item = BASE_DATOS.find(v => v._id === id);
+                    if (!item) return Promise.resolve();
+                    const nuevoCoste = Math.max(0, (parseFloat(item.precioCompra) || 0) + valorAjuste);
+                    return fetch(`${BACKEND_URL}/api/ventas/${id}`, { 
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', 
+                        body: JSON.stringify({ ...item, precioCompra: nuevoCoste, proveedor: item.proveedor }) 
+                    });
+                });
+                await Promise.all(promesas); cantarPorVoz("Costes actualizados."); limpiarSeleccionMasiva(); await reloadCoreData();
+            }
+        }
 
         function toggleMuteVolumenGlobal() {
             SOUND_MUTED_GLOBAL = !SOUND_MUTED_GLOBAL;
@@ -1210,6 +1306,26 @@
             const downloadAnchor = document.createElement('a'); downloadAnchor.setAttribute("href", dataStr);
             downloadAnchor.setAttribute("download", `Backup_Seychelles_${new Date().toISOString().split('T')[0]}.json`);
             document.body.appendChild(downloadAnchor); downloadAnchor.click(); downloadAnchor.remove();
+        }
+
+        function importarBackupJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const json = JSON.parse(e.target.result);
+                    if (confirm(`¿Importar ${json.length} productos del backup? Esto añadirá los productos a tu base de datos actual.`)) {
+                        const res = await fetch(`${BACKEND_URL}/api/ventas/bulk`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                            body: JSON.stringify({ productos: json })
+                        });
+                        if (res.ok) { cantarPorVoz("Importación completa."); await reloadCoreData(); }
+                        else alert("Error al importar.");
+                    }
+                } catch (err) { alert("Archivo JSON no válido."); }
+            };
+            reader.readAsText(file);
         }
 
         function cantarPorVoz(mensajeTexto) {
@@ -1583,13 +1699,39 @@
         }
 
         function renderKanban() {
-            const colStock = document.getElementById('col-no-vendido'); const colVendido = document.getElementById('col-vendido'); if(!colStock || !colVendido) return;
-            colStock.innerHTML = ''; colVendido.innerHTML = ''; let sCount = 0, vCount = 0;
+            const colStock = document.getElementById('col-no-vendido'); 
+            const colVendido = document.getElementById('col-vendido'); 
+            const colDevuelto = document.getElementById('col-devuelto');
+            if(!colStock || !colVendido || !colDevuelto) return;
+            
+            colStock.innerHTML = ''; colVendido.innerHTML = ''; colDevuelto.innerHTML = '';
+            let sCount = 0, vCount = 0, dCount = 0;
 
             const totalStockPorPrendaNombre = {};
             BASE_DATOS.filter(x => x.estado === 'No Vendido').forEach(x => { totalStockPorPrendaNombre[x.prenda] = (totalStockPorPrendaNombre[x.prenda] || 0) + 1; });
 
-            BASE_DATOS.forEach(v => {
+            // Aplicar ordenación antes de renderizar
+            const estados = ['No Vendido', 'Vendido', 'Devuelto'];
+            const listasOrdenadas = {};
+
+            estados.forEach(est => {
+                const criterio = CONFIG_ORDEN_COLUMNAS[est];
+                const query = CONFIG_FILTRO_COLUMNAS[est];
+                
+                listasOrdenadas[est] = BASE_DATOS.filter(v => v.estado === est).sort((a, b) => {
+                    if (criterio === 'precio-desc') return parseFloat(b.precioVenta) - parseFloat(a.precioVenta);
+                    if (criterio === 'precio-asc') return parseFloat(a.precioVenta) - parseFloat(b.precioVenta);
+                    if (criterio === 'nombre') return a.prenda.localeCompare(b.prenda);
+                    return 0; // Por defecto el orden de llegada (reciente)
+                });
+
+                // Aplicar filtro de texto si existe
+                if (query) { listasOrdenadas[est] = listasOrdenadas[est].filter(v => v.prenda.toLowerCase().includes(query) || (v.sku && v.sku.toLowerCase().includes(query))); }
+            });
+
+            const todosOrdenados = [...listasOrdenadas['No Vendido'], ...listasOrdenadas['Devuelto'], ...listasOrdenadas['Vendido']];
+
+            todosOrdenados.forEach(v => {
                 const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
                 
                 const esStockCritico = v.estado === 'No Vendido' && totalStockPorPrendaNombre[v.prenda] < 2;
@@ -1624,10 +1766,12 @@
                     </div>`;
 
                 if (v.estado === 'Vendido') { colVendido.appendChild(card); vCount += (v.cantidad || 1); }
+                else if (v.estado === 'Devuelto') { colDevuelto.appendChild(card); dCount += (v.cantidad || 1); }
                 else { colStock.appendChild(card); sCount += (v.cantidad || 1); }
             });
-            const bs = document.getElementById('badge-stock'); const bv = document.getElementById('badge-vendido');
-            if(bs) bs.innerText = sCount; if(bv) bv.innerText = vCount;
+            
+            const bs = document.getElementById('badge-stock'); const bv = document.getElementById('badge-vendido'); const bd = document.getElementById('badge-devuelto');
+            if(bs) bs.innerText = sCount; if(bv) bv.innerText = vCount; if(bd) bd.innerText = dCount;
         }
 
         function updateTickerWallStreet() {

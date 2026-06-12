@@ -561,78 +561,123 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ url })
             });
-            
-            if(!response.ok) throw new Error('Error ejecutando el scraper en el servidor.');
-            
-            cambiosPendientesScraper = await response.json();
-            
-            renderizarTablaScraping(cambiosPendientesScraper);
-            
+
+            if (!response.ok) throw new Error('Error ejecutando el scraper en el servidor.');
+
+            resultadosScraperActual = await response.json();
+            renderizarResultadosScraping(resultadosScraperActual);
+
             document.getElementById('scraper-loader').classList.add('hidden');
             document.getElementById('scraper-step-2').classList.remove('hidden');
+            
+            const badge = document.getElementById('badge-scraper-count');
+            const total = (resultadosScraperActual.discrepancias?.length || 0) + (resultadosScraperActual.nuevos?.length || 0);
+            if (total > 0) {
+                badge.innerText = `${total} HALLAZGOS`;
+                badge.classList.remove('hidden');
+            }
         } catch (error) {
-            alert(error.message);
+            alert("Error: " + error.message);
             cerrarModalScraper();
         }
     }
 
-    function renderizarTablaScraping(cambios) {
+    function renderizarResultadosScraping(data) {
         const tbody = document.getElementById('scraper-results-body');
+        const gridNuevos = document.getElementById('scraper-grid-nuevos');
+        const contDisc = document.getElementById('container-discrepancias');
+        const contNuev = document.getElementById('container-nuevos');
+        const noRes = document.getElementById('scraper-no-results');
+
         tbody.innerHTML = '';
-        
-        if(cambios.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center opacity-50">No hay diferencias. Todo está actualizado.</td></tr>';
-            return;
+        gridNuevos.innerHTML = '';
+
+        const discCount = data.discrepancias?.length || 0;
+        const nuevoCount = data.nuevos?.length || 0;
+
+        if (discCount > 0) contDisc.classList.remove('hidden'); else contDisc.classList.add('hidden');
+        if (nuevoCount > 0) contNuev.classList.remove('hidden'); else contNuev.classList.add('hidden');
+        if (discCount === 0 && nuevoCount === 0) noRes.classList.remove('hidden'); else noRes.classList.add('hidden');
+
+        // Renderizar Discrepancias (Cambios de precio)
+        if (discCount > 0) {
+            data.discrepancias.forEach((d, i) => {
+                tbody.innerHTML += `
+                    <tr class="border-b border-white/5 align-middle">
+                        <td class="py-2 pr-2 w-10"><input type="checkbox" class="check-disc-scraper" value="${i}" checked></td>
+                        <td class="py-2"><img src="${d.imagen || ''}" class="w-8 h-8 rounded object-cover border border-white/10" onerror="this.src='https://via.placeholder.com/60'"></td>
+                        <td class="py-2 font-bold px-2">${d.prenda}</td>
+                        <td class="py-2 text-rose-400/50 line-through">${d.valorAntiguo}€</td>
+                        <td class="py-2 text-emerald-400 font-black">${d.valorNuevo}€</td>
+                    </tr>`;
+            });
         }
 
-        cambios.forEach((cambio, index) => {
-            const tr = document.createElement('tr');
-            tr.className = "border-b border-current/10 hover:bg-black/10 transition-colors";
-            tr.innerHTML = `
-                <td class="p-2"><input type="checkbox" class="check-cambio-scraper" value="${index}" checked></td>
-                <td class="p-2 font-bold">${cambio.prenda} <br><span class="text-[9px] font-mono opacity-50">${cambio.sku}</span></td>
-                <td class="p-2 capitalize text-blue-400 font-medium">${cambio.campoModificado}</td>
-                <td class="p-2 text-rose-400 line-through">${cambio.valorAntiguo}</td>
-                <td class="p-2 text-emerald-400 font-bold">${cambio.valorNuevo}</td>
-            `;
-            tbody.appendChild(tr);
-        });
+        // Renderizar Nuevos Productos
+        if (nuevoCount > 0) {
+            data.nuevos.forEach((n, i) => {
+                gridNuevos.innerHTML += `
+                    <div class="flex items-center gap-3 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors cursor-pointer" onclick="document.getElementById('check-new-${i}').click()">
+                        <input type="checkbox" id="check-new-${i}" class="check-new-scraper" value="${i}" checked onclick="event.stopPropagation()">
+                        <img src="${n.imagen || ''}" class="w-10 h-10 rounded object-cover" onerror="this.src='https://via.placeholder.com/60'">
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[10px] font-bold uppercase truncate">${n.prenda}</p>
+                            <p class="text-[10px] text-emerald-400 font-mono">${n.precioVenta}€</p>
+                        </div>
+                    </div>`;
+            });
+        }
     }
 
-    function toggleAllScraped(source) {
-        const checkboxes = document.querySelectorAll('.check-cambio-scraper');
-        checkboxes.forEach(cb => cb.checked = source.checked);
-    }
-
-    // Envía la confirmación al backend
+    // Sincroniza precios de productos existentes
     async function autorizarCambiosScraping() {
-        const checkboxes = document.querySelectorAll('.check-cambio-scraper:checked');
-        const cambiosAprobados = Array.from(checkboxes).map(cb => cambiosPendientesScraper[cb.value]);
-        
-        if(cambiosAprobados.length === 0) return alert('No has seleccionado ningún cambio para aplicar.');
+        const selected = Array.from(document.querySelectorAll('.check-disc-scraper:checked')).map(cb => resultadosScraperActual.discrepancias[cb.value]);
+        if (selected.length === 0) return alert('Selecciona algún cambio de precio.');
 
         try {
-            const btn = event.target;
-            btn.innerHTML = 'Actualizando...';
-            btn.disabled = true;
-
             const response = await fetch('/api/scraper/aplicar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cambios: cambiosAprobados })
+                body: JSON.stringify({ cambios: selected })
             });
-            
-            if(!response.ok) throw new Error('Fallo al actualizar la base de datos.');
-            
-            alert('✅ Productos actualizados con éxito directamente en la base de datos.');
-            cerrarModalScraper();
-            
-            // Llama a la función que ya tienes en tu index para refrescar la pantalla
+
+            if (!response.ok) throw new Error('Fallo al actualizar.');
+
+            cantarPorVoz("Precios actualizados.");
             if (typeof forceRefreshDataManual === "function") {
-                forceRefreshDataManual(); 
+                await forceRefreshDataManual();
             }
-            
-        } catch(error) {
+            iniciarScraping(); // Recargar para ver que ya no hay discrepancias
+
+        } catch (error) {
+            alert(error.message);
+        }
+    }
+
+    // Importa productos nuevos
+    async function importarNuevosScraping() {
+        const selected = Array.from(document.querySelectorAll('.check-new-scraper:checked')).map(cb => resultadosScraperActual.nuevos[cb.value]);
+        if (selected.length === 0) return alert('Selecciona productos para importar.');
+
+        try {
+            const response = await fetch('/api/scraper/importar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productos: selected })
+            });
+
+            if (!response.ok) throw new Error('Fallo al importar.');
+
+            const res = await response.json();
+            alert(`✅ Se han importado ${res.count} productos correctamente.`);
+            cantarPorVoz("Importación completada.");
+
+            if (typeof forceRefreshDataManual === "function") {
+                await forceRefreshDataManual();
+            }
+            iniciarScraping(); // Recargar
+
+        } catch (error) {
             alert(error.message);
         }
     }

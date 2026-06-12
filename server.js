@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { OAuth2Client } = require('google-auth-library'); 
 const session = require('express-session'); 
-const MongoStore = require('connect-mongo'); 
+const MongoStoreModule = require('connect-mongo'); // Importa el módulo completo
 const mongoose = require('mongoose');
 const path = require('path');
 
@@ -63,6 +63,7 @@ const LogAuditoria = mongoose.models.LogAuditoria || mongoose.model('LogAuditori
 
 const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
 
+const MongoStore = MongoStoreModule.default || MongoStoreModule; // Obtiene la clase MongoStore, manejando el 'default' export si existe
 app.use(session({
     name: 'seychelles.sid', // Nombre único para evitar conflictos
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',

@@ -441,6 +441,7 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
 app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
     try {
         const { productosExtraidos } = req.body;
+        console.log(`[SCRAPER MANUAL] Recibidos ${productosExtraidos?.length || 0} productos para comparar.`);
         if (!productosExtraidos || !Array.isArray(productosExtraidos)) {
             return res.status(400).json({ error: 'Datos no válidos.' });
         }

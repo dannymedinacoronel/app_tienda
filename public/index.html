@@ -488,7 +488,11 @@
             <div class="flex gap-2">
                 <input type="text" id="scraper-url" placeholder="https://vinted.es/member/..." class="input-bg border flex-1 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
                 <button onclick="iniciarScraping()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95">Analizar</button>
+                <button onclick="guardarUrlScraping()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-3 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95" title="Guardar Favorito">💾</button>
             </div>
+
+            <div id="scraper-saved-urls" class="hidden flex flex-col gap-1.5 max-h-32 overflow-y-auto pr-1"></div>
+
             <div class="mt-2 text-center">
                 <span class="text-[10px] opacity-40 uppercase font-bold">— O —</span>
             </div>
@@ -575,6 +579,7 @@
         document.getElementById('scraper-url').value = '';
         document.getElementById('scraper-file-input').value = '';
         document.getElementById('badge-scraper-count').classList.add('hidden');
+        renderSavedUrls();
     }
 
     function cerrarModalScraper() {
@@ -590,40 +595,53 @@
         document.getElementById('scraper-loader').classList.remove('hidden');
 
         try {
-            // 1. Usamos un Proxy CORS para obtener el HTML de Vinted desde tu IP local
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-            const resProxy = await fetch(proxyUrl);
+            // 1. Intentamos obtener el HTML usando el proxy AllOrigins (petición desde tu navegador/local)
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}&timestamp=${Date.now()}`;
+            const resProxy = await fetch(proxyUrl).catch(() => { 
+                throw new Error("No se pudo conectar con el Proxy local. Verifica tu internet."); 
+            });
+
+            if (!resProxy.ok) throw new Error("El servicio de proxy no responde.");
             const proxyData = await resProxy.json();
             
-            if (!proxyData || !proxyData.contents) throw new Error("No se pudo obtener el contenido de la web.");
+            if (!proxyData || !proxyData.contents) {
+                throw new Error("Vinted ha bloqueado la petición local o la URL es privada.");
+            }
 
             // 2. Parseamos el HTML directamente en el navegador
             const parser = new DOMParser();
             const doc = parser.parseFromString(proxyData.contents, 'text/html');
 
-            // Selectores robustos basados en la estructura de Vinted
-            const items = doc.querySelectorAll('div[data-testid="item-card"], .feed-grid__item, .web_ui__ItemBox__component, .item-card');
+            // Selectores ultra-robustos para Vinted 2024
+            const items = doc.querySelectorAll('div[data-testid="item-card"], .feed-grid__item, .web_ui__ItemBox__component, .item-card, .grid__item');
             
             const productosExtraidos = [];
             items.forEach(item => {
-                const titulo = item.querySelector('div[data-testid$="--description"], h4, .web_ui__ItemBox__title, .truncated')?.textContent?.trim();
-                const precioTexto = item.querySelector('div[data-testid$="--price"], h3, .web_ui__ItemBox__price, .price')?.textContent?.trim();
+                const titulo = item.querySelector('[data-testid$="--description"], .web_ui__ItemBox__title, .truncated, h4')?.textContent?.trim();
+                const precioTexto = item.querySelector('[data-testid$="--price"], .web_ui__ItemBox__price, .price, h3')?.textContent?.trim();
                 const imgTag = item.querySelector('img');
                 const imagen = imgTag?.src || imgTag?.getAttribute('data-src') || imgTag?.getAttribute('srcset')?.split(' ')[0];
 
                 if (titulo && precioTexto) {
-                    // Limpieza de precio para el backend
-                    let cleanPrecio = precioTexto.replace(/[^\d,.]/g, '').trim();
-                    if (cleanPrecio.includes(',') && cleanPrecio.includes('.')) {
-                        cleanPrecio = cleanPrecio.replace(/\./g, '').replace(',', '.');
-                    } else if (cleanPrecio.includes(',')) {
-                        cleanPrecio = cleanPrecio.replace(',', '.');
+                    // Limpieza profunda de precio (maneja "22,00 €", "22.00", etc)
+                    let cleanPrice = precioTexto.replace(/[^\d,.]/g, '').trim();
+                    if (cleanPrice.includes(',') && cleanPrice.includes('.')) { 
+                        cleanPrice = cleanPrice.replace(/\./g, '').replace(',', '.');
+                    } else if (cleanPrice.includes(',')) { 
+                        cleanPrice = cleanPrice.replace(',', '.');
                     }
-                    productosExtraidos.push({ titulo, precio: cleanPrecio, imagen });
+                    
+                    if (!isNaN(parseFloat(cleanPrice))) {
+                        productosExtraidos.push({ titulo, precio: cleanPrice, imagen });
+                    }
                 }
             });
 
-            if (productosExtraidos.length === 0) throw new Error("No se detectaron productos. Vinted podría estar bloqueando el proxy o la URL es incorrecta.");
+            if (productosExtraidos.length === 0) {
+                const isBlocked = proxyData.contents.toLowerCase().includes("cloudflare") || proxyData.contents.toLowerCase().includes("captcha");
+                if (isBlocked) throw new Error("Vinted ha detectado el scraper. Por favor, usa la opción de 'Subir Excel/CSV' con la extensión.");
+                throw new Error("No se encontraron productos en esta página. Revisa la URL.");
+            }
 
             // 3. Enviamos los datos extraídos localmente al servidor para comparar con MongoDB
             const response = await fetch('/api/scraper/analizar-manual', {
@@ -635,19 +653,21 @@
             if (!response.ok) throw new Error('Error al comparar con la base de datos.');
 
             resultadosScraperActual = await response.json();
+            console.log("Comparativa completada:", resultadosScraperActual);
+            
             renderizarResultadosScraping(resultadosScraperActual);
 
             document.getElementById('scraper-loader').classList.add('hidden');
             document.getElementById('scraper-step-2').classList.remove('hidden');
             
             const badge = document.getElementById('badge-scraper-count');
-            const total = (resultadosScraperActual.discrepancias?.length || 0) + (resultadosScraperActual.nuevos?.length || 0) + (resultadosScraperActual.identicos?.length || 0);
+            const total = (resultadosScraperActual.discrepancias?.length || 0) + (resultadosScraperActual.nuevos?.length || 0);
             if (total > 0) {
-                badge.innerText = `${total} HALLAZGOS`;
+                badge.innerText = `${total} ACCIONES`;
                 badge.classList.remove('hidden');
             }
         } catch (error) {
-            alert("❌ Error en Scraper Local: " + error.message);
+            alert("⚠️ Error: " + error.message);
             document.getElementById('scraper-loader').classList.add('hidden');
             document.getElementById('scraper-step-1').classList.remove('hidden');
         }
@@ -863,6 +883,46 @@
             cantarPorVoz("Artículo eliminado.");
             iniciarScraping(); // Refrescar lista
         }
+    }
+
+    function guardarUrlScraping() {
+        const url = document.getElementById('scraper-url').value.trim();
+        if(!url) return;
+        let saved = JSON.parse(localStorage.getItem('seychelles-scraper-urls') || '[]');
+        if(!saved.includes(url)) {
+            saved.unshift(url);
+            if(saved.length > 5) saved.pop();
+            localStorage.setItem('seychelles-scraper-urls', JSON.stringify(saved));
+            renderSavedUrls();
+            cantarPorVoz("URL guardada.");
+        }
+    }
+
+    function renderSavedUrls() {
+        const container = document.getElementById('scraper-saved-urls');
+        if(!container) return;
+        const saved = JSON.parse(localStorage.getItem('seychelles-scraper-urls') || '[]');
+        if(saved.length === 0) {
+            container.classList.add('hidden');
+            return;
+        }
+        container.classList.remove('hidden');
+        let html = '<p class="text-[9px] font-bold uppercase opacity-40 mb-1">Favoritos:</p>';
+        saved.forEach((url, idx) => {
+            html += `
+                <div class="flex items-center justify-between gap-2 p-2 bg-black/20 rounded-xl group hover:bg-black/40 transition-colors">
+                    <span class="text-[10px] truncate flex-1 cursor-pointer hover:text-blue-400 font-mono" onclick="document.getElementById('scraper-url').value='${url}'">${url}</span>
+                    <button onclick="eliminarUrlGuardada(${idx})" class="text-rose-500 text-[10px] font-bold px-1 hover:scale-125 transition-transform">✕</button>
+                </div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    function eliminarUrlGuardada(idx) {
+        let saved = JSON.parse(localStorage.getItem('seychelles-scraper-urls') || '[]');
+        saved.splice(idx, 1);
+        localStorage.setItem('seychelles-scraper-urls', JSON.stringify(saved));
+        renderSavedUrls();
     }
 </script>
 

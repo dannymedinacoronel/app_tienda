@@ -2532,19 +2532,21 @@
             } catch (err) {}
         }
 
-        async function handleCredentialResponse(response) {
+        window.handleCredentialResponse = async function(response) {
             try {
+                console.log("Token recibido de Google, verificando en servidor...");
                 const res = await fetch(`${BACKEND_URL}/api/auth/google`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ token: response.credential }) });
                 if (res.ok) {
+                    console.log("Login exitoso, recargando panel...");
                     window.location.reload();
                 } else {
                     const data = await res.json();
-                    alert(`Error de acceso: ${data.error || 'Correo no autorizado'}`);
+                    alert(`⚠️ Acceso denegado: ${data.error || 'Correo no autorizado en el sistema.'}`);
                 }
             } catch(e) {
-                alert("Error de conexión con el servidor de autenticación.");
+                alert("❌ Error crítico: No se pudo conectar con el servidor de Seychelles.");
             }
-        }
+        };
 
         async function reloadCoreData() {
             try {

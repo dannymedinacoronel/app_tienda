@@ -137,10 +137,11 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
     resave: false, 
     saveUninitialized: false, 
+    proxy: true, // Necesario para que las cookies 'secure' funcionen tras el proxy de Render
     store: MongoStore.create({ mongoUrl: MONGO_URI_FINAL, collectionName: 'sesiones_activas', ttl: 14 * 24 * 60 * 60 }),
     cookie: { 
         secure: isProd, // True solo en HTTPS
-        sameSite: 'lax', // 'lax' es más compatible para apps que sirven su propio frontend
+        sameSite: isProd ? 'none' : 'lax', // 'none' permite el flujo de retorno de Google en HTTPS
         maxAge: 14 * 24 * 60 * 60 * 1000 
     }
 }));

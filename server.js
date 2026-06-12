@@ -5,6 +5,8 @@ const session = require('express-session');
 const MongoStoreModule = require('connect-mongo'); // Importa el módulo completo
 const mongoose = require('mongoose');
 const path = require('path');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 const app = express();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -331,37 +333,45 @@ app.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: $
 app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
     try {
         const { url } = req.body;
-        
-        // AQUI VA LA LÓGICA DE TU SCRAPER EXTERNO (Puppeteer, Cheerio, o llamada a Python).
-        // Una vez obtenida la data extraída de la web, se compara con MongoDB:
+        if (!url) return res.status(400).json({ error: 'La URL es obligatoria.' });
+
+        // 1. Obtener el HTML de la página (Vinted/Wallapop suelen bloquear bots, usamos un User-Agent)
+        const response = await axios.get(url, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36' }
+        });
+
+        const $ = cheerio.load(response.data);
         const discrepancias = [];
 
-        // EJEMPLO/MOCK: Simulando que el scraper comparó datos y detectó cambios
-        // (Deberás reemplazar esta parte con el array generado por tu script de extracción)
-        const productosVinted = await VentaRopa.find({ canalVenta: 'Vinted' }).limit(2);
-        
-        if (productosVinted.length > 0) {
-            // Ejemplo 1: Detectar que cambió el precio
-            discrepancias.push({
-                idMongo: productosVinted[0]._id,
-                sku: productosVinted[0].sku,
-                prenda: productosVinted[0].prenda,
-                campoModificado: 'precioVenta',
-                valorAntiguo: productosVinted[0].precioVenta,
-                valorNuevo: productosVinted[0].precioVenta + 5 
-            });
-            
-            // Ejemplo 2: Detectar que ya no está disponible (cambio de estado)
-            if (productosVinted.length > 1) {
-                discrepancias.push({
-                    idMongo: productosVinted[1]._id,
-                    sku: productosVinted[1].sku,
-                    prenda: productosVinted[1].prenda,
-                    campoModificado: 'estado',
-                    valorAntiguo: productosVinted[1].estado,
-                    valorNuevo: 'Vendido' 
-                });
+        // 2. Buscar productos actuales de la base de datos para comparar
+        const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
+
+        // 3. Extraer productos de la web (Los selectores de clase varían, esto es una base lógica)
+        // Nota: Vinted suele usar clases como '.feed-grid__item' o '.web_ui__ItemBox__details'
+        $('.feed-grid__item, .web_ui__ItemBox__details').each((i, el) => {
+            const titulo = $(el).find('h4, .web_ui__Text__title').text().trim();
+            const precioTexto = $(el).find('h3, .web_ui__Text__text').text().trim();
+            const precioWeb = parseFloat(precioTexto.replace(/[^0-9,.]/g, '').replace(',', '.'));
+
+            if (titulo && !isNaN(precioWeb)) {
+                // Intentar encontrar el producto en nuestra BD por el nombre de la prenda
+                const coincidencia = productosBD.find(p => p.prenda.toLowerCase() === titulo.toLowerCase());
+
+                if (coincidencia && coincidencia.precioVenta !== precioWeb) {
+                    discrepancias.push({
+                        idMongo: coincidencia._id,
+                        sku: coincidencia.sku,
+                        prenda: coincidencia.prenda,
+                        campoModificado: 'precioVenta',
+                        valorAntiguo: coincidencia.precioVenta,
+                        valorNuevo: precioWeb
+                    });
+                }
             }
+        });
+
+        if (discrepancias.length === 0) {
+            console.log(`[SCRAPER] No se detectaron discrepancias para: ${url}`);
         }
 
         res.json(discrepancias);

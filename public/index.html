@@ -21,6 +21,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
     
     <style>
@@ -521,11 +522,14 @@
                             <button type="button" onclick="limpiarFormCRM()" class="w-full text-[9px] opacity-40 hover:opacity-100 uppercase underline">Cancelar</button>
                         </form>
                     </div>
-                    <div class="lg:col-span-3 card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[700px]">
-                        <div class="flex justify-between items-center mb-6">
-                            <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest">📋 Base de Datos de Clientes</h3>
-                            <input type="text" oninput="filtrarCRM(this.value)" placeholder="Buscar cliente..." class="bg-black/20 border border-white/5 rounded-xl px-4 py-1.5 text-[10px] focus:outline-none w-64">
+                    <div class="lg:col-span-3 card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[750px]">
+                        <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest mb-4">📋 Base de Datos de Clientes</h3>
+                        
+                        <div class="relative mb-6">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none opacity-40 text-sm">🔍</span>
+                            <input type="text" oninput="filtrarCRM(this.value)" placeholder="Buscar por nombre, DNI, email o teléfono..." class="input-bg border w-full rounded-2xl pl-10 pr-4 py-3 text-xs focus:outline-none shadow-inner">
                         </div>
+
                         <div class="overflow-x-auto">
                             <table class="w-full text-left text-[11px]">
                                 <thead class="opacity-40 uppercase font-black border-b border-white/5">
@@ -1318,6 +1322,18 @@
 
 
     <script>
+        // --- 0. CONEXIÓN REAL-TIME ---
+        const socket = io();
+        socket.on('cambio_detectado', (data) => {
+            console.log("[WS] Actualización recibida de otro terminal...");
+            // Actualizamos todo el core sin refrescar la página
+            reloadCoreData();
+            cargarNotasBoard();
+            refrescarClientesCRM();
+            refrescarCategoriasCloud();
+            refrescarYListarTiendasCloud();
+        });
+
         // --- 1. BLOQUE DE AUTENTICACIÓN (Prioridad Máxima: Definir antes de que cargue GSI) ---
         window.handleCredentialResponse = async function(response) {
             try {
@@ -1352,6 +1368,7 @@
         let BASE_DATOS = [];
         let LISTA_TIENDAS_GLOBAL = [];
         let LISTA_CATEGORIAS_GLOBAL = [];
+        let LISTA_CLIENTES_CACHE = [];
         let INSTANCIA_CHARTS = null;
         let INSTANCIA_TARTA = null;
         let INSTANCIA_BARRAS = null;
@@ -1858,6 +1875,17 @@
 
         // --- LÓGICA CRM ---
         let RESERVAS_CLIENTE_EDICION = [];
+
+        window.filtrarCRM = function(query) {
+            const q = query.toLowerCase();
+            const filtrados = LISTA_CLIENTES_CACHE.filter(c => 
+                (c.nombre && c.nombre.toLowerCase().includes(q)) || 
+                (c.nif && c.nif.toLowerCase().includes(q)) ||
+                (c.email && c.email.toLowerCase().includes(q)) ||
+                (c.telefono && c.telefono.toLowerCase().includes(q))
+            );
+            renderizarTablaClientes(filtrados);
+        };
 
         function agregarReservaActual() {
             const fecha = document.getElementById('crm-reserva-fecha').value;

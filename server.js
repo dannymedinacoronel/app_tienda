@@ -66,12 +66,12 @@ const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmai
 app.use(session({
     name: 'seychelles.sid', // Nombre único para evitar conflictos
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
-    resave: true, // Forzar guardado para asegurar persistencia en Mongo
-    saveUninitialized: true,
+    resave: false, 
+    saveUninitialized: false, 
     store: MongoStore.create({ mongoUrl: MONGO_URI_FINAL, collectionName: 'sesiones_activas', ttl: 14 * 24 * 60 * 60 }),
     cookie: { 
         secure: isProd, // True solo en HTTPS
-        sameSite: isProd ? 'none' : 'lax', 
+        sameSite: 'lax', // 'lax' es más compatible para apps que sirven su propio frontend
         maxAge: 14 * 24 * 60 * 60 * 1000 
     }
 }));
@@ -153,9 +153,12 @@ app.get('/api/auth/verificar', (req, res) => {
 app.post('/api/auth/google', async (req, res) => {
     const { token } = req.body;
     try {
+        if (!token) return res.status(400).json({ error: 'Token no proporcionado.' });
+
         const ticket = await client.verifyIdToken({ idToken: token, audience: process.env.GOOGLE_CLIENT_ID });
         const payload = ticket.getPayload();
         const emailUsuario = payload['email'].toLowerCase().trim();
+
         if (ADMIN_WHITELIST.includes(emailUsuario)) {
             req.session.esAdmin = true;
             req.session.email = emailUsuario;
@@ -166,9 +169,14 @@ app.post('/api/auth/google', async (req, res) => {
                 if (err) return res.status(500).json({ error: 'Fallo al guardar sesión.' });
                 res.json({ status: 'success', usuario: emailUsuario });
             });
+        } else {
+            console.warn(`[AUTH] Intento de acceso no autorizado: ${emailUsuario}`);
+            return res.status(401).json({ error: 'Email no autorizado en la lista blanca.' });
         }
-        return res.status(401).json({ error: 'Email no autorizado.' });
-    } catch (error) { return res.status(400).json({ error: 'Token inválido.' }); }
+    } catch (error) { 
+        console.error('[AUTH] Error al verificar token de Google:', error.message);
+        return res.status(400).json({ error: 'Token inválido o expirado.' }); 
+    }
 });
 
 // --- Rutas de Ventas / Inventario ---

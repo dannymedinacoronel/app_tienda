@@ -232,6 +232,28 @@ app.delete('/api/notas/:id', exigeAdmin, async (req, res) => {
 
 // --- Rutas de Ventas / Inventario ---
 
+/**
+ * Recupera logs de auditoría para el calendario (filtrado por mes/año)
+ */
+app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
+    try {
+        const { mes, anio } = req.query; // mes: 1-12
+        if (!mes || !anio) return res.status(400).json({ error: 'Mes y año requeridos.' });
+
+        const m = parseInt(mes);
+        const a = parseInt(anio);
+        
+        const fechaInicio = new Date(Date.UTC(a, m - 1, 1, 0, 0, 0));
+        const fechaFin = new Date(Date.UTC(a, m, 0, 23, 59, 59)); 
+        
+        const logs = await LogAuditoria.find({
+            fechaHora: { $gte: fechaInicio, $lte: fechaFin }
+        }).sort({ fechaHora: 1 }).lean();
+        
+        res.json({ logs });
+    } catch (e) { res.status(500).json({ error: 'Fallo al recuperar logs.' }); }
+});
+
 app.get('/api/ventas', exigeAdmin, async (req, res) => {
     try {
         const ventasRaw = await VentaRopa.find().populate('tienda').sort({ _id: -1 }).lean();

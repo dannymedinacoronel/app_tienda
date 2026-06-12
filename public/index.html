@@ -1157,10 +1157,6 @@
                         div.style.left = `${newX}px`;
                         div.style.top = `${newY}px`;
                     };
-        async function actualizarNotaDimensiones(id, width, height) {
-            await fetch(`/api/notas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ width, height }) });
-        }
-
                     const mouseUpHandler = async () => {
                         isDragging = false;
                         document.removeEventListener('mousemove', mouseMoveHandler);
@@ -1181,6 +1177,10 @@
 
                 canvas.appendChild(div);
             });
+        }
+
+        async function actualizarNotaDimensiones(id, width, height) {
+            await fetch(`/api/notas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ width, height }) });
         }
 
         async function borrarNota(id) {

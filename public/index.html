@@ -68,6 +68,17 @@
         .ticker-alert-mode { background-color: #7f1d1d !important; color: #fee2e2 !important; font-weight: 900; animation: blinker 1s linear infinite; }
         @keyframes blinker { 50% { opacity: 0.85; } }
 
+        @keyframes gold-shine {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .logo-premium {
+            background: linear-gradient(to right, #fbbf24, #f472b6, #a855f7, #fbbf24);
+            background-size: 200% auto;
+            animation: gold-shine 4s linear infinite;
+        }
+
         @keyframes pulseBorder {
             0%, 100% { border-color: rgba(245, 158, 11, 0.2); }
             50% { border-color: rgba(245, 158, 11, 0.8); box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); }
@@ -143,7 +154,7 @@
             <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-6">
                 <div class="flex items-center gap-4">
                     <div>
-                        <h1 class="text-5xl font-black uppercase tracking-tighter bg-gradient-to-r from-yellow-400 via-fuchsia-500 to-indigo-600 bg-clip-text text-transparent drop-shadow-[0_4px_15px_rgba(217,70,239,0.4)] filter brightness-110">Seychelles Shop</h1>
+                        <h1 class="text-5xl font-black uppercase tracking-tighter logo-premium bg-clip-text text-transparent drop-shadow-[0_4px_15px_rgba(217,70,239,0.4)] filter brightness-110">Seychelles Shop</h1>
                         <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
                     </div>
                     <div id="combo-badge" class="hidden bg-amber-500 text-slate-950 font-black px-3 py-1 rounded-xl text-xs uppercase tracking-wider animate-bounce shadow-md">
@@ -400,27 +411,27 @@
                     <div class="lg:col-span-10 card-bg border rounded-3xl p-6 flex flex-col shadow-xl h-full">
                         <div class="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
-                                <span class="bg-blue-500/20 p-2 rounded-xl">📅</span> Historial de Stock & Flujos
+                                <span class="bg-blue-500/20 p-2.5 rounded-2xl shadow-inner text-lg">📅</span> Historial de Stock & Flujos
                             </h3>
-                            <div class="flex items-center gap-4 bg-black/20 p-1.5 rounded-2xl border border-white/5">
-                                <button onclick="navegarCalendarioStock(-1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs">◀</button>
-                                <span id="txt-calendario-stock-mes" class="text-[10px] font-black uppercase tracking-widest min-w-[120px] text-center">...</span>
-                                <button onclick="navegarCalendarioStock(1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs">▶</button>
+                            <div class="flex items-center gap-4 bg-black/40 p-2 rounded-2xl border border-white/5 shadow-xl">
+                                <button onclick="navegarCalendarioStock(-1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs font-black">◀</button>
+                                <span id="txt-calendario-stock-mes" class="text-[11px] font-black uppercase tracking-widest min-w-[140px] text-center text-blue-400">...</span>
+                                <button onclick="navegarCalendarioStock(1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs font-black">▶</button>
                             </div>
                         </div>
-                        <div class="grid grid-cols-7 gap-1 mb-3">
-                            <div class="text-[8px] font-black uppercase opacity-40 text-center">Dom</div><div class="text-[8px] font-black uppercase opacity-40 text-center">Lun</div><div class="text-[8px] font-black uppercase opacity-40 text-center">Mar</div><div class="text-[8px] font-black uppercase opacity-40 text-center">Mié</div><div class="text-[8px] font-black uppercase opacity-40 text-center">Jue</div><div class="text-[8px] font-black uppercase opacity-40 text-center">Vie</div><div class="text-[8px] font-black uppercase opacity-40 text-center">Sáb</div>
+                        <div class="grid grid-cols-7 gap-1 mb-4">
+                            <div class="text-[9px] font-black uppercase opacity-50 text-center text-blue-300">Dom</div><div class="text-[9px] font-black uppercase opacity-50 text-center text-blue-300">Lun</div><div class="text-[9px] font-black uppercase opacity-50 text-center text-blue-300">Mar</div><div class="text-[9px] font-black uppercase opacity-50 text-center text-blue-300">Mié</div><div class="text-[9px] font-black uppercase opacity-50 text-center text-blue-300">Jue</div><div class="text-[9px] font-black uppercase opacity-50 text-center text-blue-300">Vie</div><div class="text-[9px] font-black uppercase opacity-50 text-center text-blue-300">Sáb</div>
                         </div>
-                        <div id="grid-calendario-stock" class="grid grid-cols-7 gap-2 flex-1">
+                        <div id="grid-calendario-stock" class="grid grid-cols-7 gap-3 flex-1">
                             <!-- Días inyectados -->
                         </div>
                     </div>
 
                     <!-- GESTIÓN DE INCIDENCIAS (DERECHA) -->
-                    <div class="lg:col-span-2 card-bg border rounded-3xl p-6 flex flex-col transition-all h-full">
+                    <div class="lg:col-span-2 card-bg border rounded-3xl p-4 flex flex-col transition-all h-full overflow-hidden">
                         <div class="flex flex-col gap-4 mb-6">
-                            <h3 class="text-[9px] font-black text-rose-500 uppercase tracking-tighter flex items-center gap-1.5">
-                                <span class="bg-rose-500/20 p-1.5 rounded-lg text-xs">⚠️</span> INCIDENCIAS / DEV. <span id="badge-devuelto" class="bg-rose-500/10 px-1.5 py-0.5 rounded text-[8px]">0</span>
+                            <h3 class="text-[8px] font-black text-rose-500 uppercase tracking-tighter flex items-center gap-1">
+                                <span class="bg-rose-500/20 p-1 rounded-lg text-xs">⚠️</span> INCIDENCIAS/DEV/ETC... <span id="badge-devuelto" class="bg-rose-500/10 px-1 py-0.5 rounded text-[7px]">0</span>
                             </h3>
                             <div class="flex flex-col gap-1.5">
                                 <div class="flex items-center gap-2">
@@ -428,12 +439,12 @@
                                         <option value="reciente">🕒 Orden</option>
                                         <option value="precio-desc">💰 Precio</option>
                                     </select>
-                                    <button onclick="alternarSeleccionColumna('Devuelto')" class="text-[9px] bg-rose-600 hover:bg-rose-700 text-white px-3 py-1 rounded-xl font-bold uppercase transition-all shadow-sm">Marcar</button>
+                                    <button onclick="alternarSeleccionColumna('Devuelto')" class="text-[8px] bg-rose-600 hover:bg-rose-700 text-white px-2 py-1 rounded-lg font-bold uppercase transition-all shadow-sm">Marcar</button>
                                 </div>
-                                <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Filtrar incidencias..." class="bg-black/20 border border-current/10 text-[10px] rounded-xl px-3 py-1 focus:outline-none placeholder-current/30">
+                                <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Filtrar..." class="bg-black/20 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30 w-full">
                             </div>
                         </div>
-                        <div id="col-devuelto" class="grid grid-cols-1 gap-3 p-1 overflow-y-auto max-h-[650px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
+                        <div id="col-devuelto" class="grid grid-cols-1 gap-2 p-1 overflow-y-auto max-h-[650px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
                     </div>
                 </div>
             </div>
@@ -1472,16 +1483,34 @@
             const primerDiaMes = new Date(CAL_STOCK_ANIO, CAL_STOCK_MES - 1, 1).getDay();
             const diasEnMes = new Date(CAL_STOCK_ANIO, CAL_STOCK_MES, 0).getDate();
             grid.innerHTML = '';
-            for (let i = 0; i < primerDiaMes; i++) { grid.innerHTML += `<div class="bg-white/5 rounded-2xl opacity-5"></div>`; }
+            for (let i = 0; i < primerDiaMes; i++) { grid.innerHTML += `<div class="bg-black/5 rounded-2xl opacity-10 h-full min-h-[90px] border border-white/5"></div>`; }
             for (let d = 1; d <= diasEnMes; d++) {
-                const esHoy = d === new Date().getDate() && CAL_STOCK_MES === (new Date().getMonth() + 1) && CAL_STOCK_ANIO === new Date().getFullYear();
+                const now = new Date();
+                const esHoy = d === now.getDate() && CAL_STOCK_MES === (now.getMonth() + 1) && CAL_STOCK_ANIO === now.getFullYear();
                 let info = '';
-                if (addsPorDia[d]) info += `<div class="text-[7px] text-blue-400 font-bold">➕ ${addsPorDia[d]} Alta</div>`;
-                if (salesPorDia[d]) info += `<div class="text-[7px] text-emerald-400 font-bold">💰 ${salesPorDia[d]} Venta</div>`;
+                if (addsPorDia[d]) info += `
+                    <div class="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[8px] font-black px-2 py-0.5 rounded-lg shadow-sm">
+                        <span class="w-1 h-1 rounded-full bg-blue-500 animate-pulse"></span>
+                        <span>${addsPorDia[d]} ALTA${addsPorDia[d] > 1 ? 'S' : ''}</span>
+                    </div>`;
+                if (salesPorDia[d]) info += `
+                    <div class="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[8px] font-black px-2 py-0.5 rounded-lg shadow-sm">
+                        <span class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>${salesPorDia[d]} VENTA${salesPorDia[d] > 1 ? 'S' : ''}</span>
+                    </div>`;
+
                 grid.innerHTML += ` 
-                    <div onclick="verDetalleStockDia(${d})" class="calendario-dia bg-gradient-to-br from-black/10 to-black/5 border rounded-2xl p-3 flex flex-col gap-1.5 transition-all hover:from-blue-500/10 hover:to-blue-500/5 hover:border-blue-500/40 cursor-pointer min-h-[85px] ${esHoy ? 'border-blue-500 ring-1 ring-blue-500/30' : 'border-white/5'}">
-                        <span class="text-base font-black ${esHoy ? 'text-blue-400' : 'opacity-40'}">${d}</span>
-                        <div class="flex-1 flex flex-col gap-1">${info}</div>
+                    <div onclick="verDetalleStockDia(${d})" class="calendario-dia group bg-gradient-to-br from-white/5 to-transparent border rounded-2xl p-3.5 flex flex-col gap-2 transition-all hover:bg-blue-500/10 hover:border-blue-500/40 cursor-pointer min-h-[95px] shadow-md relative overflow-hidden ${esHoy ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-500/5' : 'border-white/5'}">
+                        <div class="flex justify-between items-center z-10">
+                            <span class="text-sm font-black transition-opacity ${esHoy ? 'text-blue-400' : 'opacity-30 group-hover:opacity-100'}">${d}</span>
+                            ${esHoy ? '<span class="text-[8px] font-black bg-blue-500 text-white px-1.5 py-0.5 rounded-md uppercase tracking-widest">Hoy</span>' : ''}
+                        </div>
+                        <div class="flex-1 flex flex-col gap-1.5 justify-end z-10">
+                            ${info}
+                        </div>
+                        <div class="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                             <span class="text-4xl">📦</span>
+                        </div>
                     </div>`;
             }
         }

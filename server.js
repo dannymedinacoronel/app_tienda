@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -136,6 +137,42 @@ async function registrarLog(usuario, accion) {
         await nuevoLog.save();
     } catch (e) { console.error("Error al guardar log:", e); }
 }
+
+// --- Sistema de Backup Automatizado por Email ---
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.BACKUP_EMAIL_USER,
+        pass: process.env.BACKUP_EMAIL_PASS
+    }
+});
+
+async function realizarBackupDiarioEmail() {
+    try {
+        const ventas = await VentaRopa.find().populate('tienda').lean();
+        const backupData = JSON.stringify(ventas, null, 2);
+        const ahora = new Date();
+        const dateStr = ahora.toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/:/g, '-');
+
+        const mailOptions = {
+            from: process.env.BACKUP_EMAIL_USER,
+            to: 'dannymedinacoronel@gmail.com',
+            subject: `BACKUP_${dateStr}`,
+            text: `Backup diario automático generado el ${ahora.toLocaleString('es-ES')}.`,
+            attachments: [{ filename: `Backup_Seychelles_${dateStr}.json`, content: backupData }]
+        };
+
+        await transporter.sendMail(mailOptions);
+        console.log(`[SYSTEM] Backup enviado a dannymedinacoronel@gmail.com: BACKUP_${dateStr}`);
+    } catch (error) {
+        console.error("[ERROR] Fallo en backup automático:", error.message);
+    }
+}
+
+// Se ejecuta una vez al día (86400000 ms)
+setInterval(realizarBackupDiarioEmail, 24 * 60 * 60 * 1000);
+// También permitimos un trigger manual si fuera necesario vía ruta secreta o similar en el futuro
+
 
 // --- Rutas de Categorías ---
 

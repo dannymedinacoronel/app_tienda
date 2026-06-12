@@ -291,7 +291,7 @@
                             <h2 id="form-title" class="text-sm font-black uppercase tracking-wide text-indigo-400">Ficha Avanzada</h2>
                             <button type="button" onclick="autocompletarNombreLocalRapido()" class="text-[9px] bg-slate-800 text-white px-2 py-1 rounded-lg font-bold uppercase hover:bg-slate-700 transition-colors">✨ Auto</button>
                         </div>
-                        <form id="form-venta" class="space-y-3">
+                        <form id="form-venta" class="space-y-3" onsubmit="manejarEnvioVenta(event)">
                             <input type="hidden" id="edit-id" value="">
                             
                             <!-- CARGA DE FOTO CON COMPRESIÓN -->
@@ -573,6 +573,18 @@
                             <p class="text-[10px] opacity-60">Solo los emails de Gmail añadidos aquí podrán saltar la pantalla de login.</p>
                             <input type="email" id="user-admin-email" placeholder="ejemplo@gmail.com" class="input-bg border w-full rounded-xl px-4 py-3 text-xs focus:outline-none">
                             <button onclick="agregarUsuarioAutorizado()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-xl text-[10px] tracking-widest uppercase transition-all shadow-lg">Otorgar Acceso</button>
+                        </div>
+
+                        <!-- BARRA DE ALMACENAMIENTO MONGODB -->
+                        <div class="mt-8 pt-6 border-t border-white/5">
+                            <div class="flex justify-between items-end mb-2">
+                                <span class="text-[9px] font-black uppercase opacity-40 tracking-widest">Nivel de Almacenamiento DB</span>
+                                <span id="txt-storage-data" class="text-[9px] font-mono opacity-60">Calculando...</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                                <div id="bar-storage-progress" class="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000" style="width: 0%"></div>
+                            </div>
+                            <p id="txt-storage-percent" class="text-[8px] text-right mt-1.5 font-bold text-blue-400">0% usado</p>
                         </div>
                     </div>
                     <div class="lg:col-span-2 card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[500px]">
@@ -1381,6 +1393,7 @@
             refrescarClientesCRM();
             refrescarCategoriasCloud();
             refrescarYListarTiendasCloud();
+            actualizarEstadoAlmacenamiento();
         });
 
         // --- 1. BLOQUE DE AUTENTICACIÓN (Prioridad Máxima: Definir antes de que cargue GSI) ---
@@ -1403,9 +1416,6 @@
 
         // --- 2. GESTIÓN DE EVENTOS SEGURA ---
         function vincularFormularios() {
-            const fVenta = document.getElementById('form-venta');
-            if (fVenta) fVenta.onsubmit = manejarEnvioVenta;
-
             const fCliente = document.getElementById('form-cliente');
             if (fCliente) fCliente.onsubmit = manejarEnvioCliente;
 
@@ -1754,7 +1764,7 @@
             }
 
             if (idSeccion === 'sec-usuarios') {
-                setTimeout(() => { refrescarUsuariosAdmin(); }, 50);
+                setTimeout(() => { refrescarUsuariosAdmin(); actualizarEstadoAlmacenamiento(); }, 50);
             }
         }
 
@@ -1985,6 +1995,29 @@
                     alert(err.error || "Error al eliminar.");
                 }
             } catch(e) { alert("Error de red."); }
+        }
+
+        async function actualizarEstadoAlmacenamiento() {
+            try {
+                const res = await fetch('/api/system/storage', { credentials: 'include' });
+                const data = await res.json();
+                if (data.error) return;
+
+                const usedMB = (data.used / (1024 * 1024)).toFixed(2);
+                const limitMB = (data.limit / (1024 * 1024)).toFixed(0);
+                
+                document.getElementById('txt-storage-data').innerText = `${usedMB} MB / ${limitMB} MB`;
+                document.getElementById('txt-storage-percent').innerText = `${data.percent}% utilizado`;
+                
+                const bar = document.getElementById('bar-storage-progress');
+                bar.style.width = `${data.percent}%`;
+                
+                // Feedback visual dinámico según el llenado
+                if (data.percent > 90) bar.className = "h-full bg-rose-500 animate-pulse";
+                else if (data.percent > 70) bar.className = "h-full bg-amber-500";
+                else bar.className = "h-full bg-gradient-to-r from-blue-500 to-indigo-500";
+                
+            } catch(e) { console.error("Error al obtener estado de almacenamiento:", e); }
         }
 
         // --- REPARACIÓN GUARDADO CRM ---

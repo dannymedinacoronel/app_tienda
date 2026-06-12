@@ -23,7 +23,8 @@ console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
 
 // Es vital para que las sesiones funcionen en plataformas como Render/Heroku
 app.set('trust proxy', 1);
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // 🔒 CONEXIÓN DEPURADA: Purgadas las credenciales del código fuente
 const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI;
@@ -425,6 +426,18 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
         
         res.json({ logs });
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar logs.' }); }
+});
+
+// --- Ruta de Estado de Almacenamiento DB ---
+app.get('/api/system/storage', exigeAdmin, async (req, res) => {
+    try {
+        const stats = await mongoose.connection.db.stats();
+        const limitMB = parseInt(process.env.MONGO_STORAGE_LIMIT_MB) || 512; // 512MB por defecto para Atlas M0
+        const limitBytes = limitMB * 1024 * 1024;
+        const usedBytes = stats.storageSize || 0; 
+        const percent = Math.min(100, (usedBytes / limitBytes) * 100).toFixed(2);
+        res.json({ used: usedBytes, limit: limitBytes, percent });
+    } catch (e) { res.status(500).json({ error: 'Error al obtener estadísticas de DB.' }); }
 });
 
 // --- Rutas de Gestión de Usuarios Autorizados ---

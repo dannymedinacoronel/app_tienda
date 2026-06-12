@@ -8,6 +8,7 @@
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="shortcut icon" type="image/png" href="logo.png">
     
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Seychelles">
@@ -1245,6 +1246,25 @@
 
 
     <script>
+        // 1. Definir callback de Google de primero para evitar errores de sincronización
+        window.handleCredentialResponse = async function(response) {
+            try {
+                console.log("Token recibido de Google, verificando...");
+                const res = await fetch(`${BACKEND_URL}/api/auth/google`, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    credentials: 'include', 
+                    body: JSON.stringify({ token: response.credential }) 
+                });
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    const data = await res.json();
+                    alert(`⚠️ Acceso denegado: ${data.error || 'Correo no autorizado.'}`);
+                }
+            } catch(e) { alert("❌ Error: No se pudo conectar con el servidor."); }
+        };
+
         const BACKEND_URL = '';
         let BASE_DATOS = [];
         let LISTA_TIENDAS_GLOBAL = [];
@@ -1777,7 +1797,8 @@
             `).join('');
         }
 
-        document.getElementById('form-cliente').onsubmit = async (e) => {
+        const fCliente = document.getElementById('form-cliente');
+        if(fCliente) fCliente.onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('crm-id').value;
             const payload = {
@@ -2824,7 +2845,8 @@
             ticker.innerHTML = txt + txt;
         }
 
-        document.getElementById('form-venta').onsubmit = async (e) => {
+        const fVenta = document.getElementById('form-venta');
+        if(fVenta) fVenta.onsubmit = async (e) => {
             e.preventDefault(); const id = document.getElementById('edit-id').value;
             const payload = {
                 sku: document.getElementById('sku').value.trim(), 

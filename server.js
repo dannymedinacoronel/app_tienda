@@ -159,6 +159,20 @@ async function registrarLog(usuario, accion) {
     } catch (e) { console.error("Error al guardar log:", e); }
 }
 
+// --- Utilidades de Imagen ---
+async function downloadAndConvertToBase64(url) {
+    if (!url || !url.startsWith('http')) return url || '';
+    try {
+        const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 5000 });
+        const contentType = response.headers['content-type'];
+        const base64 = Buffer.from(response.data, 'binary').toString('base64');
+        return `data:${contentType};base64,${base64}`;
+    } catch (error) {
+        console.error(`[IMAGE] Error descargando imagen: ${url}`, error.message);
+        return url; // Retornamos la URL original si falla la conversión
+    }
+}
+
 // --- Sistema de Backup Automatizado por Email ---
 const transporter = nodemailer.createTransport({
     service: 'gmail',

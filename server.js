@@ -347,10 +347,16 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
 
         const response = await axios.get(url, {
             headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                'Accept-Language': 'es-ES,es;q=0.9',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
+                'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
                 'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
+                'Referer': 'https://www.vinted.es/',
+                'sec-ch-ua': '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'same-origin',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
                 'Cache-Control': 'no-cache',
                 'Pragma': 'no-cache'
@@ -358,12 +364,15 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         });
 
         const $ = cheerio.load(response.data);
+        const htmlBody = $('body').text();
         
         // Verificación de bloqueo por Cloudflare/Vinted
-        if ($('title').text().includes('Cloudflare') || $('title').text().includes('Attention Required')) {
+        if ($('title').text().includes('Cloudflare') || $('title').text().includes('Attention Required') || htmlBody.length < 500) {
+            console.error('[SCRAPER] Bloqueo detectado o respuesta vacía.');
             return res.status(403).json({ error: 'Bloqueo temporal de Vinted detectado. Intenta más tarde.' });
         }
 
+        console.log(`[SCRAPER] HTML recibido correctamente. Longitud: ${response.data.length} caracteres.`);
         const resultados = { discrepancias: [], nuevos: [], identicos: [] };
         const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
 
@@ -374,13 +383,20 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
             const precioTexto = item.find('h3, .web_ui__Text__text, [data-testid$="--price"], .web_ui__ItemBox__price, .price').first().text().trim();
             const imagen = item.find('img').attr('src') || item.find('img').attr('data-src') || item.find('img').attr('srcset')?.split(' ')[0];
             
-            const precioWeb = parseFloat(precioTexto.replace(/[^0-9,.]/g, '').replace(',', '.').replace(/\s/g, ''));
+            // Limpieza de precio robusta
+            let cleanPrecio = precioTexto.replace(/[^\d,.]/g, '').trim();
+            if (cleanPrecio.includes(',') && cleanPrecio.includes('.')) {
+                cleanPrecio = cleanPrecio.replace(/\./g, '').replace(',', '.');
+            } else if (cleanPrecio.includes(',')) {
+                cleanPrecio = cleanPrecio.replace(',', '.');
+            }
+            const precioWeb = parseFloat(cleanPrecio);
 
             if (titulo && !isNaN(precioWeb)) {
                 const coincidencia = productosBD.find(p => p.prenda.toLowerCase().includes(titulo.toLowerCase()) || titulo.toLowerCase().includes(p.prenda.toLowerCase()));
 
                 if (coincidencia) {
-                    if (coincidencia.precioVenta !== precioWeb) {
+                    if (Math.abs(coincidencia.precioVenta - precioWeb) > 0.01) {
                         resultados.discrepancias.push({
                             idMongo: coincidencia._id,
                             prenda: coincidencia.prenda,

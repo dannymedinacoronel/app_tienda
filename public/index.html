@@ -475,12 +475,12 @@
         <button onclick="cerrarModalScraper()" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-xl">✕</button>
         
         <div class="flex items-center gap-3">
-            <h2 class="text-xl font-black uppercase tracking-wider text-blue-400">Sincronizador Vinted</h2>
+            <h2 class="text-xl font-black uppercase tracking-wider text-blue-400">🔍 Análisis de Vinted</h2>
             <span id="badge-scraper-count" class="hidden bg-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-lg border border-blue-500/30"></span>
         </div>
         
         <div id="scraper-step-1" class="flex flex-col gap-3">
-            <label class="text-[10px] font-bold uppercase opacity-70 tracking-widest">URL del Perfil o Catálogo</label>
+            <label class="text-[10px] font-bold uppercase opacity-70 tracking-widest">Pega la URL de Vinted para iniciar el escaneo:</label>
             <div class="flex gap-2">
                 <input type="text" id="scraper-url" placeholder="https://vinted.es/member/..." class="input-bg border flex-1 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500">
                 <button onclick="iniciarScraping()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95">Analizar</button>
@@ -488,17 +488,29 @@
         </div>
 
         <div id="scraper-step-2" class="hidden flex flex-col gap-3">
-            <div class="flex justify-between items-center">
-                <p class="text-[11px] font-mono text-amber-400">Resultados del escaneo:</p>
-                <button onclick="document.getElementById('scraper-step-1').classList.remove('hidden'); document.getElementById('scraper-step-2').classList.add('hidden');" class="text-[10px] opacity-50 hover:opacity-100 underline">Cambiar URL</button>
+            <div class="bg-blue-600/10 border border-blue-500/20 rounded-2xl p-4 mb-2">
+                <p id="scraper-summary-text" class="text-xs font-semibold text-blue-300 leading-relaxed"></p>
+            </div>
+            
+            <div class="flex justify-end">
+                <button onclick="document.getElementById('scraper-step-1').classList.remove('hidden'); document.getElementById('scraper-step-2').classList.add('hidden');" class="text-[10px] opacity-50 hover:opacity-100 underline font-bold">Realizar otra búsqueda</button>
             </div>
             
             <div class="max-h-[400px] overflow-y-auto pr-1 space-y-6">
                 <!-- Discrepancias -->
                 <div id="container-discrepancias" class="hidden">
-                    <h3 class="text-[10px] font-bold text-amber-500 uppercase mb-2">⚠️ Cambios de Precio en Stock</h3>
+                    <h3 class="text-[10px] font-bold text-amber-500 uppercase mb-2 tracking-widest">⚠️ Precios modificados en Vinted</h3>
                     <div class="border border-current/10 rounded-2xl bg-black/20 p-2">
                         <table class="w-full text-left text-[11px]">
+                            <thead>
+                                <tr class="border-b border-white/10 opacity-50 font-bold">
+                                    <th class="pb-2 w-8"></th>
+                                    <th class="pb-2 w-10">Foto</th>
+                                    <th class="pb-2 px-2">Producto</th>
+                                    <th class="pb-2 text-rose-400">En Mongo</th>
+                                    <th class="pb-2 text-emerald-400">En Vinted</th>
+                                </tr>
+                            </thead>
                             <tbody id="scraper-results-body"></tbody>
                         </table>
                     </div>
@@ -571,6 +583,7 @@
             if (!response.ok) throw new Error('Error ejecutando el scraper en el servidor.');
 
             resultadosScraperActual = await response.json();
+            console.log("Datos recibidos del scraper:", resultadosScraperActual);
             renderizarResultadosScraping(resultadosScraperActual);
 
             document.getElementById('scraper-loader').classList.add('hidden');
@@ -583,7 +596,7 @@
                 badge.classList.remove('hidden');
             }
         } catch (error) {
-            alert("Error: " + error.message);
+            alert("❌ Fallo en el Scraper: " + error.message + "\n\nEsto suele pasar si Vinted bloquea la conexión del servidor. Inténtalo de nuevo en unos minutos.");
             cerrarModalScraper();
         }
     }
@@ -596,6 +609,7 @@
         const contNuev = document.getElementById('container-nuevos');
         const contExist = document.getElementById('container-existentes');
         const noRes = document.getElementById('scraper-no-results');
+        const summaryText = document.getElementById('scraper-summary-text');
 
         if (!data) return;
 
@@ -606,6 +620,11 @@
         const discCount = data.discrepancias?.length || 0;
         const nuevoCount = data.nuevos?.length || 0;
         const identCount = data.identicos?.length || 0;
+
+        summaryText.innerHTML = `Análisis completado. He comparado Vinted con tu inventario de MongoDB:<br>
+            • <span class="text-amber-400 font-bold">${discCount} cambios de precio</span>: Se han detectado modificaciones en Vinted que no tienes en el sistema.<br>
+            • <span class="text-emerald-400 font-bold">${nuevoCount} productos nuevos</span>: Artículos en la web que no están registrados en Mongo.<br>
+            • <span class="text-slate-400 font-bold">${identCount} artículos sin cambios</span>: Productos que ya están perfectamente sincronizados.`;
 
         if (discCount > 0) contDisc.classList.remove('hidden'); else contDisc.classList.add('hidden');
         if (nuevoCount > 0) contNuev.classList.remove('hidden'); else contNuev.classList.add('hidden');
@@ -665,6 +684,8 @@
         const selected = Array.from(document.querySelectorAll('.check-disc-scraper:checked')).map(cb => resultadosScraperActual.discrepancias[cb.value]);
         if (selected.length === 0) return alert('Selecciona algún cambio de precio.');
 
+        if (!confirm(`¿Estás seguro de actualizar los precios de estos ${selected.length} artículos en MongoDB basándote en lo encontrado en Vinted?`)) return;
+
         try {
             const response = await fetch('/api/scraper/aplicar', {
                 method: 'POST',
@@ -689,6 +710,8 @@
     async function importarNuevosScraping() {
         const selected = Array.from(document.querySelectorAll('.check-new-scraper:checked')).map(cb => resultadosScraperActual.nuevos[cb.value]);
         if (selected.length === 0) return alert('Selecciona productos para importar.');
+
+        if (!confirm(`¿Deseas importar estos ${selected.length} productos nuevos desde Vinted a tu base de datos de MongoDB?`)) return;
 
         try {
             const response = await fetch('/api/scraper/importar', {

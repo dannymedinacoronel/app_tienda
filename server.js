@@ -9,7 +9,12 @@ const path = require('path');
 const app = express();
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-app.set('trust proxy', 1);
+// Detectar si estamos en producción para configurar cookies seguras
+const isProd = process.env.NODE_ENV === 'production';
+
+if (isProd) {
+    app.set('trust proxy', 1);
+}
 
 // 🔒 CONEXIÓN DEPURADA: Purgadas las credenciales del código fuente
 const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI;
@@ -59,13 +64,12 @@ const ADMIN_WHITELIST = ['dannymedinacoronel@gmail.com', 'juliamugo2001@gmail.co
 
 app.use(express.json());
 
-const mongoStoreBuilder = MongoStore.create ? MongoStore : MongoStore.default;
 app.use(session({
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
     resave: false,
     saveUninitialized: false,
-    store: mongoStoreBuilder.create({ mongoUrl: MONGO_URI_FINAL, collectionName: 'sesiones_activas', ttl: 14 * 24 * 60 * 60 }),
-    cookie: { secure: true, sameSite: 'lax', maxAge: 14 * 24 * 60 * 60 * 1000 }
+    store: MongoStore.create({ mongoUrl: MONGO_URI_FINAL, collectionName: 'sesiones_activas', ttl: 14 * 24 * 60 * 60 }),
+    cookie: { secure: isProd, sameSite: 'lax', maxAge: 14 * 24 * 60 * 60 * 1000 }
 }));
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -153,7 +157,12 @@ app.post('/api/auth/google', async (req, res) => {
             req.session.esAdmin = true;
             req.session.email = emailUsuario;
             await registrarLog(emailUsuario, "Inició sesión en el sistema core");
-            return res.json({ status: 'success', usuario: emailUsuario });
+            
+            // Forzar el guardado de la sesión antes de responder al cliente
+            return req.session.save(err => {
+                if (err) return res.status(500).json({ error: 'Fallo al guardar sesión.' });
+                res.json({ status: 'success', usuario: emailUsuario });
+            });
         }
         return res.status(401).json({ error: 'Email no autorizado.' });
     } catch (error) { return res.status(400).json({ error: 'Token inválido.' }); }
@@ -366,7 +375,7 @@ app.post('/api/scraper/aplicar', exigeAdmin, async (req, res) => {
             // Registrar acción en la Auditoría si la tienes habilitada
             if (typeof registrarLog === "function") {
                 await registrarLog(
-                    req.session.usuarioEmail || 'Admin', 
+                    req.session.email || 'Admin', 
                     `Scraper Autoupdate: ${cambio.prenda} | ${cambio.campoModificado} -> ${cambio.valorNuevo}`
                 );
             }

@@ -1084,8 +1084,15 @@
         async function handleCredentialResponse(response) {
             try {
                 const res = await fetch(`${BACKEND_URL}/api/auth/google`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ token: response.credential }) });
-                if (res.ok) window.location.reload();
-            } catch(e) {}
+                if (res.ok) {
+                    window.location.reload();
+                } else {
+                    const data = await res.json();
+                    alert(`Error de acceso: ${data.error || 'Correo no autorizado'}`);
+                }
+            } catch(e) {
+                alert("Error de conexión con el servidor de autenticación.");
+            }
         }
 
         async function reloadCoreData() {

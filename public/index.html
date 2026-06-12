@@ -2796,14 +2796,14 @@
             const colDevuelto = document.getElementById('col-devuelto');
             if(!colStock || !colReservado || !colVendido || !colDevuelto) return;
             
-            colStock.innerHTML = ''; colVendido.innerHTML = ''; colDevuelto.innerHTML = '';
+            colStock.innerHTML = ''; colReservado.innerHTML = ''; colVendido.innerHTML = ''; colDevuelto.innerHTML = '';
             let sCount = 0, rCount = 0, vCount = 0, dCount = 0;
 
             const totalStockPorPrendaNombre = {};
             BASE_DATOS.filter(x => x.estado === 'No Vendido').forEach(x => { totalStockPorPrendaNombre[x.prenda] = (totalStockPorPrendaNombre[x.prenda] || 0) + 1; });
 
             // Aplicar ordenación antes de renderizar
-            const estados = ['No Vendido', 'Vendido', 'Devuelto'];
+            const estados = ['No Vendido', 'Reservado', 'Vendido', 'Devuelto'];
             const listasOrdenadas = {};
 
             estados.forEach(est => {

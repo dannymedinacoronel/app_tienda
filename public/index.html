@@ -89,7 +89,7 @@
         .group:hover .group-hover\:block { display: block; }
 
         /* Estilos Calendario */
-        .calendario-dia { min-height: 100px; transition: all 0.2s; }
+        .calendario-dia { min-height: 100px; transition: all 0.2s; cursor: pointer; }
         .calendario-log-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
         .calendario-log-item:hover { white-space: normal; position: relative; z-index: 50; background: rgba(0,0,0,0.9); }
         #grid-calendario-audit::-webkit-scrollbar { width: 4px; }
@@ -522,6 +522,21 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- MODAL DETALLE CALENDARIO -->
+        <div id="modal-audit-detalle" class="hidden fixed inset-0 z-[400] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+            <div class="card-bg border rounded-3xl p-6 w-full max-w-2xl flex flex-col gap-4 shadow-2xl relative max-h-[85vh]">
+                <button onclick="document.getElementById('modal-audit-detalle').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-xl">✕</button>
+                <div class="border-b border-white/10 pb-4">
+                    <h2 class="text-xl font-black uppercase tracking-widest text-indigo-400" id="detalle-dia-titulo">Detalle de Actividad</h2>
+                    <p class="text-[10px] opacity-50 font-mono" id="detalle-dia-fecha"></p>
+                </div>
+                <div id="detalle-dia-lista" class="flex-1 overflow-y-auto space-y-3 pr-2 font-mono text-xs">
+                    <!-- Logs detallados -->
+                </div>
+                <button onclick="document.getElementById('modal-audit-detalle').classList.add('hidden')" class="w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all">Cerrar Vista</button>
             </div>
         </div>
 
@@ -1068,6 +1083,7 @@
         let CONFIG_FILTRO_COLUMNAS = { 'No Vendido': '', 'Vendido': '', 'Devuelto': '' };
         let CALENDARIO_MES = new Date().getMonth() + 1;
         let CALENDARIO_ANIO = new Date().getFullYear();
+        let LOGS_MES_ACTUAL = {};
         let NOTAS_LOCALES = [];
 
         // 📌 LÓGICA DE NOTAS ADHESIVAS
@@ -1292,14 +1308,15 @@
 
             try {
                 const res = await fetch(`${BACKEND_URL}/api/logs/calendario?mes=${CALENDARIO_MES}&anio=${CALENDARIO_ANIO}`, { credentials: 'include' });
+                if(!res.ok) throw new Error("Fallo en respuesta");
                 const data = await res.json();
                 const logs = data.logs || [];
 
-                const logsPorDia = {};
+                LOGS_MES_ACTUAL = {};
                 logs.forEach(l => {
                     const dia = new Date(l.fechaHora).getDate();
-                    if (!logsPorDia[dia]) logsPorDia[dia] = [];
-                    logsPorDia[dia].push(l);
+                    if (!LOGS_MES_ACTUAL[dia]) LOGS_MES_ACTUAL[dia] = [];
+                    LOGS_MES_ACTUAL[dia].push(l);
                 });
 
                 const primerDiaMes = new Date(CALENDARIO_ANIO, CALENDARIO_MES - 1, 1).getDay();
@@ -1313,18 +1330,18 @@
                     const esHoy = d === hoy.getDate() && CALENDARIO_MES === (hoy.getMonth() + 1) && CALENDARIO_ANIO === hoy.getFullYear();
                     
                     let logsHtml = '';
-                    if (logsPorDia[d]) {
-                        logsPorDia[d].slice(0, 4).forEach(log => {
+                    if (LOGS_MES_ACTUAL[d]) {
+                        LOGS_MES_ACTUAL[d].slice(0, 4).forEach(log => {
                             const hora = new Date(log.fechaHora).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
                             logsHtml += `<div class="calendario-log-item text-[7px] mb-0.5 opacity-70" title="${log.accion}">
                                             <span class="text-indigo-400 font-bold">${hora}</span> ${log.accion}
                                          </div>`;
                         });
-                        if (logsPorDia[d].length > 4) { logsHtml += `<div class="text-[6px] opacity-30 text-right">+${logsPorDia[d].length - 4} items</div>`; }
+                        if (LOGS_MES_ACTUAL[d].length > 4) { logsHtml += `<div class="text-[6px] opacity-30 text-right">+${LOGS_MES_ACTUAL[d].length - 4} items</div>`; }
                     }
 
                     grid.innerHTML += `
-                        <div class="calendario-dia card-bg border rounded-2xl p-2 flex flex-col gap-1 transition-all hover:scale-[1.02] ${esHoy ? 'border-indigo-500 shadow-[0_0_15px_rgba(79,70,229,0.3)]' : 'border-white/5'}">
+                        <div onclick="verDetalleDiaCalendario(${d})" class="calendario-dia card-bg border rounded-2xl p-2 flex flex-col gap-1 transition-all hover:scale-[1.02] hover:border-indigo-500/50 ${esHoy ? 'border-indigo-500 shadow-[0_0_15px_rgba(79,70,229,0.3)]' : 'border-white/5'}">
                             <span class="text-[10px] font-black ${esHoy ? 'text-indigo-400' : 'opacity-40'}">${d}</span>
                             <div class="flex-1 overflow-hidden">
                                 ${logsHtml}
@@ -1334,6 +1351,34 @@
             } catch (err) {
                 grid.innerHTML = '<div class="col-span-7 py-20 text-center text-rose-400 text-xs">Error al conectar con la base de datos de auditoría.</div>';
             }
+        }
+
+        function verDetalleDiaCalendario(dia) {
+            const logs = LOGS_MES_ACTUAL[dia] || [];
+            const modal = document.getElementById('modal-audit-detalle');
+            const lista = document.getElementById('detalle-dia-lista');
+            const titulo = document.getElementById('detalle-dia-titulo');
+            const fechaTxt = document.getElementById('detalle-dia-fecha');
+
+            titulo.innerText = `Actividad del Día ${dia}`;
+            fechaTxt.innerText = `${dia}/${CALENDARIO_MES}/${CALENDARIO_ANIO}`;
+            
+            if (logs.length === 0) {
+                lista.innerHTML = '<div class="py-10 text-center opacity-30">No hubo actividad registrada este día.</div>';
+            } else {
+                lista.innerHTML = logs.map(l => {
+                    const hora = new Date(l.fechaHora).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    return `
+                        <div class="p-3 bg-black/20 border border-white/5 rounded-2xl flex flex-col gap-1">
+                            <div class="flex justify-between items-center text-[10px]">
+                                <span class="text-indigo-400 font-black">${hora}</span>
+                                <span class="opacity-40 uppercase tracking-tighter">${l.usuario.split('@')[0]}</span>
+                            </div>
+                            <div class="text-[11px] leading-relaxed">${l.accion}</div>
+                        </div>`;
+                }).join('');
+            }
+            modal.classList.remove('hidden');
         }
 
         // 🎯 MOTOR DE FILTRADO AVANZADO DE MÉTRICAS (MÓDULO ANALÍTICA)

@@ -64,16 +64,6 @@ const LogAuditoriaSchema = new mongoose.Schema({
 });
 const LogAuditoria = mongoose.models.LogAuditoria || mongoose.model('LogAuditoria', LogAuditoriaSchema);
 
-const NotaSchema = new mongoose.Schema({
-    texto: { type: String, default: 'Nueva nota...', trim: true },
-    color: { type: String, default: 'bg-yellow-400' },
-    x: { type: Number, default: 20 },
-    y: { type: Number, default: 40 },
-    usuario: String,
-    fecha: { type: Date, default: Date.now }
-});
-const Nota = mongoose.models.Nota || mongoose.model('Nota', NotaSchema);
-
 const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
 
 const MongoStore = MongoStoreModule.default || MongoStoreModule; // Obtiene la clase MongoStore, manejando el 'default' export si existe
@@ -193,40 +183,29 @@ app.post('/api/auth/google', async (req, res) => {
     }
 });
 
-// --- Rutas de Notas ---
-
-app.get('/api/notas', exigeAdmin, async (req, res) => {
-    try {
-        const notas = await Nota.find().lean();
-        res.json(notas);
-    } catch (e) { res.status(500).json({ error: 'Fallo al recuperar notas.' }); }
-});
-
-app.post('/api/notas', exigeAdmin, async (req, res) => {
-    try {
-        const nuevaNota = new Nota({ ...req.body, usuario: req.session.email });
-        await nuevaNota.save();
-        res.json(nuevaNota);
-    } catch (e) { res.status(500).json({ error: 'Error al crear nota.' }); }
-});
-
-app.put('/api/notas/:id', exigeAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        const notaActualizada = await Nota.findByIdAndUpdate(id, req.body, { new: true });
-        res.json(notaActualizada);
-    } catch (e) { res.status(500).json({ error: 'Error al mover nota.' }); }
-});
-
-app.delete('/api/notas/:id', exigeAdmin, async (req, res) => {
-    try {
-        const { id } = req.params;
-        await Nota.findByIdAndDelete(id);
-        res.sendStatus(200);
-    } catch (e) { res.status(500).json({ error: 'Error al borrar nota.' }); }
-});
-
 // --- Rutas de Ventas / Inventario ---
+
+/**
+ * Recupera logs de auditoría para el calendario (filtrado por mes/año)
+ */
+app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
+    try {
+        let { mes, anio } = req.query; // mes: 1-12
+        if (!mes || !anio) return res.status(400).json({ error: 'Mes y año requeridos.' });
+
+        const m = parseInt(mes);
+        const a = parseInt(anio);
+        
+        const fechaInicio = new Date(a, m - 1, 1);
+        const fechaFin = new Date(a, m, 0, 23, 59, 59); 
+        
+        const logs = await LogAuditoria.find({
+            fechaHora: { $gte: fechaInicio, $lte: fechaFin }
+        }).sort({ fechaHora: 1 }).lean();
+        
+        res.json({ logs });
+    } catch (e) { res.status(500).json({ error: 'Fallo al recuperar logs.' }); }
+});
 
 app.get('/api/ventas', exigeAdmin, async (req, res) => {
     try {

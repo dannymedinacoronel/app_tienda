@@ -53,7 +53,8 @@ const VentaRopaSchema = new mongoose.Schema({
     estado: { type: String, enum: ['Vendido', 'No Vendido', 'Devuelto'], default: 'No Vendido' },
     comentariosProducto: { type: String, default: '', trim: true },
     tienda: { type: mongoose.Schema.Types.ObjectId, ref: 'Tienda', required: true },
-    imagen: { type: String, default: '' }
+    imagen: { type: String, default: '' },
+    fechaVenta: { type: String, default: '' }
 });
 const VentaRopa = mongoose.models.VentaRopa || mongoose.model('VentaRopa', VentaRopaSchema);
 
@@ -415,7 +416,14 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
         const { id } = req.params;
         const { estado } = req.body;
 
-        const ventaActualizada = await VentaRopa.findByIdAndUpdate(id, { estado }, { new: true });
+        const updateData = { estado };
+        if (estado === 'Vendido') {
+            updateData.fechaVenta = new Date().toISOString().split('T')[0];
+        } else {
+            updateData.fechaVenta = '';
+        }
+
+        const ventaActualizada = await VentaRopa.findByIdAndUpdate(id, updateData, { new: true });
         await registrarLog(req.session.email, `Transición de estado: [${ventaActualizada.prenda}] -> ${estado.toUpperCase()}`);
         return res.json({ status: "success", venta: ventaActualizada });
     } catch (error) {
@@ -441,6 +449,11 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
         } else {
             const nuevoEstado = venta.estado === 'Vendido' ? 'No Vendido' : 'Vendido';
             venta.estado = nuevoEstado;
+            if (nuevoEstado === 'Vendido') {
+                venta.fechaVenta = new Date().toISOString().split('T')[0];
+            } else {
+                venta.fechaVenta = '';
+            }
             await venta.save();
             return res.json({ operacion: nuevoEstado, venta });
         }

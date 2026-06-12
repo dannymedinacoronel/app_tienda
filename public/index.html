@@ -411,6 +411,26 @@
                         <div id="col-devuelto" class="grid grid-cols-1 sm:grid-cols-2 gap-4 p-1 overflow-y-auto max-h-[800px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
                     </div>
                 </div>
+
+                <!-- CALENDARIO DE MOVIMIENTOS DE STOCK -->
+                <div class="lg:col-span-3 card-bg border rounded-3xl p-6 flex flex-col mt-6 shadow-xl">
+                    <div class="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
+                        <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                            📅 Historial Visual de Movimientos
+                        </h3>
+                        <div class="flex items-center gap-4 bg-black/20 p-1.5 rounded-2xl border border-white/5">
+                            <button onclick="navegarCalendarioStock(-1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs">◀</button>
+                            <span id="txt-calendario-stock-mes" class="text-[10px] font-black uppercase tracking-widest min-w-[140px] text-center">...</span>
+                            <button onclick="navegarCalendarioStock(1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs">▶</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-7 gap-1 mb-2">
+                        <div class="text-[8px] font-black uppercase opacity-30 text-center">Dom</div><div class="text-[8px] font-black uppercase opacity-30 text-center">Lun</div><div class="text-[8px] font-black uppercase opacity-30 text-center">Mar</div><div class="text-[8px] font-black uppercase opacity-30 text-center">Mié</div><div class="text-[8px] font-black uppercase opacity-30 text-center">Jue</div><div class="text-[8px] font-black uppercase opacity-30 text-center">Vie</div><div class="text-[8px] font-black uppercase opacity-30 text-center">Sáb</div>
+                    </div>
+                    <div id="grid-calendario-stock" class="grid grid-cols-7 gap-2 flex-1">
+                        <!-- Días inyectados -->
+                    </div>
+                </div>
             </div>
 
             <div id="sec-analitica" class="seccion-app hidden flex flex-col gap-6 mb-8">
@@ -1086,6 +1106,8 @@
         let CONFIG_FILTRO_COLUMNAS = { 'No Vendido': '', 'Vendido': '', 'Devuelto': '' };
         let CALENDARIO_MES = new Date().getMonth() + 1;
         let CALENDARIO_ANIO = new Date().getFullYear();
+        let CAL_STOCK_MES = new Date().getMonth() + 1;
+        let CAL_STOCK_ANIO = new Date().getFullYear();
         let LOGS_MES_ACTUAL = {};
         let NOTAS_LOCALES = [];
 
@@ -1393,6 +1415,52 @@
 
             if (idSeccion === 'sec-auditoria') {
                 setTimeout(() => { actualizarCalendarioAuditoria(); }, 50);
+            }
+            if (idSeccion === 'sec-inventario') {
+                setTimeout(() => { renderCalendarioStock(); }, 50);
+            }
+        }
+
+        function navegarCalendarioStock(delta) {
+            CAL_STOCK_MES += delta;
+            if (CAL_STOCK_MES > 12) { CAL_STOCK_MES = 1; CAL_STOCK_ANIO++; }
+            if (CAL_STOCK_MES < 1) { CAL_STOCK_MES = 12; CAL_STOCK_ANIO--; }
+            renderCalendarioStock();
+        }
+
+        function renderCalendarioStock() {
+            const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+            const txtMes = document.getElementById('txt-calendario-stock-mes');
+            if(txtMes) txtMes.innerText = `${nombresMeses[CAL_STOCK_MES-1]} ${CAL_STOCK_ANIO}`;
+            const grid = document.getElementById('grid-calendario-stock');
+            if(!grid) return;
+            const addsPorDia = {}; const salesPorDia = {};
+            BASE_DATOS.forEach(v => {
+                if (v.fecha) {
+                    const fParts = v.fecha.split('-');
+                    if (parseInt(fParts[0]) === CAL_STOCK_ANIO && parseInt(fParts[1]) === CAL_STOCK_MES) {
+                        const d = parseInt(fParts[2]); addsPorDia[d] = (addsPorDia[d] || 0) + 1;
+                    }
+                }
+                if (v.fechaVenta) {
+                    const fParts = v.fechaVenta.split('-');
+                    if (parseInt(fParts[0]) === CAL_STOCK_ANIO && parseInt(fParts[1]) === CAL_STOCK_MES) {
+                        const d = parseInt(fParts[2]); salesPorDia[d] = (salesPorDia[d] || 0) + 1;
+                    }
+                }
+            });
+            const primerDiaMes = new Date(CAL_STOCK_ANIO, CAL_STOCK_MES - 1, 1).getDay();
+            const diasEnMes = new Date(CAL_STOCK_ANIO, CAL_STOCK_MES, 0).getDate();
+            grid.innerHTML = '';
+            for (let i = 0; i < primerDiaMes; i++) { grid.innerHTML += `<div class="bg-white/5 rounded-2xl opacity-5"></div>`; }
+            for (let d = 1; d <= diasEnMes; d++) {
+                const esHoy = d === new Date().getDate() && CAL_STOCK_MES === (new Date().getMonth() + 1) && CAL_STOCK_ANIO === new Date().getFullYear();
+                let info = '';
+                if (addsPorDia[d]) info += `<div class="text-[7px] text-blue-400 font-bold">➕ ${addsPorDia[d]} Alta</div>`;
+                if (salesPorDia[d]) info += `<div class="text-[7px] text-emerald-400 font-bold">💰 ${salesPorDia[d]} Venta</div>`;
+                grid.innerHTML += `<div class="calendario-dia card-bg border rounded-2xl p-1.5 flex flex-col gap-0.5 transition-all hover:bg-white/5 ${esHoy ? 'border-blue-500' : 'border-white/5'}">
+                    <span class="text-[9px] font-black ${esHoy ? 'text-blue-400' : 'opacity-40'}">${d}</span>
+                    <div class="flex-1">${info}</div></div>`;
             }
         }
 
@@ -1934,6 +2002,7 @@
                 document.getElementById('kpi-roi').innerText = `${(data.resumen.roi || 0).toFixed(1)}%`;
 
                 renderKanban(); updateTickerWallStreet(); ejecutarVerificacionAlertasStock(); aplicarFiltrosFrontLineal(); actualizarVisibilidadPanelMasivo();
+                renderCalendarioStock();
                 
                 if (!document.getElementById('sec-analitica').classList.contains('hidden')) {
                     actualizarTodoElBloqueGrafico();
@@ -2154,6 +2223,10 @@
                 const badgeStockFrio = esStockFrio ? `<span class="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded text-[7px] font-black tracking-widest flex items-center gap-0.5" title="Artículo en stock más de 21 días">❄️ ANTIGUO</span>` : '';
                 const renderComentario = v.comentariosProducto ? `<p class="text-[9px] italic opacity-60 mt-1 bg-black/5 p-1 rounded border border-current/5 truncate">💬 ${v.comentariosProducto}</p>` : '';
 
+                const labelAlta = `<span class="text-blue-400/80">📥 ${v.fecha || 'N/A'}</span>`;
+                const labelVenta = v.fechaVenta ? `<span class="text-emerald-400/80">💰 ${v.fechaVenta}</span>` : '';
+                const renderTimeline = `<div class="flex gap-2 text-[8px] font-mono mt-1 opacity-80">${labelAlta} ${labelVenta}</div>`;
+
                 card.innerHTML = `
                     <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0">
                     <div class="flex-1 min-w-0 pointer-events-none">
@@ -2163,6 +2236,7 @@
                         </div>
                         <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
                         <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
+                        ${renderTimeline}
                         ${renderComentario}
                         <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
                     </div>

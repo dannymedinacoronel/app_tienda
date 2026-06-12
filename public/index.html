@@ -394,12 +394,12 @@
                     </div>
                 </div>
 
-                <div class="lg:col-span-3 grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 items-stretch">
+                <div class="lg:col-span-3 grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6 items-stretch">
                     <!-- CALENDARIO DE MOVIMIENTOS (IZQUIERDA) -->
-                    <div class="card-bg border rounded-3xl p-6 flex flex-col shadow-xl h-full">
+                    <div class="lg:col-span-7 card-bg border rounded-3xl p-6 flex flex-col shadow-xl h-full">
                         <div class="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
-                                📅 Historial de Stock
+                                <span class="bg-blue-500/20 p-2 rounded-xl">📅</span> Historial de Stock & Flujos
                             </h3>
                             <div class="flex items-center gap-4 bg-black/20 p-1.5 rounded-2xl border border-white/5">
                                 <button onclick="navegarCalendarioStock(-1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs">◀</button>
@@ -407,8 +407,8 @@
                                 <button onclick="navegarCalendarioStock(1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs">▶</button>
                             </div>
                         </div>
-                        <div class="grid grid-cols-7 gap-1 mb-2">
-                            <div class="text-[8px] font-black uppercase opacity-30 text-center">Dom</div><div class="text-[8px] font-black uppercase opacity-30 text-center">Lun</div><div class="text-[8px] font-black uppercase opacity-30 text-center">Mar</div><div class="text-[8px] font-black uppercase opacity-30 text-center">Mié</div><div class="text-[8px] font-black uppercase opacity-30 text-center">Jue</div><div class="text-[8px] font-black uppercase opacity-30 text-center">Vie</div><div class="text-[8px] font-black uppercase opacity-30 text-center">Sáb</div>
+                        <div class="grid grid-cols-7 gap-2 mb-3">
+                            <div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Dom</div><div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Lun</div><div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Mar</div><div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Mié</div><div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Jue</div><div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Vie</div><div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Sáb</div>
                         </div>
                         <div id="grid-calendario-stock" class="grid grid-cols-7 gap-2 flex-1">
                             <!-- Días inyectados -->
@@ -416,9 +416,11 @@
                     </div>
 
                     <!-- GESTIÓN DE INCIDENCIAS (DERECHA) -->
-                    <div class="card-bg border rounded-3xl p-6 flex flex-col transition-all h-full">
+                    <div class="lg:col-span-5 card-bg border rounded-3xl p-6 flex flex-col transition-all h-full">
                         <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-                            <h3 class="text-xs font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">⚠️ Incidencias <span id="badge-devuelto" class="bg-rose-500/10 px-2 py-0.5 rounded text-[10px]">0</span></h3>
+                            <h3 class="text-xs font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">
+                                <span class="bg-rose-500/20 p-2 rounded-xl">⚠️</span> Incidencias <span id="badge-devuelto" class="bg-rose-500/10 px-2 py-0.5 rounded text-[10px]">0</span>
+                            </h3>
                             <div class="flex flex-col gap-2">
                                 <div class="flex items-center gap-2">
                                     <select onchange="cambiarOrdenColumna('Devuelto', this.value)" class="bg-black/20 border border-current/10 text-[9px] font-bold uppercase rounded-xl px-2 py-1 focus:outline-none">
@@ -1475,9 +1477,11 @@
                 let info = '';
                 if (addsPorDia[d]) info += `<div class="text-[7px] text-blue-400 font-bold">➕ ${addsPorDia[d]} Alta</div>`;
                 if (salesPorDia[d]) info += `<div class="text-[7px] text-emerald-400 font-bold">💰 ${salesPorDia[d]} Venta</div>`;
-                grid.innerHTML += `<div onclick="verDetalleStockDia(${d})" class="calendario-dia card-bg border rounded-2xl p-1.5 flex flex-col gap-0.5 transition-all hover:bg-white/5 hover:border-blue-500/50 cursor-pointer ${esHoy ? 'border-blue-500' : 'border-white/5'}">
-                    <span class="text-[9px] font-black ${esHoy ? 'text-blue-400' : 'opacity-40'}">${d}</span>
-                    <div class="flex-1">${info}</div></div>`;
+                grid.innerHTML += `
+                    <div onclick="verDetalleStockDia(${d})" class="calendario-dia bg-black/10 border rounded-2xl p-2.5 flex flex-col gap-1.5 transition-all hover:bg-blue-500/10 hover:border-blue-500/40 cursor-pointer min-h-[75px] ${esHoy ? 'border-blue-500 ring-1 ring-blue-500/30' : 'border-white/5'}">
+                        <span class="text-[11px] font-black ${esHoy ? 'text-blue-400' : 'opacity-40'}">${d}</span>
+                        <div class="flex-1 flex flex-col gap-0.5">${info}</div>
+                    </div>`;
             }
         }
 

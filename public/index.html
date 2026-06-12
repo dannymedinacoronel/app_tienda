@@ -143,7 +143,7 @@
             <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-6">
                 <div class="flex items-center gap-4">
                     <div>
-                        <h1 class="text-4xl font-black uppercase tracking-tighter bg-gradient-to-r from-amber-400 via-pink-500 to-purple-600 bg-clip-text text-transparent drop-shadow-[0_2px_10px_rgba(236,72,153,0.3)]">Seychelles Shop</h1>
+                        <h1 class="text-5xl font-black uppercase tracking-tighter bg-gradient-to-r from-yellow-400 via-fuchsia-500 to-indigo-600 bg-clip-text text-transparent drop-shadow-[0_4px_15px_rgba(217,70,239,0.4)] filter brightness-110">Seychelles Shop</h1>
                         <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
                     </div>
                     <div id="combo-badge" class="hidden bg-amber-500 text-slate-950 font-black px-3 py-1 rounded-xl text-xs uppercase tracking-wider animate-bounce shadow-md">
@@ -394,8 +394,9 @@
                     </div>
                 </div>
 
-                <div class="lg:col-span-3 grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6 items-stretch">
-                    <!-- CALENDARIO DE MOVIMIENTOS (IZQUIERDA) - APROX. 80% (10/12) -->
+                <!-- FILA INFERIOR: CALENDARIO (80%) + INCIDENCIAS (20%) -->
+                <div class="lg:col-span-4 grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6 items-stretch">
+                    <!-- CALENDARIO DE MOVIMIENTOS (IZQUIERDA) -->
                     <div class="lg:col-span-10 card-bg border rounded-3xl p-6 flex flex-col shadow-xl h-full">
                         <div class="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
                             <h3 class="text-xs font-black text-blue-400 uppercase tracking-widest flex items-center gap-2">
@@ -407,21 +408,21 @@
                                 <button onclick="navegarCalendarioStock(1)" class="p-2 hover:bg-white/10 rounded-xl transition-all text-xs">▶</button>
                             </div>
                         </div>
-                        <div class="grid grid-cols-7 gap-2 mb-3">
-                            <div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Dom</div><div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Lun</div><div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Mar</div><div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Mié</div><div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Jue</div><div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Vie</div><div class="text-[9px] font-black uppercase opacity-40 text-center tracking-tighter">Sáb</div>
+                        <div class="grid grid-cols-7 gap-1 mb-3">
+                            <div class="text-[8px] font-black uppercase opacity-40 text-center">Dom</div><div class="text-[8px] font-black uppercase opacity-40 text-center">Lun</div><div class="text-[8px] font-black uppercase opacity-40 text-center">Mar</div><div class="text-[8px] font-black uppercase opacity-40 text-center">Mié</div><div class="text-[8px] font-black uppercase opacity-40 text-center">Jue</div><div class="text-[8px] font-black uppercase opacity-40 text-center">Vie</div><div class="text-[8px] font-black uppercase opacity-40 text-center">Sáb</div>
                         </div>
                         <div id="grid-calendario-stock" class="grid grid-cols-7 gap-2 flex-1">
                             <!-- Días inyectados -->
                         </div>
                     </div>
 
-                    <!-- GESTIÓN DE INCIDENCIAS (DERECHA) - APROX. 20% (2/12) -->
+                    <!-- GESTIÓN DE INCIDENCIAS (DERECHA) -->
                     <div class="lg:col-span-2 card-bg border rounded-3xl p-6 flex flex-col transition-all h-full">
-                        <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
-                            <h3 class="text-xs font-black text-rose-500 uppercase tracking-widest flex items-center gap-2">
-                                <span class="bg-rose-500/20 p-2 rounded-xl">⚠️</span> Incidencias/Devoluciones/Etc... <span id="badge-devuelto" class="bg-rose-500/10 px-2 py-0.5 rounded text-[10px]">0</span>
+                        <div class="flex flex-col gap-4 mb-6">
+                            <h3 class="text-[9px] font-black text-rose-500 uppercase tracking-tighter flex items-center gap-1.5">
+                                <span class="bg-rose-500/20 p-1.5 rounded-lg text-xs">⚠️</span> INCIDENCIAS / DEV. <span id="badge-devuelto" class="bg-rose-500/10 px-1.5 py-0.5 rounded text-[8px]">0</span>
                             </h3>
-                            <div class="flex flex-col gap-2">
+                            <div class="flex flex-col gap-1.5">
                                 <div class="flex items-center gap-2">
                                     <select onchange="cambiarOrdenColumna('Devuelto', this.value)" class="bg-black/20 border border-current/10 text-[9px] font-bold uppercase rounded-xl px-2 py-1 focus:outline-none">
                                         <option value="reciente">🕒 Orden</option>
@@ -432,7 +433,7 @@
                                 <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Filtrar incidencias..." class="bg-black/20 border border-current/10 text-[10px] rounded-xl px-3 py-1 focus:outline-none placeholder-current/30">
                             </div>
                         </div>
-                        <div id="col-devuelto" class="grid grid-cols-1 gap-3 p-1 overflow-y-auto max-h-[600px] text-[10px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
+                        <div id="col-devuelto" class="grid grid-cols-1 gap-3 p-1 overflow-y-auto max-h-[650px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
                     </div>
                 </div>
             </div>

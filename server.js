@@ -137,11 +137,11 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
     resave: false, 
     saveUninitialized: false, 
-    proxy: true, // Necesario para que las cookies 'secure' funcionen tras el proxy de Render
+    proxy: isProd, // Solo confiar en proxy en producción
     store: MongoStore.create({ mongoUrl: MONGO_URI_FINAL, collectionName: 'sesiones_activas', ttl: 14 * 24 * 60 * 60 }),
     cookie: { 
         secure: isProd, // True solo en HTTPS
-        sameSite: isProd ? 'none' : 'lax', // 'none' permite el flujo de retorno de Google en HTTPS
+        sameSite: isProd ? 'none' : 'lax',
         maxAge: 14 * 24 * 60 * 60 * 1000 
     }
 }));
@@ -441,12 +441,12 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
         const logs = await LogAuditoria.find().sort({ _id: -1 }).limit(50).lean(); 
         const gastosExtra = await Gasto.find().lean();
         
-        let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, totalGastosOperativos = 0, costeVendidos = 0;
+        let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, totalGastosOperativos = 0, costeVendidosTotal = 0;
         
         gastosExtra.forEach(g => totalGastosOperativos += g.monto);
 
         const ventas = ventasRaw.map(v => {
-            const proveedorNombre = v.tienda ? v.tienda.nombre : '';
+            const proveedorNombre = v.tienda && v.tienda.nombre ? v.tienda.nombre : 'Particular';
             
             const cant = parseInt(v.cantidad, 10) || 0;
             const pCompra = parseFloat(v.precioCompra) || 0;
@@ -463,7 +463,7 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
                 }
                 ingresos += ((pVenta - comisionPlataforma) * cant);
                 prendasVendidas += cant;
-                costeVendidos += (pCompra * cant);
+                costeVendidosTotal += (pCompra * cant);
             }
 
             return { ...v, proveedor: proveedorNombre };

@@ -8,7 +8,6 @@
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="shortcut icon" type="image/png" href="logo.png">
     
-    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Seychelles">
@@ -162,13 +161,10 @@
             <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-6">
                 <div class="flex items-center gap-4">
                     <div>
-                        <h1 class="text-5xl font-black uppercase tracking-tighter logo-premium bg-clip-text text-transparent drop-shadow-[0_4px_15px_rgba(217,70,239,0.4)] filter brightness-110">Seychelles Shop</h1>
+                        <h1 class="text-6xl font-black uppercase tracking-tighter logo-premium bg-clip-text text-transparent">Seychelles Shop</h1>
                         <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
                     </div>
-                    <div id="combo-badge" class="hidden bg-amber-500 text-slate-950 font-black px-3 py-1 rounded-xl text-xs uppercase tracking-wider animate-bounce shadow-md">
-                        💥 Combo x<span id="combo-count">0</span>
-                    </div>
-                    <button onclick="crearNotaNueva()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold px-3 py-2 rounded-xl shadow-lg flex items-center gap-1.5 transition-all active:scale-95">
+                    <button onclick="crearNotaNueva()" class="bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-bold px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 transition-all">
                         📌 Nota
                     </button>
                 </div>
@@ -216,14 +212,14 @@
             </header>
 
             <nav class="flex gap-2 p-1.5 card-bg border rounded-2xl mb-6 text-xs max-w-md shadow-inner">
-                <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white shadow">📦 Panel</button>
-                <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📊 Analítica</button>
-                <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">👥 Clientes</button>
-                <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📋 Gestión</button>
-                <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100">📜 Logs</button>
+                <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all nav-btn-active text-white">📦 Panel</button>
+                <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">📊 Analítica</button>
+                <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">👥 Clientes</button>
+                <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">📋 Gestión</button>
+                <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100">📜 Logs</button>
             </nav>
 
-            <div id="barra-filtros-generales" class="card-bg border p-3.5 rounded-2xl mb-6 flex flex-wrap gap-3 items-center text-xs">
+            <div id="barra-filtros-generales" class="card-bg p-4 rounded-3xl mb-8 flex flex-wrap gap-4 items-center text-[11px]">
                 <span class="font-bold uppercase tracking-wider opacity-60 text-[10px]">🎯 Filtros rápidos:</span>
                 <select id="filtro-categoria" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2.5 py-1.5 focus:outline-none">
                     <option value="TODOS">👕 Todas las categorías</option>
@@ -1246,11 +1242,11 @@
 
 
     <script>
-        // 1. Definir callback de Google de primero para evitar errores de sincronización
+        // 1. DEFINICIÓN GLOBAL INMEDIATA PARA GOOGLE
         window.handleCredentialResponse = async function(response) {
             try {
-                console.log("Token recibido de Google, verificando...");
-                const res = await fetch(`${BACKEND_URL}/api/auth/google`, { 
+                console.log("🚀 Verificando credenciales con Seychelles Server...");
+                const res = await fetch(`/api/auth/google`, { 
                     method: 'POST', 
                     headers: { 'Content-Type': 'application/json' }, 
                     credentials: 'include', 
@@ -1260,9 +1256,9 @@
                     window.location.reload();
                 } else {
                     const data = await res.json();
-                    alert(`⚠️ Acceso denegado: ${data.error || 'Correo no autorizado.'}`);
+                    alert(`Acceso denegado: ${data.error}`);
                 }
-            } catch(e) { alert("❌ Error: No se pudo conectar con el servidor."); }
+            } catch(e) { alert("Error de conexión con el servidor core."); }
         };
 
         const BACKEND_URL = '';
@@ -1296,10 +1292,10 @@
 
         // 🏷️ LÓGICA DE CATEGORÍAS DINÁMICAS
         async function refrescarCategoriasCloud() {
-            const selectForm = document.getElementById('categoria');
-            const selectFiltro = document.getElementById('filtro-categoria');
-            const selectAn = document.getElementById('an-filtro-categoria');
-            const selectMasivo = document.getElementById('categoria-masiva');
+            const selectForm = document.getElementById('categoria'); if(!selectForm) return;
+            const selectFiltro = document.getElementById('filtro-categoria'); if(!selectFiltro) return;
+            const selectAn = document.getElementById('an-filtro-categoria'); if(!selectAn) return;
+            const selectMasivo = document.getElementById('categoria-masiva'); if(!selectMasivo) return;
             try {
                 const res = await fetch(`${BACKEND_URL}/api/categorias`, { credentials: 'include' });
                 const data = await res.json();
@@ -1572,17 +1568,17 @@
         }
 
         // 🗺️ MENÚ DE NAVEGACIÓN ENTRE MÓDULOS SEPARADOS
-        function navegarASeccion(idSeccion) {
+        window.navegarASeccion = function(idSeccion) {
             document.querySelectorAll('.seccion-app').forEach(sec => sec.classList.add('hidden'));
             document.getElementById(idSeccion).classList.remove('hidden');
             
             document.querySelectorAll('nav button').forEach(btn => {
-                btn.className = "flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all opacity-60 hover:opacity-100";
+                btn.className = "flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all opacity-40 hover:opacity-100";
             });
             
             const tabActivo = document.getElementById(`tab-${idSeccion}`);
             if (tabActivo) {
-                tabActivo.className = "flex-1 py-2.5 px-3 rounded-xl font-bold uppercase tracking-wider text-center transition-all bg-blue-600 text-white shadow";
+                tabActivo.className = "flex-1 py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-center transition-all nav-btn-active text-white";
             }
             
             if (idSeccion === 'sec-analitica' && BASE_DATOS.length > 0) {
@@ -1775,15 +1771,17 @@
 
         // --- LÓGICA CRM ---
         async function refrescarClientesCRM() {
-            const res = await fetch('/api/clientes', { credentials: 'include' });
-            const clientes = await res.json();
-            const tbody = document.getElementById('tabla-clientes-crm');
-            if(!tbody) return;
+            const res = await fetch('/api/clientes', { credentials: 'include' }); if(!res.ok) return;
+            const clientes = await res.json(); if(!Array.isArray(clientes)) return;
+            const tbody = document.getElementById('tabla-clientes-crm'); if(!tbody) return;
+            
+            if(clientes.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="py-10 text-center opacity-30 italic">No hay clientes registrados</td></tr>'; return; }
+
             tbody.innerHTML = clientes.map(c => `
-                <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 font-bold uppercase">${c.nombre}</td>
-                    <td class="py-3 font-mono opacity-60">${c.nif || '---'}</td>
-                    <td class="py-3">
+                <tr class="hover:bg-white/5 transition-colors border-b border-white/5 last:border-0">
+                    <td class="py-4 font-black uppercase tracking-tighter">${c.nombre}</td>
+                    <td class="py-4 font-mono opacity-60 text-[10px]">${c.nif || '---'}</td>
+                    <td class="py-4">
                         <p class="text-[9px] opacity-60">${c.email || ''}</p>
                         <p class="text-[9px] font-bold">${c.telefono || ''}</p>
                     </td>
@@ -1797,8 +1795,7 @@
             `).join('');
         }
 
-        const fCliente = document.getElementById('form-cliente');
-        if(fCliente) fCliente.onsubmit = async (e) => {
+        document.getElementById('form-cliente').onsubmit = async (e) => {
             e.preventDefault();
             const id = document.getElementById('crm-id').value;
             const payload = {
@@ -2845,8 +2842,7 @@
             ticker.innerHTML = txt + txt;
         }
 
-        const fVenta = document.getElementById('form-venta');
-        if(fVenta) fVenta.onsubmit = async (e) => {
+        document.getElementById('form-venta').onsubmit = async (e) => {
             e.preventDefault(); const id = document.getElementById('edit-id').value;
             const payload = {
                 sku: document.getElementById('sku').value.trim(), 

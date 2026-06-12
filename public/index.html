@@ -421,28 +421,11 @@
                         <div id="col-no-vendido" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
                     </div>
 
-                    <!-- COLUMNA 2: RESERVADO -->
+                    <!-- COLUMNA 2: VENTAS (VENDIDO) -->
                     <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
                         <div class="flex flex-col gap-2 mb-4">
                             <div class="flex justify-between items-center">
-                                <h3 class="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">🤝 RESERVADO <span id="badge-reservado" class="bg-indigo-400/10 px-1.5 py-0.5 rounded">0</span></h3>
-                                <button onclick="alternarSeleccionColumna('Reservado')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
-                            </div>
-                            <select onchange="cambiarOrdenColumna('Reservado', this.value)" class="input-bg border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none dropdown-bg">
-                                <option value="reciente">🕒 Más Recientes</option>
-                                <option value="precio-desc">💰 Precio: Mayor</option>
-                                <option value="nombre">🔤 Nombre</option>
-                            </select>
-                            <input type="text" oninput="cambiarFiltroColumna('Reservado', this.value)" placeholder="Filtrar reservas..." class="input-bg border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30">
-                        </div>
-                        <div id="col-reservado" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Reservado')" ondragleave="clearDrop(event)"></div>
-                    </div>
-
-                    <!-- COLUMNA 2: VENDIDO -->
-                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
-                        <div class="flex flex-col gap-2 mb-4">
-                            <div class="flex justify-between items-center">
-                                <h3 class="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1.5">💰 VENDIDOS <span id="badge-vendido" class="bg-emerald-500/10 px-1.5 py-0.5 rounded">0</span></h3>
+                                <h3 class="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1.5">💰 VENTAS <span id="badge-vendido" class="bg-emerald-500/10 px-1.5 py-0.5 rounded">0</span></h3>
                                 <button onclick="alternarSeleccionColumna('Vendido')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
                             </div>
                             <select onchange="cambiarOrdenColumna('Vendido', this.value)" class="input-bg border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none dropdown-bg">
@@ -454,8 +437,25 @@
                         <div id="col-vendido" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
                     </div>
 
-                    <!-- COLUMNA 4: INCIDENCIAS (Movida aquí para completar el 2x2) -->
-                    <div class="card-bg border rounded-3xl p-4 flex flex-col transition-all h-full overflow-hidden">
+                    <!-- COLUMNA 3: RESERVAS -->
+                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[350px] transition-all">
+                        <div class="flex flex-col gap-2 mb-4">
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">🤝 RESERVAS <span id="badge-reservado" class="bg-indigo-400/10 px-1.5 py-0.5 rounded">0</span></h3>
+                                <button onclick="alternarSeleccionColumna('Reservado')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
+                            </div>
+                            <select onchange="cambiarOrdenColumna('Reservado', this.value)" class="input-bg border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none dropdown-bg">
+                                <option value="reciente">🕒 Más Recientes</option>
+                                <option value="precio-desc">💰 Precio: Mayor</option>
+                                <option value="nombre">🔤 Nombre</option>
+                            </select>
+                            <input type="text" oninput="cambiarFiltroColumna('Reservado', this.value)" placeholder="Filtrar reservas..." class="input-bg border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30">
+                        </div>
+                        <div id="col-reservado" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[320px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Reservado')" ondragleave="clearDrop(event)"></div>
+                    </div>
+
+                    <!-- COLUMNA 4: INCIDENCIAS -->
+                    <div class="card-bg border rounded-3xl p-4 flex flex-col transition-all min-h-[350px] overflow-hidden">
                         <div class="flex flex-col gap-4 mb-6">
                             <h3 class="text-[10px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-1.5">
                                 <span class="bg-rose-500/20 p-1.5 rounded-lg">⚠️</span> INCIDENCIAS/DEV <span id="badge-devuelto" class="bg-rose-500/10 px-2 py-0.5 rounded">0</span>
@@ -468,7 +468,7 @@
                                 <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Filtrar incidencias..." class="input-bg border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30 w-full">
                             </div>
                         </div>
-                        <div id="col-devuelto" class="grid grid-cols-1 gap-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
+                        <div id="col-devuelto" class="grid grid-cols-1 gap-3 p-1 overflow-y-auto max-h-[320px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
                     </div>
                 </div>
 
@@ -2903,7 +2903,7 @@
             BASE_DATOS.filter(x => x.estado === 'No Vendido').forEach(x => { totalStockPorPrendaNombre[x.prenda] = (totalStockPorPrendaNombre[x.prenda] || 0) + 1; });
 
             // Aplicar ordenación antes de renderizar
-            const estados = ['No Vendido', 'Reservado', 'Vendido', 'Devuelto'];
+            const estados = ['No Vendido', 'Vendido', 'Reservado', 'Devuelto'];
             const listasOrdenadas = {};
 
             estados.forEach(est => {
@@ -2921,7 +2921,7 @@
                 if (query) { listasOrdenadas[est] = listasOrdenadas[est].filter(v => v.prenda.toLowerCase().includes(query) || (v.sku && v.sku.toLowerCase().includes(query))); }
             });
 
-            const todosOrdenados = [...listasOrdenadas['No Vendido'], ...listasOrdenadas['Reservado'], ...listasOrdenadas['Vendido'], ...listasOrdenadas['Devuelto']];
+            const todosOrdenados = [...listasOrdenadas['No Vendido'], ...listasOrdenadas['Vendido'], ...listasOrdenadas['Reservado'], ...listasOrdenadas['Devuelto']];
 
             todosOrdenados.forEach(v => {
                 const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
@@ -2933,6 +2933,10 @@
                 const fechaRegistro = new Date(v.fecha);
                 const diasEnStock = Math.floor((new Date() - fechaRegistro) / (1000 * 60 * 60 * 24));
                 const esStockFrio = v.estado === 'No Vendido' && diasEnStock > 21;
+
+                // Nuevos indicadores de tiempo
+                const badgeExtintor = (v.estado !== 'Vendido' && diasEnStock >= 15) ? '<span title="Producto estancado (+15 días)" class="ml-1 text-xs">🧯</span>' : '';
+                const labelIncidencias = (v.estado === 'Devuelto') ? `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded text-[7px] font-black uppercase">⚠️ ${diasEnStock} DÍAS</span>` : '';
 
                 const claseAlertaStock = esStockCritico ? 'alerta-stock-critico border-amber-500/70 bg-amber-500/5' : '';
                 card.className = `kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none ${claseAlertaStock}`;
@@ -2955,8 +2959,8 @@
                     ${thumb}
                     <div class="flex-1 min-w-0 pointer-events-none">
                         <div class="flex items-center gap-1.5 flex-wrap">
-                            <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
-                            ${badgeCanal} ${badgeTienda} ${badgeCriticoHtml} ${badgeStockFrio} ${v.estado === 'Reservado' ? '<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-black">RESERVADO</span>' : ''}
+                            <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}${badgeExtintor}</h4> 
+                            ${badgeCanal} ${badgeTienda} ${badgeCriticoHtml} ${badgeStockFrio} ${labelIncidencias} ${v.estado === 'Reservado' ? '<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-black">RESERVADO</span>' : ''}
                         </div>
                         <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
                         <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>

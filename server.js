@@ -607,25 +607,29 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
             ];
         }
 
-        const modelosGratuitos = [
-            "google/gemini-2.0-flash-lite-preview-02-05:free",
-            "meta-llama/llama-3.2-11b-vision-instruct:free",
-            "google/gemini-2.0-flash:free",
-            "google/gemini-1.5-pro:free",
-            "google/gemini-1.5-flash:free",
-            "qwen/qwen-2-vl-7b-instruct:free"
+        const endpoints = [
+            { id: "google/gemini-2.0-flash-lite-preview-02-05:free", vision: true },
+            { id: "google/gemini-2.0-pro-exp-02-05:free", vision: true },
+            { id: "google/gemini-1.5-pro:free", vision: true },
+            { id: "meta-llama/llama-3.2-11b-vision-instruct:free", vision: true },
+            { id: "meta-llama/llama-3-8b-instruct:free", vision: false },
+            { id: "openchat/openchat-7b:free", vision: false }
         ];
 
         let iaData = null;
         let lastErrorMsg = "Error desconocido.";
 
-        for (const modelo of modelosGratuitos) {
+        for (const ep of endpoints) {
             try {
+                let currentContent = userContent;
+                // Si el modelo de respaldo no soporta fotos, enviamos solo texto para evitar un crash
+                if (!ep.vision && imagen) currentContent = mensaje || "Por favor, analiza mi inventario.";
+
                 const payload = {
-                    model: modelo,
+                    model: ep.id,
                     messages: [
                         { role: "system", content: promptSistema },
-                        { role: "user", content: userContent }
+                        { role: "user", content: currentContent }
                     ],
                     temperature: 0.5,
                     max_tokens: 2000
@@ -637,11 +641,11 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
                     { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://seychelles-shop.com', 'X-Title': 'Seychelles Core' }, timeout: 15000 }
                 );
                 iaData = apiRes.data;
-                console.log(`[IA INFO] Éxito con OpenRouter usando el modelo: ${modelo}`);
+                console.log(`[IA INFO] Éxito con OpenRouter usando el modelo: ${ep.id}`);
                 break; // Si funciona, rompemos el bucle y continuamos
             } catch (err) {
                 lastErrorMsg = err.response?.data?.error?.message || err.message;
-                console.warn(`[IA WARN] Falló ${modelo} en OpenRouter: ${lastErrorMsg}`);
+                console.warn(`[IA WARN] Falló ${ep.id} en OpenRouter: ${lastErrorMsg}`);
             }
         }
 

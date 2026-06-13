@@ -522,7 +522,7 @@
                 <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col gap-4">
                         <h3 id="crm-form-title" class="text-xs font-black text-blue-400 uppercase">👥 Ficha de Cliente</h3>
-                        <form id="form-cliente" class="space-y-3">
+                        <form id="form-cliente" class="space-y-3" onsubmit="manejarEnvioCliente(event)">
                             <input type="hidden" id="crm-id">
                             <input type="text" id="crm-nombre" placeholder="Nombre Completo" required class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
                             <input type="text" id="crm-nif" placeholder="DNI / NIF" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
@@ -1371,48 +1371,6 @@
 
 
     <script>
-        // --- 1. BLOQUE DE AUTENTICACIÓN (Definido globalmente de inmediato) ---
-        window.handleCredentialResponse = async function(response) {
-            try {
-                console.log("🚀 Verificando credenciales con Seychelles Server...");
-                const res = await fetch(`/api/auth/google`, { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    credentials: 'include', 
-                    body: JSON.stringify({ token: response.credential }) 
-                });
-                if (res.ok) {
-                    window.location.reload();
-                } else {
-                    alert("Acceso denegado: Usuario no autorizado.");
-                }
-            } catch(e) { alert("Error crítico de conexión."); }
-        };
-
-        // --- 0. CONEXIÓN REAL-TIME (Protegida) ---
-        let socket;
-        try {
-            if (typeof io !== 'undefined') {
-                socket = io();
-                socket.on('cambio_detectado', () => {
-                    console.log("[WS] Actualización recibida...");
-                    reloadCoreData();
-                    cargarNotasBoard();
-                    refrescarClientesCRM();
-                    refrescarCategoriasCloud();
-                    refrescarYListarTiendasCloud();
-                });
-            }
-        } catch(e) { console.warn("Socket.io no pudo inicializarse."); }
-
-        // --- 2. GESTIÓN DE EVENTOS SEGURA ---
-        function vincularFormularios() {
-            const fCliente = document.getElementById('form-cliente'); 
-            if (fCliente) fCliente.onsubmit = manejarEnvioCliente;
-            
-            const fPistola = document.getElementById('form-escaner-pistola'); 
-            if (fPistola) fPistola.onsubmit = manejarEscaneoPistola;
-        }
 
         const BACKEND_URL = '';
         let BASE_DATOS = [];

@@ -115,7 +115,7 @@ mongoose.connect(MONGO_URI_FINAL)
         // Migrar whitelist inicial si la base de datos está vacía
         const countUsers = await UsuarioAutorizado.countDocuments();
         if (countUsers === 0) {
-            const initialEmails = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
+            const initialEmails = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase()).filter(e => e);
             await UsuarioAutorizado.insertMany(initialEmails.map(e => ({ email: e })));
             console.log('[INIT] Whitelist inicial migrada a MongoDB.');
         }
@@ -176,7 +176,11 @@ async function registrarLog(usuario, accion) {
 async function downloadAndConvertToBase64(url) {
     if (!url || !url.startsWith('http')) return url || '';
     try {
-        const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 5000 });
+        const response = await axios.get(url, { 
+            responseType: 'arraybuffer', 
+            timeout: 8000,
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+        });
         const contentType = response.headers['content-type'];
         const base64 = Buffer.from(response.data, 'binary').toString('base64');
         return `data:${contentType};base64,${base64}`;
@@ -324,7 +328,12 @@ app.post('/api/auth/google', async (req, res) => {
         const payload = ticket.getPayload();
         const emailUsuario = payload['email'].toLowerCase().trim();
 
-        if (ADMIN_WHITELIST.includes(emailUsuario)) {
+        const autorizado = await UsuarioAutorizado.findOne({ email: emailUsuario });
+
+        if (autorizado) {
+            autorizado.ultimaConexion = new Date();
+            await autorizado.save();
+
             req.session.esAdmin = true;
             req.session.email = emailUsuario;
             await registrarLog(emailUsuario, "Inició sesión en el sistema core");

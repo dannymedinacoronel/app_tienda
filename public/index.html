@@ -2571,7 +2571,11 @@
                 document.getElementById(idTemp).remove();
 
                 if (res.ok) {
-                    const respuestaFormat = data.respuesta.replace(/\n/g, '<br>');
+                    // Parseador de Markdown básico para que la IA se vea bien
+                    const respuestaFormat = data.respuesta
+                        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-purple-300">$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em class="opacity-80">$1</em>')
+                        .replace(/\n/g, '<br>');
                     chatMessages.innerHTML += `
                         <div class="flex gap-2 animate-fadeIn">
                             <div class="w-7 h-7 rounded-full bg-purple-600/30 border border-purple-500/30 flex items-center justify-center flex-shrink-0 text-sm mt-1">✨</div>

@@ -582,9 +582,9 @@ app.post('/api/chat', exigeAdmin, async (req, res) => {
         if (!response.ok) {
             console.error("[IA ERROR] Gemini API falló:", data);
             
-            // Fallback automático al modelo universal 'gemini-pro' si el modelo 1.5 no está disponible en la cuenta/región del usuario
-            if (data.error && data.error.message && data.error.message.includes("not found")) {
-                const resFallback = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+            // Fallback automático al modelo universal 'gemini-1.0-pro' si el modelo 1.5 no está disponible en la cuenta/región del usuario
+            if (data.error && data.error.message && (data.error.message.includes("not found") || data.error.message.includes("not supported"))) {
+                const resFallback = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key=${apiKey}`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
                 });
                 const dataFallback = await resFallback.json();

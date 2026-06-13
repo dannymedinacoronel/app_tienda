@@ -609,23 +609,42 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
         let iaData;
         try {
-            // Intentamos con Gemini 1.5 Flash (El más rápido y estable para imágenes y texto)
+            // 1. PENSAR MÁS ALLÁ: Dejamos de adivinar. Le preguntamos a Google QUÉ modelos tienes habilitados exactamente.
+            const modelsRes = await axios.get(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+            const availableModels = modelsRes.data.models.map(m => m.name);
+            
+            // 2. Elegimos el mejor modelo disponible en TU cuenta específicamente
+            let targetModel = "";
+            if (availableModels.includes("models/gemini-1.5-flash")) targetModel = "models/gemini-1.5-flash";
+            else if (availableModels.includes("models/gemini-1.5-pro")) targetModel = "models/gemini-1.5-pro";
+            else if (availableModels.includes("models/gemini-1.0-pro")) targetModel = "models/gemini-1.0-pro";
+            else {
+                const fallback = availableModels.find(m => m.includes("gemini"));
+                if (fallback) targetModel = fallback;
+            }
+
+            if (!targetModel) {
+                return res.status(400).json({ error: 'Tu API Key no tiene habilitado NINGÚN modelo de Gemini. Verifica tu proyecto en Google Cloud.' });
+            }
+
+            // 3. Ajustamos el payload si el modelo es antiguo (1.0-pro) y no soporta imágenes
+            let currentPayload = payload;
+            if (targetModel.includes('1.0-pro') && imagen) {
+                currentPayload = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
+            }
+
+            // 4. Hacemos la petición con el modelo 100% confirmado que existe en tu cuenta
+            console.log(`[IA INFO] Ejecutando petición con el modelo confirmado: ${targetModel}`);
             const apiRes = await axios.post(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-                payload,
+                `https://generativelanguage.googleapis.com/v1beta/${targetModel}:generateContent?key=${apiKey}`,
+                currentPayload,
                 { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
             );
             iaData = apiRes.data;
         } catch (err) {
-            try {
-                // Si falla, reintentamos automáticamente con Gemini 1.5 Pro
-                const apiResFallback = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, payload, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
-                iaData = apiResFallback.data;
-            } catch (errFallback) {
-                const errorMsg = errFallback.response?.data?.error?.message || errFallback.message;
-                console.error("[IA ERROR] Google API:", errorMsg);
-                return res.status(400).json({ error: `Google API Error: ${errorMsg}` });
-            }
+            const errorMsg = err.response?.data?.error?.message || err.message;
+            console.error("[IA ERROR CRÍTICO] Google API:", errorMsg);
+            return res.status(400).json({ error: `Google API Error: ${errorMsg}` });
         }
 
         let textoIA = iaData.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";

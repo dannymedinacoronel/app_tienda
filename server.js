@@ -609,21 +609,22 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
         const endpoints = [
             { id: "google/gemini-2.0-flash-lite-preview-02-05:free", vision: true },
-            { id: "google/gemini-2.0-pro-exp-02-05:free", vision: true },
-            { id: "google/gemini-1.5-pro:free", vision: true },
             { id: "meta-llama/llama-3.2-11b-vision-instruct:free", vision: true },
-            { id: "meta-llama/llama-3-8b-instruct:free", vision: false },
-            { id: "openchat/openchat-7b:free", vision: false }
+            { id: "qwen/qwen-vl-plus:free", vision: true },
+            { id: "deepseek/deepseek-r1:free", vision: false },
+            { id: "meta-llama/llama-3.1-8b-instruct:free", vision: false },
+            { id: "mistralai/mistral-7b-instruct:free", vision: false }
         ];
 
         let iaData = null;
         let lastErrorMsg = "Error desconocido.";
+        let rateLimitExcedido = false;
 
         for (const ep of endpoints) {
             try {
                 let currentContent = userContent;
                 // Si el modelo de respaldo no soporta fotos, enviamos solo texto para evitar un crash
-                if (!ep.vision && imagen) currentContent = mensaje || "Por favor, analiza mi inventario.";
+                if (!ep.vision && imagen) currentContent = mensaje || "Por favor, responde basándote en los datos de la base de datos.";
 
                 const payload = {
                     model: ep.id,
@@ -646,12 +647,16 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
             } catch (err) {
                 lastErrorMsg = err.response?.data?.error?.message || err.message;
                 console.warn(`[IA WARN] Falló ${ep.id} en OpenRouter: ${lastErrorMsg}`);
+                if (err.response?.status === 429) rateLimitExcedido = true;
             }
         }
 
         if (!iaData) {
+            if (rateLimitExcedido) {
+                lastErrorMsg = "Has alcanzado el límite de peticiones gratuitas por minuto de OpenRouter. Espera unos segundos y vuelve a intentarlo.";
+            }
             console.error("[IA ERROR TOTAL] OpenRouter:", lastErrorMsg);
-            return res.status(400).json({ error: `Fallo de IA. OpenRouter rechazó todos los modelos gratuitos. Último error: ${lastErrorMsg}` });
+            return res.status(400).json({ error: `Fallo de IA: ${lastErrorMsg}` });
         }
 
         let textoIA = iaData.choices?.[0]?.message?.content || "El modelo no pudo generar una respuesta.";

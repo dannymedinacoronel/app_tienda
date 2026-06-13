@@ -439,7 +439,7 @@
                     </div>
                 </div>
 
-                <div id="kanban-dynamic-wrapper" class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-6 items-start">
+                <div id="kanban-dynamic-wrapper" class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 items-start">
                     <!-- Columnas inyectadas via Javascript -->
                 </div>
 
@@ -1477,8 +1477,17 @@
         async function refrescarEstadosKanban() {
             try {
                 const res = await fetch('/api/estados-kanban', { credentials: 'include' });
+                if (!res.ok) throw new Error("Fallo red");
                 LISTA_ESTADOS_KANBAN = await res.json();
-
+            } catch(e) { 
+                console.error("Error estados, usando fallback:", e);
+                LISTA_ESTADOS_KANBAN = [
+                    { _id: '1', nombre: 'No Vendido', icono: '📦', color: 'amber', rolFinanciero: 'Stock', orden: 1 },
+                    { _id: '2', nombre: 'Reservado', icono: '🤝', color: 'indigo', rolFinanciero: 'Stock', orden: 2 },
+                    { _id: '3', nombre: 'Vendido', icono: '💰', color: 'emerald', rolFinanciero: 'Venta', orden: 3 },
+                    { _id: '4', nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
+                ];
+            }
                 // Actualizar dropdown del formulario
                 const selectForm = document.getElementById('estado');
                 const valActual = selectForm.value;
@@ -1493,12 +1502,17 @@
                     `).join('');
                 }
                 renderListaAjustesKanban();
-            } catch(e) { console.error("Error estados:", e); }
         }
 
         function renderListaAjustesKanban() {
             const list = document.getElementById('lista-estados-kanban-config');
             if(!list) return;
+            
+            if (LISTA_ESTADOS_KANBAN.length === 0) {
+                list.innerHTML = '<div class="p-5 text-center text-[10px] opacity-50 font-mono border border-white/5 bg-black/20 rounded-2xl">No se han encontrado configuraciones cargadas.</div>';
+                return;
+            }
+            
             list.innerHTML = LISTA_ESTADOS_KANBAN.map(e => `
                 <div class="p-3 bg-black/20 border border-white/5 rounded-2xl flex items-center justify-between hover:bg-white/5 transition-all">
                     <div class="flex items-center gap-4">
@@ -2120,6 +2134,7 @@
                 const data = await res.json();
                 LISTA_TAREAS = Array.isArray(data) ? data : [];
                 renderKanbanTareas();
+                updateTickerWallStreet();
             } catch (e) { console.error("Error al cargar tareas:", e); }
         }
         
@@ -3502,10 +3517,18 @@
             const wrapper = document.getElementById('kanban-dynamic-wrapper');
             if (!wrapper) return;
             
+            if (LISTA_ESTADOS_KANBAN.length === 0) {
+                wrapper.innerHTML = '<div class="col-span-2 py-10 text-center opacity-50 font-mono">Cargando tablero...</div>';
+                return;
+            }
+
             let htmlColumns = '';
-            LISTA_ESTADOS_KANBAN.forEach(est => {
+            LISTA_ESTADOS_KANBAN.forEach((est, index) => {
+                // Restauramos el diseño perfecto clásico: las dos primeras grandes, las otras más compactas.
+                const minHClass = index < 2 ? 'min-h-[520px]' : 'min-h-[350px]';
+                
                 htmlColumns += `
-                <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all relative group border-${est.color}-500/20 shadow-lg">
+                <div class="card-bg border rounded-3xl p-4 flex flex-col ${minHClass} transition-all relative group border-${est.color}-500/20 shadow-lg">
                     <div class="flex flex-col gap-2 mb-4">
                         <div class="flex justify-between items-center">
                             <h3 class="text-[10px] font-black text-${est.color}-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -3595,9 +3618,30 @@
 
         function updateTickerWallStreet() {
             const ticker = document.getElementById('ticker-content'); if(!ticker) return; let txt = '';
+            
+            // 1. TAREAS ACTIVAS (Urgencia y Proceso)
+            const tareasActivas = LISTA_TAREAS.filter(t => t.estado !== 'Completada');
+            tareasActivas.forEach(t => {
+                const icon = t.estado === 'En Proceso' ? '⚙️' : '📌';
+                const colorTexto = t.prioridad === 'Alta' ? 'text-rose-400' : (t.estado === 'En Proceso' ? 'text-blue-400' : 'text-amber-400');
+                txt += `<span onclick="navegarASeccion('sec-tareas'); setTimeout(() => editarTarea('${t._id}'), 100)" class="text-white font-mono uppercase cursor-pointer hover:bg-white/10 transition-colors mx-4 border border-white/20 bg-black/40 px-3 py-1 rounded-full inline-flex items-center gap-1.5"><span class="${colorTexto} font-black">${icon} TAREA ${t.estado.toUpperCase()}:</span> ${t.titulo}</span>`;
+            });
+
+            // 2. ARTÍCULOS RESERVADOS
+            const nombresEstadosReserva = LISTA_ESTADOS_KANBAN.filter(e => e.nombre.toLowerCase().includes('reserva') || e.icono.includes('🤝')).map(e => e.nombre);
+            const reservas = BASE_DATOS.filter(v => nombresEstadosReserva.includes(v.estado) || v.estado === 'Reservado');
+            reservas.forEach(v => {
+                txt += `<span onclick="navegarASeccion('sec-inventario'); setTimeout(() => editItem('${v._id}'), 100)" class="text-white font-mono uppercase cursor-pointer hover:bg-indigo-500/20 transition-colors mx-4 border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 rounded-full inline-flex items-center gap-1.5"><span class="text-indigo-400 font-black">🤝 RESERVA:</span> ${v.prenda} [${v.talla}]</span>`;
+            });
+
+            // 3. PRODUCTOS RECIENTES (Últimos 10)
             const nombresEstadosVenta = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
-            BASE_DATOS.slice(0, 10).forEach(v => { const symbol = nombresEstadosVenta.includes(v.estado) ? '<span class="text-emerald-400">▲</span>' : '<span class="text-amber-400">●</span>'; txt += `<span class="text-white font-mono uppercase">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400">${parseFloat(v.precioVenta || 0).toFixed(2)}€</b></span>`; });
-            ticker.innerHTML = txt + txt;
+            BASE_DATOS.slice(0, 10).forEach(v => { 
+                const symbol = nombresEstadosVenta.includes(v.estado) ? '<span class="text-emerald-400">▲</span>' : '<span class="text-amber-400">●</span>'; 
+                txt += `<span class="text-white font-mono uppercase mx-4 inline-flex items-center gap-1">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400 ml-1">${parseFloat(v.precioVenta || 0).toFixed(2)}€</b></span>`; 
+            });
+            
+            ticker.innerHTML = txt + txt; // Duplicar para efecto infinito suave
         }
 
         async function manejarEnvioVenta(e) {

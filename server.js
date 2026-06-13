@@ -550,7 +550,7 @@ app.post('/api/chat', exigeAdmin, async (req, res) => {
     const { mensaje } = req.body;
     if (!mensaje) return res.status(400).json({ error: 'Mensaje vacío' });
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.replace(/['"]/g, '').trim() : '';
     
     // Fallback amigable si el usuario aún no ha configurado la API Key
     if (!apiKey) {
@@ -570,7 +570,13 @@ app.post('/api/chat', exigeAdmin, async (req, res) => {
         });
 
         const data = await response.json();
-        const textoIA = data.candidates?.[0]?.content?.parts?.[0]?.text || "Lo siento, mi servidor neuronal está ocupado ahora mismo.";
+        
+        if (!response.ok) {
+            console.error("[IA ERROR] Gemini API falló:", data);
+            return res.status(400).json({ error: `Rechazado por Google API: ${data.error?.message || 'Verifica tu API Key'}` });
+        }
+
+        const textoIA = data.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";
         res.json({ respuesta: textoIA });
     } catch (error) {
         console.error("[IA ERROR] Fallo en Gemini:", error);

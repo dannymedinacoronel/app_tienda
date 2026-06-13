@@ -616,13 +616,10 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
         let data = await response.json();
         
         if (!response.ok) {
-            console.warn(`[IA INFO] Fallo con 1.5-flash. Intentando fallback a gemini-1.0-pro...`);
+            console.warn(`[IA INFO] Fallo con 1.5-flash. Intentando fallback a gemini-1.5-pro...`);
             
-            // El modelo 1.0-pro no acepta imágenes, enviamos solo texto
-            const payloadTextOnly = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
-            
-            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key=${apiKey}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(imagen ? payloadTextOnly : payload)
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
             });
             
             data = await response.json();

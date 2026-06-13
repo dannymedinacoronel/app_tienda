@@ -607,36 +607,47 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
             ];
         }
 
-        const payload = {
-            model: "google/gemini-2.0-flash-exp:free",
-            messages: [
-                { role: "system", content: promptSistema },
-                { role: "user", content: userContent }
-            ],
-            temperature: 0.5,
-            max_tokens: 2000
-        };
+        const modelosGratuitos = [
+            "google/gemini-2.0-flash-lite-preview-02-05:free",
+            "meta-llama/llama-3.2-11b-vision-instruct:free",
+            "google/gemini-2.0-flash:free",
+            "google/gemini-1.5-pro:free",
+            "google/gemini-1.5-flash:free",
+            "qwen/qwen-2-vl-7b-instruct:free"
+        ];
 
-        let iaData;
-        try {
-            const apiRes = await axios.post(
-                'https://openrouter.ai/api/v1/chat/completions',
-                payload,
-                { 
-                    headers: { 
-                        'Authorization': `Bearer ${apiKey}`, 
-                        'Content-Type': 'application/json',
-                        'HTTP-Referer': 'https://seychelles-shop.com',
-                        'X-Title': 'Seychelles Core'
-                    }, 
-                    timeout: 20000 
-                }
-            );
-            iaData = apiRes.data;
-        } catch (err) {
-            let errorMsg = err.response?.data?.error?.message || err.message;
-            console.error("[IA ERROR] OpenRouter API:", errorMsg);
-            return res.status(400).json({ error: `Fallo de IA: ${errorMsg}` });
+        let iaData = null;
+        let lastErrorMsg = "Error desconocido.";
+
+        for (const modelo of modelosGratuitos) {
+            try {
+                const payload = {
+                    model: modelo,
+                    messages: [
+                        { role: "system", content: promptSistema },
+                        { role: "user", content: userContent }
+                    ],
+                    temperature: 0.5,
+                    max_tokens: 2000
+                };
+
+                const apiRes = await axios.post(
+                    'https://openrouter.ai/api/v1/chat/completions',
+                    payload,
+                    { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://seychelles-shop.com', 'X-Title': 'Seychelles Core' }, timeout: 15000 }
+                );
+                iaData = apiRes.data;
+                console.log(`[IA INFO] Éxito con OpenRouter usando el modelo: ${modelo}`);
+                break; // Si funciona, rompemos el bucle y continuamos
+            } catch (err) {
+                lastErrorMsg = err.response?.data?.error?.message || err.message;
+                console.warn(`[IA WARN] Falló ${modelo} en OpenRouter: ${lastErrorMsg}`);
+            }
+        }
+
+        if (!iaData) {
+            console.error("[IA ERROR TOTAL] OpenRouter:", lastErrorMsg);
+            return res.status(400).json({ error: `Fallo de IA. OpenRouter rechazó todos los modelos gratuitos. Último error: ${lastErrorMsg}` });
         }
 
         let textoIA = iaData.choices?.[0]?.message?.content || "El modelo no pudo generar una respuesta.";

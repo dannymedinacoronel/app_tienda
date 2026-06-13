@@ -608,32 +608,35 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
         const payload = { contents: [{ parts }] };
 
-        // Forzamos el uso de 1.5 Flash (evitando el 2.0 que tiene cuotas más estrictas)
-        let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-        });
+        const modelosATentar = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-pro'];
+        let response;
+        let data;
+        let modeloExitoso = null;
 
-        let data = await response.json();
-        
-        if (!response.ok) {
-            console.warn(`[IA INFO] Fallo con 1.5-flash. Intentando fallback a gemini-1.5-pro...`);
-            
-            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        for (const modelo of modelosATentar) {
+            let payloadActual = payload;
+            // El modelo gemini-pro clásico no soporta imágenes, evitamos que rompa si le pasaste foto
+            if (modelo === 'gemini-pro' && imagen) {
+                payloadActual = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
+            }
+
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadActual)
             });
-            
+
             data = await response.json();
 
-            if (!response.ok) {
-                let errorMsg = data.error?.message || 'Error desconocido en Gemini.';
-                
-                // Traducción al español del error de Cuota (limit: 0) en Europa
-                if (errorMsg.includes('quota') || errorMsg.includes('limit: 0')) {
-                    errorMsg = "Google ha bloqueado el nivel gratuito de IA en tu país. Para desbloquearlo, ve a Google Cloud Console y añade una tarjeta en 'Facturación' (no te cobrarán nada, el uso gratuito mensual se mantiene intacto, es solo verificación de identidad).";
-                }
-                
-                return res.status(400).json({ error: `Google API: ${errorMsg}` });
+            if (response.ok) {
+                modeloExitoso = modelo;
+                console.log(`[IA INFO] Conexión exitosa usando el modelo: ${modelo}`);
+                break; // El modelo funcionó, salimos del bucle
+            } else {
+                console.warn(`[IA INFO] Fallo intentando con ${modelo}: ${data.error?.message}`);
             }
+        }
+
+        if (!modeloExitoso) {
+            return res.status(400).json({ error: `Google API Error: ${data?.error?.message || 'Ningún modelo disponible para esta clave.'}` });
         }
 
         let textoIA = data.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";

@@ -624,8 +624,12 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
             });
             iaData = apiRes.data;
         } catch (err) {
-            console.error("[IA ERROR] Groq API:", err.response?.data || err.message);
-            return res.status(400).json({ error: `Fallo de IA: ${err.response?.data?.error?.message || err.message}` });
+            let errorMessage = err.response?.data?.error?.message || err.message;
+            console.error("[IA ERROR] Groq API:", errorMessage);
+            if (errorMessage.toLowerCase().includes('access denied')) {
+                errorMessage = "Acceso denegado. La clave API de Groq que está en Render es incorrecta o ha caducado. Por favor, crea una nueva clave en console.groq.com y actualiza la variable de entorno.";
+            }
+            return res.status(400).json({ error: `Fallo de IA: ${errorMessage}` });
         }
 
         let textoIA = iaData.choices?.[0]?.message?.content || "El modelo no pudo generar una respuesta.";

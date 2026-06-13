@@ -243,7 +243,6 @@
                         <span id="icon-refresh" class="inline-block">🔄</span> <span class="hidden sm:inline">Refrescar</span>
                     </button>
                     <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600/40 hover:bg-purple-700 border border-purple-500/30 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">💾 Backup</button>
-                    <button id="btn-backup-drive" onclick="guardarBackupEnDrive()" class="bg-blue-600/40 hover:bg-blue-700 border border-blue-500/30 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all hover:-translate-y-1 hover:shadow-lg" title="Guardar copia en Google Drive">☁️ Drive</button>
                     <button onclick="document.getElementById('input-restore-backup').click()" class="bg-slate-700 hover:bg-slate-600 border border-current/10 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">📂 Importar</button>
                     <input type="file" id="input-restore-backup" class="hidden" accept=".json" onchange="importarBackupJSON(event)">
                     <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">📊 Excel</button>
@@ -268,12 +267,14 @@
                 </div>
 
                 <!-- DERECHA: NAV (50%) -->
-                <nav class="lg:w-1/2 flex gap-1.5 p-1.5 card-bg rounded-2xl text-[9px] w-full border border-white/5">
+                <nav class="lg:w-1/2 flex flex-wrap gap-1.5 p-1.5 card-bg rounded-2xl text-[9px] w-full border border-white/5">
                     <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all nav-btn-active text-white">📦 Panel</button>
+                    <button onclick="navegarASeccion('sec-tareas')" id="tab-sec-tareas" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">✅ Tareas</button>
                     <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📊 Analítica</button>
                     <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">👥 CRM</button>
                     <button onclick="navegarASeccion('sec-usuarios')" id="tab-sec-usuarios" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">🔑 Acceso</button>
                     <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📋 Fact.</button>
+                    <button onclick="navegarASeccion('sec-faqs')" id="tab-sec-faqs" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">❓ FAQs</button>
                     <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📜 Logs</button>
                 </nav>
             </div>
@@ -771,7 +772,7 @@
                             <p class="text-[10px] opacity-60 mt-1">Aprende a automatizar y sacar el máximo partido a Seychelles Core.</p>
                         </div>
                         <div class="flex gap-3 w-full sm:w-auto">
-                            <button onclick="document.getElementById('modal-faq').classList.remove('hidden')" class="flex-1 sm:flex-none bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-6 rounded-xl text-[10px] uppercase tracking-widest transition-all shadow-md">❓ Ver FAQs</button>
+                            <button onclick="navegarASeccion('sec-faqs')" class="flex-1 sm:flex-none bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-6 rounded-xl text-[10px] uppercase tracking-widest transition-all shadow-md">❓ Configurar FAQs</button>
                             <button onclick="generarGuiaPDF()" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-xl text-[10px] uppercase tracking-widest transition-all shadow-md">📄 Generar Guía PDF</button>
                         </div>
                     </div>
@@ -971,11 +972,7 @@
                         </summary>
                         <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2">
                             <p>Seychelles Core incluye herramientas de grado empresarial para proteger tus datos:</p>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                                <div class="bg-white/5 p-3 rounded-xl border border-white/10 shadow-sm">
-                                    <h5 class="text-blue-300 font-bold mb-1">☁️ Backup a Google Drive</h5>
-                                    <p class="opacity-70 text-[10px]">El servidor enviará automáticamente a las 00:00h un archivo cifrado con tu BD a Google Drive. También puedes forzarlo pulsando el botón azul superior.</p>
-                                </div>
+                            <div class="grid grid-cols-1 gap-4 mt-2">
                                 <div class="bg-white/5 p-3 rounded-xl border border-white/10 shadow-sm">
                                     <h5 class="text-indigo-300 font-bold mb-1">📜 Calendario de Auditoría</h5>
                                     <p class="opacity-70 text-[10px]">En la pestaña 'Logs', puedes ver día a día qué persona ha modificado, borrado o vendido qué producto exactamente, garantizando trazabilidad.</p>
@@ -1570,6 +1567,8 @@
         let CAL_STOCK_ANIO = new Date().getFullYear();
         let LOGS_MES_ACTUAL = {};
         let NOTAS_LOCALES = [];
+        let LISTA_TAREAS = [];
+        let LISTA_FAQS = [];
 
         // 📌 LÓGICA DE NOTAS ADHESIVAS
         async function cargarNotasBoard() {
@@ -1906,6 +1905,14 @@
             if (idSeccion === 'sec-usuarios') {
                 setTimeout(() => { refrescarUsuariosAdmin(); }, 50);
             }
+            
+            if (idSeccion === 'sec-tareas') {
+                setTimeout(() => { refrescarTareas(); }, 50);
+            }
+            
+            if (idSeccion === 'sec-faqs') {
+                setTimeout(() => { refrescarFaqs(); }, 50);
+            }
         }
 
         function navegarCalendarioStock(delta) {
@@ -2086,7 +2093,7 @@
                 seccion("9. Business Intelligence (Analítica y Heatmap)", "Soporte para 4 instancias de Chart.js animadas. Filtrado multidimensional (Canal + Talla + Categoría + Rango PVP). Destaca el 'Scatter Heatmap' (Mapa de Calor), el cual mapea la densidad transaccional (Día vs Franja Horaria) para encontrar las horas pico donde tus clientes compran más, ayudando a programar tus lanzamientos.");
                 seccion("10. Calendarios Históricos y Trazabilidad", "Doble matriz de calendario. \n- Calendario Stock: Te muestra visualmente cuántas altas y cuántas ventas hubo un día exacto. \n- Calendario de Auditoría (Logs): Un registro inmutable. Cada vez que alguien entra, edita, borra o emite una factura, su email y hora quedan grabados. Ninguna acción en la empresa es anónima.");
                 seccion("11. Workspace Espacial (Notas Adhesivas)", "Sistema de Coordenadas X/Y guardado en tiempo real. Permite anclar Post-its en la pantalla. Estas notas son arrastrables (drag & drop), redimensionables y soportan cambio de color. Al actualizar la BD, todos los usuarios verán la nota en el mismo lugar de su pantalla.");
-                seccion("12. Ciberseguridad, Auth y Backup", "La app está blindada por Google OAuth2.0 y Middleware de Sesiones. Solo los correos inscritos en la sección '🔑 Acceso' pueden validar su token. Las variables de entorno inyectan credenciales de Servicio de IAM (Google Cloud) para ejecutar volcados físicos completos de MongoDB hacia carpetas privadas de Google Drive a las 00:00 cada día.");
+                seccion("12. Ciberseguridad y Autenticación", "La app está blindada por Google OAuth2.0 y Middleware de Sesiones. Solo los correos inscritos en la sección '🔑 Acceso' pueden validar su token.");
 
                 doc.save('Guia_Automatizacion_Seychelles.pdf');
                 cantarPorVoz("Guía en PDF generada exitosamente.");
@@ -2150,6 +2157,152 @@
             
             localStorage.setItem('seychelles-fac-vendedor', JSON.stringify(vendedor));
         }
+
+        // --- GESTIÓN DE TAREAS (KANBAN) ---
+        async function refrescarTareas() {
+            try {
+                const res = await fetch('/api/tareas', { credentials: 'include' });
+                LISTA_TAREAS = await res.json();
+                renderKanbanTareas();
+            } catch (e) { console.error("Error al cargar tareas:", e); }
+        }
+        
+        function renderKanbanTareas() {
+            const colPendiente = document.getElementById('col-tar-pendiente');
+            const colProceso = document.getElementById('col-tar-proceso');
+            const colCompletada = document.getElementById('col-tar-completada');
+            if(!colPendiente || !colProceso || !colCompletada) return;
+            
+            colPendiente.innerHTML = ''; colProceso.innerHTML = ''; colCompletada.innerHTML = '';
+            
+            LISTA_TAREAS.forEach(t => {
+                const card = document.createElement('div');
+                card.className = "card-bg border border-white/10 p-3 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:border-blue-500/50 transition-all select-none group";
+                card.setAttribute('draggable', 'true');
+                card.setAttribute('ondragstart', `window.handleDragStartTarea(event, '${t._id}')`);
+                card.setAttribute('ondragend', `this.classList.remove('opacity-30')`);
+                
+                let colorPrio = t.prioridad === 'Alta' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : (t.prioridad === 'Media' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20');
+                let fechaVenc = t.fechaVencimiento ? `<span class="text-[9px] opacity-50 font-mono mt-1 block">📅 Vence: ${t.fechaVencimiento}</span>` : '';
+                
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-1.5">
+                        <span class="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${colorPrio}">${t.prioridad}</span>
+                        <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onclick="editarTarea('${t._id}')" class="text-blue-400 hover:text-blue-300 text-[10px]">✏️</button>
+                            <button onclick="borrarTarea('${t._id}')" class="text-rose-400 hover:text-rose-300 text-[10px]">🗑️</button>
+                        </div>
+                    </div>
+                    <h4 class="font-bold text-xs">${t.titulo}</h4>
+                    ${t.descripcion ? `<p class="text-[10px] opacity-70 mt-1 line-clamp-3">${t.descripcion}</p>` : ''}
+                    ${fechaVenc}
+                `;
+                
+                if (t.estado === 'Completada') colCompletada.appendChild(card);
+                else if (t.estado === 'En Proceso') colProceso.appendChild(card);
+                else colPendiente.appendChild(card);
+            });
+        }
+        
+        window.handleDragStartTarea = function(e, id) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData("text/tarea-id", id); setTimeout(() => { e.target.classList.add('opacity-30'); }, 0); };
+        window.handleDropTarea = async function(e, nuevoEstado) {
+            e.preventDefault(); window.clearDrop(e);
+            const id = e.dataTransfer.getData("text/tarea-id"); if(!id) return;
+            
+            const idx = LISTA_TAREAS.findIndex(t => t._id === id);
+            if(idx !== -1) { LISTA_TAREAS[idx].estado = nuevoEstado; renderKanbanTareas(); }
+            
+            try { await fetch(`/api/tareas/${id}/estado`, { method: 'PUT', headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({ estado: nuevoEstado }) }); } 
+            catch(err) { refrescarTareas(); }
+        };
+
+        async function manejarEnvioTarea(e) {
+            e.preventDefault();
+            const id = document.getElementById('edit-id-tarea').value;
+            const payload = {
+                titulo: document.getElementById('tar-titulo').value,
+                descripcion: document.getElementById('tar-desc').value,
+                fechaVencimiento: document.getElementById('tar-fecha').value,
+                prioridad: document.getElementById('tar-prio').value
+            };
+            
+            const url = id ? `/api/tareas/${id}` : '/api/tareas';
+            const method = id ? 'PUT' : 'POST';
+            
+            try {
+                const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify(payload) });
+                if (res.ok) { cantarPorVoz("Tarea guardada."); cancelarEdicionTarea(); refrescarTareas(); }
+            } catch(err) { alert("Error al guardar tarea."); }
+        }
+        
+        function editarTarea(id) {
+            const t = LISTA_TAREAS.find(x => x._id === id); if(!t) return;
+            document.getElementById('edit-id-tarea').value = t._id;
+            document.getElementById('tar-titulo').value = t.titulo;
+            document.getElementById('tar-desc').value = t.descripcion;
+            document.getElementById('tar-fecha').value = t.fechaVencimiento || '';
+            document.getElementById('tar-prio').value = t.prioridad;
+            document.getElementById('form-title-tarea').innerText = "✏️ Editar Tarea";
+            document.getElementById('btn-submit-tarea').innerText = "Guardar Cambios";
+            document.getElementById('btn-cancel-tarea').classList.remove('hidden');
+            document.getElementById('form-container-tarea').classList.add('border-blue-500');
+        }
+        function cancelarEdicionTarea() {
+            document.getElementById('form-tarea').reset();
+            document.getElementById('edit-id-tarea').value = '';
+            document.getElementById('form-title-tarea').innerText = "Nueva Tarea";
+            document.getElementById('btn-submit-tarea').innerText = "Añadir Tarea";
+            document.getElementById('btn-cancel-tarea').classList.add('hidden');
+            document.getElementById('form-container-tarea').classList.remove('border-blue-500');
+        }
+        async function borrarTarea(id) { if(confirm("¿Eliminar esta tarea?")) { await fetch(`/api/tareas/${id}`, { method: 'DELETE', credentials: 'include' }); refrescarTareas(); } }
+
+        // --- GESTIÓN DE FAQS DINÁMICAS ---
+        async function refrescarFaqs() {
+            try {
+                const res = await fetch('/api/faqs', { credentials: 'include' });
+                LISTA_FAQS = await res.json();
+                const cont = document.getElementById('lista-faqs-admin');
+                if(!cont) return;
+                
+                cont.innerHTML = LISTA_FAQS.map(f => `
+                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
+                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
+                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest flex-1 pr-4">${f.pregunta}</span>
+                            <div class="flex items-center gap-3">
+                                <button onclick="editarFaq('${f._id}'); event.preventDefault();" class="text-[10px] text-blue-400 hover:text-blue-300 transition-colors">✏️ Editar</button>
+                                <button onclick="borrarFaq('${f._id}'); event.preventDefault();" class="text-[10px] text-rose-400 hover:text-rose-300 transition-colors">🗑️ Borrar</button>
+                                <span class="group-open:rotate-180 transition-transform text-lg text-emerald-400">▾</span>
+                            </div>
+                        </summary>
+                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2 whitespace-pre-wrap">${f.respuesta}</div>
+                    </details>
+                `).join('');
+            } catch(e) { console.error("Error faqs:", e); }
+        }
+
+        async function manejarEnvioFaq(e) {
+            e.preventDefault();
+            const id = document.getElementById('edit-id-faq').value;
+            const payload = { pregunta: document.getElementById('faq-pregunta').value, respuesta: document.getElementById('faq-respuesta').value };
+            const url = id ? `/api/faqs/${id}` : '/api/faqs'; const method = id ? 'PUT' : 'POST';
+            try {
+                const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify(payload) });
+                if(res.ok) { cantarPorVoz("FAQ guardada."); cancelarEdicionFaq(); refrescarFaqs(); }
+            } catch(err) { alert("Error al guardar FAQ."); }
+        }
+        function editarFaq(id) {
+            const f = LISTA_FAQS.find(x => x._id === id); if(!f) return;
+            document.getElementById('edit-id-faq').value = f._id; document.getElementById('faq-pregunta').value = f.pregunta; document.getElementById('faq-respuesta').value = f.respuesta;
+            document.getElementById('form-title-faq').innerText = "✏️ Editando FAQ"; document.getElementById('btn-submit-faq').innerText = "Actualizar Pregunta"; document.getElementById('btn-cancel-faq').classList.remove('hidden');
+            document.getElementById('faq-pregunta').focus();
+        }
+        function cancelarEdicionFaq() {
+            document.getElementById('form-faq').reset(); document.getElementById('edit-id-faq').value = '';
+            document.getElementById('form-title-faq').innerText = "✍️ Crear Nueva FAQ"; document.getElementById('btn-submit-faq').innerText = "Guardar Pregunta"; document.getElementById('btn-cancel-faq').classList.add('hidden');
+        }
+        async function borrarFaq(id) { if(confirm("¿Eliminar esta FAQ del sistema permanentemente?")) { await fetch(`/api/faqs/${id}`, { method: 'DELETE', credentials: 'include' }); refrescarFaqs(); } }
+
 
         // --- GESTIÓN DE USUARIOS AUTORIZADOS ---
         async function refrescarUsuariosAdmin() {
@@ -2902,23 +3055,6 @@
                 } catch (err) { alert("Archivo JSON no válido."); }
             };
             reader.readAsText(file);
-        }
-
-        async function guardarBackupEnDrive() {
-            if (!confirm("¿Deseas generar una copia de seguridad de la base de datos y guardarla en tu Google Drive ahora?")) return;
-            const btn = document.getElementById('btn-backup-drive');
-            if (btn) { btn.innerHTML = "Subiendo... ⏳"; btn.disabled = true; }
-            try {
-                const res = await fetch(`${BACKEND_URL}/api/backup/drive`, { method: 'POST', credentials: 'include' });
-                const data = await res.json();
-                if (res.ok) {
-                    cantarPorVoz("Backup subido a Drive.");
-                    alert("¡Copia de seguridad guardada exitosamente en la carpeta de Google Drive!");
-                } else {
-                    alert("Error: " + (data.error || "Fallo desconocido al subir."));
-                }
-            } catch(e) { alert("Fallo de conexión con el servidor."); } 
-            finally { if (btn) { btn.innerHTML = "☁️ Drive"; btn.disabled = false; } }
         }
 
         function cantarPorVoz(mensajeTexto) {

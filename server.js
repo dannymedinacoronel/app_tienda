@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const { OAuth2Client } = require('google-auth-library'); 
 const session = require('express-session'); 
-const { google } = require('googleapis');
 const MongoStoreModule = require('connect-mongo'); // Importa el módulo completo
 const mongoose = require('mongoose');
 const path = require('path');
@@ -93,6 +92,23 @@ const LogAuditoriaSchema = new mongoose.Schema({
 });
 const LogAuditoria = mongoose.models.LogAuditoria || mongoose.model('LogAuditoria', LogAuditoriaSchema);
 
+const TareaSchema = new mongoose.Schema({
+    titulo: { type: String, required: true, trim: true },
+    descripcion: { type: String, default: '', trim: true },
+    estado: { type: String, enum: ['Pendiente', 'En Proceso', 'Completada'], default: 'Pendiente' },
+    prioridad: { type: String, enum: ['Baja', 'Media', 'Alta'], default: 'Media' },
+    fechaVencimiento: { type: String, default: '' },
+    fechaCreacion: { type: Date, default: Date.now }
+});
+const Tarea = mongoose.models.Tarea || mongoose.model('Tarea', TareaSchema);
+
+const FaqSchema = new mongoose.Schema({
+    pregunta: { type: String, required: true, trim: true },
+    respuesta: { type: String, required: true, trim: true },
+    fechaCreacion: { type: Date, default: Date.now }
+});
+const Faq = mongoose.models.Faq || mongoose.model('Faq', FaqSchema);
+
 const NotaSchema = new mongoose.Schema({
     texto: { type: String, default: 'Nueva nota...', trim: true },
     color: { type: String, default: 'bg-yellow-400' },
@@ -158,6 +174,19 @@ mongoose.connect(MONGO_URI_FINAL)
                 console.error("Error inyectando categorías iniciales:", err);
             }
         }
+        
+        // Auto-poblar FAQs predeterminadas si está vacío
+        const faqCount = await Faq.countDocuments();
+        if (faqCount === 0) {
+            await Faq.insertMany([
+                { pregunta: "🔄 ¿Cómo muevo un producto a 'Vendido'?", respuesta: "Puedes arrastrar la tarjeta del producto hacia la columna 'VENTAS' en el Kanban principal, o editar el producto haciendo click en el botón azul de 'Editar' y cambiar su estado." },
+                { pregunta: "⚡ ¿Cómo aplico acciones masivas?", respuesta: "Selecciona las casillas redondas de varios artículos en el Kanban para desplegar el 'Panel Flotante Oscuro' abajo. Desde ahí podrás ajustar precios o estados en lote." },
+                { pregunta: "📷 ¿Para qué sirve el escáner superior?", respuesta: "Convierte la cámara de tu móvil o tablet en una pistola láser. Imprime las etiquetas con QR de tus prendas, y al escanearlas desde aquí se marcarán automáticamente como Vendidas." },
+                { pregunta: "💸 Gastos Operativos vs Coste de Ropa", respuesta: "El sistema separa tu inversión en 2 bloques para darte un Beneficio Neto real: El Coste Unitario (lo que costó la prenda) y los Gastos Operativos (Alquiler, cajas, luz) que se añaden en la sección de Gastos." }
+            ]);
+            console.log('[INIT] FAQs predeterminadas inyectadas.');
+        }
+        
     })
     .catch(err => console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err));
 
@@ -217,8 +246,16 @@ const transporter = nodemailer.createTransport({
 
 async function realizarBackupDiarioEmail() {
     try {
-        const ventas = await VentaRopa.find().populate('tienda').lean();
-        const backupData = JSON.stringify(ventas, null, 2);
+        // Extracción total de todas las colecciones de MongoDB
+        const baseDatosCompleta = {
+            ventas: await VentaRopa.find().populate('tienda').lean(),
+            clientes: await Cliente.find().lean(),
+            gastos: await Gasto.find().lean(),
+            tiendas: await Tienda.find().lean(),
+            categorias: await Categoria.find().lean(),
+            usuariosAutorizados: await UsuarioAutorizado.find().lean()
+        };
+        const backupData = JSON.stringify(baseDatosCompleta, null, 2);
         const ahora = new Date();
         const dateStr = ahora.toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/:/g, '-');
 
@@ -240,70 +277,6 @@ async function realizarBackupDiarioEmail() {
 // Se ejecuta una vez al día (86400000 ms)
 setInterval(realizarBackupDiarioEmail, 24 * 60 * 60 * 1000);
 // También permitimos un trigger manual si fuera necesario vía ruta secreta o similar en el futuro
-
-// --- Función Centralizada de Backup a Google Drive ---
-async function generarBackupDrive(esManual = false) {
-    if (!process.env.GOOGLE_DRIVE_CREDENTIALS || !process.env.GOOGLE_DRIVE_FOLDER_ID) {
-        throw new Error('Configura GOOGLE_DRIVE_CREDENTIALS y GOOGLE_DRIVE_FOLDER_ID en el archivo .env.');
-    }
-
-    let credsStr = process.env.GOOGLE_DRIVE_CREDENTIALS.trim();
-    // Limpiar comillas simples o dobles accidentales al principio y al final (muy común al copiar a Render)
-    if (credsStr.startsWith("'") && credsStr.endsWith("'")) credsStr = credsStr.slice(1, -1);
-    if (credsStr.startsWith('"') && credsStr.endsWith('"') && !credsStr.includes('":"')) credsStr = credsStr.slice(1, -1);
-    
-    let credentials;
-    try {
-        credentials = JSON.parse(credsStr);
-        if (typeof credentials === 'string') {
-            credentials = JSON.parse(credentials); // Evita doble-stringificación de Render
-        }
-    } catch(err) { throw new Error("JSON de credenciales inválido. Revisa tu panel de Render: " + err.message); }
-
-    // Auto-reparar los saltos de línea de la Private Key si Render los escapó accidentalmente como texto literal
-    if (credentials.private_key) {
-        credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
-    }
-
-    const auth = new google.auth.GoogleAuth({
-        credentials,
-        scopes: ['https://www.googleapis.com/auth/drive.file']
-    });
-
-    const drive = google.drive({ version: 'v3', auth });
-    const ventas = await VentaRopa.find().populate('tienda').lean();
-    const backupData = JSON.stringify(ventas, null, 2);
-    
-    const { Readable } = require('stream');
-    const dateStr = new Date().toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/:/g, '-');
-    const prefijo = esManual ? 'Manual' : 'Auto';
-    
-    const response = await drive.files.create({
-        resource: {
-            name: `Backup_Seychelles_${prefijo}_${dateStr}.json`,
-            parents: [process.env.GOOGLE_DRIVE_FOLDER_ID.trim()]
-        },
-        media: { mimeType: 'application/json', body: Readable.from([backupData]) },
-        fields: 'id'
-    });
-    
-    return response.data.id;
-}
-
-// Ejecutar Backup Automático a Drive cada 24 horas (86400000 ms)
-setInterval(() => { generarBackupDrive(false).catch(e => console.error("[AUTO-DRIVE] Fallo:", e.message)); }, 24 * 60 * 60 * 1000);
-
-// --- Backup a Google Drive ---
-app.post('/api/backup/drive', exigeAdmin, async (req, res) => {
-    try {
-        const fileId = await generarBackupDrive(true);
-        await registrarLog(req.session.email, `Generó Backup manual en Google Drive (${fileId})`);
-        res.json({ success: true, fileId });
-    } catch (error) {
-        console.error("[ERROR] Fallo subiendo a Drive:", error.message);
-        res.status(500).json({ error: `Fallo de Google Drive: ${error.message}` });
-    }
-});
 
 // --- Rutas de Categorías ---
 
@@ -459,6 +432,60 @@ app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
         }
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
+});
+
+// --- Rutas de Tareas (Kanban) ---
+app.get('/api/tareas', exigeAdmin, async (req, res) => {
+    try { res.json(await Tarea.find().sort({ fechaCreacion: -1 })); } catch (e) { res.status(500).send(e); }
+});
+app.post('/api/tareas', exigeAdmin, async (req, res) => {
+    try {
+        const nueva = new Tarea(req.body);
+        await nueva.save();
+        await registrarLog(req.session.email, `Creó una tarea: ${nueva.titulo}`);
+        res.json(nueva);
+    } catch (e) { res.status(400).send(e); }
+});
+app.put('/api/tareas/:id', exigeAdmin, async (req, res) => {
+    try {
+        const tarea = await Tarea.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        await registrarLog(req.session.email, `Actualizó la tarea: ${tarea.titulo}`);
+        res.json(tarea);
+    } catch (e) { res.status(400).send(e); }
+});
+app.put('/api/tareas/:id/estado', exigeAdmin, async (req, res) => {
+    try {
+        const tarea = await Tarea.findByIdAndUpdate(req.params.id, { estado: req.body.estado }, { new: true });
+        await registrarLog(req.session.email, `Movió tarea a ${req.body.estado}: ${tarea.titulo}`);
+        res.json(tarea);
+    } catch (e) { res.status(400).send(e); }
+});
+app.delete('/api/tareas/:id', exigeAdmin, async (req, res) => {
+    try {
+        const tarea = await Tarea.findByIdAndDelete(req.params.id);
+        if(tarea) await registrarLog(req.session.email, `Eliminó la tarea: ${tarea.titulo}`);
+        res.sendStatus(200);
+    } catch (e) { res.status(500).send(e); }
+});
+
+// --- Rutas de FAQs Dinámicas ---
+app.get('/api/faqs', exigeAdmin, async (req, res) => {
+    try { res.json(await Faq.find().sort({ fechaCreacion: 1 })); } catch (e) { res.status(500).send(e); }
+});
+app.post('/api/faqs', exigeAdmin, async (req, res) => {
+    try {
+        const nueva = new Faq(req.body); await nueva.save();
+        await registrarLog(req.session.email, `Añadió nueva FAQ`); res.json(nueva);
+    } catch (e) { res.status(400).send(e); }
+});
+app.put('/api/faqs/:id', exigeAdmin, async (req, res) => {
+    try {
+        const f = await Faq.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        await registrarLog(req.session.email, `Modificó una FAQ`); res.json(f);
+    } catch (e) { res.status(400).send(e); }
+});
+app.delete('/api/faqs/:id', exigeAdmin, async (req, res) => {
+    try { await Faq.findByIdAndDelete(req.params.id); await registrarLog(req.session.email, `Eliminó una FAQ`); res.sendStatus(200); } catch (e) { res.status(500).send(e); }
 });
 
 // --- Rutas de Notas ---

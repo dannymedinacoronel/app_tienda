@@ -553,17 +553,17 @@ app.delete('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(500).send(e); }
 });
 
-// --- Ruta del Asistente IA (Google Gemini) ---
+// --- Ruta del Asistente IA (Groq / Llama 3) ---
 app.post('/api/chat', exigeAdmin, async (req, res) => {
     const { mensaje, imagen } = req.body;
     if (!mensaje && !imagen) return res.status(400).json({ error: 'Mensaje vacío' });
 
-    const apiKey = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.replace(/['"]/g, '').trim() : '';
+    const apiKey = (process.env.GROQ_API_KEY || '').replace(/['"]/g, '').trim();
     
     // Fallback amigable si el usuario aún no ha configurado la API Key
     if (!apiKey) {
         return res.json({
-            respuesta: "¡Hola! Soy el asistente virtual de Seychelles. 🌺\n\nPara que pueda responderte usando Inteligencia Artificial, necesitas crear una clave gratuita en **aistudio.google.com** y añadir la variable `GEMINI_API_KEY` en tu panel de Render.\n\nMientras tanto, puedes consultar el manual en el botón de FAQs."
+            respuesta: "¡Hola! He evolucionado. 🚀\n\nHe dejado atrás a Google. Ahora funciono con **Llama 3 (Groq)** que es 100% gratis y sin tarjeta de crédito. Para activarme, entra en **console.groq.com**, crea una clave y ponla en la variable `GROQ_API_KEY` en Render."
         });
     }
 
@@ -598,50 +598,37 @@ Ejemplo: Si te piden hacer una factura a Pedro del producto 999:
 Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, inventa un buen título SEO, un precio estimado de venta de mercado y una categoría, y responde:
 [ACCION: CREAR_PRODUCTO | prenda: Camiseta Nike Vintage 90s | precio: 35 | categoria: Camisetas]`;
         
-        const parts = [{ text: `${promptSistema}\n\nUsuario: ${mensaje || 'Revisa esta imagen y actúa.'}` }];
+        let userContent = mensaje || "Revisa esta imagen y dime qué prenda es.";
 
-        // 2. Si el frontend envía una foto, se la incrustamos a Gemini Vision
         if (imagen) {
-            const matches = imagen.match(/^data:(image\/(png|jpeg|jpg|webp|heic));base64,(.+)$/);
-            if (matches && matches.length === 4) parts.push({ inline_data: { mime_type: matches[1], data: matches[3] } });
+            userContent = [
+                { type: "text", text: userContent },
+                { type: "image_url", image_url: { url: imagen } }
+            ];
         }
 
-        const payload = { contents: [{ parts }] };
+        const payload = {
+            model: imagen ? "llama-3.2-11b-vision-preview" : "llama3-70b-8192",
+            messages: [
+                { role: "system", content: promptSistema },
+                { role: "user", content: userContent }
+            ],
+            temperature: 0.3
+        };
 
-        const endpoints = [
-            { modelo: 'gemini-1.5-flash (v1)', url: `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, vision: true },
-            { modelo: 'gemini-1.5-flash (v1beta)', url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, vision: true },
-            { modelo: 'gemini-1.5-pro (v1)', url: `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${apiKey}`, vision: true },
-            { modelo: 'gemini-1.0-pro (v1beta)', url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key=${apiKey}`, vision: false },
-            { modelo: 'gemini-pro (v1)', url: `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`, vision: false }
-        ];
-
-        let geminiData = null;
-        let lastError = '';
-
-        for (const ep of endpoints) {
-            try {
-                let currentPayload = payload;
-                // Si el modelo de emergencia es antiguo y no soporta fotos, enviamos solo texto para no romperlo
-                if (!ep.vision && imagen) {
-                    currentPayload = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
-                }
-                const apiRes = await axios.post(ep.url, currentPayload, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
-                geminiData = apiRes.data;
-                console.log(`[IA INFO] Conexión exitosa con: ${ep.modelo}`);
-                break; // Rompemos el bucle porque funcionó
-            } catch (err) {
-                lastError = err.response?.data?.error?.message || err.message;
-                console.warn(`[IA WARN] Falló ${ep.modelo}: ${lastError}`);
-            }
+        let iaData;
+        try {
+            const apiRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', payload, {
+                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                timeout: 15000
+            });
+            iaData = apiRes.data;
+        } catch (err) {
+            console.error("[IA ERROR] Groq API:", err.response?.data || err.message);
+            return res.status(400).json({ error: `Fallo de IA: ${err.response?.data?.error?.message || err.message}` });
         }
 
-        if (!geminiData) {
-            console.error("[IA ERROR TOTAL]:", lastError);
-            return res.status(400).json({ error: `Google API Error: Ningún modelo funcionó. Último error: ${lastError}` });
-        }
-
-        let textoIA = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";
+        let textoIA = iaData.choices?.[0]?.message?.content || "El modelo no pudo generar una respuesta.";
         let accionEjecutada = false;
         const accionesDetectadas = [];
 
@@ -689,7 +676,7 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
         res.json({ respuesta: textoIA, accionEjecutada, acciones: accionesDetectadas });
     } catch (error) {
-        console.error("[IA ERROR] Fallo en Gemini:", error);
+        console.error("[IA ERROR] Fallo crítico:", error);
         res.status(500).json({ error: 'No se pudo conectar con el motor de IA.' });
     }
 });

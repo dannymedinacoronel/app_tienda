@@ -991,7 +991,7 @@
                 <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-lg border border-purple-400/50 shadow-inner">🤖</div>
                 <div>
                     <h3 class="text-xs font-black uppercase tracking-widest text-purple-400">Seychelles AI</h3>
-                    <p class="text-[9px] opacity-60 font-mono">Motor: Gemini 1.5 Flash</p>
+                    <p class="text-[9px] opacity-60 font-mono">Motor: Llama 3 (Groq)</p>
                 </div>
             </div>
             <button onclick="toggleAIAssistant()" class="text-white/50 hover:text-white transition-colors text-lg px-2">✕</button>
@@ -2669,7 +2669,7 @@
                     <div class="flex gap-2">
                         <div class="w-7 h-7 rounded-full bg-rose-600/30 border border-rose-500/30 flex items-center justify-center flex-shrink-0 text-sm mt-1">⚠️</div>
                         <div class="bg-rose-500/10 border border-rose-500/20 text-rose-300 p-3 rounded-2xl rounded-tl-none opacity-90 leading-relaxed max-w-[85%]">
-                            ${err.message || 'Error de conexión con Gemini AI.'}
+                            ${err.message || 'Error de conexión con Groq / Llama 3.'}
                         </div>
                     </div>
                 `;

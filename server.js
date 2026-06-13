@@ -624,12 +624,12 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
             });
             iaData = apiRes.data;
         } catch (err) {
-            let errorMessage = err.response?.data?.error?.message || err.message;
-            console.error("[IA ERROR] Groq API:", errorMessage);
-            if (errorMessage.toLowerCase().includes('access denied')) {
-                errorMessage = "Acceso denegado. La clave API de Groq que está en Render es incorrecta o ha caducado. Por favor, crea una nueva clave en console.groq.com y actualiza la variable de entorno.";
+            let errorMsg = err.response?.data?.error?.message || err.message;
+            console.error("[IA ERROR] Groq API:", errorMsg);
+            if (errorMsg.toLowerCase().includes('access denied')) {
+                errorMsg = "Acceso denegado. La clave API de Groq que está en Render es incorrecta o ha caducado. Por favor, crea una **NUEVA** clave en console.groq.com, cópiala y pégala de nuevo en la variable de entorno.";
             }
-            return res.status(400).json({ error: `Fallo de IA: ${errorMessage}` });
+            return res.status(400).json({ error: `Fallo de IA: ${errorMsg}` });
         }
 
         let textoIA = iaData.choices?.[0]?.message?.content || "El modelo no pudo generar una respuesta.";

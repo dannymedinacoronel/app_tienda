@@ -123,6 +123,7 @@ const Nota = mongoose.models.Nota || mongoose.model('Nota', NotaSchema);
 
 const UsuarioAutorizadoSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    rol: { type: String, enum: ['Admin', 'Editor', 'Lector'], default: 'Editor' },
     fechaAgregado: { type: Date, default: Date.now },
     ultimaConexion: { type: Date }
 });
@@ -367,7 +368,7 @@ app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
 // --- Rutas de Auth ---
 
 app.get('/api/auth/verificar', (req, res) => {
-    if (req.session && req.session.esAdmin) return res.json({ autenticado: true, usuario: req.session.email });
+    if (req.session && req.session.esAdmin) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin' });
     return res.json({ autenticado: false });
 });
 
@@ -388,6 +389,7 @@ app.post('/api/auth/google', async (req, res) => {
 
             req.session.esAdmin = true;
             req.session.email = emailUsuario;
+            req.session.rol = autorizado.rol || 'Admin';
             await registrarLog(emailUsuario, "Inició sesión en el sistema core");
             
             // Forzar el guardado de la sesión antes de responder al cliente
@@ -415,10 +417,11 @@ app.get('/api/usuarios-admin', exigeAdmin, async (req, res) => {
 app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
     try {
         const emailLimpio = req.body.email ? req.body.email.toLowerCase().trim() : "";
+        const rolAsignado = req.body.rol || "Editor";
         if (!emailLimpio) return res.status(400).json({ error: 'Email requerido.' });
-        const nuevo = new UsuarioAutorizado({ email: emailLimpio });
+        const nuevo = new UsuarioAutorizado({ email: emailLimpio, rol: rolAsignado });
         await nuevo.save();
-        await registrarLog(req.session.email, `Autorizó cuenta de acceso a: ${emailLimpio}`);
+        await registrarLog(req.session.email, `Autorizó cuenta: ${emailLimpio} [Rol: ${rolAsignado}]`);
         res.json(nuevo);
     } catch (e) { res.status(400).json({ error: 'El usuario ya está autorizado en la lista.' }); }
 });

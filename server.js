@@ -18,7 +18,8 @@ console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
 
 // Es vital para que las sesiones funcionen en plataformas como Render/Heroku
 app.set('trust proxy', 1);
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // 🔒 CONEXIÓN DEPURADA: Purgadas las credenciales del código fuente
 const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI;

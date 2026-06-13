@@ -21,7 +21,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/html5-qrcode"></script>
-    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
     
     <style>
@@ -1371,20 +1371,7 @@
 
 
     <script>
-        // --- 0. CONEXIÓN REAL-TIME ---
-        const socket = io();
-        socket.on('cambio_detectado', (data) => {
-            console.log("[WS] Actualización recibida de otro terminal...");
-            // Actualizamos todo el core sin refrescar la página
-            reloadCoreData();
-            cargarNotasBoard();
-            refrescarClientesCRM();
-            refrescarCategoriasCloud();
-            refrescarYListarTiendasCloud();
-            // No llamar a actualizarEstadoAlmacenamiento aquí, ya se llama en sec-usuarios
-        });
-
-        // --- 1. BLOQUE DE AUTENTICACIÓN (Prioridad Máxima: Definir antes de que cargue GSI) ---
+        // --- 1. BLOQUE DE AUTENTICACIÓN (Definido globalmente de inmediato) ---
         window.handleCredentialResponse = async function(response) {
             try {
                 console.log("🚀 Verificando credenciales con Seychelles Server...");
@@ -1395,19 +1382,36 @@
                     body: JSON.stringify({ token: response.credential }) 
                 });
                 if (res.ok) {
-                    window.location.reload(); // Recargar para cargar el panel completo
+                    window.location.reload();
                 } else {
                     alert("Acceso denegado: Usuario no autorizado.");
                 }
             } catch(e) { alert("Error crítico de conexión."); }
         };
 
+        // --- 0. CONEXIÓN REAL-TIME (Protegida) ---
+        let socket;
+        try {
+            if (typeof io !== 'undefined') {
+                socket = io();
+                socket.on('cambio_detectado', () => {
+                    console.log("[WS] Actualización recibida...");
+                    reloadCoreData();
+                    cargarNotasBoard();
+                    refrescarClientesCRM();
+                    refrescarCategoriasCloud();
+                    refrescarYListarTiendasCloud();
+                });
+            }
+        } catch(e) { console.warn("Socket.io no pudo inicializarse."); }
+
         // --- 2. GESTIÓN DE EVENTOS SEGURA ---
         function vincularFormularios() {
-            const fCliente = document.getElementById('form-cliente'); if (fCliente) fCliente.onsubmit = manejarEnvioCliente;
-            const fPistola = document.getElementById('form-escaner-pistola'); if (fPistola) fPistola.onsubmit = manejarEscaneoPistola;
-            // El formulario de venta (form-venta) ya tiene su onsubmit directamente en la etiqueta HTML
-            // <form id="form-venta" class="space-y-3" onsubmit="manejarEnvioVenta(event)">
+            const fCliente = document.getElementById('form-cliente'); 
+            if (fCliente) fCliente.onsubmit = manejarEnvioCliente;
+            
+            const fPistola = document.getElementById('form-escaner-pistola'); 
+            if (fPistola) fPistola.onsubmit = manejarEscaneoPistola;
         }
 
         const BACKEND_URL = '';

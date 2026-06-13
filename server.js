@@ -553,17 +553,17 @@ app.delete('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(500).send(e); }
 });
 
-// --- Ruta del Asistente IA (Groq / Llama 3) ---
+// --- Ruta del Asistente IA (Google Gemini 1.5) ---
 app.post('/api/chat', exigeAdmin, async (req, res) => {
     const { mensaje, imagen } = req.body;
     if (!mensaje && !imagen) return res.status(400).json({ error: 'Mensaje vacío' });
 
-    const apiKey = (process.env.GROQ_API_KEY || '').replace(/['"]/g, '').trim();
+    const apiKey = (process.env.GEMINI_API_KEY || '').replace(/['"]/g, '').trim();
     
     // Fallback amigable si el usuario aún no ha configurado la API Key
     if (!apiKey) {
         return res.json({
-            respuesta: "¡Hola! He evolucionado. 🚀\n\nHe dejado atrás a Google. Ahora funciono con **Llama 3 (Groq)** que es 100% gratis y sin tarjeta de crédito. Para activarme, entra en **console.groq.com**, crea una clave y ponla en la variable `GROQ_API_KEY` en Render."
+            respuesta: "¡Hola! Necesito conectarme a los servidores de Google. Por favor, asegúrate de tener la variable `GEMINI_API_KEY` correctamente configurada en tu panel de Render."
         });
     }
 
@@ -598,48 +598,37 @@ Ejemplo: Si te piden hacer una factura a Pedro del producto 999:
 Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, inventa un buen título SEO, un precio estimado de venta de mercado y una categoría, y responde:
 [ACCION: CREAR_PRODUCTO | prenda: Camiseta Nike Vintage 90s | precio: 35 | categoria: Camisetas]`;
         
-        let userContent = mensaje || "Revisa esta imagen y dime qué prenda es.";
+        const parts = [{ text: `${promptSistema}\n\nUsuario: ${mensaje || 'Revisa esta imagen y dime qué prenda es.'}` }];
 
         if (imagen) {
-            userContent = [
-                { type: "text", text: userContent },
-                { type: "image_url", image_url: { url: imagen } }
-            ];
+            const matches = imagen.match(/^data:(image\/(png|jpeg|jpg|webp|heic));base64,(.+)$/);
+            if (matches && matches.length === 4) parts.push({ inline_data: { mime_type: matches[1], data: matches[3] } });
         }
 
-        const payload = {
-            // Usamos el modelo open-source de OpenAI a través de Groq
-            model: "openai/gpt-oss-120b",
-            messages: [
-                { role: "system", content: promptSistema },
-                { role: "user", content: userContent }
-            ],
-            temperature: 0.5,
-            max_tokens: 2048, // Renombrado de max_completion_tokens
-            top_p: 1,
-            stream: false,
-            // Le indicamos al modelo que queremos una respuesta en formato JSON para los comandos
-            response_format: { "type": "json_object" }
-        };
+        const payload = { contents: [{ parts }] };
 
         let iaData;
         try {
-            const apiRes = await axios.post('https://api.groq.com/openai/v1/chat/completions', payload, {
-                headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-                timeout: 15000
-            });
+            // Intentamos con Gemini 1.5 Flash (El más rápido y estable para imágenes y texto)
+            const apiRes = await axios.post(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+                payload,
+                { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
+            );
             iaData = apiRes.data;
         } catch (err) {
-            let errorMsg = err.response?.data?.error?.message || err.message;
-            const keySnippet = apiKey.length > 8 ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : '(clave muy corta)';
-            console.error(`[IA ERROR] Groq API: ${errorMsg}. Usando clave: ${keySnippet}`);
-            if (errorMsg.toLowerCase().includes('access denied')) {
-                errorMsg = `Acceso denegado. La clave que está usando el servidor (empieza por '${apiKey.substring(0, 4)}' y termina en '${apiKey.substring(apiKey.length - 4)}') es incorrecta o ha caducado. Por favor, crea una **NUEVA** clave en console.groq.com, cópiala y pégala de nuevo en la variable de entorno.`;
+            try {
+                // Si falla, reintentamos automáticamente con Gemini 1.5 Pro
+                const apiResFallback = await axios.post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, payload, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
+                iaData = apiResFallback.data;
+            } catch (errFallback) {
+                const errorMsg = errFallback.response?.data?.error?.message || errFallback.message;
+                console.error("[IA ERROR] Google API:", errorMsg);
+                return res.status(400).json({ error: `Google API Error: ${errorMsg}` });
             }
-            return res.status(400).json({ error: `Fallo de IA: ${errorMsg}` });
         }
 
-        let textoIA = iaData.choices?.[0]?.message?.content || "El modelo no pudo generar una respuesta.";
+        let textoIA = iaData.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";
         let accionEjecutada = false;
         const accionesDetectadas = [];
 

@@ -608,7 +608,7 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
         }
 
         const payload = {
-            model: "google/gemini-2.0-flash-lite-preview-02-05:free",
+            model: "google/gemini-2.0-flash-exp:free",
             messages: [
                 { role: "system", content: promptSistema },
                 { role: "user", content: userContent }

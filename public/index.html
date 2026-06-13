@@ -2897,7 +2897,7 @@
             const configuracionGraficas = {
                 dark: { linea: '#3b82f6', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' }, pink: { linea: '#db2777', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
                 light: { linea: '#0f172a', texto: '#475569', malla: 'rgba(0,0,0,0.05)' }, emerald: { linea: '#10b981', texto: '#e6f4ea', malla: 'rgba(255,255,255,0.05)' },
-                purple: { linea: '#a855f7', texto: '#e0e7ff', malla: 'rgba(255,255,255,0.05)' }
+                purple: { linea: '#a855f7', texto: '#e0e7ff', malla: 'rgba(255,255,255,0.05)' },
                 premium: { linea: '#d4af37', texto: '#b49339', malla: 'rgba(212,175,55,0.1)' }
             };
             const cfg = configuracionGraficas[currentTheme] || configuracionGraficas.dark;
@@ -2905,6 +2905,7 @@
             INSTANCIA_CHARTS = new Chart(ctx, {
                 type: 'line', data: { labels: fechas.map(f => f.split('-').reverse().slice(0,2).join('/')), datasets: [{ data: montos, borderColor: cfg.linea, borderWidth: 3, pointBackgroundColor: cfg.linea, tension: 0.2, fill: false }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: cfg.malla }, ticks: { color: cfg.texto } }, y: { grid: { color: cfg.malla }, ticks: { color: cfg.texto, callback: v => v + '€' } } } }
+                options: { responsive: true, maintainAspectRatio: false, animation: { duration: 2000, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: cfg.malla }, ticks: { color: cfg.texto } }, y: { grid: { color: cfg.malla }, ticks: { color: cfg.texto, callback: v => v + '€' } } } }
             });
         }
 
@@ -2932,6 +2933,7 @@
             INSTANCIA_TARTA = new Chart(ctx, {
                 type: 'doughnut', data: { labels: etiquetas, datasets: [{ data: datos, backgroundColor: coloresSeleccionados, borderWidth: 0 }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: colorTexto, font: { size: 9, family: 'monospace' } } } } }
+                options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1800, easing: 'easeOutCirc' }, plugins: { legend: { position: 'right', labels: { color: colorTexto, font: { size: 9, family: 'monospace' } } } } }
             });
         }
 
@@ -2966,6 +2968,7 @@
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
+                    animation: { duration: 1200, easing: 'easeOutBounce', delay: (context) => context.dataIndex * 150 },
                     plugins: { legend: { display: false } },
                     scales: {
                         x: { ticks: { color: colorTexto, font: { size: 9 } }, grid: { display: false } },
@@ -3018,6 +3021,7 @@
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
+                    animation: { duration: 1500, easing: 'easeOutElastic', delay: (context) => context.dataIndex * 30 },
                     plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => ` ${diasSemana[context.raw.x]} (${bloquesHorarios[context.raw.y]}): ${context.raw.v} prenda(s)` } } },
                     scales: {
                         x: { type: 'linear', min: -0.5, max: 6.5, grid: { color: cfg.malla }, ticks: { color: cfg.texto, stepSize: 1, callback: v => diasSemana[v] } },

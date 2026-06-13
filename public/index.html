@@ -1478,27 +1478,30 @@
             try {
                 const res = await fetch('/api/estados-kanban', { credentials: 'include' });
                 if (!res.ok) throw new Error("Fallo red");
-                LISTA_ESTADOS_KANBAN = await res.json();
+                const data = await res.json();
+                LISTA_ESTADOS_KANBAN = Array.isArray(data) ? data : [];
             } catch(e) { 
                 console.error("Error estados, usando fallback:", e);
                 LISTA_ESTADOS_KANBAN = [
                     { _id: '1', nombre: 'No Vendido', icono: '📦', color: 'amber', rolFinanciero: 'Stock', orden: 1 },
-                    { _id: '2', nombre: 'Reservado', icono: '🤝', color: 'indigo', rolFinanciero: 'Stock', orden: 2 },
-                    { _id: '3', nombre: 'Vendido', icono: '💰', color: 'emerald', rolFinanciero: 'Venta', orden: 3 },
+                    { _id: '2', nombre: 'Vendido', icono: '💰', color: 'emerald', rolFinanciero: 'Venta', orden: 2 },
+                    { _id: '3', nombre: 'Reservado', icono: '🤝', color: 'indigo', rolFinanciero: 'Stock', orden: 3 },
                     { _id: '4', nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
                 ];
             }
                 // Actualizar dropdown del formulario
                 const selectForm = document.getElementById('estado');
+                if (selectForm) {
                 const valActual = selectForm.value;
                 selectForm.innerHTML = LISTA_ESTADOS_KANBAN.map(e => `<option value="${e.nombre}">${e.icono} ${e.nombre}</option>`).join('');
                 if (valActual && LISTA_ESTADOS_KANBAN.find(e => e.nombre === valActual)) selectForm.value = valActual;
+                }
 
                 // Actualizar botones masivos
                 const panelBotones = document.getElementById('botones-estados-masivos');
                 if(panelBotones) {
                     panelBotones.innerHTML = LISTA_ESTADOS_KANBAN.map(e => `
-                        <button onclick="ejecutarAccionMasivaEstado('${e.nombre}')" class="bg-${e.color}-600 hover:bg-${e.color}-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg whitespace-nowrap">${e.icono} ➡️ ${e.nombre}</button>
+                        <button onclick="ejecutarAccionMasivaEstado('${e.nombre}')" class="bg-${e.color || 'slate'}-600 hover:bg-${e.color || 'slate'}-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg whitespace-nowrap">${e.icono || ''} ➡️ ${e.nombre}</button>
                     `).join('');
                 }
                 renderListaAjustesKanban();
@@ -1508,23 +1511,23 @@
             const list = document.getElementById('lista-estados-kanban-config');
             if(!list) return;
             
-            if (LISTA_ESTADOS_KANBAN.length === 0) {
-                list.innerHTML = '<div class="p-5 text-center text-[10px] opacity-50 font-mono border border-white/5 bg-black/20 rounded-2xl">No se han encontrado configuraciones cargadas.</div>';
+            if (!LISTA_ESTADOS_KANBAN || LISTA_ESTADOS_KANBAN.length === 0) {
+                list.innerHTML = '<div class="p-5 text-center text-[10px] opacity-50 font-mono border border-white/5 bg-black/20 rounded-2xl">Aún no hay columnas configuradas.</div>';
                 return;
             }
             
             list.innerHTML = LISTA_ESTADOS_KANBAN.map(e => `
-                <div class="p-3 bg-black/20 border border-white/5 rounded-2xl flex items-center justify-between hover:bg-white/5 transition-all">
+                <div class="p-3 bg-black/20 border border-white/5 rounded-2xl flex items-center justify-between hover:bg-white/5 transition-all mb-3">
                     <div class="flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-xl bg-${e.color}-500/20 text-${e.color}-400 flex items-center justify-center border border-${e.color}-500/30 text-xl shadow-inner">${e.icono}</div>
+                        <div class="w-10 h-10 rounded-xl bg-slate-500/20 text-white flex items-center justify-center border border-white/10 text-xl shadow-inner">${e.icono || '📦'}</div>
                         <div>
                             <p class="font-black uppercase text-[11px] tracking-wider">${e.nombre}</p>
-                            <p class="text-[9px] opacity-50 font-mono text-${e.rolFinanciero === 'Venta' ? 'emerald' : (e.rolFinanciero === 'Oculto' ? 'rose' : 'amber')}-400 mt-0.5">Rol: ${e.rolFinanciero} • Orden Posición: ${e.orden}</p>
+                            <p class="text-[9px] opacity-50 font-mono text-${e.rolFinanciero === 'Venta' ? 'emerald' : (e.rolFinanciero === 'Oculto' ? 'rose' : 'amber')}-400 mt-0.5">Rol: ${e.rolFinanciero || 'Stock'} • Orden: ${e.orden || 0}</p>
                         </div>
                     </div>
                     <div class="flex gap-2 bg-black/30 p-1.5 rounded-xl border border-white/5">
-                        <button onclick="editarEstadoKanban('${e._id}')" class="text-blue-400 hover:text-blue-300 text-[10px] px-2">✏️ Editar</button>
-                        <button onclick="borrarEstadoKanban('${e._id}')" class="text-rose-400 hover:text-rose-300 text-[10px] px-2">🗑️</button>
+                        <button onclick="editarEstadoKanban('${e._id}')" class="text-blue-400 hover:text-blue-300 text-[10px] px-2 font-bold">✏️ Editar</button>
+                        <button onclick="borrarEstadoKanban('${e._id}')" class="text-rose-400 hover:text-rose-300 text-[10px] px-2 font-bold">🗑️ Borrar</button>
                     </div>
                 </div>
             `).join('');

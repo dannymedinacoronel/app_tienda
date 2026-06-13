@@ -2625,6 +2625,39 @@
                     if (data.accionEjecutada) {
                         cantarPorVoz("Operación ejecutada por Inteligencia Artificial.");
                         await reloadCoreData();
+                        
+                        if (data.acciones && data.acciones.length > 0) {
+                            data.acciones.forEach(acc => {
+                                if (acc.tipo === 'PREPARAR_FACTURA') {
+                                    setTimeout(() => {
+                                        navegarASeccion('sec-gestion');
+                                        setTimeout(() => {
+                                            if (acc.params.cliente) document.getElementById('fac-cliente-nombre').value = acc.params.cliente;
+                                            
+                                            if (acc.params.sku) {
+                                                const checks = document.querySelectorAll('.fac-check-item');
+                                                checks.forEach(c => c.checked = false); // Limpiar previos
+                                                let encontrado = false;
+                                                checks.forEach(c => {
+                                                    const itemData = BASE_DATOS.find(v => v._id === c.dataset.id);
+                                                    if (itemData && itemData.sku && itemData.sku.toLowerCase() === acc.params.sku.toLowerCase()) {
+                                                        c.checked = true; encontrado = true;
+                                                    }
+                                                });
+                                                recalcularTotalesFactura();
+                                                
+                                                if (encontrado) {
+                                                    cantarPorVoz("Generando documento PDF");
+                                                    setTimeout(() => generarFacturaPDF(), 1200);
+                                                } else {
+                                                    alert("IA: No he podido facturar porque el artículo " + acc.params.sku + " no existe o no está marcado como Vendido.");
+                                                }
+                                            }
+                                        }, 200); // Esperar a que la pestaña de facturación se dibuje
+                                    }, 100);
+                                }
+                            });
+                        }
                     }
                 } else {
                     throw new Error(data.error);

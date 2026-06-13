@@ -586,10 +586,14 @@ Comandos permitidos:
 2. CAMBIAR_ESTADO -> params: sku, estado
 3. BORRAR_PRODUCTO -> params: sku
 4. CREAR_PRODUCTO -> params: prenda, precio, categoria
+5. PREPARAR_FACTURA -> params: cliente, sku
 
 Ejemplo: Si te piden cambiar precio de VNT-123 a 20 euros, responde:
 Claro, he actualizado el precio a 20€.
 [ACCION: ACTUALIZAR_PRECIO | sku: VNT-123 | precio: 20]
+
+Ejemplo: Si te piden hacer una factura a Pedro del producto 999:
+[ACCION: PREPARAR_FACTURA | cliente: Pedro | sku: 999]
 
 Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, inventa un buen título SEO, un precio estimado de venta de mercado y una categoría, y responde:
 [ACCION: CREAR_PRODUCTO | prenda: Camiseta Nike Vintage 90s | precio: 35 | categoria: Camisetas]`;
@@ -626,6 +630,7 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
         let textoIA = data.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";
         let accionEjecutada = false;
+        const accionesDetectadas = [];
 
         // 3. Interceptor de Comandos Mágicos (Si la IA ha decidido modificar la base de datos)
         const actionRegex = /\[ACCION:\s*(.*?)\s*\]/g;
@@ -639,6 +644,8 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
                 const kv = partsCmd[i].split(':');
                 if (kv.length >= 2) params[kv[0].trim().toLowerCase()] = kv.slice(1).join(':').trim();
             }
+            
+            accionesDetectadas.push({ tipo: actionType, params });
 
             try {
                 if (actionType === 'ACTUALIZAR_PRECIO' && params.sku && params.precio) {
@@ -667,15 +674,7 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
         textoIA = textoIA.replace(actionRegex, '').trim();
         if (textoIA === '') textoIA = "¡Acción ejecutada con éxito en la base de datos! ✅";
 
-        res.json({ respuesta: textoIA, accionEjecutada });
-    } catch (error) {
-        console.error("[IA ERROR] Fallo en Gemini:", error);
-        res.status(500).json({ error: 'No se pudo conectar con el motor de IA.' });
-    }
-});
-
-        const textoIA = data.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";
-        res.json({ respuesta: textoIA });
+        res.json({ respuesta: textoIA, accionEjecutada, acciones: accionesDetectadas });
     } catch (error) {
         console.error("[IA ERROR] Fallo en Gemini:", error);
         res.status(500).json({ error: 'No se pudo conectar con el motor de IA.' });

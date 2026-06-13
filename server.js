@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { OAuth2Client } = require('google-auth-library'); 
 const session = require('express-session'); 
+const { google } = require('googleapis');
 const MongoStoreModule = require('connect-mongo'); // Importa el módulo completo
 const mongoose = require('mongoose');
 const path = require('path');
@@ -240,6 +241,52 @@ async function realizarBackupDiarioEmail() {
 setInterval(realizarBackupDiarioEmail, 24 * 60 * 60 * 1000);
 // También permitimos un trigger manual si fuera necesario vía ruta secreta o similar en el futuro
 
+// --- Función Centralizada de Backup a Google Drive ---
+async function generarBackupDrive(esManual = false) {
+    if (!process.env.GOOGLE_DRIVE_CREDENTIALS || !process.env.GOOGLE_DRIVE_FOLDER_ID) {
+        throw new Error('Configura GOOGLE_DRIVE_CREDENTIALS y GOOGLE_DRIVE_FOLDER_ID en el archivo .env.');
+    }
+
+    const credentials = JSON.parse(process.env.GOOGLE_DRIVE_CREDENTIALS);
+    const auth = new google.auth.GoogleAuth({
+        credentials,
+        scopes: ['https://www.googleapis.com/auth/drive.file']
+    });
+
+    const drive = google.drive({ version: 'v3', auth });
+    const ventas = await VentaRopa.find().populate('tienda').lean();
+    const backupData = JSON.stringify(ventas, null, 2);
+    
+    const { Readable } = require('stream');
+    const dateStr = new Date().toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/:/g, '-');
+    const prefijo = esManual ? 'Manual' : 'Auto';
+    
+    const response = await drive.files.create({
+        resource: {
+            name: `Backup_Seychelles_${prefijo}_${dateStr}.json`,
+            parents: [process.env.GOOGLE_DRIVE_FOLDER_ID]
+        },
+        media: { mimeType: 'application/json', body: Readable.from([backupData]) },
+        fields: 'id'
+    });
+    
+    return response.data.id;
+}
+
+// Ejecutar Backup Automático a Drive cada 24 horas (86400000 ms)
+setInterval(() => { generarBackupDrive(false).catch(e => console.error("[AUTO-DRIVE] Fallo:", e.message)); }, 24 * 60 * 60 * 1000);
+
+// --- Backup a Google Drive ---
+app.post('/api/backup/drive', exigeAdmin, async (req, res) => {
+    try {
+        const fileId = await generarBackupDrive(true);
+        await registrarLog(req.session.email, `Generó Backup manual en Google Drive (${fileId})`);
+        res.json({ success: true, fileId });
+    } catch (error) {
+        console.error("[ERROR] Fallo subiendo a Drive:", error.message);
+        res.status(500).json({ error: 'Fallo al comunicarse con Google Drive.' });
+    }
+});
 
 // --- Rutas de Categorías ---
 

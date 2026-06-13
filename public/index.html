@@ -25,6 +25,7 @@
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     
     <style>
         body.theme-dark { background-color: #0b0f19; color: #f1f5f9; }
@@ -3051,6 +3052,7 @@
             const estadoDestino = LISTA_ESTADOS_KANBAN.find(est => est.nombre === newState);
             if (estadoDestino && estadoDestino.rolFinanciero === 'Venta') {
                 tocarSonidoCajaRegistradora();
+                lanzarConfetiVenta();
             }
 
             cantarPorVoz(`Columna actualizada`);
@@ -3294,6 +3296,18 @@
             } catch(e) {}
         }
 
+        function lanzarConfetiVenta() {
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 150,
+                    spread: 80,
+                    origin: { y: 0.6 },
+                    colors: ['#10b981', '#3b82f6', '#fbbf24', '#f472b6', '#a855f7'],
+                    zIndex: 9999
+                });
+            }
+        }
+
         function procesarMultiplicadorCombo() {
             const tAhora = Date.now(); HISTORIAL_TIMESTAMPS_OPERACIONES = HISTORIAL_TIMESTAMPS_OPERACIONES.filter(t => (tAhora - t) < 180000); HISTORIAL_TIMESTAMPS_OPERACIONES.push(tAhora);
             const totalCombos = HISTORIAL_TIMESTAMPS_OPERACIONES.length; const bBadge = document.getElementById('combo-badge'); const bCards = document.querySelectorAll('#kpi-container-grid > div');
@@ -3382,7 +3396,10 @@
         async function ejecutarAccionMasivaEstado(nuevoEstado) {
             if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
             const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: nuevoEstado }) }));
-            await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
+            await Promise.all(promesas); 
+            const eConfig = LISTA_ESTADOS_KANBAN.find(est => est.nombre === nuevoEstado);
+            if (eConfig && eConfig.rolFinanciero === 'Venta') { tocarSonidoCajaRegistradora(); lanzarConfetiVenta(); cantarPorVoz("Lote Vendido"); }
+            limpiarSeleccionMasiva(); await reloadCoreData();
         }
 
         async function ejecutarEdicionMasivaPropiedad(campo, valor) {
@@ -3438,7 +3455,11 @@
             const ip = document.getElementById('input-pistola'); if(ip) ip.value = '';
             try {
                 const r = await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: nuevoEstado }) });
-                if(r.ok) { procesarMultiplicadorCombo(); await reloadCoreData(); }
+                if(r.ok) { 
+                    const eConfig = LISTA_ESTADOS_KANBAN.find(est => est.nombre === nuevoEstado);
+                    if (eConfig && eConfig.rolFinanciero === 'Venta') { tocarSonidoCajaRegistradora(); lanzarConfetiVenta(); cantarPorVoz("Vendido"); }
+                    procesarMultiplicadorCombo(); await reloadCoreData(); 
+                }
             } catch (err) {}
         }
 
@@ -3468,7 +3489,7 @@
                 if (response.ok) {
                     const resJson = await response.json(); 
                     const eConfig = LISTA_ESTADOS_KANBAN.find(est => est.nombre === resJson.operacion);
-                    if (eConfig && eConfig.rolFinanciero === 'Venta') { tocarSonidoCajaRegistradora(); cantarPorVoz("Vendido"); }
+                    if (eConfig && eConfig.rolFinanciero === 'Venta') { tocarSonidoCajaRegistradora(); lanzarConfetiVenta(); cantarPorVoz("Vendido"); }
                     else if (resJson.operacion === "Creado") { cantarPorVoz("Indexado."); cancelEdit(); document.getElementById('sku').value = resJson.venta.sku; document.getElementById('prenda').focus(); }
                     else { cantarPorVoz("Actualizado"); }
                     procesarMultiplicadorCombo(); await reloadCoreData();

@@ -615,13 +615,11 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
         let data = await response.json();
         
         if (!response.ok) {
-            console.warn("[IA INFO] Gemini 1.5 bloqueado por Google. Ejecutando Fallback universal...");
+            console.warn("[IA INFO] Gemini 1.5 Flash falló. Ejecutando Fallback a 1.5 Pro...");
             
-            // Plan B definitivo: gemini-pro (El modelo más compatible a nivel global).
-            // Se limpia la imagen del payload porque este modelo clásico solo lee texto.
-            const payloadFallback = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
-            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadFallback)
+            // Plan B: gemini-1.5-pro en API v1beta (Soporta imágenes y reemplaza al antiguo 1.0)
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
             });
             
             data = await response.json();

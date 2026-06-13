@@ -250,11 +250,20 @@ async function generarBackupDrive(esManual = false) {
     let credsStr = process.env.GOOGLE_DRIVE_CREDENTIALS.trim();
     // Limpiar comillas simples o dobles accidentales al principio y al final (muy común al copiar a Render)
     if (credsStr.startsWith("'") && credsStr.endsWith("'")) credsStr = credsStr.slice(1, -1);
+    if (credsStr.startsWith('"') && credsStr.endsWith('"') && !credsStr.includes('":"')) credsStr = credsStr.slice(1, -1);
     
     let credentials;
     try {
         credentials = JSON.parse(credsStr);
+        if (typeof credentials === 'string') {
+            credentials = JSON.parse(credentials); // Evita doble-stringificación de Render
+        }
     } catch(err) { throw new Error("JSON de credenciales inválido. Revisa tu panel de Render: " + err.message); }
+
+    // Auto-reparar los saltos de línea de la Private Key si Render los escapó accidentalmente como texto literal
+    if (credentials.private_key) {
+        credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
+    }
 
     const auth = new google.auth.GoogleAuth({
         credentials,
@@ -272,7 +281,7 @@ async function generarBackupDrive(esManual = false) {
     const response = await drive.files.create({
         resource: {
             name: `Backup_Seychelles_${prefijo}_${dateStr}.json`,
-            parents: [process.env.GOOGLE_DRIVE_FOLDER_ID]
+            parents: [process.env.GOOGLE_DRIVE_FOLDER_ID.trim()]
         },
         media: { mimeType: 'application/json', body: Readable.from([backupData]) },
         fields: 'id'
@@ -292,7 +301,7 @@ app.post('/api/backup/drive', exigeAdmin, async (req, res) => {
         res.json({ success: true, fileId });
     } catch (error) {
         console.error("[ERROR] Fallo subiendo a Drive:", error.message);
-        res.status(500).json({ error: 'Fallo al comunicarse con Google Drive.' });
+        res.status(500).json({ error: `Fallo de Google Drive: ${error.message}` });
     }
 });
 

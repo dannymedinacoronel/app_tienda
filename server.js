@@ -553,17 +553,17 @@ app.delete('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(500).send(e); }
 });
 
-// --- Ruta del Asistente IA (Google Gemini 1.5) ---
+// --- Ruta del Asistente IA (OpenRouter - 100% Gratis sin Tarjeta) ---
 app.post('/api/chat', exigeAdmin, async (req, res) => {
     const { mensaje, imagen } = req.body;
     if (!mensaje && !imagen) return res.status(400).json({ error: 'Mensaje vacío' });
 
-    const apiKey = (process.env.GEMINI_API_KEY || '').replace(/['"]/g, '').trim();
+    const apiKey = (process.env.OPENROUTER_API_KEY || '').replace(/['"]/g, '').trim();
     
     // Fallback amigable si el usuario aún no ha configurado la API Key
     if (!apiKey) {
         return res.json({
-            respuesta: "¡Hola! Necesito conectarme a los servidores de Google. Por favor, asegúrate de tener la variable `GEMINI_API_KEY` correctamente configurada en tu panel de Render."
+            respuesta: "¡Hola! Para seguir siendo 100% gratis y sin usar tarjeta de crédito, he cambiado mi motor a **OpenRouter**. Por favor, entra en **openrouter.ai**, crea una clave gratuita y ponla en la variable `OPENROUTER_API_KEY` en Render."
         });
     }
 
@@ -598,56 +598,48 @@ Ejemplo: Si te piden hacer una factura a Pedro del producto 999:
 Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, inventa un buen título SEO, un precio estimado de venta de mercado y una categoría, y responde:
 [ACCION: CREAR_PRODUCTO | prenda: Camiseta Nike Vintage 90s | precio: 35 | categoria: Camisetas]`;
         
-        const parts = [{ text: `${promptSistema}\n\nUsuario: ${mensaje || 'Revisa esta imagen y dime qué prenda es.'}` }];
+        let userContent = mensaje || "Revisa esta imagen y dime qué prenda es.";
 
         if (imagen) {
-            const matches = imagen.match(/^data:(image\/(png|jpeg|jpg|webp|heic));base64,(.+)$/);
-            if (matches && matches.length === 4) parts.push({ inline_data: { mime_type: matches[1], data: matches[3] } });
+            userContent = [
+                { type: "text", text: userContent },
+                { type: "image_url", image_url: { url: imagen } }
+            ];
         }
 
-        const payload = { contents: [{ parts }] };
+        const payload = {
+            model: "google/gemini-2.0-flash-lite-preview-02-05:free",
+            messages: [
+                { role: "system", content: promptSistema },
+                { role: "user", content: userContent }
+            ],
+            temperature: 0.5,
+            max_tokens: 2000
+        };
 
         let iaData;
         try {
-            // 1. PENSAR MÁS ALLÁ: Dejamos de adivinar. Le preguntamos a Google QUÉ modelos tienes habilitados exactamente.
-            const modelsRes = await axios.get(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-            const availableModels = modelsRes.data.models.map(m => m.name);
-            
-            // 2. Elegimos el mejor modelo disponible en TU cuenta específicamente
-            let targetModel = "";
-            if (availableModels.includes("models/gemini-1.5-flash")) targetModel = "models/gemini-1.5-flash";
-            else if (availableModels.includes("models/gemini-1.5-pro")) targetModel = "models/gemini-1.5-pro";
-            else if (availableModels.includes("models/gemini-1.0-pro")) targetModel = "models/gemini-1.0-pro";
-            else {
-                const fallback = availableModels.find(m => m.includes("gemini"));
-                if (fallback) targetModel = fallback;
-            }
-
-            if (!targetModel) {
-                return res.status(400).json({ error: 'Tu API Key no tiene habilitado NINGÚN modelo de Gemini. Verifica tu proyecto en Google Cloud.' });
-            }
-
-            // 3. Ajustamos el payload si el modelo es antiguo (1.0-pro) y no soporta imágenes
-            let currentPayload = payload;
-            if (targetModel.includes('1.0-pro') && imagen) {
-                currentPayload = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
-            }
-
-            // 4. Hacemos la petición con el modelo 100% confirmado que existe en tu cuenta
-            console.log(`[IA INFO] Ejecutando petición con el modelo confirmado: ${targetModel}`);
             const apiRes = await axios.post(
-                `https://generativelanguage.googleapis.com/v1beta/${targetModel}:generateContent?key=${apiKey}`,
-                currentPayload,
-                { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
+                'https://openrouter.ai/api/v1/chat/completions',
+                payload,
+                { 
+                    headers: { 
+                        'Authorization': `Bearer ${apiKey}`, 
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': 'https://seychelles-shop.com',
+                        'X-Title': 'Seychelles Core'
+                    }, 
+                    timeout: 20000 
+                }
             );
             iaData = apiRes.data;
         } catch (err) {
-            const errorMsg = err.response?.data?.error?.message || err.message;
-            console.error("[IA ERROR CRÍTICO] Google API:", errorMsg);
-            return res.status(400).json({ error: `Google API Error: ${errorMsg}` });
+            let errorMsg = err.response?.data?.error?.message || err.message;
+            console.error("[IA ERROR] OpenRouter API:", errorMsg);
+            return res.status(400).json({ error: `Fallo de IA: ${errorMsg}` });
         }
 
-        let textoIA = iaData.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";
+        let textoIA = iaData.choices?.[0]?.message?.content || "El modelo no pudo generar una respuesta.";
         let accionEjecutada = false;
         const accionesDetectadas = [];
 

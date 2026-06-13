@@ -155,6 +155,13 @@
             min-width: 100px;
             min-height: 80px;
         }
+        
+        @keyframes spin-once { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
+        .animate-spin-once { animation: spin-once 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        
         .sticky-note:active { z-index: 600; }
         .sticky-note textarea { background: transparent; border: none; resize: none; width: 100%; height: calc(100% - 25px); outline: none; font-size: 10px; color: inherit; line-height: 1.2; }
         .note-colors { display: none; }
@@ -232,7 +239,7 @@
                     </div>
 
                     <button onclick="forceRefreshDataManual()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
-                        🔄 <span class="hidden sm:inline">Refrescar</span>
+                        <span id="icon-refresh" class="inline-block">🔄</span> <span class="hidden sm:inline">Refrescar</span>
                     </button>
                     <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600/40 hover:bg-purple-700 border border-purple-500/30 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">💾 Backup</button>
                     <button onclick="document.getElementById('input-restore-backup').click()" class="bg-slate-700 hover:bg-slate-600 border border-current/10 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">📂 Importar</button>
@@ -2538,7 +2545,15 @@
             }
         }
 
-        async function forceRefreshDataManual() { cantarPorVoz("Sincronizando."); await reloadCoreData(); }
+        async function forceRefreshDataManual() { 
+            const icono = document.getElementById('icon-refresh');
+            if (icono) {
+                icono.classList.remove('animate-spin-once');
+                void icono.offsetWidth; // Fuerza al navegador a reiniciar la animación
+                icono.classList.add('animate-spin-once');
+            }
+            cantarPorVoz("Sincronizando."); await reloadCoreData(); 
+        }
 
         function recalcularKPIsLocalesOptimistas() {
             let ingresos = 0, inversion = 0, prendasVendidas = 0;
@@ -2651,7 +2666,18 @@
 
         function cantarPorVoz(mensajeTexto) {
             if (!SOUND_MUTED_GLOBAL && 'speechSynthesis' in window) { 
-                window.speechSynthesis.cancel(); const frase = new SpeechSynthesisUtterance(mensajeTexto); frase.lang = 'es-ES'; window.speechSynthesis.speak(frase); 
+                window.speechSynthesis.cancel(); 
+                const frase = new SpeechSynthesisUtterance(mensajeTexto); 
+                frase.lang = 'es-ES'; 
+                
+                // Buscar voces de alta calidad en el navegador
+                const voces = window.speechSynthesis.getVoices();
+                const vozNatural = voces.find(v => v.name.includes('Google español') || v.name.includes('Microsoft Sabina') || v.name.includes('Monica') || v.name.includes('Paulina')) || voces.find(v => v.lang.startsWith('es'));
+                if (vozNatural) frase.voice = vozNatural;
+                
+                frase.pitch = 1.15; // Tono más natural, menos grave
+                frase.rate = 1.05;  // Velocidad un poco más fluida
+                window.speechSynthesis.speak(frase); 
             }
         }
 
@@ -2904,7 +2930,6 @@
 
             INSTANCIA_CHARTS = new Chart(ctx, {
                 type: 'line', data: { labels: fechas.map(f => f.split('-').reverse().slice(0,2).join('/')), datasets: [{ data: montos, borderColor: cfg.linea, borderWidth: 3, pointBackgroundColor: cfg.linea, tension: 0.2, fill: false }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: cfg.malla }, ticks: { color: cfg.texto } }, y: { grid: { color: cfg.malla }, ticks: { color: cfg.texto, callback: v => v + '€' } } } }
                 options: { responsive: true, maintainAspectRatio: false, animation: { duration: 2000, easing: 'easeOutQuart' }, plugins: { legend: { display: false } }, scales: { x: { grid: { color: cfg.malla }, ticks: { color: cfg.texto } }, y: { grid: { color: cfg.malla }, ticks: { color: cfg.texto, callback: v => v + '€' } } } }
             });
         }
@@ -2932,7 +2957,6 @@
 
             INSTANCIA_TARTA = new Chart(ctx, {
                 type: 'doughnut', data: { labels: etiquetas, datasets: [{ data: datos, backgroundColor: coloresSeleccionados, borderWidth: 0 }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: colorTexto, font: { size: 9, family: 'monospace' } } } } }
                 options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true, animateRotate: true, duration: 1800, easing: 'easeOutCirc' }, plugins: { legend: { position: 'right', labels: { color: colorTexto, font: { size: 9, family: 'monospace' } } } } }
             });
         }

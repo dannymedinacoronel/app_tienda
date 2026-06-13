@@ -608,38 +608,23 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
         const payload = { contents: [{ parts }] };
 
-        const modelosATentar = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-pro'];
-        let response;
-        let data;
-        let modeloExitoso = null;
-
-        for (const modelo of modelosATentar) {
-            let payloadActual = payload;
-            // El modelo gemini-pro clásico no soporta imágenes, evitamos que rompa si le pasaste foto
-            if (modelo === 'gemini-pro' && imagen) {
-                payloadActual = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
-            }
-
-            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadActual)
-            });
-
-            data = await response.json();
-
-            if (response.ok) {
-                modeloExitoso = modelo;
-                console.log(`[IA INFO] Conexión exitosa usando el modelo: ${modelo}`);
-                break; // El modelo funcionó, salimos del bucle
-            } else {
-                console.warn(`[IA INFO] Fallo intentando con ${modelo}: ${data.error?.message}`);
-            }
+        let geminiData;
+        try {
+            // Utilizamos Axios en lugar de fetch nativo para máxima estabilidad en Node.js/Render
+            const apiRes = await axios.post(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+                payload,
+                { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
+            );
+            geminiData = apiRes.data;
+        } catch (err) {
+            // Si falla, sacamos el error crudo real de Google
+            const errMsg = err.response?.data?.error?.message || err.message;
+            console.error("[IA ERROR AXIOS]:", errMsg);
+            return res.status(400).json({ error: `Google API Error: ${errMsg}` });
         }
 
-        if (!modeloExitoso) {
-            return res.status(400).json({ error: `Google API Error: ${data?.error?.message || 'Ningún modelo disponible para esta clave.'}` });
-        }
-
-        let textoIA = data.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";
+        let textoIA = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";
         let accionEjecutada = false;
         const accionesDetectadas = [];
 

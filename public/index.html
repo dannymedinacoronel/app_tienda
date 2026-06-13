@@ -56,6 +56,12 @@
         .theme-purple .dropdown-bg { background-color: #1e1642; border-color: #4338ca; color: #e0e7ff; }
         .theme-purple .dropdown-item-hover:hover { background-color: #4338ca; }
 
+        body.theme-premium { background-color: #050505; color: #d4af37; }
+        .theme-premium .card-bg { background-color: rgba(20, 20, 20, 0.85); border-color: #d4af37; color: #f3f4f6; box-shadow: 0 10px 40px rgba(212, 175, 55, 0.1); backdrop-filter: blur(16px); }
+        .theme-premium .input-bg { background-color: #0a0a0a; border-color: #333333; color: #f3f4f6; transition: all 0.3s; }
+        .theme-premium .dropdown-bg { background-color: #111111; border-color: #d4af37; color: #f3f4f6; }
+        .theme-premium .dropdown-item-hover:hover { background-color: rgba(212, 175, 55, 0.1); }
+
         .drag-over { border: 2px dashed #3b82f6 !important; background-color: rgba(59, 130, 246, 0.1) !important; }
         .modo-edicion { border-color: #3b82f6 !important; box-shadow: 0 0 20px rgba(59, 130, 246, 0.4) !important; }
 
@@ -221,6 +227,7 @@
                             <button onclick="setTheme('light')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">☀️ Claro</button>
                             <button onclick="setTheme('emerald')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌲 Verde</button>
                             <button onclick="setTheme('purple')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🔮 Morado</button>
+                            <button onclick="setTheme('premium')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5 text-amber-500">👑 Premium</button>
                         </div>
                     </div>
 
@@ -303,6 +310,7 @@
                                     <span class="text-2xl">📸</span>
                                     <span class="text-[9px] font-bold uppercase opacity-40">Añadir Foto (Auto-comprimida)</span>
                                 </div>
+                                <button type="button" id="btn-remove-foto" onclick="cancelFoto()" class="hidden mt-2 w-full text-[10px] text-rose-500 font-bold uppercase hover:underline flex items-center justify-center gap-1 transition-all">🗑️ Eliminar foto seleccionada</button>
                                 <input type="hidden" id="foto-base64" value="">
                             </div>
 
@@ -553,13 +561,8 @@
                             <input type="text" oninput="filtrarCRM(this.value)" placeholder="Buscar por nombre, DNI, email o teléfono..." class="input-bg border w-full rounded-2xl pl-10 pr-4 py-3 text-xs focus:outline-none shadow-inner">
                         </div>
 
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-[11px]">
-                                <thead class="opacity-40 uppercase font-black border-b border-white/5">
-                                    <tr><th class="pb-3 px-2">Nombre</th><th class="pb-3 px-2">Contacto</th><th class="pb-3 px-2">Notas</th><th class="pb-3 px-2">Próx. Reservas</th><th class="pb-3 px-2 text-right">Acciones</th></tr>
-                                </thead>
-                                <tbody id="tabla-clientes-crm" class="divide-y divide-white/5"></tbody>
-                            </table>
+                        <div id="contenedor-clientes-crm" class="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto pr-2 pb-10 content-start">
+                            <!-- Inyectado vía JS -->
                         </div>
                     </div>
                 </div>
@@ -1427,6 +1430,7 @@
                     if(selectAn) selectAn.appendChild(opt.cloneNode(true));
                     if(selectMasivo) selectMasivo.appendChild(opt.cloneNode(true));
                 });
+                if (!document.getElementById('edit-id').value) establecerValoresPorDefecto();
             } catch(e) { console.error("Error cargando categorías:", e); }
         }
 
@@ -1598,6 +1602,19 @@
             cargarNotasBoard();
         }
 
+        function establecerValoresPorDefecto() {
+            const selectCat = document.getElementById('categoria');
+            if (selectCat) {
+                const topOpt = Array.from(selectCat.options).find(o => o.value.toLowerCase().includes('tops'));
+                if (topOpt) selectCat.value = topOpt.value;
+            }
+            const selectProv = document.getElementById('proveedor');
+            if (selectProv) {
+                const provOpt = Array.from(selectProv.options).find(o => o.value.toLowerCase().includes('seyshelleshop'));
+                if (provOpt) selectProv.value = provOpt.value;
+            }
+        }
+
         // 🏬 LÓGICA DE TIENDAS DESDE MONGODB
         async function refrescarYListarTiendasCloud() {
             const selectForm = document.getElementById('proveedor');
@@ -1628,6 +1645,7 @@
                         selectMasivo.appendChild(opt3);
                     }
                 });
+                if (!document.getElementById('edit-id').value) establecerValoresPorDefecto();
             } catch (err) {
                 console.error("Fallo de red cloud, cargando fallback...", err);
             }
@@ -2033,29 +2051,37 @@
         async function refrescarClientesCRM() {
             const res = await fetch('/api/clientes', { credentials: 'include' });
             const clientes = await res.json();
-            const tbody = document.getElementById('tabla-clientes-crm');
-            if(!tbody) return;
-            tbody.innerHTML = clientes.map(c => `
-                <tr class="hover:bg-white/5 transition-colors border-b border-white/5 last:border-0">
-                    <td class="py-4 px-2 font-black uppercase tracking-tighter">${c.nombre}<br><span class="opacity-40 font-mono text-[9px]">${c.nif || ''}</span></td>
-                    <td class="py-4 px-2">
-                        <p class="text-[9px] opacity-60">${c.email || ''}</p>
-                        <p class="text-[9px] font-bold">${c.telefono || ''}</p>
-                    </td>
-                    <td class="py-4 px-2 max-w-[200px] truncate text-[9px] opacity-70 italic">${c.comentarios || '---'}</td>
-                    <td class="py-4 px-2">
-                        <div class="flex flex-wrap gap-1">
-                            ${(c.reservas || []).slice(0,2).map(r => `<span class="bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded text-[8px] font-bold">${new Date(r.fecha).toLocaleDateString()}</span>`).join('')}
-                            ${(c.reservas || []).length > 2 ? `<span class="opacity-30 text-[8px]">+${c.reservas.length - 2}</span>` : ''}
+            const container = document.getElementById('contenedor-clientes-crm');
+            if(!container) return;
+            container.innerHTML = clientes.map(c => `
+                <div class="card-bg border rounded-3xl p-5 flex flex-col gap-3 hover:scale-[1.02] transition-transform shadow-xl">
+                    <div class="flex justify-between items-start">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-xl shadow-md border-2 border-white/10">
+                                ${c.nombre.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                                <h4 class="font-black text-sm uppercase tracking-tight text-blue-400">${c.nombre}</h4>
+                                <span class="text-[10px] font-mono opacity-50">${c.nif || 'Sin DNI/NIF'}</span>
+                            </div>
                         </div>
-                    </td>
-                    <td class="py-4 px-2 text-right">
-                        <div class="flex gap-2 justify-end">
-                            <button onclick="cargarEnFormCRM('${c._id}')" class="text-blue-400 hover:text-blue-300">✏️</button>
-                            <button onclick="borrarClienteCRM('${c._id}')" class="text-rose-500 hover:text-rose-400">🗑️</button>
+                        <div class="flex gap-1">
+                            <button onclick="cargarEnFormCRM('${c._id}')" class="bg-blue-500/10 hover:bg-blue-500 text-blue-400 hover:text-white p-2 rounded-xl transition-all" title="Editar">✏️</button>
+                            <button onclick="borrarClienteCRM('${c._id}')" class="bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white p-2 rounded-xl transition-all" title="Eliminar">🗑️</button>
                         </div>
-                    </td>
-                </tr>
+                    </div>
+                    <div class="text-[11px] space-y-1.5 mt-2 opacity-80">
+                        <p class="flex items-center gap-2"><span class="opacity-40">📞</span> <span class="font-bold tracking-wider">${c.telefono || 'Sin teléfono'}</span></p>
+                        <p class="flex items-center gap-2"><span class="opacity-40">✉️</span> <span class="font-mono">${c.email || 'Sin email'}</span></p>
+                    </div>
+                    ${c.comentarios ? `<div class="mt-2 p-3 bg-black/20 rounded-xl border border-white/5 text-[10px] italic opacity-80 leading-relaxed break-words">${c.comentarios}</div>` : ''}
+                    <div class="mt-4 pt-4 border-t border-white/10">
+                        <p class="text-[9px] font-black uppercase tracking-widest opacity-40 mb-2">📅 Próximas Reservas</p>
+                        <div class="flex flex-wrap gap-1.5">
+                            ${c.reservas?.length ? c.reservas.map(r => `<span class="bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">${new Date(r.fecha).toLocaleDateString()}</span>`).join('') : '<span class="text-[9px] opacity-30 italic">No hay reservas programadas</span>'}
+                        </div>
+                    </div>
+                </div>
             `).join('');
         }
 
@@ -2872,6 +2898,7 @@
                 dark: { linea: '#3b82f6', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' }, pink: { linea: '#db2777', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
                 light: { linea: '#0f172a', texto: '#475569', malla: 'rgba(0,0,0,0.05)' }, emerald: { linea: '#10b981', texto: '#e6f4ea', malla: 'rgba(255,255,255,0.05)' },
                 purple: { linea: '#a855f7', texto: '#e0e7ff', malla: 'rgba(255,255,255,0.05)' }
+                premium: { linea: '#d4af37', texto: '#b49339', malla: 'rgba(212,175,55,0.1)' }
             };
             const cfg = configuracionGraficas[currentTheme] || configuracionGraficas.dark;
 
@@ -2897,10 +2924,10 @@
             const paletasColor = {
                 dark: ['#3b82f6', '#60a5fa', '#ec4899', '#10b981', '#f59e0b'], pink: ['#db2777', '#f472b6', '#fbcfe8', '#be185d', '#9d174d'],
                 light: ['#1e293b', '#475569', '#64748b', '#94a3b8', '#cbd5e1'], emerald: ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
-                purple: ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe']
+                purple: ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe'], premium: ['#d4af37', '#eab308', '#b45309', '#a16207', '#713f12']
             };
             const coloresSeleccionados = paletasColor[currentTheme] || paletasColor.dark;
-            const colorTexto = currentTheme === 'light' || currentTheme === 'pink' ? '#0f172a' : '#f1f5f9';
+            const colorTexto = currentTheme === 'light' || currentTheme === 'pink' ? '#0f172a' : (currentTheme === 'premium' ? '#d4af37' : '#f1f5f9');
 
             INSTANCIA_TARTA = new Chart(ctx, {
                 type: 'doughnut', data: { labels: etiquetas, datasets: [{ data: datos, backgroundColor: coloresSeleccionados, borderWidth: 0 }] },
@@ -2926,10 +2953,10 @@
             const etiquetas = Object.keys(facturacionTiendas); const datos = etiquetas.map(t => facturacionTiendas[t]);
 
             const paletasColor = {
-                dark: '#ec4899', pink: '#db2777', light: '#475569', emerald: '#10b981', purple: '#8b5cf6'
+                dark: '#ec4899', pink: '#db2777', light: '#475569', emerald: '#10b981', purple: '#8b5cf6', premium: '#d4af37'
             };
             const colorBarra = paletasColor[currentTheme] || paletasColor.dark;
-            const colorTexto = currentTheme === 'light' || currentTheme === 'pink' ? '#475569' : '#94a3b8';
+            const colorTexto = currentTheme === 'light' || currentTheme === 'pink' ? '#475569' : (currentTheme === 'premium' ? '#d4af37' : '#94a3b8');
 
             INSTANCIA_BARRAS = new Chart(ctx, {
                 type: 'bar',
@@ -2975,7 +3002,8 @@
             const paletasTema = {
                 dark: { base: '59, 130, 246', texto: '#94a3b8', malla: 'rgba(255,255,255,0.05)' }, pink: { base: '219, 39, 119', texto: '#831843', malla: 'rgba(219,39,119,0.1)' },
                 light: { base: '15, 23, 42', texto: '#475569', malla: 'rgba(0,0,0,0.05)' }, emerald: { base: '16, 185, 129', texto: '#e6f4ea', malla: 'rgba(255,255,255,0.05)' },
-                purple: { base: '168, 85, 247', texto: '#e0e7ff', malla: 'rgba(255,255,255,0.05)' }
+                purple: { base: '168, 85, 247', texto: '#e0e7ff', malla: 'rgba(255,255,255,0.05)' },
+                premium: { base: '212, 175, 55', texto: '#b49339', malla: 'rgba(212,175,55,0.1)' }
             };
             const cfg = paletasTema[currentTheme] || paletasTema.dark;
 
@@ -3172,6 +3200,7 @@
                 document.getElementById('preview-foto-form').src = item.imagen;
                 document.getElementById('preview-foto-form').classList.remove('hidden');
                 document.getElementById('placeholder-foto').classList.add('hidden');
+                document.getElementById('btn-remove-foto').classList.remove('hidden');
             } else {
                 cancelFoto();
             }
@@ -3185,6 +3214,7 @@
 
         function cancelEdit() {
             document.getElementById('form-venta').reset(); document.getElementById('edit-id').value = ""; 
+            establecerValoresPorDefecto();
             document.getElementById('gastosEnvio').value = 0; document.getElementById('cantidad').value = 1;
             document.getElementById('canalVenta').value = "Vinted"; document.getElementById('comentariosProducto').value = "";
             document.getElementById('estado').value = "No Vendido";
@@ -3248,6 +3278,7 @@
                     document.getElementById('preview-foto-form').src = dataUrl;
                     document.getElementById('preview-foto-form').classList.remove('hidden');
                     document.getElementById('placeholder-foto').classList.add('hidden');
+                    document.getElementById('btn-remove-foto').classList.remove('hidden');
                     
                     btnSubmit.innerText = textoBotonOriginal;
                     btnSubmit.disabled = false;
@@ -3263,6 +3294,7 @@
             document.getElementById('preview-foto-form').src = "";
             document.getElementById('preview-foto-form').classList.add('hidden');
             document.getElementById('placeholder-foto').classList.remove('hidden');
+            document.getElementById('btn-remove-foto').classList.add('hidden');
         }
 
         async function deleteItem(id) { if (confirm("¿Seguro que deseas eliminar permanentemente este artículo?")) { await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }); await reloadCoreData(); } }

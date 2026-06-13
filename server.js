@@ -104,6 +104,13 @@ const NotaSchema = new mongoose.Schema({
 });
 const Nota = mongoose.models.Nota || mongoose.model('Nota', NotaSchema);
 
+const UsuarioAutorizadoSchema = new mongoose.Schema({
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    fechaAgregado: { type: Date, default: Date.now },
+    ultimaConexion: { type: Date }
+});
+const UsuarioAutorizado = mongoose.models.UsuarioAutorizado || mongoose.model('UsuarioAutorizado', UsuarioAutorizadoSchema);
+
 const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
 
 const MongoStore = MongoStoreModule.default || MongoStoreModule; // Obtiene la clase MongoStore, manejando el 'default' export si existe
@@ -119,6 +126,14 @@ mongoose.connect(MONGO_URI_FINAL)
             await UsuarioAutorizado.insertMany(initialEmails.map(e => ({ email: e })));
             console.log('[INIT] Whitelist inicial migrada a MongoDB.');
         }
+        
+        // Auto-poblar tiendas si la colección está vacía
+        const tiendaCount = await Tienda.countDocuments();
+        if (tiendaCount === 0) {
+            await Tienda.insertMany([{ nombre: 'seyshelleshop' }, { nombre: 'Vinted' }]);
+            console.log('[INIT] Tiendas base inyectadas.');
+        }
+
         // Auto-poblar categorías si la colección está vacía
         const catCount = await Categoria.countDocuments();
         if (catCount === 0) {
@@ -351,6 +366,35 @@ app.post('/api/auth/google', async (req, res) => {
         console.error('[AUTH] Error al verificar token de Google:', error.message);
         return res.status(400).json({ error: 'Token inválido o expirado.' }); 
     }
+});
+
+// --- Rutas de Gestión de Usuarios ---
+app.get('/api/usuarios-admin', exigeAdmin, async (req, res) => {
+    try { 
+        res.json(await UsuarioAutorizado.find().sort({ fechaAgregado: -1 })); 
+    } catch (e) { res.status(500).send(e); }
+});
+
+app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
+    try {
+        const emailLimpio = req.body.email ? req.body.email.toLowerCase().trim() : "";
+        if (!emailLimpio) return res.status(400).json({ error: 'Email requerido.' });
+        const nuevo = new UsuarioAutorizado({ email: emailLimpio });
+        await nuevo.save();
+        await registrarLog(req.session.email, `Autorizó cuenta de acceso a: ${emailLimpio}`);
+        res.json(nuevo);
+    } catch (e) { res.status(400).json({ error: 'El usuario ya está autorizado en la lista.' }); }
+});
+
+app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
+    try {
+        const u = await UsuarioAutorizado.findById(req.params.id);
+        if (u) {
+            await UsuarioAutorizado.findByIdAndDelete(req.params.id);
+            await registrarLog(req.session.email, `Revocó el acceso permanente a: ${u.email}`);
+        }
+        res.sendStatus(200);
+    } catch (e) { res.status(500).send(e); }
 });
 
 // --- Rutas de Notas ---

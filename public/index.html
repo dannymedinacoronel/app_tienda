@@ -2969,6 +2969,11 @@
             const loteRaw = e.dataTransfer.getData("text/lote-items"); if (!loteRaw) return;
             const listaIds = JSON.parse(loteRaw);
             
+            const estadoDestino = LISTA_ESTADOS_KANBAN.find(est => est.nombre === newState);
+            if (estadoDestino && estadoDestino.rolFinanciero === 'Venta') {
+                tocarSonidoCajaRegistradora();
+            }
+
             cantarPorVoz(`Columna actualizada`);
             procesarMultiplicadorCombo();
 
@@ -3188,6 +3193,28 @@
             }
         }
 
+        function tocarSonidoCajaRegistradora() {
+            if (SOUND_MUTED_GLOBAL) return;
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioContext();
+                // Función para imitar el choque metálico de dos monedas
+                const playCoin = (fStart, fEnd, time) => {
+                    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(fStart, time);
+                    osc.frequency.exponentialRampToValueAtTime(fEnd, time + 0.1);
+                    gain.gain.setValueAtTime(0, time);
+                    gain.gain.linearRampToValueAtTime(0.5, time + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.3);
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.start(time); osc.stop(time + 0.3);
+                };
+                playCoin(2000, 8000, ctx.currentTime);
+                playCoin(3000, 9000, ctx.currentTime + 0.1);
+            } catch(e) {}
+        }
+
         function procesarMultiplicadorCombo() {
             const tAhora = Date.now(); HISTORIAL_TIMESTAMPS_OPERACIONES = HISTORIAL_TIMESTAMPS_OPERACIONES.filter(t => (tAhora - t) < 180000); HISTORIAL_TIMESTAMPS_OPERACIONES.push(tAhora);
             const totalCombos = HISTORIAL_TIMESTAMPS_OPERACIONES.length; const bBadge = document.getElementById('combo-badge'); const bCards = document.querySelectorAll('#kpi-container-grid > div');
@@ -3360,8 +3387,11 @@
             try {
                 const response = await fetch(`${BACKEND_URL}/api/ventas/escanear/${skuParam}`, { method: 'PUT', credentials: 'include' });
                 if (response.ok) {
-                    const resJson = await response.json(); if(resJson.operacion === "Vendido") cantarPorVoz("Vendido");
+                    const resJson = await response.json(); 
+                    const eConfig = LISTA_ESTADOS_KANBAN.find(est => est.nombre === resJson.operacion);
+                    if (eConfig && eConfig.rolFinanciero === 'Venta') { tocarSonidoCajaRegistradora(); cantarPorVoz("Vendido"); }
                     else if (resJson.operacion === "Creado") { cantarPorVoz("Indexado."); cancelEdit(); document.getElementById('sku').value = resJson.venta.sku; document.getElementById('prenda').focus(); }
+                    else { cantarPorVoz("Actualizado"); }
                     procesarMultiplicadorCombo(); await reloadCoreData();
                 }
             } catch (err) {}

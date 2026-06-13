@@ -206,6 +206,14 @@ mongoose.connect(MONGO_URI_FINAL)
                 { nombre: 'Reservado', icono: '🤝', color: 'indigo', rolFinanciero: 'Stock', orden: 3 },
                 { nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
             ]);
+        } else {
+            // Migración forzada para corregir el orden de las columnas en bases de datos que ya existían
+            const estVendido = await EstadoKanban.findOne({ nombre: 'Vendido' });
+            const estReservado = await EstadoKanban.findOne({ nombre: 'Reservado' });
+            if (estVendido && estReservado && estVendido.orden > estReservado.orden) {
+                await EstadoKanban.updateOne({ nombre: 'Vendido' }, { orden: 2 });
+                await EstadoKanban.updateOne({ nombre: 'Reservado' }, { orden: 3 });
+            }
         }
 
         // Auto-poblar Tareas predeterminadas si está vacío
@@ -565,7 +573,7 @@ app.post('/api/chat', exigeAdmin, async (req, res) => {
         
         const payload = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
 
@@ -573,6 +581,16 @@ app.post('/api/chat', exigeAdmin, async (req, res) => {
         
         if (!response.ok) {
             console.error("[IA ERROR] Gemini API falló:", data);
+            
+            // Fallback automático al modelo universal 'gemini-pro' si el modelo 1.5 no está disponible en la cuenta/región del usuario
+            if (data.error && data.error.message && data.error.message.includes("not found")) {
+                const resFallback = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                });
+                const dataFallback = await resFallback.json();
+                if (resFallback.ok) return res.json({ respuesta: dataFallback.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta." });
+            }
+
             return res.status(400).json({ error: `Rechazado por Google API: ${data.error?.message || 'Verifica tu API Key'}` });
         }
 

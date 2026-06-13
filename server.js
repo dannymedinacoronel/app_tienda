@@ -608,24 +608,46 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
         const payload = { contents: [{ parts }] };
 
-        let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        // SOLUCIÓN DEFINITIVA: Búsqueda dinámica de modelos permitidos para tu API Key.
+        let modelToUse = 'gemini-1.5-flash';
+        try {
+            const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+            if (listRes.ok) {
+                const listData = await listRes.json();
+                const availableNames = listData.models.map(m => m.name.replace('models/', ''));
+                
+                if (availableNames.includes('gemini-1.5-flash')) modelToUse = 'gemini-1.5-flash';
+                else if (availableNames.includes('gemini-1.5-pro')) modelToUse = 'gemini-1.5-pro';
+                else if (availableNames.includes('gemini-2.0-flash')) modelToUse = 'gemini-2.0-flash';
+                else if (availableNames.includes('gemini-pro')) modelToUse = 'gemini-pro';
+                else {
+                    const fallbackGemini = availableNames.find(n => n.includes('gemini'));
+                    if (fallbackGemini) modelToUse = fallbackGemini;
+                }
+            }
+        } catch (e) { console.warn("[IA INFO] No se pudo obtener lista de modelos, usando default."); }
+
+        let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
 
         let data = await response.json();
         
         if (!response.ok) {
-            console.warn("[IA INFO] Gemini 1.5 Flash falló. Ejecutando Fallback a 1.5 Pro...");
+            console.error(`[IA ERROR] Fallo con el modelo detectado (${modelToUse}):`, data);
             
-            // Plan B: gemini-1.5-pro en API v1beta (Soporta imágenes y reemplaza al antiguo 1.0)
-            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-            });
-            
-            data = await response.json();
+            // Último recurso: si el modelo escogido no soporta imágenes (ej. versiones antiguas), reintentar solo con texto.
+            if (imagen) {
+                console.warn("[IA INFO] Reintentando petición sin la imagen...");
+                const payloadTextOnly = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
+                response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadTextOnly)
+                });
+                data = await response.json();
+            }
+
             if (!response.ok) {
-                console.error("[IA ERROR] Fallo total en Gemini:", data);
-                return res.status(400).json({ error: `Google API Error: ${data.error?.message || 'Clave inválida.'}` });
+                return res.status(400).json({ error: `Google API Error: ${data.error?.message || 'Revisa tu API Key.'}` });
             }
         }
 

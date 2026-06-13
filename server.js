@@ -608,12 +608,18 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
         }
 
         const payload = {
-            model: imagen ? "llama-3.2-11b-vision-preview" : "llama3-70b-8192",
+            // Usamos el modelo open-source de OpenAI a través de Groq
+            model: "openai/gpt-oss-120b",
             messages: [
                 { role: "system", content: promptSistema },
                 { role: "user", content: userContent }
             ],
-            temperature: 0.3
+            temperature: 0.5,
+            max_tokens: 2048, // Renombrado de max_completion_tokens
+            top_p: 1,
+            stream: false,
+            // Le indicamos al modelo que queremos una respuesta en formato JSON para los comandos
+            response_format: { "type": "json_object" }
         };
 
         let iaData;

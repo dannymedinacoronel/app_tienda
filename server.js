@@ -608,46 +608,34 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
         const payload = { contents: [{ parts }] };
 
-        // SOLUCIÓN DEFINITIVA: Búsqueda dinámica de modelos permitidos para tu API Key.
-        let modelToUse = 'gemini-1.5-flash';
-        try {
-            const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-            if (listRes.ok) {
-                const listData = await listRes.json();
-                const availableNames = listData.models.map(m => m.name.replace('models/', ''));
-                
-                if (availableNames.includes('gemini-1.5-flash')) modelToUse = 'gemini-1.5-flash';
-                else if (availableNames.includes('gemini-1.5-pro')) modelToUse = 'gemini-1.5-pro';
-                else if (availableNames.includes('gemini-2.0-flash')) modelToUse = 'gemini-2.0-flash';
-                else if (availableNames.includes('gemini-pro')) modelToUse = 'gemini-pro';
-                else {
-                    const fallbackGemini = availableNames.find(n => n.includes('gemini'));
-                    if (fallbackGemini) modelToUse = fallbackGemini;
-                }
-            }
-        } catch (e) { console.warn("[IA INFO] No se pudo obtener lista de modelos, usando default."); }
-
-        let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`, {
+        // Forzamos el uso de 1.5 Flash (evitando el 2.0 que tiene cuotas más estrictas)
+        let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
 
         let data = await response.json();
         
         if (!response.ok) {
-            console.error(`[IA ERROR] Fallo con el modelo detectado (${modelToUse}):`, data);
+            console.warn(`[IA INFO] Fallo con 1.5-flash. Intentando fallback a gemini-1.0-pro...`);
             
-            // Último recurso: si el modelo escogido no soporta imágenes (ej. versiones antiguas), reintentar solo con texto.
-            if (imagen) {
-                console.warn("[IA INFO] Reintentando petición sin la imagen...");
-                const payloadTextOnly = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
-                response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${apiKey}`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadTextOnly)
-                });
-                data = await response.json();
-            }
+            // El modelo 1.0-pro no acepta imágenes, enviamos solo texto
+            const payloadTextOnly = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
+            
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key=${apiKey}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(imagen ? payloadTextOnly : payload)
+            });
+            
+            data = await response.json();
 
             if (!response.ok) {
-                return res.status(400).json({ error: `Google API Error: ${data.error?.message || 'Revisa tu API Key.'}` });
+                let errorMsg = data.error?.message || 'Error desconocido en Gemini.';
+                
+                // Traducción al español del error de Cuota (limit: 0) en Europa
+                if (errorMsg.includes('quota') || errorMsg.includes('limit: 0')) {
+                    errorMsg = "Google ha bloqueado el nivel gratuito de IA en tu país. Para desbloquearlo, ve a Google Cloud Console y añade una tarjeta en 'Facturación' (no te cobrarán nada, el uso gratuito mensual se mantiene intacto, es solo verificación de identidad).";
+                }
+                
+                return res.status(400).json({ error: `Google API: ${errorMsg}` });
             }
         }
 

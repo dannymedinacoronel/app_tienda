@@ -625,9 +625,10 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
             iaData = apiRes.data;
         } catch (err) {
             let errorMsg = err.response?.data?.error?.message || err.message;
-            console.error("[IA ERROR] Groq API:", errorMsg);
+            const keySnippet = apiKey.length > 8 ? `${apiKey.substring(0, 4)}...${apiKey.substring(apiKey.length - 4)}` : '(clave muy corta)';
+            console.error(`[IA ERROR] Groq API: ${errorMsg}. Usando clave: ${keySnippet}`);
             if (errorMsg.toLowerCase().includes('access denied')) {
-                errorMsg = "Acceso denegado. La clave API de Groq que está en Render es incorrecta o ha caducado. Por favor, crea una **NUEVA** clave en console.groq.com, cópiala y pégala de nuevo en la variable de entorno.";
+                errorMsg = `Acceso denegado. La clave que está usando el servidor (empieza por '${apiKey.substring(0, 4)}' y termina en '${apiKey.substring(apiKey.length - 4)}') es incorrecta o ha caducado. Por favor, crea una **NUEVA** clave en console.groq.com, cópiala y pégala de nuevo en la variable de entorno.`;
             }
             return res.status(400).json({ error: `Fallo de IA: ${errorMsg}` });
         }

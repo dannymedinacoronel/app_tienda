@@ -247,7 +247,15 @@ async function generarBackupDrive(esManual = false) {
         throw new Error('Configura GOOGLE_DRIVE_CREDENTIALS y GOOGLE_DRIVE_FOLDER_ID en el archivo .env.');
     }
 
-    const credentials = JSON.parse(process.env.GOOGLE_DRIVE_CREDENTIALS);
+    let credsStr = process.env.GOOGLE_DRIVE_CREDENTIALS.trim();
+    // Limpiar comillas simples o dobles accidentales al principio y al final (muy común al copiar a Render)
+    if (credsStr.startsWith("'") && credsStr.endsWith("'")) credsStr = credsStr.slice(1, -1);
+    
+    let credentials;
+    try {
+        credentials = JSON.parse(credsStr);
+    } catch(err) { throw new Error("JSON de credenciales inválido. Revisa tu panel de Render: " + err.message); }
+
     const auth = new google.auth.GoogleAuth({
         credentials,
         scopes: ['https://www.googleapis.com/auth/drive.file']

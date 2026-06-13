@@ -8,6 +8,7 @@
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="shortcut icon" type="image/png" href="logo.png">
     
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Seychelles">
@@ -920,6 +921,65 @@
                                 <p class="opacity-70 mb-2">Detecta si cambiaste un precio rebajándolo en la app de Vinted pero olvidaste actualizarlo aquí.</p>
                                 <p class="text-emerald-400 font-bold mb-1">✨ Artículos Nuevos:</p>
                                 <p class="opacity-70">Encuentra prendas que subiste directamente a Vinted desde el móvil para importarlas a tu base de datos con un clic (y descargando sus fotos originales automáticamente).</p>
+                            </div>
+                        </div>
+                    </details>
+
+                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
+                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
+                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest">📝 ¿Cómo funciona el CRM y las Facturas?</span>
+                            <span class="group-open:rotate-180 transition-transform text-lg">▾</span>
+                        </summary>
+                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2">
+                            <p>El sistema cuenta con un gestor de clientes y un emisor de facturas legales en PDF.</p>
+                            <ul class="list-disc pl-5 mt-2 space-y-1 opacity-80 text-[10px]">
+                                <li><strong>Módulo CRM:</strong> Guarda DNI, contacto y programa reservas futuras. El sistema te avisará en la fecha indicada.</li>
+                                <li><strong>Facturación Automática:</strong> Ve a la pestaña 'Fact.', selecciona las prendas que compró el cliente, pulsa 'Cargar de CRM' para autocompletar sus datos, y haz clic en emitir. El sistema calcula Base Imponible e IVA automáticamente.</li>
+                            </ul>
+                        </div>
+                    </details>
+
+                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
+                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
+                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest">📌 ¿Qué son las Notas Adhesivas de la pantalla?</span>
+                            <span class="group-open:rotate-180 transition-transform text-lg">▾</span>
+                        </summary>
+                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2">
+                            <p>El <strong>Workspace Colaborativo</strong> te permite pegar notas virtuales sobre el panel de control.</p>
+                            <p class="mt-2 opacity-80 text-[10px]">Haz clic en el botón superior <span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded shadow">📌 Nota</span>. Aparecerá un Post-it. Puedes arrastrarlo por toda la pantalla, cambiarle el color (pasando el ratón por encima) o redimensionarlo arrastrando desde su esquina inferior derecha. Todos los usuarios conectados verán la nota en tiempo real.</p>
+                        </div>
+                    </details>
+
+                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
+                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
+                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest">💸 Gastos Operativos vs Coste de Ropa</span>
+                            <span class="group-open:rotate-180 transition-transform text-lg">▾</span>
+                        </summary>
+                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2">
+                            <p>El sistema separa tu inversión en 2 bloques para darte un Beneficio Neto 100% real:</p>
+                            <ol class="list-decimal pl-5 mt-2 space-y-1 opacity-80 text-[10px]">
+                                <li><strong>Coste Unitario:</strong> Lo que te costó comprar la prenda (se añade al crear el artículo).</li>
+                                <li><strong>Gastos Operativos (OpEx):</strong> Alquileres, sobres, publicidad, luz. Estos se añaden desde la sección inferior "Registrar Gasto Operativo". Todo se resta en la tarjeta central "Ganancia Neta".</li>
+                            </ol>
+                        </div>
+                    </details>
+
+                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
+                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
+                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest">🛡️ Auditoría, Privacidad y Copias de Seguridad</span>
+                            <span class="group-open:rotate-180 transition-transform text-lg">▾</span>
+                        </summary>
+                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2">
+                            <p>Seychelles Core incluye herramientas de grado empresarial para proteger tus datos:</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                                <div class="bg-white/5 p-3 rounded-xl border border-white/10 shadow-sm">
+                                    <h5 class="text-blue-300 font-bold mb-1">☁️ Backup a Google Drive</h5>
+                                    <p class="opacity-70 text-[10px]">El servidor enviará automáticamente a las 00:00h un archivo cifrado con tu BD a Google Drive. También puedes forzarlo pulsando el botón azul superior.</p>
+                                </div>
+                                <div class="bg-white/5 p-3 rounded-xl border border-white/10 shadow-sm">
+                                    <h5 class="text-indigo-300 font-bold mb-1">📜 Calendario de Auditoría</h5>
+                                    <p class="opacity-70 text-[10px]">En la pestaña 'Logs', puedes ver día a día qué persona ha modificado, borrado o vendido qué producto exactamente, garantizando trazabilidad.</p>
+                                </div>
                             </div>
                         </div>
                     </details>
@@ -2015,14 +2075,18 @@
                     y += (lineas.length * 6) + 12;
                 };
 
-                seccion("1. Tablero Kanban (Inventario Interactivo)", "Gestiona visualmente tus prendas. Arrastra las tarjetas entre 'STOCK', 'VENTAS', 'RESERVAS' e 'INCIDENCIAS'. Cada movimiento recalcula instantáneamente la Facturación, Ganancia Neta y Retorno (ROI).");
-                seccion("2. Alta Rápida y Autocompresión", "Al crear un nuevo artículo, sube fotos desde tu móvil o PC. El sistema comprimirá la imagen de forma inteligente para no saturar la nube. Usa el botón 'Auto' para rellenar los títulos mágicamente.");
-                seccion("3. Panel de Acciones Masivas", "Activa las casillas redondas (checkbox) de múltiples productos para abrir el panel flotante inferior. Te permite rebajar precios en lote (ej. escribe '-5' para bajar 5€ a todos), duplicarlos o cambiar su estado a Vendido en un solo clic.");
-                seccion("4. Gestión de Clientes (CRM)", "Fideliza a tus compradores. Guarda su contacto, NIF y anota las fechas clave en su 'Calendario de Reservas'. Podrás importar estos datos directamente al generar sus facturas para ahorrar tiempo.");
-                seccion("5. Facturación Automatizada Legal", "En la pestaña 'Facturación', selecciona las prendas que han sido compradas y haz clic en 'Emitir Factura PDF'. La herramienta calculará el IVA, la Base Imponible y generará un documento oficial profesional.");
-                seccion("6. Analítica y Mapa de Calor", "Explora 4 gráficas interactivas. Destaca el 'Mapa de Calor', que cruza los días de la semana y las horas para revelarte las franjas horarias con mayor volumen de transacciones de venta.");
-                seccion("7. Sincronizador Web (Scraper Vinted)", "Pega tu enlace de Vinted. La aplicación detectará prendas nuevas que no hayas registrado en MongoDB y diferencias de precio (ej. si bajaste el precio en Vinted pero no aquí), permitiéndote importarlas con 1 clic.");
-                seccion("8. Protección y Backup en Google Drive", "Haz clic en el botón 'Drive' (icono azul superior). Un robot comprimirá tu base de datos en un archivo seguro y lo enviará directamente a tu carpeta privada en la nube. ¡También se ejecuta de forma automática todas las madrugadas!");
+                seccion("1. Arquitectura del Kanban y KPIs en Tiempo Real", "El núcleo financiero de la aplicación. Al arrastrar una prenda de 'Stock' a 'Ventas', el motor matemático recalcula la Facturación Bruta, Inversión (incluyendo gastos de envío y compras), Beneficio Neto y ROI. Si hay comisiones de plataforma (ej. Vinted 5%), el algoritmo las descuenta antes de reflejar el neto.\n\nAdemás, el sistema de inventario detecta el 'Stock Frío' (prendas estancadas más de 21 días) marcándolas con un copo de nieve (❄️) y un extintor (🧯) para que puedas aplicarles ofertas.");
+                seccion("2. Fichas de Alta y Procesamiento HEIC", "Diseñado para velocidad. El sistema cuenta con compresión asíncrona de imágenes mediante Canvas API. Si subes fotos directamente desde un iPhone (.HEIC), la librería heic2any las transcodifica internamente a JPEG comprimido al 80% en milisegundos. El indicador de Margen Comercial cambiará de color en vivo (Rojo < 0%, Ámbar < 30%, Verde > 30%) mientras escribes los costes.");
+                seccion("3. Manipulación Masiva de Objetos", "Seleccionando las casillas circulares de las prendas habilitas el 'Panel Dark Flotante'. Esta herramienta inyecta operaciones iterativas en MongoDB. Por ejemplo, pulsando 'Ajustar Precio' e introduciendo '-5', el backend descontará 5€ al PVP de todos los objetos marcados. También permite cambios de estado masivos, duplicaciones o asignaciones de Talla/Categoría en bloque.");
+                seccion("4. Terminal Punto de Venta (Scanner)", "La app convierte la lente de cualquier dispositivo móvil o webcam en un lector láser HTML5. Imprime las etiquetas con QR generadas por la app. Al leerlas, el endpoint descodifica el SKU y mueve el artículo a 'Vendido'. Incluye control anti-rebote (bloqueo por lectura doble) para evitar que el producto vuelva a stock por error.");
+                seccion("5. Motor de Scraping Vinted (Auditoría Web)", "Un módulo de extracción asíncrona. Pega una URL de Vinted o sube un CSV. El motor buscará coincidencias borrosas y te alertará si un precio fue rebajado en la web pero olvidaste actualizarlo en el sistema. Además, localiza publicaciones nuevas y las importa a MongoDB descargando la imagen en Base64 de forma autónoma.");
+                seccion("6. Módulo CRM (Customer Relationship Management)", "Base de datos independiente para clientes frecuentes. Permite almacenar históricos de contacto, NIF, direcciones y 'Reservas futuras'. Las reservas generan un array embebido en MongoDB que te permitirá ver cronológicamente a quién le tienes guardado un artículo especial.");
+                seccion("7. Motor de Facturación y Tributación (jsPDF AutoTable)", "Permite agrupar N artículos vendidos en una matriz de facturación. Automáticamente extrae las direcciones del vendedor y del cliente del CRM, desglosa la Base Imponible según el % de IVA indicado y renderiza un PDF legal con estilo en rejilla corporativa (Azul Índigo), preparado para enviar a gestorías.");
+                seccion("8. Control Financiero de Gastos (OpEx)", "El inventario no es el único coste de un negocio. La pestaña 'Gastos' permite imputar salidas de flujo de caja libre (Suministros, Publicidad, Packaging). Este OpEx impacta directamente en el KPI global de 'Ganancia Neta' restándose del margen bruto de ventas.");
+                seccion("9. Business Intelligence (Analítica y Heatmap)", "Soporte para 4 instancias de Chart.js animadas. Filtrado multidimensional (Canal + Talla + Categoría + Rango PVP). Destaca el 'Scatter Heatmap' (Mapa de Calor), el cual mapea la densidad transaccional (Día vs Franja Horaria) para encontrar las horas pico donde tus clientes compran más, ayudando a programar tus lanzamientos.");
+                seccion("10. Calendarios Históricos y Trazabilidad", "Doble matriz de calendario. \n- Calendario Stock: Te muestra visualmente cuántas altas y cuántas ventas hubo un día exacto. \n- Calendario de Auditoría (Logs): Un registro inmutable. Cada vez que alguien entra, edita, borra o emite una factura, su email y hora quedan grabados. Ninguna acción en la empresa es anónima.");
+                seccion("11. Workspace Espacial (Notas Adhesivas)", "Sistema de Coordenadas X/Y guardado en tiempo real. Permite anclar Post-its en la pantalla. Estas notas son arrastrables (drag & drop), redimensionables y soportan cambio de color. Al actualizar la BD, todos los usuarios verán la nota en el mismo lugar de su pantalla.");
+                seccion("12. Ciberseguridad, Auth y Backup", "La app está blindada por Google OAuth2.0 y Middleware de Sesiones. Solo los correos inscritos en la sección '🔑 Acceso' pueden validar su token. Las variables de entorno inyectan credenciales de Servicio de IAM (Google Cloud) para ejecutar volcados físicos completos de MongoDB hacia carpetas privadas de Google Drive a las 00:00 cada día.");
 
                 doc.save('Guia_Automatizacion_Seychelles.pdf');
                 cantarPorVoz("Guía en PDF generada exitosamente.");

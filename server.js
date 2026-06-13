@@ -608,23 +608,26 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
         const payload = { contents: [{ parts }] };
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
 
         let data = await response.json();
         
         if (!response.ok) {
-            console.error("[IA ERROR] Gemini 1.5 Flash falló:", data);
+            console.warn("[IA INFO] Gemini 1.5 bloqueado por Google. Ejecutando Fallback universal...");
+            
+            // Plan B definitivo: gemini-pro (El modelo más compatible a nivel global).
+            // Se limpia la imagen del payload porque este modelo clásico solo lee texto.
             const payloadFallback = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
-            const resFallback = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
+            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadFallback)
             });
             
-            data = await resFallback.json();
-            if (!resFallback.ok) {
-                console.error("[IA ERROR] Gemini Pro Fallback también falló:", data);
-                return res.status(400).json({ error: `Rechazado por Google API: ${data.error?.message || 'Verifica tu API Key'}` });
+            data = await response.json();
+            if (!response.ok) {
+                console.error("[IA ERROR] Fallo total en Gemini:", data);
+                return res.status(400).json({ error: `Google API Error: ${data.error?.message || 'Clave inválida.'}` });
             }
         }
 

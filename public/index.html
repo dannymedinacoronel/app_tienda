@@ -276,6 +276,7 @@
                     <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📋 Fact.</button>
                     <button onclick="navegarASeccion('sec-faqs')" id="tab-sec-faqs" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">❓ FAQs</button>
                     <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📜 Logs</button>
+                    <button onclick="navegarASeccion('sec-ajustes')" id="tab-sec-ajustes" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100 text-amber-500">⚙️ Ajustes</button>
                 </nav>
             </div>
 
@@ -406,12 +407,7 @@
                             <div class="grid grid-cols-1 gap-2 mb-4">
                                 <div>
                                     <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Estado</label>
-                                    <select id="estado" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none dropdown-bg">
-                                        <option value="No Vendido">📦 En Stock</option>
-                                        <option value="Reservado">🤝 Reservado</option>
-                                        <option value="Vendido">💰 Vendido</option>
-                                        <option value="Devuelto">⚠️ Devuelto</option>
-                                    </select>
+                                    <select id="estado" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none dropdown-bg"></select>
                                 </div>
                             </div>
 
@@ -443,74 +439,8 @@
                     </div>
                 </div>
 
-                <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <!-- COLUMNA 1: STOCK -->
-                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
-                        <div class="flex flex-col gap-2 mb-4">
-                            <div class="flex justify-between items-center">
-                                <h3 class="text-[10px] font-black text-amber-500 uppercase tracking-widest flex items-center gap-1.5">📦 EN STOCK <span id="badge-stock" class="bg-amber-500/10 px-1.5 py-0.5 rounded">0</span></h3>
-                                <button onclick="alternarSeleccionColumna('No Vendido')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
-                            </div>
-                            <select onchange="cambiarOrdenColumna('No Vendido', this.value)" class="bg-black/20 border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none">
-                                <option value="reciente">🕒 Más Recientes</option>
-                                <option value="precio-desc">💰 Precio: Mayor</option>
-                                <option value="precio-asc">💰 Precio: Menor</option>
-                                <option value="nombre">🔤 Nombre</option>
-                            </select>
-                            <input type="text" oninput="cambiarFiltroColumna('No Vendido', this.value)" placeholder="Filtrar stock..." class="bg-black/10 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30">
-                        </div>
-                        <div id="col-no-vendido" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'No Vendido')" ondragleave="clearDrop(event)"></div>
-                    </div>
-
-                    <!-- COLUMNA 2: VENTAS (VENDIDO) -->
-                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all">
-                        <div class="flex flex-col gap-2 mb-4">
-                            <div class="flex justify-between items-center">
-                                <h3 class="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1.5">💰 VENTAS <span id="badge-vendido" class="bg-emerald-500/10 px-1.5 py-0.5 rounded">0</span></h3>
-                                <button onclick="alternarSeleccionColumna('Vendido')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
-                            </div>
-                            <select onchange="cambiarOrdenColumna('Vendido', this.value)" class="input-bg border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none dropdown-bg">
-                                <option value="reciente">🕒 Más Recientes</option>
-                                <option value="precio-desc">Mayor Precio</option>
-                            </select>
-                            <input type="text" oninput="cambiarFiltroColumna('Vendido', this.value)" placeholder="Filtrar vendidos..." class="bg-black/10 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30">
-                        </div>
-                        <div id="col-vendido" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Vendido')" ondragleave="clearDrop(event)"></div>
-                    </div>
-
-                    <!-- COLUMNA 3: RESERVAS -->
-                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[350px] transition-all">
-                        <div class="flex flex-col gap-2 mb-4">
-                            <div class="flex justify-between items-center">
-                                <h3 class="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">🤝 RESERVAS <span id="badge-reservado" class="bg-indigo-400/10 px-1.5 py-0.5 rounded">0</span></h3>
-                                <button onclick="alternarSeleccionColumna('Reservado')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
-                            </div>
-                            <select onchange="cambiarOrdenColumna('Reservado', this.value)" class="input-bg border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none dropdown-bg">
-                                <option value="reciente">🕒 Más Recientes</option>
-                                <option value="precio-desc">💰 Precio: Mayor</option>
-                                <option value="nombre">🔤 Nombre</option>
-                            </select>
-                            <input type="text" oninput="cambiarFiltroColumna('Reservado', this.value)" placeholder="Filtrar reservas..." class="input-bg border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30">
-                        </div>
-                        <div id="col-reservado" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[320px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Reservado')" ondragleave="clearDrop(event)"></div>
-                    </div>
-
-                    <!-- COLUMNA 4: INCIDENCIAS -->
-                    <div class="card-bg border rounded-3xl p-4 flex flex-col transition-all min-h-[350px] overflow-hidden">
-                        <div class="flex flex-col gap-4 mb-6">
-                            <h3 class="text-[10px] font-black text-rose-500 uppercase tracking-widest flex items-center gap-1.5">
-                                <span class="bg-rose-500/20 p-1.5 rounded-lg">⚠️</span> INCIDENCIAS/DEV <span id="badge-devuelto" class="bg-rose-500/10 px-2 py-0.5 rounded">0</span>
-                            </h3>
-                            <div class="flex flex-col gap-1.5">
-                                <select onchange="cambiarOrdenColumna('Devuelto', this.value)" class="input-bg border border-current/10 text-[9px] font-bold uppercase rounded-xl px-2 py-1 focus:outline-none dropdown-bg">
-                                    <option value="reciente">🕒 Orden</option>
-                                    <option value="precio-desc">💰 Precio</option>
-                                </select>
-                                <input type="text" oninput="cambiarFiltroColumna('Devuelto', this.value)" placeholder="Filtrar incidencias..." class="input-bg border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30 w-full">
-                            </div>
-                        </div>
-                        <div id="col-devuelto" class="grid grid-cols-1 gap-3 p-1 overflow-y-auto max-h-[320px]" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, 'Devuelto')" ondragleave="clearDrop(event)"></div>
-                    </div>
+                <div id="kanban-dynamic-wrapper" class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-6 items-start">
+                    <!-- Columnas inyectadas via Javascript -->
                 </div>
 
                 <!-- FILA INFERIOR: CALENDARIO (Ancho completo) -->
@@ -949,14 +879,14 @@
         <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-3xl w-[92%] transition-all backdrop-blur-md">
             <div class="text-xs font-bold font-mono">💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> MARCADOS</div>
             <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
+            <div id="botones-estados-masivos" class="flex flex-wrap items-center gap-2">
+                <!-- Injectados los botones de mover columna dinámicamente -->
+            </div>
+            <div class="h-4 w-[1px] bg-slate-700 hidden sm:block mx-1"></div>
             <div class="flex flex-wrap items-center gap-2">
                 <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">👯 Duplicar Lote</button>
                 <button onclick="ejecutarAjustePrecioMasivo()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">💰 Ajustar Precio</button>
                 <button onclick="ejecutarAjusteCosteMasivo()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">📉 Ajustar Coste</button>
-                <button onclick="ejecutarAccionMasivaEstado('Vendido')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">💵 Vender Lote</button>
-                <button onclick="ejecutarAccionMasivaEstado('Reservado')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">🤝 Reservar Lote</button>
-                <button onclick="ejecutarAccionMasivaEstado('Devuelto')" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">⚠️ Devolución</button>
-                <button onclick="ejecutarAccionMasivaEstado('No Vendido')" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">📦 Mover a Stock</button>
                 <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="input-bg rounded-xl p-1.5 text-[10px] font-bold focus:outline-none dropdown-bg">
                     <option value="">📐 Talla...</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
                 </select>
@@ -1003,6 +933,9 @@
     </div>
 
     <div id="ai-chat-window" class="hidden fixed bottom-24 right-6 w-[340px] h-[500px] max-h-[70vh] card-bg border rounded-3xl shadow-2xl z-[900] flex flex-col overflow-hidden transition-all duration-300">
+
+    <!-- Tailwind Safelist hack para que cargue los colores generados por JS -->
+    <div class="hidden bg-blue-500/10 bg-emerald-500/10 bg-amber-500/10 bg-rose-500/10 bg-indigo-500/10 bg-purple-500/10 bg-slate-500/10 text-blue-500 text-emerald-500 text-amber-500 text-rose-500 text-indigo-500 text-purple-500 text-slate-500 bg-blue-600 hover:bg-blue-700 bg-emerald-600 hover:bg-emerald-700 bg-amber-600 hover:bg-amber-700 bg-rose-600 hover:bg-rose-700 bg-indigo-600 hover:bg-indigo-700 bg-purple-600 hover:bg-purple-700 bg-slate-600 hover:bg-slate-700 border-blue-500/20 border-emerald-500/20 border-amber-500/20 border-rose-500/20 border-indigo-500/20 border-purple-500/20 border-slate-500/20 text-blue-400 text-emerald-400 text-amber-400 text-rose-400 text-indigo-400 text-purple-400 text-slate-400"></div>
         <div class="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-b border-white/10 p-4 flex justify-between items-center shadow-md">
             <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-lg border border-purple-400/50 shadow-inner">🤖</div>
@@ -1531,6 +1464,7 @@
         let NOTAS_LOCALES = [];
         let LISTA_TAREAS = [];
         let LISTA_FAQS = [];
+        let LISTA_ESTADOS_KANBAN = [];
 
         // 📌 LÓGICA DE NOTAS ADHESIVAS
         async function cargarNotasBoard() {
@@ -1538,6 +1472,61 @@
             NOTAS_LOCALES = await res.json();
             renderizarNotas();
         }
+
+        // 🎛️ CONFIGURADOR DE TABLERO KANBAN DINÁMICO
+        async function refrescarEstadosKanban() {
+            try {
+                const res = await fetch('/api/estados-kanban', { credentials: 'include' });
+                LISTA_ESTADOS_KANBAN = await res.json();
+
+                // Actualizar dropdown del formulario
+                const selectForm = document.getElementById('estado');
+                const valActual = selectForm.value;
+                selectForm.innerHTML = LISTA_ESTADOS_KANBAN.map(e => `<option value="${e.nombre}">${e.icono} ${e.nombre}</option>`).join('');
+                if (valActual && LISTA_ESTADOS_KANBAN.find(e => e.nombre === valActual)) selectForm.value = valActual;
+
+                // Actualizar botones masivos
+                const panelBotones = document.getElementById('botones-estados-masivos');
+                if(panelBotones) {
+                    panelBotones.innerHTML = LISTA_ESTADOS_KANBAN.map(e => `
+                        <button onclick="ejecutarAccionMasivaEstado('${e.nombre}')" class="bg-${e.color}-600 hover:bg-${e.color}-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg whitespace-nowrap">${e.icono} ➡️ ${e.nombre}</button>
+                    `).join('');
+                }
+                renderListaAjustesKanban();
+            } catch(e) { console.error("Error estados:", e); }
+        }
+
+        function renderListaAjustesKanban() {
+            const list = document.getElementById('lista-estados-kanban-config');
+            if(!list) return;
+            list.innerHTML = LISTA_ESTADOS_KANBAN.map(e => `
+                <div class="p-3 bg-black/20 border border-white/5 rounded-2xl flex items-center justify-between hover:bg-white/5 transition-all">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-xl bg-${e.color}-500/20 text-${e.color}-400 flex items-center justify-center border border-${e.color}-500/30 text-xl shadow-inner">${e.icono}</div>
+                        <div>
+                            <p class="font-black uppercase text-[11px] tracking-wider">${e.nombre}</p>
+                            <p class="text-[9px] opacity-50 font-mono text-${e.rolFinanciero === 'Venta' ? 'emerald' : (e.rolFinanciero === 'Oculto' ? 'rose' : 'amber')}-400 mt-0.5">Rol: ${e.rolFinanciero} • Orden Posición: ${e.orden}</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 bg-black/30 p-1.5 rounded-xl border border-white/5">
+                        <button onclick="editarEstadoKanban('${e._id}')" class="text-blue-400 hover:text-blue-300 text-[10px] px-2">✏️ Editar</button>
+                        <button onclick="borrarEstadoKanban('${e._id}')" class="text-rose-400 hover:text-rose-300 text-[10px] px-2">🗑️</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function guardarEstadoKanban(e) {
+            e.preventDefault();
+            const id = document.getElementById('ek-id').value;
+            const payload = { nombre: document.getElementById('ek-nombre').value.trim(), icono: document.getElementById('ek-icono').value.trim() || '🏷️', color: document.getElementById('ek-color').value, rolFinanciero: document.getElementById('ek-rol').value, orden: parseInt(document.getElementById('ek-orden').value) || 0 };
+            const url = id ? `/api/estados-kanban/${id}` : '/api/estados-kanban'; const method = id ? 'PUT' : 'POST';
+            await fetch(url, { method, headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify(payload) });
+            limpiarFormEstadoKanban(); await refrescarEstadosKanban(); renderKanban(); recalcularKPIsLocalesOptimistas();
+        }
+        function editarEstadoKanban(id) { const e = LISTA_ESTADOS_KANBAN.find(x => x._id === id); if(!e) return; document.getElementById('ek-id').value = e._id; document.getElementById('ek-nombre').value = e.nombre; document.getElementById('ek-icono').value = e.icono; document.getElementById('ek-color').value = e.color; document.getElementById('ek-rol').value = e.rolFinanciero; document.getElementById('ek-orden').value = e.orden; }
+        function limpiarFormEstadoKanban() { document.getElementById('form-estado-kanban').reset(); document.getElementById('ek-id').value = ''; }
+        async function borrarEstadoKanban(id) { if(confirm("¿Eliminar columna del tablero? Los productos conservarán su estado textualmente, pero desaparecerán de la vista principal hasta que los reasignes.")) { await fetch(`/api/estados-kanban/${id}`, { method: 'DELETE', credentials: 'include' }); await refrescarEstadosKanban(); renderKanban(); } }
 
         // 🏷️ LÓGICA DE CATEGORÍAS DINÁMICAS
         async function refrescarCategoriasCloud() {
@@ -1875,6 +1864,9 @@
             if (idSeccion === 'sec-faqs') {
                 setTimeout(() => { refrescarFaqs(); }, 50);
             }
+            if (idSeccion === 'sec-ajustes') {
+                setTimeout(() => { renderListaAjustesKanban(); }, 50);
+            }
         }
 
         function navegarCalendarioStock(delta) {
@@ -1945,7 +1937,8 @@
             const container = document.getElementById('lista-articulos-factura');
             if(!container) return;
             
-            const vendidos = BASE_DATOS.filter(v => v.estado === 'Vendido');
+            const nombresEstadosVenta = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
+            const vendidos = BASE_DATOS.filter(v => nombresEstadosVenta.includes(v.estado));
             
             if(vendidos.length === 0) {
                 container.innerHTML = '<div class="py-20 text-center opacity-30 italic font-mono text-xs">No hay artículos vendidos disponibles para facturar en el sistema.</div>';
@@ -2750,7 +2743,8 @@
                 doc.text('Productos Vendidos', 10, y);
                 y += 7;
                 doc.setFontSize(9);
-                const vendidos = obtenerDatosFiltradosParaAnalitica(); // These are already 'Vendido'
+                const nombresEstadosVenta = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
+                const vendidos = BASE_DATOS.filter(v => nombresEstadosVenta.includes(v.estado));
                 if (vendidos.length > 0) {
                     const headers = [['SKU', 'Prenda', 'Categoría', 'Talla', 'Venta (€)', 'Canal', 'Fecha Venta']];
                     const data = vendidos.map(v => [
@@ -2782,7 +2776,8 @@
                 doc.text('Productos en Stock', 10, y);
                 y += 7;
                 doc.setFontSize(9);
-                const enStock = BASE_DATOS.filter(v => v.estado === 'No Vendido' &&
+                const nombresEstadosStock = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Stock').map(e => e.nombre);
+                const enStock = BASE_DATOS.filter(v => nombresEstadosStock.includes(v.estado) &&
                     (document.getElementById('an-filtro-tienda').value === 'TODOS' || v.proveedor === document.getElementById('an-filtro-tienda').value) &&
                     (document.getElementById('an-filtro-canal').value === 'TODOS' || v.canalVenta === document.getElementById('an-filtro-canal').value) &&
                     (document.getElementById('an-filtro-categoria').value === 'TODOS' || v.categoria === document.getElementById('an-filtro-categoria').value) &&
@@ -2867,8 +2862,8 @@
             const fMax = parseFloat(document.getElementById('an-filtro-precio-max').value) || Infinity;
 
             return BASE_DATOS.filter(v => {
-                if (v.estado === 'Reservado') return false; // No incluir reservados en analíticas de venta
-                if (v.estado !== 'Vendido') return false;
+                const eConfig = LISTA_ESTADOS_KANBAN.find(e => e.nombre === v.estado);
+                if (!eConfig || eConfig.rolFinanciero !== 'Venta') return false;
                 if (fTienda !== 'TODOS' && v.proveedor !== fTienda) return false;
                 if (fCanal !== 'TODOS' && v.canalVenta !== fCanal) return false;
                 if (fCat !== 'TODOS' && v.categoria !== fCat) return false;
@@ -2907,7 +2902,7 @@
             const loteRaw = e.dataTransfer.getData("text/lote-items"); if (!loteRaw) return;
             const listaIds = JSON.parse(loteRaw);
             
-            cantarPorVoz(newState === 'Vendido' ? `Lote Vendido` : `Lote a stock`);
+            cantarPorVoz(`Columna actualizada`);
             procesarMultiplicadorCombo();
 
             const copiasEstadosAnteriores = {};
@@ -3000,10 +2995,12 @@
 
         function recalcularKPIsLocalesOptimistas() {
             let ingresos = 0, inversion = 0, prendasVendidas = 0;
+            const nombresEstadosVenta = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
+
             BASE_DATOS.forEach(v => {
                 const cant = parseInt(v.cantidad, 10) || 1; const pCompra = parseFloat(v.precioCompra) || 0; const pVenta = parseFloat(v.precioVenta) || 0; const gEnvio = parseFloat(v.gastosEnvio) || 0;
                 inversion += ((pCompra + gEnvio) * cant);
-                if (v.estado === 'Vendido') { let comision = (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') ? (pVenta * 0.05) : 0; ingresos += ((pVenta - comision) * cant); prendasVendidas += cant; }
+                if (nombresEstadosVenta.includes(v.estado)) { let comision = (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') ? (pVenta * 0.05) : 0; ingresos += ((pVenta - comision) * cant); prendasVendidas += cant; }
             });
             document.getElementById('kpi-ingresos').innerText = `${ingresos.toFixed(2)} €`;
             document.getElementById('kpi-beneficio').innerText = `${(ingresos - inversion).toFixed(2)} €`;
@@ -3239,8 +3236,11 @@
             const coincidencias = BASE_DATOS.filter(v => v.prenda.toLowerCase().includes(query) || (v.sku && v.sku.toLowerCase().includes(query)));
             if (coincidencias.length === 0 && dropdown) { dropdown.innerHTML = `<div class="p-2 opacity-50 italic text-[10px]">Sin resultados.</div>`; dropdown.classList.remove('hidden'); return; }
             let htmlItems = '';
+            const nombresEstadosVenta = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
+            const nombresEstadosStock = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Stock').map(e => e.nombre);
+            
             coincidencias.slice(0, 8).forEach(item => {
-                const esVendido = item.estado === 'Vendido'; 
+                const esVendido = nombresEstadosVenta.includes(item.estado); 
                 const badgeEstado = esVendido ? `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1 py-0.5 rounded text-[8px] font-bold">💰 VENDIDO</span>` : `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-bold">📦 STOCK</span>`;
                 htmlItems += `
                     <div class="dropdown-item-hover p-2 rounded-xl flex justify-between items-center gap-2 cursor-pointer transition-all border-b border-current/5 last:border-b-0">
@@ -3251,7 +3251,7 @@
                         <div class="flex items-center gap-1.5 flex-shrink-0">
                             ${badgeEstado}
                             <div class="flex gap-1">
-                                <button onclick="ejecutarAccionDesplegable('${item._id}', '${esVendido ? 'No Vendido' : 'Vendido'}')" class="bg-blue-600 text-white font-bold text-[9px] px-2 py-0.5 rounded shadow-sm">${esVendido ? 'Stock' : 'Vender'}</button>
+                                <button onclick="ejecutarAccionDesplegable('${item._id}', '${esVendido ? (nombresEstadosStock[0] || 'No Vendido') : (nombresEstadosVenta[0] || 'Vendido')}')" class="bg-blue-600 text-white font-bold text-[9px] px-2 py-0.5 rounded shadow-sm">${esVendido ? 'A Stock' : 'Vender'}</button>
                                 <button onclick="editItem('${item._id}'); document.getElementById('dropdown-buscador').classList.add('hidden');" class="bg-current/10 hover:bg-current/20 px-1.5 py-0.5 rounded text-[9px]">✏️</button>
                             </div>
                         </div>
@@ -3499,104 +3499,104 @@
         }
 
         function renderKanban() {
-            const colStock = document.getElementById('col-no-vendido');
-            const colReservado = document.getElementById('col-reservado');
-            const colVendido = document.getElementById('col-vendido');
-            const colDevuelto = document.getElementById('col-devuelto');
-            if(!colStock || !colReservado || !colVendido || !colDevuelto) return;
+            const wrapper = document.getElementById('kanban-dynamic-wrapper');
+            if (!wrapper) return;
             
-            colStock.innerHTML = ''; colReservado.innerHTML = ''; colVendido.innerHTML = ''; colDevuelto.innerHTML = '';
-            let sCount = 0, rCount = 0, vCount = 0, dCount = 0;
+            let htmlColumns = '';
+            LISTA_ESTADOS_KANBAN.forEach(est => {
+                htmlColumns += `
+                <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[520px] transition-all relative group border-${est.color}-500/20 shadow-lg">
+                    <div class="flex flex-col gap-2 mb-4">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-[10px] font-black text-${est.color}-400 uppercase tracking-widest flex items-center gap-1.5">
+                                ${est.icono} ${est.nombre} <span id="badge-kanban-${est._id}" class="bg-${est.color}-500/10 px-1.5 py-0.5 rounded">0</span>
+                            </h3>
+                            <button onclick="alternarSeleccionColumna('${est.nombre}')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black text-white">Marcar</button>
+                        </div>
+                        <select onchange="cambiarOrdenColumna('${est.nombre}', this.value)" class="bg-black/20 border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none text-${est.color}-300">
+                            <option value="reciente" ${CONFIG_ORDEN_COLUMNAS[est.nombre] === 'reciente' ? 'selected' : ''}>🕒 Más Recientes</option>
+                            <option value="precio-desc" ${CONFIG_ORDEN_COLUMNAS[est.nombre] === 'precio-desc' ? 'selected' : ''}>💰 Precio: Mayor</option>
+                            <option value="precio-asc" ${CONFIG_ORDEN_COLUMNAS[est.nombre] === 'precio-asc' ? 'selected' : ''}>💰 Precio: Menor</option>
+                            <option value="nombre" ${CONFIG_ORDEN_COLUMNAS[est.nombre] === 'nombre' ? 'selected' : ''}>🔤 Nombre</option>
+                        </select>
+                        <input type="text" oninput="cambiarFiltroColumna('${est.nombre}', this.value)" value="${CONFIG_FILTRO_COLUMNAS[est.nombre] || ''}" placeholder="Filtrar..." class="bg-black/10 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30 text-white">
+                    </div>
+                    <div id="col-dinamica-${est._id}" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px] custom-scrollbar" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, '${est.nombre}')" ondragleave="clearDrop(event)"></div>
+                </div>`;
+            });
+            wrapper.innerHTML = htmlColumns;
 
-            const totalStockPorPrendaNombre = {};
-            BASE_DATOS.filter(x => x.estado === 'No Vendido').forEach(x => { totalStockPorPrendaNombre[x.prenda] = (totalStockPorPrendaNombre[x.prenda] || 0) + 1; });
+            const totalStockPorPrenda = {};
+            BASE_DATOS.filter(x => { const eConfig = LISTA_ESTADOS_KANBAN.find(e => e.nombre === x.estado); return eConfig && eConfig.rolFinanciero === 'Stock'; }).forEach(x => { totalStockPorPrenda[x.prenda] = (totalStockPorPrenda[x.prenda] || 0) + 1; });
 
-            // Aplicar ordenación antes de renderizar
-            const estados = ['No Vendido', 'Vendido', 'Reservado', 'Devuelto'];
-            const listasOrdenadas = {};
-
-            estados.forEach(est => {
-                const criterio = CONFIG_ORDEN_COLUMNAS[est];
-                const query = CONFIG_FILTRO_COLUMNAS[est];
+            const bdClonada = [...BASE_DATOS];
+            
+            LISTA_ESTADOS_KANBAN.forEach(est => {
+                let vCount = 0;
+                const criterio = CONFIG_ORDEN_COLUMNAS[est.nombre] || 'reciente';
+                const query = CONFIG_FILTRO_COLUMNAS[est.nombre] || '';
                 
-                listasOrdenadas[est] = BASE_DATOS.filter(v => v.estado === est).sort((a, b) => {
+                let filtrados = bdClonada.filter(v => v.estado === est.nombre);
+                
+                filtrados.sort((a, b) => {
                     if (criterio === 'precio-desc') return parseFloat(b.precioVenta) - parseFloat(a.precioVenta);
                     if (criterio === 'precio-asc') return parseFloat(a.precioVenta) - parseFloat(b.precioVenta);
                     if (criterio === 'nombre') return a.prenda.localeCompare(b.prenda);
-                    return 0; // Por defecto el orden de llegada (reciente)
+                    return 0; 
                 });
 
-                // Aplicar filtro de texto si existe
-                if (query) { listasOrdenadas[est] = listasOrdenadas[est].filter(v => v.prenda.toLowerCase().includes(query) || (v.sku && v.sku.toLowerCase().includes(query))); }
-            });
-
-            const todosOrdenados = [...listasOrdenadas['No Vendido'], ...listasOrdenadas['Vendido'], ...listasOrdenadas['Reservado'], ...listasOrdenadas['Devuelto']];
-
-            todosOrdenados.forEach(v => {
-                const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
+                if (query) { filtrados = filtrados.filter(v => v.prenda.toLowerCase().includes(query) || (v.sku && v.sku.toLowerCase().includes(query))); }
                 
-                const esStockCritico = v.estado === 'No Vendido' && totalStockPorPrendaNombre[v.prenda] < 2;
-                const thumb = v.imagen ? `<img src="${v.imagen}" class="card-img-mini flex-shrink-0 border border-white/10 shadow-lg">` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20">N/A</div>`;
-                
-                // Cálculo de antigüedad (Stock Frío > 21 días)
-                const fechaRegistro = new Date(v.fecha);
-                const diasEnStock = Math.floor((new Date() - fechaRegistro) / (1000 * 60 * 60 * 24));
-                const esStockFrio = v.estado === 'No Vendido' && diasEnStock > 21;
+                const colDom = document.getElementById(`col-dinamica-${est._id}`);
+                if(!colDom) return;
 
-                // Nuevos indicadores de tiempo
-                const badgeExtintor = (v.estado !== 'Vendido' && diasEnStock >= 15) ? '<span title="Producto estancado (+15 días)" class="ml-1 text-xs">🧯</span>' : '';
-                const labelIncidencias = (v.estado === 'Devuelto') ? `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded text-[7px] font-black uppercase">⚠️ ${diasEnStock} DÍAS</span>` : '';
+                filtrados.forEach(v => {
+                    const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
+                    
+                    const esStockCritico = est.rolFinanciero === 'Stock' && totalStockPorPrenda[v.prenda] < 2;
+                    const claseAlertaStock = esStockCritico ? 'alerta-stock-critico border-amber-500/70 bg-amber-500/5' : '';
+                    card.className = `kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none ${claseAlertaStock} border-${est.color}-500/30 text-white`;
 
-                const claseAlertaStock = esStockCritico ? 'alerta-stock-critico border-amber-500/70 bg-amber-500/5' : '';
-                card.className = `kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none ${claseAlertaStock}`;
+                    const thumb = v.imagen ? `<img src="${v.imagen}" class="card-img-mini flex-shrink-0 border border-white/10 shadow-lg">` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20">N/A</div>`;
+                    const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
+                    const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
+                    const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">🏬 ${v.proveedor.toUpperCase()}</span>` : '';
+                    const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas); const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
+                    
+                    const badgeEst = `<span class="bg-${est.color}-500/10 text-${est.color}-400 border border-${est.color}-500/20 px-1 py-0.5 rounded text-[8px] font-black uppercase">${est.nombre}</span>`;
 
-                const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
-                const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
-                const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">🏬 ${v.proveedor.toUpperCase()}</span>` : '';
-                const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas); const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
-                
-                const badgeCriticoHtml = esStockCritico ? `<span class="bg-amber-500 text-slate-950 px-1 py-0.5 rounded text-[7px] font-black tracking-widest animate-pulse">RESERVA</span>` : '';
-                const badgeStockFrio = esStockFrio ? `<span class="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded text-[7px] font-black tracking-widest flex items-center gap-0.5" title="Artículo en stock más de 21 días">❄️ ANTIGUO</span>` : '';
-                const renderComentario = v.comentariosProducto ? `<p class="text-[9px] italic opacity-60 mt-1 bg-black/5 p-1 rounded border border-current/5 truncate">💬 ${v.comentariosProducto}</p>` : '';
-
-                const labelAlta = `<span class="text-blue-400/80">📥 ${v.fecha || 'N/A'}</span>`;
-                const labelVenta = v.fechaVenta ? `<span class="text-emerald-400/80">💰 ${v.fechaVenta}</span>` : '';
-                const renderTimeline = `<div class="flex gap-2 text-[8px] font-mono mt-1 opacity-80">${labelAlta} ${labelVenta}</div>`;
-
-                card.innerHTML = `
-                    <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0">
-                    ${thumb}
-                    <div class="flex-1 min-w-0 pointer-events-none">
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                            <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}${badgeExtintor}</h4> 
-                            ${badgeCanal} ${badgeTienda} ${badgeCriticoHtml} ${badgeStockFrio} ${labelIncidencias} ${v.estado === 'Reservado' ? '<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-black">RESERVADO</span>' : ''}
+                    card.innerHTML = `
+                        <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0">
+                        ${thumb}
+                        <div class="flex-1 min-w-0 pointer-events-none">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
+                                ${badgeCanal} ${badgeTienda} ${badgeEst}
+                            </div>
+                            <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
+                            <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
+                            <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
                         </div>
-                        <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
-                        <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
-                        ${renderTimeline}
-                        ${renderComentario}
-                        <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
-                    </div>
-                    <div class="flex items-center gap-1.5 flex-shrink-0 text-[11px]">
-                        <button onclick="duplicarPrendaIndividual('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg">👯</button>
-                        <button onclick="lanzarModalImpresionEtiqueta('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg">🖨️</button>
-                        <button onclick="editItem('${v._id}')" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-0.5">Editar</button>
-                        <button onclick="deleteItem('${v._id}')" class="opacity-30 hover:opacity-100 text-xs px-0.5">✕</button>
-                    </div>`;
+                        <div class="flex items-center gap-1.5 flex-shrink-0 text-[11px]">
+                            <button onclick="duplicarPrendaIndividual('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg">👯</button>
+                            <button onclick="lanzarModalImpresionEtiqueta('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg">🖨️</button>
+                            <button onclick="editItem('${v._id}')" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-0.5">Editar</button>
+                            <button onclick="deleteItem('${v._id}')" class="opacity-30 hover:opacity-100 text-xs px-0.5">✕</button>
+                        </div>`;
 
-                if (v.estado === 'Vendido') { colVendido.appendChild(card); vCount += (v.cantidad || 1); }
-                else if (v.estado === 'Reservado') { colReservado.appendChild(card); rCount += (v.cantidad || 1); }
-                else if (v.estado === 'Devuelto') { colDevuelto.appendChild(card); dCount += (v.cantidad || 1); }
-                else { colStock.appendChild(card); sCount += (v.cantidad || 1); }
+                    colDom.appendChild(card);
+                    vCount += (v.cantidad || 1);
+                });
+                
+                const badgeDom = document.getElementById(`badge-kanban-${est._id}`);
+                if(badgeDom) badgeDom.innerText = vCount;
             });
-            
-            const bs = document.getElementById('badge-stock'); const br = document.getElementById('badge-reservado'); const bv = document.getElementById('badge-vendido'); const bd = document.getElementById('badge-devuelto');
-            if(bs) bs.innerText = sCount; if(br) br.innerText = rCount; if(bv) bv.innerText = vCount; if(bd) bd.innerText = dCount;
         }
 
         function updateTickerWallStreet() {
             const ticker = document.getElementById('ticker-content'); if(!ticker) return; let txt = '';
-            BASE_DATOS.slice(0, 10).forEach(v => { const symbol = v.estado === 'Vendido' ? '<span class="text-emerald-400">▲</span>' : '<span class="text-amber-400">●</span>'; txt += `<span class="text-white font-mono uppercase">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400">${parseFloat(v.precioVenta || 0).toFixed(2)}€</b></span>`; });
+            const nombresEstadosVenta = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
+            BASE_DATOS.slice(0, 10).forEach(v => { const symbol = nombresEstadosVenta.includes(v.estado) ? '<span class="text-emerald-400">▲</span>' : '<span class="text-amber-400">●</span>'; txt += `<span class="text-white font-mono uppercase">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400">${parseFloat(v.precioVenta || 0).toFixed(2)}€</b></span>`; });
             ticker.innerHTML = txt + txt;
         }
 
@@ -3784,6 +3784,7 @@
                     document.getElementById('ticker-bar').classList.remove('hidden'); 
                     document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario.split('@')[0]} [${data.rol}]`; 
                     
+                    await refrescarEstadosKanban();
                     // 3. Cargar datos protegidos solo después de confirmar acceso
                     await refrescarYListarTiendasCloud();
                     await refrescarCategoriasCloud();

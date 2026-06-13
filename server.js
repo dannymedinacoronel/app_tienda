@@ -63,6 +63,15 @@ const GastoSchema = new mongoose.Schema({
 });
 const Gasto = mongoose.models.Gasto || mongoose.model('Gasto', GastoSchema);
 
+const EstadoKanbanSchema = new mongoose.Schema({
+    nombre: { type: String, required: true, unique: true, trim: true },
+    icono: { type: String, default: '📦' },
+    color: { type: String, default: 'slate' },
+    rolFinanciero: { type: String, enum: ['Stock', 'Venta', 'Oculto'], default: 'Stock' },
+    orden: { type: Number, default: 0 }
+});
+const EstadoKanban = mongoose.models.EstadoKanban || mongoose.model('EstadoKanban', EstadoKanbanSchema);
+
 const VentaRopaSchema = new mongoose.Schema({
     fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
     sku: { type: String, default: '', trim: true },
@@ -75,7 +84,7 @@ const VentaRopaSchema = new mongoose.Schema({
     gastosEnvio: { type: Number, default: 0 }, 
     canalVenta: { type: String, enum: ['Tienda Física', 'Vinted', 'Wallapop', 'Web'], default: 'Tienda Física' }, 
     rating: { type: Number, default: 0, min: 0, max: 5 },
-    estado: { type: String, enum: ['Vendido', 'No Vendido', 'Devuelto', 'Reservado'], default: 'No Vendido' },
+    estado: { type: String, default: 'No Vendido' },
     comentariosProducto: { type: String, default: '', trim: true },
     tienda: { type: mongoose.Schema.Types.ObjectId, ref: 'Tienda' },
     imagen: { type: String, default: '' },
@@ -188,6 +197,17 @@ mongoose.connect(MONGO_URI_FINAL)
             console.log('[INIT] FAQs predeterminadas inyectadas.');
         }
         
+        // Auto-poblar Configuración Kanban si está vacío
+        const estadoCount = await EstadoKanban.countDocuments();
+        if (estadoCount === 0) {
+            await EstadoKanban.insertMany([
+                { nombre: 'No Vendido', icono: '📦', color: 'amber', rolFinanciero: 'Stock', orden: 1 },
+                { nombre: 'Reservado', icono: '🤝', color: 'indigo', rolFinanciero: 'Stock', orden: 2 },
+                { nombre: 'Vendido', icono: '💰', color: 'emerald', rolFinanciero: 'Venta', orden: 3 },
+                { nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
+            ]);
+        }
+
         // Auto-poblar Tareas predeterminadas si está vacío
         const tareaCount = await Tarea.countDocuments();
         if (tareaCount === 0) {
@@ -502,6 +522,29 @@ app.delete('/api/faqs/:id', exigeAdmin, async (req, res) => {
     try { await Faq.findByIdAndDelete(req.params.id); await registrarLog(req.session.email, `Eliminó una FAQ`); res.sendStatus(200); } catch (e) { res.status(500).send(e); }
 });
 
+// --- Rutas de Ajustes del Tablero Kanban ---
+app.get('/api/estados-kanban', exigeAdmin, async (req, res) => {
+    try { res.json(await EstadoKanban.find().sort({ orden: 1 })); } catch (e) { res.status(500).send(e); }
+});
+app.post('/api/estados-kanban', exigeAdmin, async (req, res) => {
+    try {
+        const nuevo = new EstadoKanban(req.body); await nuevo.save();
+        await registrarLog(req.session.email, `Creó el estado Kanban: ${nuevo.nombre}`); res.json(nuevo);
+    } catch (e) { res.status(400).send(e); }
+});
+app.put('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
+    try {
+        const estado = await EstadoKanban.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        await registrarLog(req.session.email, `Modificó estado Kanban: ${estado.nombre}`); res.json(estado);
+    } catch (e) { res.status(400).send(e); }
+});
+app.delete('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
+    try {
+        const estado = await EstadoKanban.findByIdAndDelete(req.params.id);
+        if(estado) await registrarLog(req.session.email, `Eliminó el estado Kanban: ${estado.nombre}`); res.sendStatus(200);
+    } catch (e) { res.status(500).send(e); }
+});
+
 // --- Ruta del Asistente IA (Google Gemini) ---
 app.post('/api/chat', exigeAdmin, async (req, res) => {
     const { mensaje } = req.body;
@@ -646,6 +689,8 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
         const ventasRaw = await VentaRopa.find().populate('tienda').sort({ _id: -1 }).lean();
         const logs = await LogAuditoria.find().sort({ _id: -1 }).limit(50).lean(); 
         const gastosExtra = await Gasto.find().lean();
+        const estadosKanban = await EstadoKanban.find().lean();
+        const nombresEstadosVenta = estadosKanban.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
         
         let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, totalGastosOperativos = 0, costeVendidosTotal = 0;
         
@@ -662,7 +707,7 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
             inversion += (pCompra * cant);
             gastosTotalesEnvio += (gEnvio * cant);
 
-            if (v.estado === 'Vendido' && v.canalVenta) {
+            if (nombresEstadosVenta.includes(v.estado) && v.canalVenta) {
                 let comisionPlataforma = 0;
                 if (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') {
                     comisionPlataforma = (pVenta * 0.05); 
@@ -726,9 +771,10 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
         const { id } = req.params;
         const { estado } = req.body;
 
-        // Si el estado es Reservado, no se registra fechaVenta
+        const estadoConfig = await EstadoKanban.findOne({ nombre: estado });
         const updateData = { estado };
-        if (estado === 'Vendido') {
+        
+        if (estadoConfig && estadoConfig.rolFinanciero === 'Venta') {
             updateData.fechaVenta = new Date().toISOString().split('T')[0];
         } else {
             updateData.fechaVenta = '';
@@ -746,24 +792,28 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
     try {
         const { sku } = req.params;
         let venta = await VentaRopa.findOne({ sku: sku });
+        
+        const estadosConfig = await EstadoKanban.find().sort({ orden: 1 });
+        const estStock = estadosConfig.find(e => e.rolFinanciero === 'Stock');
+        const estVenta = estadosConfig.find(e => e.rolFinanciero === 'Venta');
+        
+        const nombreStock = estStock ? estStock.nombre : 'No Vendido';
+        const nombreVenta = estVenta ? estVenta.nombre : 'Vendido';
 
         if (!venta) {
             venta = new VentaRopa({
                 sku: sku,
                 prenda: 'Artículo Escaneado Nuevo',
-                estado: 'No Vendido'
+                estado: nombreStock
             });
             await venta.save();
             return res.json({ operacion: "Creado", venta });
         } else {
-            const nuevoEstado = venta.estado === 'Vendido' ? 'No Vendido' : 'Vendido';
+            const nuevoEstado = venta.estado === nombreVenta ? nombreStock : nombreVenta;
             venta.estado = nuevoEstado;
-            if (nuevoEstado === 'Vendido') {
+            if (nuevoEstado === nombreVenta) {
                 venta.fechaVenta = new Date().toISOString().split('T')[0];
             } else {
-                // Si se mueve de Vendido a No Vendido o Reservado, se limpia la fecha de venta
-                // Si se mueve de Reservado a No Vendido, también se limpia
-                // Si se mueve de No Vendido a Reservado, no se toca fechaVenta
                 venta.fechaVenta = '';
             }
             await venta.save();

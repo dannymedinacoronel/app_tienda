@@ -608,7 +608,7 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
         const payload = { contents: [{ parts }] };
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
 
@@ -617,7 +617,7 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
         if (!response.ok) {
             console.error("[IA ERROR] Gemini 1.5 Flash falló:", data);
             const payloadFallback = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
-            const resFallback = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key=${apiKey}`, {
+            const resFallback = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadFallback)
             });
             

@@ -1003,11 +1003,17 @@
                 </div>
             </div>
         </div>
-        <form onsubmit="enviarMensajeIA(event)" class="p-3 border-t border-white/10 bg-black/40 flex gap-2">
-            <input type="text" id="ai-chat-input" placeholder="Escribe aquí tu duda..." autocomplete="off" class="flex-1 input-bg border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-purple-500 transition-colors shadow-inner">
-            <button type="submit" id="ai-btn-send" class="bg-gradient-to-br from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-all active:scale-90 font-black">
-                ➤
-            </button>
+        <form onsubmit="enviarMensajeIA(event)" class="p-3 border-t border-white/10 bg-black/40 flex flex-col gap-2">
+            <div id="ai-image-preview-container" class="hidden relative w-16 h-16 rounded-xl border border-white/10 overflow-hidden shadow-md">
+                <img id="ai-image-preview" src="" class="w-full h-full object-cover">
+                <button type="button" onclick="quitarImagenIA()" class="absolute top-0 right-0 bg-rose-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-bl-lg">✕</button>
+            </div>
+            <div class="flex gap-2">
+                <button type="button" onclick="document.getElementById('ai-file-input').click()" class="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 w-10 h-10 rounded-xl flex items-center justify-center transition-colors shadow-inner flex-shrink-0" title="Adjuntar Foto a la IA">📎</button>
+                <input type="file" id="ai-file-input" accept="image/*" class="hidden" onchange="procesarImagenIA(event)">
+                <input type="text" id="ai-chat-input" placeholder="Escribe duda o pídele una acción..." autocomplete="off" class="flex-1 input-bg border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-purple-500 transition-colors shadow-inner">
+                <button type="submit" id="ai-btn-send" class="bg-gradient-to-br from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-all active:scale-90 font-black flex-shrink-0">➤</button>
+            </div>
         </form>
     </div>
 
@@ -2530,25 +2536,56 @@
                 document.getElementById('ai-chat-input').focus();
             }
         }
+        
+        let imagenIABase64 = "";
+
+        function procesarImagenIA(event) {
+            const file = event.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+                    const MAX = 600; let w = img.width; let h = img.height;
+                    if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } } else { if (h > MAX) { w *= MAX / h; h = MAX; } }
+                    canvas.width = w; canvas.height = h; ctx.drawImage(img, 0, 0, w, h);
+                    imagenIABase64 = canvas.toDataURL('image/jpeg', 0.7);
+                    document.getElementById('ai-image-preview').src = imagenIABase64;
+                    document.getElementById('ai-image-preview-container').classList.remove('hidden');
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function quitarImagenIA() {
+            imagenIABase64 = ""; document.getElementById('ai-file-input').value = "";
+            document.getElementById('ai-image-preview-container').classList.add('hidden');
+        }
 
         async function enviarMensajeIA(e) {
             e.preventDefault();
             const input = document.getElementById('ai-chat-input');
             const mensaje = input.value.trim();
-            if (!mensaje) return;
+            const imgData = imagenIABase64; 
+            if (!mensaje && !imgData) return;
 
             const chatMessages = document.getElementById('ai-chat-messages');
             const btnSend = document.getElementById('ai-btn-send');
 
+            let userMsgHtml = mensaje;
+            if (imgData) userMsgHtml = `<img src="${imgData}" class="w-32 rounded-lg mb-2 border border-white/10 shadow-md">` + (mensaje ? `<p>${mensaje}</p>` : '');
+
             // Renderizar mensaje del usuario
             chatMessages.innerHTML += `
                 <div class="flex gap-2 justify-end">
-                    <div class="bg-indigo-600/30 border border-indigo-500/30 p-3 rounded-2xl rounded-tr-none opacity-90 leading-relaxed text-indigo-50 max-w-[85%] shadow-sm">
-                        ${mensaje}
+                    <div class="bg-indigo-600/30 border border-indigo-500/30 p-3 rounded-2xl rounded-tr-none opacity-90 leading-relaxed text-indigo-50 max-w-[85%] shadow-sm flex flex-col items-end">
+                        ${userMsgHtml}
                     </div>
                 </div>
             `;
             input.value = ''; btnSend.disabled = true; btnSend.innerHTML = '⏳';
+            quitarImagenIA();
             chatMessages.scrollTop = chatMessages.scrollHeight;
 
             // Renderizar burbuja de "Pensando..."
@@ -2565,7 +2602,7 @@
 
             try {
                 const res = await fetch(`${BACKEND_URL}/api/chat`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ mensaje })
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ mensaje, imagen: imgData })
                 });
                 const data = await res.json();
                 document.getElementById(idTemp).remove();
@@ -2584,6 +2621,11 @@
                             </div>
                         </div>
                     `;
+                    
+                    if (data.accionEjecutada) {
+                        cantarPorVoz("Operación ejecutada por Inteligencia Artificial.");
+                        await reloadCoreData();
+                    }
                 } else {
                     throw new Error(data.error);
                 }

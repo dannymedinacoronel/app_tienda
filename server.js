@@ -555,8 +555,8 @@ app.delete('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
 
 // --- Ruta del Asistente IA (Google Gemini) ---
 app.post('/api/chat', exigeAdmin, async (req, res) => {
-    const { mensaje } = req.body;
-    if (!mensaje) return res.status(400).json({ error: 'Mensaje vacío' });
+    const { mensaje, imagen } = req.body;
+    if (!mensaje && !imagen) return res.status(400).json({ error: 'Mensaje vacío' });
 
     const apiKey = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.replace(/['"]/g, '').trim() : '';
     
@@ -568,31 +568,111 @@ app.post('/api/chat', exigeAdmin, async (req, res) => {
     }
 
     try {
-        // Le damos personalidad y contexto a la IA
-        const promptSistema = "Eres Seychelles AI, el asistente virtual experto de un software ERP de inventario y facturación para una tienda de ropa. Tus respuestas deben ser breves, directas, profesionales y usar algún emoji. Ayudas al usuario a entender cómo usar la app (acciones masivas, escáner, KPIs, facturación).";
-        
-        const payload = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
+        // 1. Damos visión del inventario a la IA para que pueda analizarlo (Máx 150 items recientes)
+        const productos = await VentaRopa.find().select('sku prenda estado precioVenta cantidad').limit(150).lean();
+        const inventarioContexto = productos.map(p => `[SKU: ${p.sku || 'N/A'}] ${p.prenda} (${p.cantidad} ud) - ${p.estado} - ${p.precioVenta}€`).join('\n');
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        // Le damos personalidad y contexto a la IA
+        const promptSistema = `Eres Seychelles AI, asistente ERP y gerente virtual de la tienda.
+Respuestas extremadamente breves y amigables.
+Inventario actual para análisis:
+${inventarioContexto || 'Inventario vacío.'}
+
+¡TIENES PERMISOS DE ADMINISTRADOR! Puedes ejecutar acciones reales en la base de datos respondiendo EXACTAMENTE con este formato en una línea nueva al final de tu texto:
+[ACCION: comando | param1: valor | param2: valor]
+
+Comandos permitidos:
+1. ACTUALIZAR_PRECIO -> params: sku, precio
+2. CAMBIAR_ESTADO -> params: sku, estado
+3. BORRAR_PRODUCTO -> params: sku
+4. CREAR_PRODUCTO -> params: prenda, precio, categoria
+
+Ejemplo: Si te piden cambiar precio de VNT-123 a 20 euros, responde:
+Claro, he actualizado el precio a 20€.
+[ACCION: ACTUALIZAR_PRECIO | sku: VNT-123 | precio: 20]
+
+Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, inventa un buen título SEO, un precio estimado de venta de mercado y una categoría, y responde:
+[ACCION: CREAR_PRODUCTO | prenda: Camiseta Nike Vintage 90s | precio: 35 | categoria: Camisetas]`;
+        
+        const parts = [{ text: `${promptSistema}\n\nUsuario: ${mensaje || 'Revisa esta imagen y actúa.'}` }];
+
+        // 2. Si el frontend envía una foto, se la incrustamos a Gemini Vision
+        if (imagen) {
+            const matches = imagen.match(/^data:(image\/(png|jpeg|jpg|webp|heic));base64,(.+)$/);
+            if (matches && matches.length === 4) parts.push({ inline_data: { mime_type: matches[1], data: matches[3] } });
+        }
+
+        const payload = { contents: [{ parts }] };
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
         });
 
-        const data = await response.json();
+        let data = await response.json();
         
         if (!response.ok) {
-            console.error("[IA ERROR] Gemini API falló:", data);
+            console.error("[IA ERROR] Gemini 1.5 Flash falló:", data);
+            const payloadFallback = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
+            const resFallback = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.0-pro:generateContent?key=${apiKey}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadFallback)
+            });
             
-            // Fallback automático al modelo universal 'gemini-1.0-pro' si el modelo 1.5 no está disponible en la cuenta/región del usuario
-            if (data.error && data.error.message && (data.error.message.includes("not found") || data.error.message.includes("not supported"))) {
-                const resFallback = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key=${apiKey}`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-                });
-                const dataFallback = await resFallback.json();
-                if (resFallback.ok) return res.json({ respuesta: dataFallback.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta." });
+            data = await resFallback.json();
+            if (!resFallback.ok) {
+                console.error("[IA ERROR] Gemini Pro Fallback también falló:", data);
+                return res.status(400).json({ error: `Rechazado por Google API: ${data.error?.message || 'Verifica tu API Key'}` });
+            }
+        }
+
+        let textoIA = data.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";
+        let accionEjecutada = false;
+
+        // 3. Interceptor de Comandos Mágicos (Si la IA ha decidido modificar la base de datos)
+        const actionRegex = /\[ACCION:\s*(.*?)\s*\]/g;
+        let match;
+        while ((match = actionRegex.exec(textoIA)) !== null) {
+            accionEjecutada = true;
+            const partsCmd = match[1].split('|').map(p => p.trim());
+            const actionType = partsCmd[0];
+            const params = {};
+            for (let i = 1; i < partsCmd.length; i++) {
+                const kv = partsCmd[i].split(':');
+                if (kv.length >= 2) params[kv[0].trim().toLowerCase()] = kv.slice(1).join(':').trim();
             }
 
-            return res.status(400).json({ error: `Rechazado por Google API: ${data.error?.message || 'Verifica tu API Key'}` });
+            try {
+                if (actionType === 'ACTUALIZAR_PRECIO' && params.sku && params.precio) {
+                    await VentaRopa.findOneAndUpdate({ sku: params.sku }, { precioVenta: parseFloat(params.precio) });
+                    await registrarLog(req.session.email, `IA actualizó precio de ${params.sku}`);
+                } else if (actionType === 'CAMBIAR_ESTADO' && params.sku && params.estado) {
+                    await VentaRopa.findOneAndUpdate({ sku: params.sku }, { estado: params.estado });
+                    await registrarLog(req.session.email, `IA cambió estado de ${params.sku} a ${params.estado}`);
+                } else if (actionType === 'BORRAR_PRODUCTO' && params.sku) {
+                    await VentaRopa.findOneAndDelete({ sku: params.sku });
+                    await registrarLog(req.session.email, `IA borró producto ${params.sku}`);
+                } else if (actionType === 'CREAR_PRODUCTO' && params.prenda) {
+                    const nuevo = new VentaRopa({
+                        sku: `IA-${Date.now().toString().slice(-6)}`,
+                        prenda: params.prenda, precioVenta: parseFloat(params.precio) || 0,
+                        categoria: params.categoria || 'General', estado: 'No Vendido',
+                        imagen: imagen || '' // Se guarda la foto que le pasaste en el chat directamente en la ficha del producto!
+                    });
+                    await nuevo.save();
+                    await registrarLog(req.session.email, `IA creó producto ${params.prenda}`);
+                }
+            } catch(e) { console.error("Error ejecutando orden de IA:", e); }
         }
+
+        // Quitamos el texto de sistema para que el usuario no vea los comandos de máquina
+        textoIA = textoIA.replace(actionRegex, '').trim();
+        if (textoIA === '') textoIA = "¡Acción ejecutada con éxito en la base de datos! ✅";
+
+        res.json({ respuesta: textoIA, accionEjecutada });
+    } catch (error) {
+        console.error("[IA ERROR] Fallo en Gemini:", error);
+        res.status(500).json({ error: 'No se pudo conectar con el motor de IA.' });
+    }
+});
 
         const textoIA = data.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";
         res.json({ respuesta: textoIA });

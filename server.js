@@ -188,6 +188,17 @@ mongoose.connect(MONGO_URI_FINAL)
             console.log('[INIT] FAQs predeterminadas inyectadas.');
         }
         
+        // Auto-poblar Tareas predeterminadas si está vacío
+        const tareaCount = await Tarea.countDocuments();
+        if (tareaCount === 0) {
+            await Tarea.insertMany([
+                { titulo: "📦 Inventariar nueva colección", descripcion: "Subir fotos, añadir tallas y establecer el margen de beneficio en el sistema.", estado: "Pendiente", prioridad: "Alta" },
+                { titulo: "📸 Actualizar catálogo online", descripcion: "Sincronizar artículos nuevos con Vinted / Wallapop usando el Scraper.", estado: "En Proceso", prioridad: "Media" },
+                { titulo: "🛍️ Revisar stock de packaging", descripcion: "Comprobar si quedan suficientes cajas y bolsas de envío para esta semana.", estado: "Pendiente", prioridad: "Media" },
+                { titulo: "🧾 Cuadrar contabilidad mensual", descripcion: "Exportar el Excel y revisar los Gastos Operativos (OpEx) del mes.", estado: "Completada", prioridad: "Baja" }
+            ]);
+            console.log('[INIT] Tareas predeterminadas inyectadas.');
+        }
     })
     .catch(err => console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err));
 
@@ -489,6 +500,39 @@ app.put('/api/faqs/:id', exigeAdmin, async (req, res) => {
 });
 app.delete('/api/faqs/:id', exigeAdmin, async (req, res) => {
     try { await Faq.findByIdAndDelete(req.params.id); await registrarLog(req.session.email, `Eliminó una FAQ`); res.sendStatus(200); } catch (e) { res.status(500).send(e); }
+});
+
+// --- Ruta del Asistente IA (Google Gemini) ---
+app.post('/api/chat', exigeAdmin, async (req, res) => {
+    const { mensaje } = req.body;
+    if (!mensaje) return res.status(400).json({ error: 'Mensaje vacío' });
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    // Fallback amigable si el usuario aún no ha configurado la API Key
+    if (!apiKey) {
+        return res.json({
+            respuesta: "¡Hola! Soy el asistente virtual de Seychelles. 🌺\n\nPara que pueda responderte usando Inteligencia Artificial, necesitas crear una clave gratuita en **aistudio.google.com** y añadir la variable `GEMINI_API_KEY` en tu panel de Render.\n\nMientras tanto, puedes consultar el manual en el botón de FAQs."
+        });
+    }
+
+    try {
+        // Le damos personalidad y contexto a la IA
+        const promptSistema = "Eres Seychelles AI, el asistente virtual experto de un software ERP de inventario y facturación para una tienda de ropa. Tus respuestas deben ser breves, directas, profesionales y usar algún emoji. Ayudas al usuario a entender cómo usar la app (acciones masivas, escáner, KPIs, facturación).";
+        
+        const payload = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+        const textoIA = data.candidates?.[0]?.content?.parts?.[0]?.text || "Lo siento, mi servidor neuronal está ocupado ahora mismo.";
+        res.json({ respuesta: textoIA });
+    } catch (error) {
+        console.error("[IA ERROR] Fallo en Gemini:", error);
+        res.status(500).json({ error: 'No se pudo conectar con el motor de IA.' });
+    }
 });
 
 // --- Rutas de Notas ---

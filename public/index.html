@@ -847,147 +847,72 @@
                 </div>
             </div>
         </div>
-
-        <!-- MODAL FAQS -->
-        <div id="modal-faq" class="hidden fixed inset-0 z-[400] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-            <div class="card-bg border rounded-3xl p-6 w-full max-w-3xl flex flex-col gap-4 shadow-2xl relative max-h-[85vh]">
-                <button onclick="document.getElementById('modal-faq').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-2xl z-10">✕</button>
-                <div class="border-b border-white/10 pb-4">
-                    <h2 class="text-xl font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
-                        <span class="bg-emerald-500/20 p-2 rounded-xl">📚</span> Manual y Documentación
-                    </h2>
-                    <p class="text-[10px] opacity-50 font-mono mt-1">Haz clic en cualquier pregunta para desplegar la respuesta ilustrada.</p>
+        
+        <!-- SECCIÓN TAREAS (KANBAN) -->
+        <div id="sec-tareas" class="seccion-app hidden grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+            <div class="flex flex-col gap-6 lg:col-span-1">
+                <div id="form-container-tarea" class="card-bg border p-5 rounded-3xl shadow-xl transition-all">
+                    <h2 id="form-title-tarea" class="text-sm font-black uppercase tracking-wide text-indigo-400 mb-3">Nueva Tarea</h2>
+                    <form id="form-tarea" class="space-y-3" onsubmit="manejarEnvioTarea(event)">
+                        <input type="hidden" id="edit-id-tarea" value="">
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Título / Asunto</label>
+                            <input type="text" id="tar-titulo" required class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Descripción</label>
+                            <textarea id="tar-desc" rows="3" class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs focus:outline-none resize-none focus:border-blue-500"></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Vencimiento</label>
+                                <input type="date" id="tar-fecha" class="input-bg border w-full rounded-xl px-2 py-1.5 text-[10px] focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Prioridad</label>
+                                <select id="tar-prio" class="input-bg border w-full rounded-xl px-2 py-1.5 text-[10px] focus:outline-none dropdown-bg">
+                                    <option value="Baja">🟢 Baja</option>
+                                    <option value="Media" selected>🟡 Media</option>
+                                    <option value="Alta">🔴 Alta</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" id="btn-submit-tarea" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs py-3 rounded-xl shadow-md uppercase tracking-widest transition-all active:scale-[0.98]">Añadir Tarea</button>
+                        <button type="button" id="btn-cancel-tarea" onclick="cancelarEdicionTarea()" class="hidden w-full text-center text-[10px] uppercase opacity-50 py-0.5 hover:underline">Cancelar Cambios</button>
+                    </form>
                 </div>
-                <div class="flex-1 overflow-y-auto space-y-3 pr-2 text-xs text-slate-300 custom-scrollbar">
-                    
-                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
-                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
-                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest">🔄 ¿Cómo muevo un producto a "Vendido"?</span>
-                            <span class="group-open:rotate-180 transition-transform text-lg">▾</span>
-                        </summary>
-                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2 flex flex-col gap-3">
-                            <p>El tablero principal es completamente interactivo. Puedes gestionar el ciclo de vida de dos formas:</p>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
-                                <div class="bg-white/5 p-3 rounded-xl border border-white/10 shadow-sm">
-                                    <h5 class="text-emerald-300 font-bold mb-1">1. Arrastrar y Soltar (Recomendado)</h5>
-                                    <p class="opacity-70 text-[10px]">Mantén pulsada la tarjeta y muévela visualmente a la columna correspondiente.</p>
-                                    <div class="mt-2 flex items-center justify-center gap-2 opacity-60 text-[10px] font-mono bg-black/30 p-2 rounded-lg">
-                                        <span>📦 STOCK</span> ➡️ <span>💰 VENTAS</span>
-                                    </div>
-                                </div>
-                                <div class="bg-white/5 p-3 rounded-xl border border-white/10 shadow-sm">
-                                    <h5 class="text-emerald-300 font-bold mb-1">2. Edición Manual</h5>
-                                    <p class="opacity-70 text-[10px]">Pulsa en el botón azul de "Editar" en cualquier tarjeta y cambia su estado desde el formulario principal.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </details>
-
-                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
-                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
-                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest">⚡ ¿Cómo aplico acciones masivas (Ej. Rebajar precios)?</span>
-                            <span class="group-open:rotate-180 transition-transform text-lg">▾</span>
-                        </summary>
-                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2">
-                            <p>Aplica cambios a decenas de productos al mismo tiempo activando las casillas circulares 🔘 de cada prenda.</p>
-                            <div class="mt-3 bg-slate-900 border border-slate-700 p-3 rounded-xl flex flex-wrap gap-2 items-center shadow-lg">
-                                <span class="text-amber-400 font-black text-[10px]">💥 3 MARCADOS</span>
-                                <div class="h-4 w-[1px] bg-slate-700"></div>
-                                <span class="bg-blue-600 text-white px-2 py-1 rounded shadow text-[9px] font-bold">💰 AJUSTAR PRECIO</span>
-                                <span class="bg-emerald-600 text-white px-2 py-1 rounded shadow text-[9px] font-bold">💵 VENDER LOTE</span>
-                            </div>
-                            <p class="mt-3 opacity-70 text-[10px]">Al presionar "Ajustar Precio", puedes escribir <code class="bg-black/30 px-1 rounded text-amber-300">-5</code> para descontar 5€ a todo el lote seleccionado, o <code class="bg-black/30 px-1 rounded text-emerald-300">5</code> para subirlos.</p>
-                        </div>
-                    </details>
-
-                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
-                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
-                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest">📷 ¿Para qué sirve el escáner superior?</span>
-                            <span class="group-open:rotate-180 transition-transform text-lg">▾</span>
-                        </summary>
-                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2">
-                            <p>Convierte la cámara de tu móvil, tablet o portátil en una pistola láser de código de barras.</p>
-                            <ol class="list-decimal pl-5 mt-2 space-y-1 opacity-80 text-[10px]">
-                                <li>Abre cualquier producto y pulsa el botón gris <span class="bg-slate-700 px-1 rounded shadow text-white">🖨️ Imprimir</span> para obtener su etiqueta QR.</li>
-                                <li>Pega esa etiqueta en tus estanterías o bolsas de almacén.</li>
-                                <li>Cuando hagas una venta física rápida, pulsa el botón azul <span class="bg-blue-600 text-white px-1.5 py-0.5 rounded text-[9px] shadow">📷</span> superior, apunta al QR y el producto se marcará como <strong>Vendido</strong> automáticamente con un aviso sonoro.</li>
-                            </ol>
-                        </div>
-                    </details>
-
-                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
-                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
-                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest">👗 ¿Cómo funciona el "Scraper" de Vinted?</span>
-                            <span class="group-open:rotate-180 transition-transform text-lg">▾</span>
-                        </summary>
-                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2">
-                            <p>Es un robot que te ayuda a auditar que tu inventario de Seychelles coincida perfectamente con tu armario de Vinted.</p>
-                            <div class="mt-2 bg-white/5 border border-white/10 p-3 rounded-xl text-[10px]">
-                                <p class="text-amber-400 font-bold mb-1">⚠️ Diferencias de precio:</p>
-                                <p class="opacity-70 mb-2">Detecta si cambiaste un precio rebajándolo en la app de Vinted pero olvidaste actualizarlo aquí.</p>
-                                <p class="text-emerald-400 font-bold mb-1">✨ Artículos Nuevos:</p>
-                                <p class="opacity-70">Encuentra prendas que subiste directamente a Vinted desde el móvil para importarlas a tu base de datos con un clic (y descargando sus fotos originales automáticamente).</p>
-                            </div>
-                        </div>
-                    </details>
-
-                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
-                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
-                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest">📝 ¿Cómo funciona el CRM y las Facturas?</span>
-                            <span class="group-open:rotate-180 transition-transform text-lg">▾</span>
-                        </summary>
-                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2">
-                            <p>El sistema cuenta con un gestor de clientes y un emisor de facturas legales en PDF.</p>
-                            <ul class="list-disc pl-5 mt-2 space-y-1 opacity-80 text-[10px]">
-                                <li><strong>Módulo CRM:</strong> Guarda DNI, contacto y programa reservas futuras. El sistema te avisará en la fecha indicada.</li>
-                                <li><strong>Facturación Automática:</strong> Ve a la pestaña 'Fact.', selecciona las prendas que compró el cliente, pulsa 'Cargar de CRM' para autocompletar sus datos, y haz clic en emitir. El sistema calcula Base Imponible e IVA automáticamente.</li>
-                            </ul>
-                        </div>
-                    </details>
-
-                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
-                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
-                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest">📌 ¿Qué son las Notas Adhesivas de la pantalla?</span>
-                            <span class="group-open:rotate-180 transition-transform text-lg">▾</span>
-                        </summary>
-                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2">
-                            <p>El <strong>Workspace Colaborativo</strong> te permite pegar notas virtuales sobre el panel de control.</p>
-                            <p class="mt-2 opacity-80 text-[10px]">Haz clic en el botón superior <span class="bg-indigo-600 text-white px-1.5 py-0.5 rounded shadow">📌 Nota</span>. Aparecerá un Post-it. Puedes arrastrarlo por toda la pantalla, cambiarle el color (pasando el ratón por encima) o redimensionarlo arrastrando desde su esquina inferior derecha. Todos los usuarios conectados verán la nota en tiempo real.</p>
-                        </div>
-                    </details>
-
-                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
-                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
-                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest">💸 Gastos Operativos vs Coste de Ropa</span>
-                            <span class="group-open:rotate-180 transition-transform text-lg">▾</span>
-                        </summary>
-                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2">
-                            <p>El sistema separa tu inversión en 2 bloques para darte un Beneficio Neto 100% real:</p>
-                            <ol class="list-decimal pl-5 mt-2 space-y-1 opacity-80 text-[10px]">
-                                <li><strong>Coste Unitario:</strong> Lo que te costó comprar la prenda (se añade al crear el artículo).</li>
-                                <li><strong>Gastos Operativos (OpEx):</strong> Alquileres, sobres, publicidad, luz. Estos se añaden desde la sección inferior "Registrar Gasto Operativo". Todo se resta en la tarjeta central "Ganancia Neta".</li>
-                            </ol>
-                        </div>
-                    </details>
-
-                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
-                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
-                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest">🛡️ Auditoría, Privacidad y Copias de Seguridad</span>
-                            <span class="group-open:rotate-180 transition-transform text-lg">▾</span>
-                        </summary>
-                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2">
-                            <p>Seychelles Core incluye herramientas de grado empresarial para proteger tus datos:</p>
-                            <div class="grid grid-cols-1 gap-4 mt-2">
-                                <div class="bg-white/5 p-3 rounded-xl border border-white/10 shadow-sm">
-                                    <h5 class="text-indigo-300 font-bold mb-1">📜 Calendario de Auditoría</h5>
-                                    <p class="opacity-70 text-[10px]">En la pestaña 'Logs', puedes ver día a día qué persona ha modificado, borrado o vendido qué producto exactamente, garantizando trazabilidad.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </details>
-
+            </div>
+            <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[500px]">
+                    <h3 class="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-4 flex items-center gap-1.5">📌 PENDIENTES</h3>
+                    <div id="col-tar-pendiente" class="flex-1 space-y-3 overflow-y-auto pr-1 pb-10" ondragover="allowDrop(event)" ondrop="handleDropTarea(event, 'Pendiente')" ondragleave="clearDrop(event)"></div>
                 </div>
-                <button onclick="document.getElementById('modal-faq').classList.add('hidden')" class="w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all shadow-md mt-2">Entendido, cerrar guía</button>
+                <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[500px]">
+                    <h3 class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4 flex items-center gap-1.5">⚙️ EN PROCESO</h3>
+                    <div id="col-tar-proceso" class="flex-1 space-y-3 overflow-y-auto pr-1 pb-10" ondragover="allowDrop(event)" ondrop="handleDropTarea(event, 'En Proceso')" ondragleave="clearDrop(event)"></div>
+                </div>
+                <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[500px]">
+                    <h3 class="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-4 flex items-center gap-1.5">✅ COMPLETADAS</h3>
+                    <div id="col-tar-completada" class="flex-1 space-y-3 overflow-y-auto pr-1 pb-10" ondragover="allowDrop(event)" ondrop="handleDropTarea(event, 'Completada')" ondragleave="clearDrop(event)"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN GESTIÓN FAQS -->
+        <div id="sec-faqs" class="seccion-app hidden grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col gap-4 h-fit sticky top-4">
+                <h3 id="form-title-faq" class="text-xs font-black text-emerald-400 uppercase tracking-widest flex items-center gap-2">✍️ Crear Nueva FAQ</h3>
+                <form id="form-faq" class="space-y-3" onsubmit="manejarEnvioFaq(event)">
+                    <input type="hidden" id="edit-id-faq" value="">
+                    <input type="text" id="faq-pregunta" placeholder="Ej: ¿Cómo muevo un producto?" required class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 font-bold">
+                    <textarea id="faq-respuesta" placeholder="Escribe aquí la respuesta detallada..." rows="5" required class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none resize-none focus:border-emerald-500"></textarea>
+                    <button type="submit" id="btn-submit-faq" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-xl shadow-lg uppercase text-[10px] tracking-widest transition-all">Guardar Pregunta</button>
+                    <button type="button" id="btn-cancel-faq" onclick="cancelarEdicionFaq()" class="hidden w-full text-center text-[10px] uppercase opacity-50 py-0.5 hover:underline">Cancelar</button>
+                </form>
+            </div>
+            <div class="lg:col-span-2 card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[500px]">
+                <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest mb-6">📚 Directorio de Preguntas Frecuentes</h3>
+                <div id="lista-faqs-admin" class="flex-1 space-y-3 overflow-y-auto pr-1 pb-10 custom-scrollbar"></div>
             </div>
         </div>
 
@@ -1070,6 +995,38 @@
                 <div class="ticker-content flex items-center gap-12" id="ticker-content"></div>
             </div>
         </footer>
+    </div>
+    
+    <!-- ASISTENTE IA FLOTANTE -->
+    <div id="ai-assistant-btn" onclick="toggleAIAssistant()" class="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full shadow-[0_0_20px_rgba(147,51,234,0.5)] flex items-center justify-center cursor-pointer hover:scale-110 transition-transform z-[900] active:scale-95 border-2 border-white/20">
+        <span class="text-2xl drop-shadow-md">✨</span>
+    </div>
+
+    <div id="ai-chat-window" class="hidden fixed bottom-24 right-6 w-[340px] h-[500px] max-h-[70vh] card-bg border rounded-3xl shadow-2xl z-[900] flex flex-col overflow-hidden transition-all duration-300">
+        <div class="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border-b border-white/10 p-4 flex justify-between items-center shadow-md">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-lg border border-purple-400/50 shadow-inner">🤖</div>
+                <div>
+                    <h3 class="text-xs font-black uppercase tracking-widest text-purple-400">Seychelles AI</h3>
+                    <p class="text-[9px] opacity-60 font-mono">Motor: Gemini 1.5 Flash</p>
+                </div>
+            </div>
+            <button onclick="toggleAIAssistant()" class="text-white/50 hover:text-white transition-colors text-lg px-2">✕</button>
+        </div>
+        <div id="ai-chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar text-xs">
+            <div class="flex gap-2">
+                <div class="w-7 h-7 rounded-full bg-purple-600/30 border border-purple-500/30 flex items-center justify-center flex-shrink-0 text-sm mt-1">✨</div>
+                <div class="bg-white/5 border border-white/5 p-3 rounded-2xl rounded-tl-none opacity-90 leading-relaxed shadow-sm">
+                    ¡Hola! Soy tu asistente inteligente. Pregúntame sobre tus datos, cómo funciona una pantalla o dile que te resuma información. ¿En qué te ayudo?
+                </div>
+            </div>
+        </div>
+        <form onsubmit="enviarMensajeIA(event)" class="p-3 border-t border-white/10 bg-black/40 flex gap-2">
+            <input type="text" id="ai-chat-input" placeholder="Escribe aquí tu duda..." autocomplete="off" class="flex-1 input-bg border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-purple-500 transition-colors shadow-inner">
+            <button type="submit" id="ai-btn-send" class="bg-gradient-to-br from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-all active:scale-90 font-black">
+                ➤
+            </button>
+        </form>
     </div>
 
 
@@ -2503,6 +2460,83 @@
 
         async function borrarClienteCRM(id) {
             if(confirm("¿Eliminar cliente del CRM?")) { await fetch(`/api/clientes/${id}`, { method: 'DELETE', credentials: 'include' }); refrescarClientesCRM(); }
+        }
+        
+        // --- LÓGICA DEL ASISTENTE DE IA (GEMINI) ---
+        function toggleAIAssistant() {
+            const chat = document.getElementById('ai-chat-window');
+            chat.classList.toggle('hidden');
+            if (!chat.classList.contains('hidden')) {
+                document.getElementById('ai-chat-input').focus();
+            }
+        }
+
+        async function enviarMensajeIA(e) {
+            e.preventDefault();
+            const input = document.getElementById('ai-chat-input');
+            const mensaje = input.value.trim();
+            if (!mensaje) return;
+
+            const chatMessages = document.getElementById('ai-chat-messages');
+            const btnSend = document.getElementById('ai-btn-send');
+
+            // Renderizar mensaje del usuario
+            chatMessages.innerHTML += `
+                <div class="flex gap-2 justify-end">
+                    <div class="bg-indigo-600/30 border border-indigo-500/30 p-3 rounded-2xl rounded-tr-none opacity-90 leading-relaxed text-indigo-50 max-w-[85%] shadow-sm">
+                        ${mensaje}
+                    </div>
+                </div>
+            `;
+            input.value = ''; btnSend.disabled = true; btnSend.innerHTML = '⏳';
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            // Renderizar burbuja de "Pensando..."
+            const idTemp = 'ia-temp-' + Date.now();
+            chatMessages.innerHTML += `
+                <div id="${idTemp}" class="flex gap-2">
+                    <div class="w-7 h-7 rounded-full bg-purple-600/30 border border-purple-500/30 flex items-center justify-center flex-shrink-0 animate-pulse text-sm mt-1">🤖</div>
+                    <div class="bg-white/5 border border-white/5 p-3 rounded-2xl rounded-tl-none opacity-70 italic shadow-sm">
+                        Procesando...
+                    </div>
+                </div>
+            `;
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/chat`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ mensaje })
+                });
+                const data = await res.json();
+                document.getElementById(idTemp).remove();
+
+                if (res.ok) {
+                    const respuestaFormat = data.respuesta.replace(/\n/g, '<br>');
+                    chatMessages.innerHTML += `
+                        <div class="flex gap-2 animate-fadeIn">
+                            <div class="w-7 h-7 rounded-full bg-purple-600/30 border border-purple-500/30 flex items-center justify-center flex-shrink-0 text-sm mt-1">✨</div>
+                            <div class="bg-white/5 border border-white/5 p-3 rounded-2xl rounded-tl-none opacity-90 leading-relaxed max-w-[85%] shadow-sm">
+                                ${respuestaFormat}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                document.getElementById(idTemp)?.remove();
+                chatMessages.innerHTML += `
+                    <div class="flex gap-2">
+                        <div class="w-7 h-7 rounded-full bg-rose-600/30 border border-rose-500/30 flex items-center justify-center flex-shrink-0 text-sm mt-1">⚠️</div>
+                        <div class="bg-rose-500/10 border border-rose-500/20 text-rose-300 p-3 rounded-2xl rounded-tl-none opacity-90 leading-relaxed max-w-[85%]">
+                            ${err.message || 'Error de conexión con Gemini AI.'}
+                        </div>
+                    </div>
+                `;
+            } finally {
+                btnSend.disabled = false; btnSend.innerHTML = '➤';
+                chatMessages.scrollTop = chatMessages.scrollHeight; input.focus();
+            }
         }
 
         async function cargarEnFormCRM(id) {

@@ -608,20 +608,37 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
         const payload = { contents: [{ parts }] };
 
-        let geminiData;
-        try {
-            // Utilizamos Axios en lugar de fetch nativo para máxima estabilidad en Node.js/Render
-            const apiRes = await axios.post(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-                payload,
-                { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
-            );
-            geminiData = apiRes.data;
-        } catch (err) {
-            // Si falla, sacamos el error crudo real de Google
-            const errMsg = err.response?.data?.error?.message || err.message;
-            console.error("[IA ERROR AXIOS]:", errMsg);
-            return res.status(400).json({ error: `Google API Error: ${errMsg}` });
+        const endpoints = [
+            { modelo: 'gemini-1.5-flash (v1)', url: `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, vision: true },
+            { modelo: 'gemini-1.5-flash (v1beta)', url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, vision: true },
+            { modelo: 'gemini-1.5-pro (v1)', url: `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${apiKey}`, vision: true },
+            { modelo: 'gemini-1.0-pro (v1beta)', url: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent?key=${apiKey}`, vision: false },
+            { modelo: 'gemini-pro (v1)', url: `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${apiKey}`, vision: false }
+        ];
+
+        let geminiData = null;
+        let lastError = '';
+
+        for (const ep of endpoints) {
+            try {
+                let currentPayload = payload;
+                // Si el modelo de emergencia es antiguo y no soporta fotos, enviamos solo texto para no romperlo
+                if (!ep.vision && imagen) {
+                    currentPayload = { contents: [{ parts: [{ text: `${promptSistema}\n\nUsuario: ${mensaje}` }] }] };
+                }
+                const apiRes = await axios.post(ep.url, currentPayload, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
+                geminiData = apiRes.data;
+                console.log(`[IA INFO] Conexión exitosa con: ${ep.modelo}`);
+                break; // Rompemos el bucle porque funcionó
+            } catch (err) {
+                lastError = err.response?.data?.error?.message || err.message;
+                console.warn(`[IA WARN] Falló ${ep.modelo}: ${lastError}`);
+            }
+        }
+
+        if (!geminiData) {
+            console.error("[IA ERROR TOTAL]:", lastError);
+            return res.status(400).json({ error: `Google API Error: Ningún modelo funcionó. Último error: ${lastError}` });
         }
 
         let textoIA = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "El modelo no pudo generar una respuesta.";

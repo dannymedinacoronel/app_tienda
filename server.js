@@ -1234,9 +1234,9 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
         const registrosCreados = [];
         for (const prod of productos) {
             const galeriaBase64 = [];
-            // Procesamos un máximo de 8 fotos extra por producto para evitar agotar la memoria
+            // Procesamos un máximo de 12 fotos extra por producto para galerías completas
             if (prod.galeria && Array.isArray(prod.galeria)) {
-                for (const gUrl of prod.galeria.slice(0, 8)) {
+                for (const gUrl of prod.galeria.slice(0, 12)) {
                     const b64 = await downloadAndConvertToBase64(gUrl);
                     if (b64 && b64.startsWith('data:image')) galeriaBase64.push(b64);
                 }

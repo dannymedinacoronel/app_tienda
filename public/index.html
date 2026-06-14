@@ -1734,6 +1734,43 @@
             contenedor.innerHTML = html;
         }
 
+        function renderizarFlechasVisor() {
+            const btnPrev = document.getElementById('btn-visor-prev');
+            const btnNext = document.getElementById('btn-visor-next');
+            const totalFotos = (ITEM_FOTOS_ACTUAL.imagen ? 1 : 0) + (ITEM_FOTOS_ACTUAL.galeria ? ITEM_FOTOS_ACTUAL.galeria.length : 0);
+            if (totalFotos > 1 && btnPrev && btnNext) {
+                btnPrev.classList.remove('hidden');
+                btnNext.classList.remove('hidden');
+            } else if (btnPrev && btnNext) {
+                btnPrev.classList.add('hidden');
+                btnNext.classList.add('hidden');
+            }
+        }
+
+        function navegarFotoVisor(delta) {
+            if (!ITEM_FOTOS_ACTUAL) return;
+            const totalFotos = (ITEM_FOTOS_ACTUAL.imagen ? 1 : 0) + (ITEM_FOTOS_ACTUAL.galeria ? ITEM_FOTOS_ACTUAL.galeria.length : 0);
+            if (totalFotos <= 1) return;
+
+            let currentIndex = 0;
+            if (IDX_FOTO_ACTUAL === -1) {
+                currentIndex = 0;
+            } else {
+                currentIndex = IDX_FOTO_ACTUAL + (ITEM_FOTOS_ACTUAL.imagen ? 1 : 0);
+            }
+            
+            currentIndex += delta;
+            
+            if (currentIndex < 0) {
+                currentIndex = totalFotos - 1;
+            } else if (currentIndex >= totalFotos) {
+                currentIndex = 0;
+            }
+            
+            const nextIdx = ITEM_FOTOS_ACTUAL.imagen ? currentIndex - 1 : currentIndex;
+            seleccionarFotoVisor(nextIdx);
+        }
+
         function seleccionarFotoVisor(idx) {
             IDX_FOTO_ACTUAL = idx;
             const imgElement = document.getElementById('visor-foto-principal');
@@ -1753,6 +1790,7 @@
                 btnPortada.classList.remove('hidden');
             }
             
+            renderizarFlechasVisor();
             renderizarMiniaturasVisor();
         }
 
@@ -4503,6 +4541,26 @@
                 );
             } else { sendLogout(null); }
         }
+
+        // --- CONTROLADORES DE TECLADO Y SCROLL PARA LA GALERÍA ---
+        document.addEventListener('wheel', (e) => {
+            const modal = document.getElementById('modal-visor-fotos');
+            if (modal && !modal.classList.contains('hidden')) {
+                if (e.target.closest('#visor-contenedor-img')) {
+                    e.preventDefault();
+                    if (e.deltaY > 0 || e.deltaX > 0) navegarFotoVisor(1);
+                    else if (e.deltaY < 0 || e.deltaX < 0) navegarFotoVisor(-1);
+                }
+            }
+        }, { passive: false });
+
+        document.addEventListener('keydown', (e) => {
+            const modal = document.getElementById('modal-visor-fotos');
+            if (modal && !modal.classList.contains('hidden')) {
+                if (e.key === 'ArrowLeft') navegarFotoVisor(-1);
+                if (e.key === 'ArrowRight') navegarFotoVisor(1);
+            }
+        });
 
         setTimeout(async () => {
             try {

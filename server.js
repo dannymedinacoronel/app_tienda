@@ -493,6 +493,20 @@ app.post('/api/auth/google', async (req, res) => {
     }
 });
 
+// --- Rutas de Sistema / Mantenimiento ---
+app.get('/api/system/db-stats', exigeAdmin, async (req, res) => {
+    try {
+        const stats = await mongoose.connection.db.command({ dbStats: 1 });
+        const MAX_BYTES = 512 * 1024 * 1024; // 512MB (Límite del clúster gratuito M0 de Atlas)
+        const usedBytes = (stats.dataSize || 0) + (stats.indexSize || 0);
+        const percentage = Math.min(((usedBytes / MAX_BYTES) * 100), 100).toFixed(2);
+        res.json({ usedBytes, totalBytes: MAX_BYTES, percentage: parseFloat(percentage) });
+    } catch (e) {
+        console.error("Error obteniendo dbStats:", e);
+        res.status(500).json({ error: 'Fallo al recuperar estadísticas de DB.' });
+    }
+});
+
 // --- Rutas de Gestión de Usuarios ---
 app.get('/api/usuarios-admin', exigeAdmin, async (req, res) => {
     try { 
@@ -1175,6 +1189,7 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
             const titulo = item.titulo || '';
             const precioWeb = parseFloat(item.precio);
             const imagen = item.imagen || '';
+            const galeria = item.galeria || [];
 
             if (titulo && !isNaN(precioWeb)) {
                 const cleanItemTitle = cleanStr(titulo);
@@ -1190,7 +1205,7 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
                         resultados.identicos.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, precio: coincidencia.precioVenta, imagen });
                     }
                 } else {
-                    resultados.nuevos.push({ prenda: titulo, precioVenta: precioWeb, imagen, canalVenta: 'Vinted', estado: 'No Vendido' });
+                    resultados.nuevos.push({ prenda: titulo, precioVenta: precioWeb, imagen, galeria, canalVenta: 'Vinted', estado: 'No Vendido' });
                 }
             }
         });
@@ -1218,9 +1233,19 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
 
         const registrosCreados = [];
         for (const prod of productos) {
+            const galeriaBase64 = [];
+            // Procesamos un máximo de 8 fotos extra por producto para evitar agotar la memoria
+            if (prod.galeria && Array.isArray(prod.galeria)) {
+                for (const gUrl of prod.galeria.slice(0, 8)) {
+                    const b64 = await downloadAndConvertToBase64(gUrl);
+                    if (b64 && b64.startsWith('data:image')) galeriaBase64.push(b64);
+                }
+            }
+            const mainImg = await downloadAndConvertToBase64(prod.imagen);
             const nuevaVenta = new VentaRopa({
                 ...prod,
-                imagen: await downloadAndConvertToBase64(prod.imagen), // Descargar y guardar imagen como Base64
+                imagen: mainImg && mainImg.startsWith('data:image') ? mainImg : prod.imagen,
+                galeria: galeriaBase64,
                 tienda: tiendaVinted._id,
                 sku: `VNT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
                 comentariosProducto: `Importado automáticamente desde Vinted el ${new Date().toLocaleDateString()}`

@@ -249,6 +249,15 @@
                 </div>
                 
                 <div class="flex flex-wrap items-center justify-center lg:justify-end gap-2.5 w-full lg:w-auto">
+                    <!-- DB STORAGE BAR -->
+                    <div id="db-storage-container" class="hidden items-center gap-2 bg-slate-800/60 border border-current/10 px-3 py-1.5 rounded-xl shadow-md" title="Uso de espacio de MongoDB Atlas (512MB Max)">
+                        <span class="text-[9px] font-black uppercase opacity-60 tracking-widest">🗄️ DB</span>
+                        <div class="w-16 h-2 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                            <div id="db-storage-bar" class="h-full bg-emerald-400 w-0 transition-all duration-1000"></div>
+                        </div>
+                        <span id="db-storage-text" class="text-[9px] font-mono font-bold text-emerald-400">0%</span>
+                    </div>
+
                     <div class="relative w-full sm:w-60 flex items-center gap-2">
                         <div class="relative flex-1">
                             <form id="form-escaner-pistola" autocomplete="off">
@@ -364,11 +373,12 @@
                             
                             <!-- CARGA DE FOTO CON COMPRESIÓN -->
                             <div class="relative mb-4">
-                                <input type="file" id="input-foto-file" accept="image/*" class="hidden" onchange="procesarYComprimirFoto(event)">
+                                <input type="file" id="input-foto-file" accept="image/*" multiple class="hidden" onchange="procesarYComprimirFoto(event)">
                                 <img id="preview-foto-form" src="" class="preview-foto hidden" onclick="document.getElementById('input-foto-file').click()">
+                                <span id="badge-fotos-extra" class="hidden absolute top-2 right-2 bg-indigo-600 text-white text-[9px] font-black px-2 py-1 rounded-lg shadow-md border border-indigo-400"></span>
                                 <div id="placeholder-foto" onclick="document.getElementById('input-foto-file').click()" class="preview-foto flex flex-col items-center justify-center bg-black/20 gap-1">
                                     <span class="text-2xl">📸</span>
-                                    <span class="text-[9px] font-bold uppercase opacity-40">Añadir Foto (Auto-comprimida)</span>
+                                    <span class="text-[9px] font-bold uppercase opacity-40">Añadir Foto(s)</span>
                                 </div>
                                 <button type="button" id="btn-remove-foto" onclick="cancelFoto()" class="hidden mt-2 w-full text-[10px] text-rose-500 font-bold uppercase hover:underline flex items-center justify-center gap-1 transition-all">🗑️ Eliminar foto seleccionada</button>
                                 <input type="hidden" id="foto-base64" value="">
@@ -1290,32 +1300,33 @@
 
                 const productosMapeados = [];
                 jsonData.forEach(row => {
-                    let titulo = '', precio = '', imagen = '';
+                    let titulo = '', precio = '';
+                    const galeriaLocal = [];
                     
-                    // Intento 1: Detección estricta de nombres de columnas de Instant Data Scraper
-                    const valUrl = row['web_ui__Image__content src'] || row['image-src'] || row.image || row.foto || row.imagen || row['item-card-image-src'];
-                    const valTitle = row['web_ui__Text__text 2'] || row['web_ui__Text__text'] || row.description || row.title || row.nombre || row.prenda || row['item-card-description'];
-                    const valPrice = row['web_ui__Text__text 4'] || row.price || row.precio || row.price_val || row['item-card-price'];
+                    for (const key in row) {
+                        const k = key.toLowerCase();
+                        const val = String(row[key] || '').trim();
+                        if (!val) continue;
 
-                    if (valUrl && valTitle && valPrice) {
-                        titulo = String(valTitle); precio = String(valPrice); imagen = String(valUrl);
-                    } else {
-                        // Intento 2: Heurística si los nombres cambian (búsqueda por valores)
-                        for (const key in row) {
-                            const k = key.toLowerCase();
-                            const val = String(row[key] || '').trim();
-                            if (!val) continue;
+                        const isUrl = val.startsWith('http');
+                        const isPrice = val.includes('€') || /^\d+[.,]\d{2}$/.test(val) || k.includes('price') || k.includes('precio') || k.includes('text 4');
 
-                            const isUrl = val.startsWith('http');
-                            const isPrice = val.includes('€') || /^\d+[.,]\d{2}$/.test(val) || k.includes('price') || k.includes('precio') || k.includes('text 4');
-
-                            if (!precio && isPrice && !isUrl) precio = val;
-                            else if (!imagen && isUrl && (val.includes('.jpg') || val.includes('.png') || val.includes('.webp') || k.includes('img') || k.includes('src'))) imagen = val;
-                            else if (!titulo && !isUrl && !isPrice && val.length > 4 && isNaN(val)) {
-                                const vLower = val.toLowerCase();
-                                if (vLower !== 'novedad' && !vLower.includes('miembro') && !vLower.includes('ver todo')) titulo = val;
-                            }
+                        if (!precio && isPrice && !isUrl) precio = val;
+                        else if (isUrl && (val.includes('.jpg') || val.includes('.png') || val.includes('.webp') || k.includes('img') || k.includes('src') || k.includes('image'))) {
+                            if (!galeriaLocal.includes(val)) galeriaLocal.push(val);
                         }
+                        else if (!titulo && !isUrl && !isPrice && val.length > 4 && isNaN(val)) {
+                            const vLower = val.toLowerCase();
+                            if (vLower !== 'novedad' && !vLower.includes('miembro') && !vLower.includes('ver todo')) titulo = val;
+                        }
+                    }
+
+                    const valTitleStrict = row['web_ui__Text__text 2'] || row['web_ui__Text__text'] || row.description || row.title || row.nombre || row.prenda || row['item-card-description'];
+                    if (valTitleStrict) titulo = String(valTitleStrict);
+                    
+                    const valUrlStrict = row['web_ui__Image__content src'] || row['image-src'] || row.image || row.foto || row.imagen || row['item-card-image-src'];
+                    if (valUrlStrict && !galeriaLocal.includes(String(valUrlStrict))) {
+                        galeriaLocal.unshift(String(valUrlStrict));
                     }
 
                     // Limpieza de precios europeos
@@ -1330,7 +1341,9 @@
                     }
 
                     if (titulo && cleanPrice) {
-                        productosMapeados.push({ titulo, precio: cleanPrice, imagen });
+                        let imagen = galeriaLocal.length > 0 ? galeriaLocal[0] : '';
+                        let galeria = galeriaLocal.length > 1 ? galeriaLocal.slice(1) : [];
+                        productosMapeados.push({ titulo, precio: cleanPrice, imagen, galeria });
                     }
                 });
 
@@ -1424,13 +1437,17 @@
         if (nuevoCount > 0) {
             let catOptions = LISTA_CATEGORIAS_GLOBAL.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
             data.nuevos.forEach((n, i) => {
+                    const badgeGaleriaInfo = n.galeria && n.galeria.length > 0 ? `<div class="absolute bottom-1 right-1 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${n.galeria.length}</div>` : '';
                 gridNuevos.innerHTML += `
                     <div class="flex flex-col gap-2 p-3 bg-black/20 border border-white/10 rounded-2xl hover:bg-white/5 transition-all shadow-inner relative">
                         <div class="absolute top-3 right-3">
                             <input type="checkbox" id="check-new-${i}" class="check-new-scraper w-4 h-4 rounded text-emerald-500 bg-black/40 border-white/20 cursor-pointer" value="${i}" checked>
                         </div>
                         <div class="flex items-start gap-3">
-                            <img src="${n.imagen || ''}" class="w-14 h-14 rounded-xl object-cover shadow-md" onerror="this.src='https://via.placeholder.com/60'">
+                                <div class="relative flex-shrink-0">
+                                    <img src="${n.imagen || ''}" class="w-14 h-14 rounded-xl object-cover shadow-md" onerror="this.src='https://via.placeholder.com/60'">
+                                    ${badgeGaleriaInfo}
+                                </div>
                             <div class="min-w-0 flex-1 flex flex-col gap-1.5 pr-6">
                                 <input type="text" id="new-item-title-${i}" value="${n.prenda}" class="bg-transparent border-b border-white/10 text-[11px] font-bold uppercase w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white transition-colors" placeholder="Título a guardar...">
                                 <div class="flex items-center gap-1 mt-1">
@@ -1547,11 +1564,12 @@
             const costEditado = parseFloat(document.getElementById(`new-item-cost-${idx}`)?.value) || 0;
             const qtyEditada = parseInt(document.getElementById(`new-item-qty-${idx}`)?.value) || 1;
             const canalEditado = document.getElementById(`new-item-canal-${idx}`)?.value || 'Vinted';
+            const galeriaOriginal = itemOriginal.galeria || [];
 
             return { 
                 ...itemOriginal, prenda: tituloEditado, precioVenta: precioEditado, 
                 categoria: catEditada, talla: tallaEditada, precioCompra: costEditado, 
-                cantidad: qtyEditada, canalVenta: canalEditado 
+                cantidad: qtyEditada, canalVenta: canalEditado, galeria: galeriaOriginal
             };
         });
         if (selected.length === 0) return alert('Selecciona productos para importar.');
@@ -1675,6 +1693,7 @@
         let LISTA_FAQS = [];
         let LISTA_ESTADOS_KANBAN = [];
         let GLOBO_INSTANCE = null;
+        let FOTOS_FORMULARIO_TEMP = [];
 
         // 📸 LÓGICA DE VISOR Y GALERÍA DE FOTOS
         let ITEM_FOTOS_ACTUAL = null;
@@ -3749,6 +3768,35 @@
             else if (footerBar && footerBadge) { footerBar.classList.remove('ticker-alert-mode'); footerBadge.className = "bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none"; footerBadge.innerText = "WALL•ST•SEYCHELLES"; }
         }
 
+        async function actualizarUsoBaseDatos() {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/system/db-stats`, { credentials: 'include' });
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                const container = document.getElementById('db-storage-container');
+                const bar = document.getElementById('db-storage-bar');
+                const text = document.getElementById('db-storage-text');
+                
+                if (container && bar && text) {
+                    container.classList.remove('hidden'); container.classList.add('flex');
+                    bar.style.width = `${data.percentage}%`; text.innerText = `${data.percentage}%`;
+                    
+                    bar.classList.remove('bg-emerald-400', 'bg-amber-400', 'bg-rose-500');
+                    text.classList.remove('text-emerald-400', 'text-amber-400', 'text-rose-500', 'animate-pulse');
+
+                    if (data.percentage > 85) {
+                        bar.classList.add('bg-rose-500');
+                        text.classList.add('text-rose-500', 'animate-pulse');
+                    } else if (data.percentage > 60) {
+                        bar.classList.add('bg-amber-400'); text.classList.add('text-amber-400');
+                    } else {
+                        bar.classList.add('bg-emerald-400'); text.classList.add('text-emerald-400');
+                    }
+                }
+            } catch (e) { console.warn("No se pudo obtener estadísticas de la BD", e); }
+        }
+
         function lanzarModalImpresionEtiqueta(idElemento) {
             const v = BASE_DATOS.find(item => item._id === idElemento); if(!v) return;
             document.getElementById('print-prenda').innerText = v.prenda; document.getElementById('print-sku').innerText = v.sku ? `SKU: ${v.sku}` : 'GENERAL';
@@ -3976,6 +4024,7 @@
                     contenedorLogs.innerHTML = htmlLogs;
                 }
             } catch(e) {}
+            actualizarUsoBaseDatos();
         }
 
         // --- SISTEMA GRÁFICO CORREGIDO 100% ---
@@ -4286,7 +4335,8 @@
                 precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0, 
                 gastosEnvio: parseFloat(document.getElementById('gastosEnvio').value) || 0, 
                 canalVenta: document.getElementById('canalVenta').value, 
-                imagen: document.getElementById('foto-base64').value,
+                imagen: FOTOS_FORMULARIO_TEMP.length > 0 ? FOTOS_FORMULARIO_TEMP[0] : "",
+                galeria: FOTOS_FORMULARIO_TEMP.length > 1 ? FOTOS_FORMULARIO_TEMP.slice(1) : [],
                 comentariosProducto: document.getElementById('comentariosProducto').value.trim(),
                 rating: parseInt(document.getElementById('rating').value, 10) || 0,
                 proveedor: document.getElementById('proveedor').value
@@ -4333,15 +4383,10 @@
             document.getElementById('comentariosProducto').value = item.comentariosProducto || '';
             document.getElementById('proveedor').value = item.proveedor || 'Sin definir';
             
-            if (item.imagen) {
-                document.getElementById('foto-base64').value = item.imagen;
-                document.getElementById('preview-foto-form').src = item.imagen;
-                document.getElementById('preview-foto-form').classList.remove('hidden');
-                document.getElementById('placeholder-foto').classList.add('hidden');
-                document.getElementById('btn-remove-foto').classList.remove('hidden');
-            } else {
-                cancelFoto();
-            }
+            FOTOS_FORMULARIO_TEMP = [];
+            if (item.imagen) FOTOS_FORMULARIO_TEMP.push(item.imagen);
+            if (item.galeria && item.galeria.length) FOTOS_FORMULARIO_TEMP.push(...item.galeria);
+            actualizarVistaFotosFormulario();
 
             setFormRating(item.rating || 0); calcularMargenComercialAlVuelo();
             document.getElementById('form-container').className = "card-bg border p-5 rounded-3xl shadow-xl modo-edicion"; 
@@ -4365,74 +4410,79 @@
         }
 
         async function procesarYComprimirFoto(event) {
-            let file = event.target.files[0];
-            if (!file) return;
+            const files = Array.from(event.target.files);
+            if (!files.length) return;
             
             const btnSubmit = document.getElementById('btn-submit');
             const textoBotonOriginal = btnSubmit.innerText;
-            btnSubmit.innerText = "Comprimiendo imagen...";
+            btnSubmit.innerText = "Comprimiendo imágenes...";
             btnSubmit.disabled = true;
 
-            // Soporte universal para HEIC/HEIF de iPhone
-            if (file.type === "image/heic" || file.type === "image/heif" || file.name.toLowerCase().endsWith(".heic")) {
-                btnSubmit.innerText = "Convirtiendo formato HEIC...";
-                try {
-                    const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.8 });
-                    file = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-                } catch (err) {
-                    console.error("Error convirtiendo HEIC", err);
-                    alert("No se pudo procesar la imagen del iPhone. El archivo está corrupto.");
-                    btnSubmit.innerText = textoBotonOriginal;
-                    btnSubmit.disabled = false;
-                    return;
+            for (let file of files) {
+                if (file.type === "image/heic" || file.type === "image/heif" || file.name.toLowerCase().endsWith(".heic")) {
+                    try {
+                        const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.8 });
+                        file = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+                    } catch (err) { continue; }
                 }
-                btnSubmit.innerText = "Comprimiendo imagen...";
+
+                const base64 = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            const MAX_WIDTH = 800; const MAX_HEIGHT = 800;
+                            let width = img.width; let height = img.height;
+                            if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
+                            else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+                            canvas.width = width; canvas.height = height;
+                            ctx.drawImage(img, 0, 0, width, height);
+                            resolve(canvas.toDataURL('image/jpeg', 0.8));
+                        };
+                        img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                });
+                
+                FOTOS_FORMULARIO_TEMP.push(base64);
             }
 
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    
-                    const MAX_WIDTH = 800;
-                    const MAX_HEIGHT = 800;
-                    let width = img.width;
-                    let height = img.height;
+            actualizarVistaFotosFormulario();
+            btnSubmit.innerText = textoBotonOriginal;
+            btnSubmit.disabled = false;
+            event.target.value = "";
+        }
 
-                    if (width > height) {
-                        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-                    } else {
-                        if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-                    }
-
-                    canvas.width = width; canvas.height = height;
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                    
-                    document.getElementById('foto-base64').value = dataUrl;
-                    document.getElementById('preview-foto-form').src = dataUrl;
-                    document.getElementById('preview-foto-form').classList.remove('hidden');
-                    document.getElementById('placeholder-foto').classList.add('hidden');
-                    document.getElementById('btn-remove-foto').classList.remove('hidden');
-                    
-                    btnSubmit.innerText = textoBotonOriginal;
-                    btnSubmit.disabled = false;
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
+        function actualizarVistaFotosFormulario() {
+            if (FOTOS_FORMULARIO_TEMP.length === 0) {
+                document.getElementById('foto-base64').value = "";
+                document.getElementById('preview-foto-form').src = "";
+                document.getElementById('preview-foto-form').classList.add('hidden');
+                document.getElementById('placeholder-foto').classList.remove('hidden');
+                document.getElementById('btn-remove-foto').classList.add('hidden');
+                document.getElementById('badge-fotos-extra').classList.add('hidden');
+            } else {
+                document.getElementById('foto-base64').value = FOTOS_FORMULARIO_TEMP[0];
+                document.getElementById('preview-foto-form').src = FOTOS_FORMULARIO_TEMP[0];
+                document.getElementById('preview-foto-form').classList.remove('hidden');
+                document.getElementById('placeholder-foto').classList.add('hidden');
+                document.getElementById('btn-remove-foto').classList.remove('hidden');
+                
+                const badge = document.getElementById('badge-fotos-extra');
+                if (FOTOS_FORMULARIO_TEMP.length > 1) {
+                    badge.innerText = `+${FOTOS_FORMULARIO_TEMP.length - 1} FOTOS`;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
         }
 
         function cancelFoto() {
-            document.getElementById('input-foto-file').value = "";
-            document.getElementById('foto-base64').value = "";
-            document.getElementById('preview-foto-form').src = "";
-            document.getElementById('preview-foto-form').classList.add('hidden');
-            document.getElementById('placeholder-foto').classList.remove('hidden');
-            document.getElementById('btn-remove-foto').classList.add('hidden');
+            FOTOS_FORMULARIO_TEMP = [];
+            actualizarVistaFotosFormulario();
         }
 
         async function deleteItem(id) { if (confirm("¿Seguro que deseas eliminar permanentemente este artículo?")) { await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }); await reloadCoreData(); } }

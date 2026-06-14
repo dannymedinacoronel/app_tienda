@@ -1311,11 +1311,20 @@
                         const isUrl = val.startsWith('http');
                         const isPrice = val.includes('€') || /^\d+[.,]\d{2}$/.test(val) || k.includes('price') || k.includes('precio') || k.includes('text 4');
 
-                        if (!precio && isPrice && !isUrl) precio = val;
-                        else if (isUrl && (val.includes('.jpg') || val.includes('.png') || val.includes('.webp') || k.includes('img') || k.includes('src') || k.includes('image'))) {
-                            if (!galeriaLocal.includes(val)) galeriaLocal.push(val);
-                        }
-                        else if (!titulo && !isUrl && !isPrice && val.length > 4 && isNaN(val)) {
+                        const parts = val.split(/[\s,;|]+/);
+                        let foundUrlInParts = false;
+                        
+                        parts.forEach(p => {
+                            const pUrl = p.trim();
+                            if (pUrl.startsWith('http') && (pUrl.match(/\.(jpg|jpeg|png|webp)/i) || pUrl.includes('image') || k.includes('img') || k.includes('src'))) {
+                                if (!galeriaLocal.includes(pUrl)) galeriaLocal.push(pUrl);
+                                foundUrlInParts = true;
+                            }
+                        });
+
+                        if (!precio && isPrice && !foundUrlInParts) {
+                            precio = val;
+                        } else if (!titulo && !foundUrlInParts && !isPrice && val.length > 4 && isNaN(val) && !val.startsWith('http')) {
                             const vLower = val.toLowerCase();
                             if (vLower !== 'novedad' && !vLower.includes('miembro') && !vLower.includes('ver todo')) titulo = val;
                         }
@@ -1325,8 +1334,13 @@
                     if (valTitleStrict) titulo = String(valTitleStrict);
                     
                     const valUrlStrict = row['web_ui__Image__content src'] || row['image-src'] || row.image || row.foto || row.imagen || row['item-card-image-src'];
-                    if (valUrlStrict && !galeriaLocal.includes(String(valUrlStrict))) {
-                        galeriaLocal.unshift(String(valUrlStrict));
+                    if (valUrlStrict) {
+                        String(valUrlStrict).split(/[\s,;|]+/).reverse().forEach(u => {
+                            const uTrim = u.trim();
+                            if (uTrim.startsWith('http') && !galeriaLocal.includes(uTrim)) {
+                                galeriaLocal.unshift(uTrim);
+                            }
+                        });
                     }
 
                     // Limpieza de precios europeos
@@ -4314,7 +4328,8 @@
 
                     const esScraping = (v.sku && v.sku.startsWith('VNT-')) || (v.comentariosProducto && v.comentariosProducto.includes('Importado'));
                     const badgeScraping = esScraping ? `<div class="absolute -top-1.5 -right-1.5 bg-blue-600 rounded-full w-4 h-4 flex items-center justify-center text-[8px] shadow-lg border border-blue-300" title="Alojado en MongoDB (Vía Web/Scraping)">🌐</div>` : '';
-                    const thumb = v.imagen ? `<div class="relative flex-shrink-0"><img src="${v.imagen}" class="card-img-mini border border-white/10 shadow-lg">${badgeScraping}</div>` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20">N/A</div>`;
+                    const badgeGaleria = v.galeria && v.galeria.length > 0 ? `<div class="absolute bottom-0 right-0 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${v.galeria.length}</div>` : '';
+                    const thumb = v.imagen ? `<div class="relative flex-shrink-0 cursor-pointer hover:scale-105 transition-transform group" onclick="abrirVisorFotos('${v._id}')" title="Ver Galería de Fotos"><img src="${v.imagen}" class="card-img-mini border border-white/10 shadow-lg group-hover:border-indigo-400">${badgeScraping}${badgeGaleria}</div>` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20 cursor-pointer hover:bg-slate-700 transition-colors border border-dashed border-white/20" onclick="abrirVisorFotos('${v._id}')" title="Añadir Fotos">📸</div>`;
                     const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
                     const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
                     const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">🏬 ${v.proveedor.toUpperCase()}</span>` : '';

@@ -107,6 +107,12 @@
         }
         .combo-fire-active { animation: fireGlow 0.8s infinite ease-in-out !important; }
 
+        /* 🚀 OPTIMIZACIÓN DE RENDIMIENTO Y SCROLL */
+        html { scroll-behavior: smooth; }
+        .seccion-app { will-change: transform, opacity; }
+        .card-bg { will-change: transform; transform: translateZ(0); backface-visibility: hidden; transition: box-shadow 0.3s ease-out, border-color 0.3s ease; }
+        .custom-scrollbar { scroll-behavior: smooth; overflow-y: auto; overflow-x: hidden; }
+
         .ticker-alert-mode { background-color: #7f1d1d !important; color: #fee2e2 !important; font-weight: 900; animation: blinker 1s linear infinite; }
         @keyframes blinker { 50% { opacity: 0.85; } }
 
@@ -323,24 +329,24 @@
                 </nav>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-8" id="kpi-container-grid">
-                <div class="bg-gradient-to-br from-blue-600 to-cyan-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-8 perspective-1000" id="kpi-container-grid">
+                <div class="kpi-3d-card bg-gradient-to-br from-blue-600 to-cyan-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform duration-200 ease-out will-change-transform cursor-pointer">
                     <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Facturación Bruta</p>
                     <p class="text-3xl font-black mt-1" id="kpi-ingresos">0.00 €</p>
                 </div>
-                <div class="bg-gradient-to-br from-pink-600 to-purple-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                <div class="kpi-3d-card bg-gradient-to-br from-pink-600 to-purple-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform duration-200 ease-out will-change-transform cursor-pointer">
                     <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Ganancia Neta</p>
                     <p class="text-3xl font-black mt-1" id="kpi-beneficio">0.00 €</p>
                 </div>
-                <div class="bg-gradient-to-br from-amber-600 to-orange-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                <div class="kpi-3d-card bg-gradient-to-br from-amber-600 to-orange-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform duration-200 ease-out will-change-transform cursor-pointer">
                     <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Inversión Stock + Envío</p>
                     <p class="text-3xl font-black mt-1" id="kpi-inversion">0.00 €</p>
                 </div>
-                <div class="bg-gradient-to-br from-emerald-600 to-teal-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                <div class="kpi-3d-card bg-gradient-to-br from-emerald-600 to-teal-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform duration-200 ease-out will-change-transform cursor-pointer">
                     <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Retorno (ROI)</p>
                     <p class="text-3xl font-black mt-1" id="kpi-roi">0%</p>
                 </div>
-                <div class="bg-gradient-to-br from-purple-600 to-indigo-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform hover:scale-[1.02]">
+                <div class="kpi-3d-card bg-gradient-to-br from-purple-600 to-indigo-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform duration-200 ease-out will-change-transform cursor-pointer">
                     <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Prendas Vendidas</p>
                     <p class="text-3xl font-black mt-1" id="kpi-prendas">0</p>
                 </div>
@@ -1146,6 +1152,7 @@
         <div id="scraper-step-2" class="hidden flex flex-col gap-3">
             <div class="bg-blue-600/10 border border-blue-500/20 rounded-2xl p-4 mb-2">
                 <p id="scraper-summary-text" class="text-xs font-semibold text-blue-300 leading-relaxed"></p>
+                <p class="text-[10px] opacity-70 mt-2 font-mono text-emerald-300">💡 Tip: Ahora puedes modificar el Título y Precio de los artículos detectados directamente en los recuadros antes de darle a importar.</p>
             </div>
             
             <div class="flex justify-end">
@@ -1281,27 +1288,32 @@
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                 const jsonData = XLSX.utils.sheet_to_json(firstSheet);
 
-                // Mapeo ultra-dinámico para Instant Data Scraper (CSV/Excel)
+                // Mapeo ultra-dinámico basado en VALORES (Inteligencia de Datos), a prueba de nombres de columna erróneos
                 const productosMapeados = [];
                 jsonData.forEach(row => {
                     let titulo = '', precio = '', imagen = '';
                     
                     for (const key in row) {
-                        const k = key.toLowerCase();
                         const val = String(row[key] || '').trim();
                         if (!val) continue;
 
+                        const isUrl = val.startsWith('http');
+                        const isPrice = val.includes('€') || /^\d+[.,]\d{2}$/.test(val) || key.toLowerCase().includes('price') || key.toLowerCase().includes('precio');
+
                         // Extraer precio
-                        if (!precio && (k.includes('price') || k.includes('precio') || val.includes('€') || k.includes('text 4'))) {
+                        if (!precio && isPrice && !isUrl) {
                             precio = val;
                         }
-                        // Extraer título
-                        else if (!titulo && (k.includes('title') || k.includes('desc') || k.includes('text') || k.includes('nombre') || k.includes('prenda'))) {
-                            if (val.length > 3 && !val.includes('http')) titulo = val;
-                        }
                         // Extraer imagen
-                        else if (!imagen && (k.includes('src') || k.includes('img') || k.includes('image') || k.includes('foto'))) {
-                            if (val.includes('http')) imagen = val;
+                        else if (!imagen && isUrl && (val.includes('.jpg') || val.includes('.jpeg') || val.includes('.png') || val.includes('images'))) {
+                            imagen = val;
+                        }
+                        // Extraer título (La cadena de texto más larga que no es URL ni precio)
+                        else if (!titulo && !isUrl && !isPrice && val.length > 4 && isNaN(val)) {
+                            const vLower = val.toLowerCase();
+                            if (vLower !== 'novedad' && !vLower.includes('miembro') && !vLower.includes('favorito') && !vLower.includes('ver todo')) {
+                                titulo = val;
+                            }
                         }
                     }
 
@@ -1321,7 +1333,7 @@
                     }
                 });
 
-                if (productosMapeados.length === 0) throw new Error("No se detectaron columnas válidas (Título, Precio, Foto) en el CSV.");
+                if (productosMapeados.length === 0) throw new Error("No se pudo extraer la información de los productos. Asegúrate de que el CSV tenga textos descriptivos, imágenes y un precio con euros.");
 
                 const response = await fetch(`${BACKEND_URL}/api/scraper/analizar-manual`, {
                     method: 'POST',
@@ -1405,12 +1417,15 @@
         if (nuevoCount > 0) {
             data.nuevos.forEach((n, i) => {
                 gridNuevos.innerHTML += `
-                    <div class="flex items-center gap-3 p-2 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-colors cursor-pointer" onclick="document.getElementById('check-new-${i}').click()">
-                        <input type="checkbox" id="check-new-${i}" class="check-new-scraper" value="${i}" checked onclick="event.stopPropagation()">
-                        <img src="${n.imagen || ''}" class="w-10 h-10 rounded object-cover" onerror="this.src='https://via.placeholder.com/60'">
-                        <div class="min-w-0 flex-1">
-                            <p class="text-[10px] font-bold uppercase truncate">${n.prenda}</p>
-                            <p class="text-[10px] text-emerald-400 font-mono">${n.precioVenta}€</p>
+                    <div class="flex items-center gap-3 p-3 bg-black/20 border border-white/10 rounded-2xl hover:bg-white/5 transition-all shadow-inner">
+                        <input type="checkbox" id="check-new-${i}" class="check-new-scraper w-4 h-4 rounded text-emerald-500 bg-black/40 border-white/20 cursor-pointer" value="${i}" checked>
+                        <img src="${n.imagen || ''}" class="w-12 h-12 rounded-xl object-cover shadow-md" onerror="this.src='https://via.placeholder.com/60'">
+                        <div class="min-w-0 flex-1 flex flex-col gap-1.5">
+                            <input type="text" id="new-item-title-${i}" value="${n.prenda}" class="bg-transparent border-b border-white/10 text-[11px] font-bold uppercase w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white transition-colors" placeholder="Título...">
+                            <div class="flex items-center gap-1">
+                                <input type="number" id="new-item-price-${i}" value="${n.precioVenta}" step="0.01" class="bg-transparent border-b border-white/10 text-[11px] text-emerald-400 font-mono w-16 focus:outline-none focus:border-emerald-400 px-1 py-0.5 transition-colors text-right">
+                                <span class="text-[10px] text-emerald-400 font-mono">€</span>
+                            </div>
                         </div>
                     </div>`;
             });
@@ -1464,7 +1479,13 @@
 
     // Importa productos nuevos
     async function importarNuevosScraping() {
-        const selected = Array.from(document.querySelectorAll('.check-new-scraper:checked')).map(cb => resultadosScraperActual.nuevos[cb.value]);
+        const selected = Array.from(document.querySelectorAll('.check-new-scraper:checked')).map(cb => {
+            const idx = cb.value;
+            const itemOriginal = resultadosScraperActual.nuevos[idx];
+            const tituloEditado = document.getElementById(`new-item-title-${idx}`).value.trim() || itemOriginal.prenda;
+            const precioEditado = parseFloat(document.getElementById(`new-item-price-${idx}`).value) || itemOriginal.precioVenta;
+            return { ...itemOriginal, prenda: tituloEditado, precioVenta: precioEditado };
+        });
         if (selected.length === 0) return alert('Selecciona productos para importar.');
 
         if (!confirm(`¿Deseas importar estos ${selected.length} productos nuevos desde Vinted a tu base de datos de MongoDB?`)) return;
@@ -4249,6 +4270,22 @@
                     document.getElementById('ticker-bar').classList.remove('hidden'); 
                     document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario.split('@')[0]} [${data.rol}]`; 
                     
+                    // Inicializar Efecto 3D en Tarjetas
+                    const cards3D = document.querySelectorAll('.kpi-3d-card');
+                    cards3D.forEach(card => {
+                        card.addEventListener('mousemove', e => {
+                            const rect = card.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            const y = e.clientY - rect.top;
+                            const centerX = rect.width / 2;
+                            const centerY = rect.height / 2;
+                            const rotateX = ((y - centerY) / centerY) * -12;
+                            const rotateY = ((x - centerX) / centerX) * 12;
+                            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.03, 1.03, 1.03)`;
+                        });
+                        card.addEventListener('mouseleave', () => { card.style.transform = `perspective(1000px) rotateX(0) rotateY(0) scale3d(1, 1, 1)`; });
+                    });
+
                     await refrescarEstadosKanban();
                     // 3. Cargar datos protegidos solo después de confirmar acceso
                     await refrescarYListarTiendasCloud();
@@ -4265,7 +4302,7 @@
         
         particlesJS("particles-js", {
             "particles": {
-                "number": { "value": 80, "density": { "enable": true, "value_area": 800 } },
+                "number": { "value": 35, "density": { "enable": true, "value_area": 800 } }, // Reducido para mayor FPS al scrollear
                 "color": { "value": ["#d4af37", "#fbbf24", "#f59e0b"] },
                 "shape": { "type": ["circle"] },
                 "opacity": { "value": 0.5, "random": true },

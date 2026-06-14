@@ -1294,7 +1294,7 @@
                     
                     // Intento 1: Detección estricta de nombres de columnas de Instant Data Scraper
                     const valUrl = row['web_ui__Image__content src'] || row['image-src'] || row.image || row.foto || row.imagen || row['item-card-image-src'];
-                    const valTitle = row['web_ui__Text__text'] || row.description || row.title || row.nombre || row.prenda || row['item-card-description'];
+                    const valTitle = row['web_ui__Text__text 2'] || row['web_ui__Text__text'] || row.description || row.title || row.nombre || row.prenda || row['item-card-description'];
                     const valPrice = row['web_ui__Text__text 4'] || row.price || row.precio || row.price_val || row['item-card-price'];
 
                     if (valUrl && valTitle && valPrice) {

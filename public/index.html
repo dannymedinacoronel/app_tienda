@@ -254,7 +254,7 @@
                     <input type="file" id="input-restore-backup" class="hidden" accept=".json" onchange="importarBackupJSON(event)">
                     <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">📊 Excel</button>
                     <button onclick="procesarScraperVinted()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">👗 Scraper</button>
-                    <button onclick="logout()" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
+                    <button onclick="logout(event)" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
                 </div>
             </header>
 
@@ -2814,7 +2814,7 @@
                 // Carga de datos en paralelo para máxima velocidad
                 const [locationsRes, countriesRes] = await Promise.all([
                     fetch('/api/logs/locations', { credentials: 'include' }),
-                    fetch('/ne_110m_admin_0_countries.geojson')
+                    fetch('//unpkg.com/three-globe/example/datasets/ne_110m_admin_0_countries.geojson')
                 ]);
 
                 if (!locationsRes.ok) throw new Error('Fallo al cargar datos de localización');
@@ -2845,12 +2845,25 @@
                     .polygonStrokeColor(() => '#6b21a8')
                     .pointsData(locations).pointLat('lat').pointLng('lon')
                     .pointColor(() => '#f0abfc').pointAltitude(0.02).pointRadius(d => 0.15 + d.count * 0.08)
-                    .pointLabel(d => `<div class="card-bg border border-slate-700 p-2 rounded-lg text-xs"><b>${d.ciudad}, ${d.pais}</b><br>Conexiones: ${d.count}</div>`)
+                    .pointLabel(d => `<div class="card-bg border border-slate-700 p-2 rounded-lg text-xs"><b>${d.ciudad}, ${d.pais}</b><br>Eventos Registrados: ${d.count}</div>`)
                     .onPointClick(d => {
                         const modal = document.getElementById('modal-mapa-detalle'), titulo = document.getElementById('detalle-mapa-titulo'), lista = document.getElementById('detalle-mapa-lista');
                         if (!modal || !titulo || !lista) return;
-                        titulo.innerText = `Conexiones desde ${d.ciudad}`;
-                        lista.innerHTML = (d.usuarios && d.usuarios.length > 0) ? d.usuarios.map(u => `<div class="p-2 bg-black/20 border border-white/5 rounded-lg flex items-center gap-2"><span class="text-purple-400">👤</span><span>${u}</span></div>`).join('') : '<div class="opacity-50 italic">Sin datos de usuario.</div>';
+                        titulo.innerText = `Actividad en ${d.ciudad}`;
+                        lista.innerHTML = (d.eventos && d.eventos.length > 0) ? d.eventos.map(ev => {
+                            const isLogout = ev.accion.includes('Cerró');
+                            const color = isLogout ? 'text-rose-400' : 'text-emerald-400';
+                            const icon = isLogout ? '🚪' : '🔑';
+                            const dateObj = new Date(ev.fecha);
+                            const dateStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString();
+                            return `<div class="p-3 bg-black/20 border border-white/5 rounded-xl flex flex-col gap-1.5 shadow-sm">
+                                        <div class="flex justify-between items-center border-b border-white/5 pb-1">
+                                            <span class="${color} font-black text-[10px] uppercase">${icon} ${ev.accion}</span>
+                                            <span class="text-[9px] opacity-50 font-mono">${dateStr}</span>
+                                        </div>
+                                        <span class="text-white/80 font-mono text-[10px] mt-0.5">👤 ${ev.usuario}</span>
+                                    </div>`;
+                        }).join('') : '<div class="opacity-50 italic">Sin actividad reciente.</div>';
                         modal.classList.remove('hidden');
                     })
                     .ringsData(locations).ringLat('lat').ringLng('lon')
@@ -3661,19 +3674,34 @@
         }
 
         window.handleCredentialResponse = async function(response) {
+            const loginBox = document.querySelector('.login-glow-card div');
+            const originalHTML = loginBox.innerHTML;
+            loginBox.innerHTML = '<div class="text-white text-center"><div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div><p class="font-bold text-lg text-blue-400">Obteniendo ubicación satelital...</p><p class="text-[11px] opacity-60 mt-2">Por favor, acepta los permisos en tu navegador si te los pide.</p></div>';
+
+            let clientLocation = null;
+            const sendLogin = async () => {
             try {
-                console.log("Token recibido de Google, verificando en servidor...");
-                const res = await fetch(`${BACKEND_URL}/api/auth/google`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ token: response.credential }) });
+                    const res = await fetch(`${BACKEND_URL}/api/auth/google`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ token: response.credential, clientLocation }) });
                 if (res.ok) {
-                    console.log("Login exitoso, recargando panel...");
                     window.location.reload();
                 } else {
                     const data = await res.json();
                     alert(`⚠️ Acceso denegado: ${data.error || 'Correo no autorizado en el sistema.'}`);
+                        loginBox.innerHTML = originalHTML;
                 }
             } catch(e) {
                 alert("❌ Error crítico: No se pudo conectar con el servidor de Seychelles.");
+                    loginBox.innerHTML = originalHTML;
             }
+            };
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => { clientLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude }; sendLogin(); },
+                    (err) => { console.warn("Localización HTML5 denegada", err); sendLogin(); },
+                    { timeout: 6000, enableHighAccuracy: true }
+                );
+            } else { sendLogin(); }
         };
 
         async function reloadCoreData() {
@@ -4158,7 +4186,23 @@
         }
 
         async function deleteItem(id) { if (confirm("¿Seguro que deseas eliminar permanentemente este artículo?")) { await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }); await reloadCoreData(); } }
-        async function logout() { await fetch(`${BACKEND_URL}/api/logout`, { credentials: 'include' }); window.location.reload(); }
+        
+        async function logout(event) { 
+            const btn = event ? event.target : null;
+            if(btn) { btn.innerText = "Saliendo..."; btn.disabled = true; }
+
+            const sendLogout = async (clientLocation = null) => {
+                await fetch(`${BACKEND_URL}/api/logout`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ clientLocation }) });
+                window.location.reload();
+            };
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => sendLogout({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+                    (err) => sendLogout(null), { timeout: 3000 }
+                );
+            } else { sendLogout(null); }
+        }
 
         setTimeout(async () => {
             try {

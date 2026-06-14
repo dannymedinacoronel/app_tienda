@@ -266,6 +266,36 @@ async function registrarLog(usuario, accion, locationData = {}) {
     } catch (e) { console.error("Error al guardar log:", e); }
 }
 
+// --- Motor de Geolocalización Precisa (IP + HTML5) ---
+async function obtenerUbicacionCompleta(req, clientLocation) {
+    const ip = req.ip || req.headers['x-forwarded-for']?.split(',').shift() || req.socket.remoteAddress;
+    let locationData = { ip };
+
+    try {
+        const geoRes = await axios.get(`http://ip-api.com/json/${ip}?fields=status,message,country,city,lat,lon`);
+        if (geoRes.data && geoRes.data.status === 'success') {
+            locationData.ciudad = geoRes.data.city; locationData.pais = geoRes.data.country;
+            locationData.lat = geoRes.data.lat; locationData.lon = geoRes.data.lon;
+        }
+    } catch (e) { console.warn(`[GEO-IP] Fallo al obtener localización por IP:`, e.message); }
+
+    // Si el navegador proporcionó coordenadas exactas GPS/HTML5, las usamos y buscamos la ciudad real
+    if (clientLocation && clientLocation.lat && clientLocation.lon) {
+        locationData.lat = clientLocation.lat;
+        locationData.lon = clientLocation.lon;
+        try {
+            // Búsqueda Inversa para saber a qué ciudad pertenecen las coordenadas HTML5
+            const reverseGeo = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${clientLocation.lat}&lon=${clientLocation.lon}`, { headers: { 'User-Agent': 'Seychelles-App/1.0' } });
+            if (reverseGeo.data && reverseGeo.data.address) {
+                locationData.ciudad = reverseGeo.data.address.city || reverseGeo.data.address.town || reverseGeo.data.address.village || locationData.ciudad;
+                locationData.pais = reverseGeo.data.address.country || locationData.pais;
+            }
+        } catch(e) { console.warn("[GEO-HTML5] Fallo reverse geocoding"); }
+    }
+
+    return locationData;
+}
+
 // --- Utilidades de Imagen ---
 async function downloadAndConvertToBase64(url) {
     if (!url || !url.startsWith('http')) return url || '';
@@ -421,7 +451,7 @@ app.get('/api/auth/verificar', (req, res) => {
 });
 
 app.post('/api/auth/google', async (req, res) => {
-    const { token } = req.body;
+    const { token, clientLocation } = req.body;
     try {
         if (!token) return res.status(400).json({ error: 'Token no proporcionado.' });
 
@@ -439,23 +469,8 @@ app.post('/api/auth/google', async (req, res) => {
             req.session.email = emailUsuario;
             req.session.rol = autorizado.rol || 'Admin';
             
-            const ip = req.ip || req.headers['x-forwarded-for']?.split(',').shift() || req.socket.remoteAddress;
-            let locationData = { ip };
-
-            try {
-                // Usar un servicio de geolocalización por IP gratuito y sin clave
-                const geoRes = await axios.get(`http://ip-api.com/json/${ip}?fields=status,message,country,city,lat,lon`);
-                if (geoRes.data && geoRes.data.status === 'success') {
-                    locationData.ciudad = geoRes.data.city;
-                    locationData.pais = geoRes.data.country;
-                    locationData.lat = geoRes.data.lat;
-                    locationData.lon = geoRes.data.lon;
-                }
-            } catch (geoError) {
-                console.warn(`[GEO-IP] No se pudo obtener la localización para la IP ${ip}:`, geoError.message);
-            }
-            
-            await registrarLog(emailUsuario, "Inició sesión en el sistema core", locationData);
+            const locationData = await obtenerUbicacionCompleta(req, clientLocation);
+            await registrarLog(emailUsuario, "Inició sesión en el sistema", locationData);
             
             return req.session.save(err => {
                 if (err) return res.status(500).json({ error: 'Fallo al guardar sesión.' });
@@ -798,22 +813,21 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
 
 app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
     try {
-        // Buscar logs que sean de inicio de sesión y tengan datos de coordenadas
-        const loginLogs = await LogAuditoria.find({
-            accion: "Inició sesión en el sistema core",
-            lat: { $ne: null },
-            lon: { $ne: null }
+        // Recuperamos logs de conexiones Y desconexiones con coordenadas
+        const activityLogs = await LogAuditoria.find({
+            lat: { $ne: null }, lon: { $ne: null },
+            accion: { $in: [ /Inició sesión/i, /Cerró sesión/i ] }
         }).lean();
 
         // Adicionalmente, buscar el último log de conexión para centrar el mapa
         const lastLoginLog = await LogAuditoria.findOne({
-            accion: "Inició sesión en el sistema core",
+            accion: /Inició sesión/i,
             lat: { $ne: null }, lon: { $ne: null }
         }).sort({ fechaHora: -1 }).lean();
 
-        // Agrupar los datos para obtener localizaciones únicas, su contador y lista de usuarios
+        // Agrupar los datos para obtener localizaciones únicas y sus eventos
         const locations = {};
-        loginLogs.forEach(log => {
+        activityLogs.forEach(log => {
             const key = `${log.lat.toFixed(4)},${log.lon.toFixed(4)}`; // Agrupar por coordenadas cercanas
             if (!locations[key]) {
                 locations[key] = {
@@ -822,15 +836,17 @@ app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
                     ciudad: log.ciudad || 'Desconocida',
                     pais: log.pais || 'Desconocido',
                     count: 0,
-                    usuarios: new Set() // Usar un Set para usuarios únicos
+                    eventos: []
                 };
             }
             locations[key].count++;
-            locations[key].usuarios.add(log.usuario);
+            locations[key].eventos.push({
+                usuario: log.usuario, accion: log.accion, fecha: log.fechaHora
+            });
         });
 
         res.json({
-            locations: Object.values(locations).map(loc => ({ ...loc, usuarios: Array.from(loc.usuarios) })),
+            locations: Object.values(locations),
             lastLogin: lastLoginLog 
         });
 
@@ -1037,7 +1053,18 @@ app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
     }
 });
 
-app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(200)); });
+app.post('/api/logout', async (req, res) => { 
+    const { clientLocation } = req.body;
+    if (req.session && req.session.email) {
+        const emailUsuario = req.session.email;
+        const locationData = await obtenerUbicacionCompleta(req, clientLocation);
+        await registrarLog(emailUsuario, "Cerró sesión en el sistema", locationData);
+        req.session.destroy(() => res.sendStatus(200));
+    } else {
+        res.sendStatus(200);
+    }
+});
+app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(200)); }); // Compatibilidad
 app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
 const PORT = process.env.PORT || 3000;

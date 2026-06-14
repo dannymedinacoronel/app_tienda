@@ -1450,6 +1450,20 @@
                                 <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option>
                             </select>
                         </div>
+                        <div class="grid grid-cols-3 gap-2 mt-1">
+                            <div class="flex items-center gap-1 bg-black/40 border border-white/10 rounded px-1">
+                                <span class="text-[8px] opacity-60">Coste:</span>
+                                <input type="number" id="new-item-cost-${i}" value="0" step="0.01" class="w-full bg-transparent text-[10px] py-1 focus:outline-none focus:text-emerald-400 text-white text-right">
+                                <span class="text-[8px] opacity-60">€</span>
+                            </div>
+                            <div class="flex items-center gap-1 bg-black/40 border border-white/10 rounded px-1">
+                                <span class="text-[8px] opacity-60">Cant:</span>
+                                <input type="number" id="new-item-qty-${i}" value="1" min="1" class="w-full bg-transparent text-[10px] py-1 focus:outline-none focus:text-emerald-400 text-white text-right">
+                            </div>
+                            <select id="new-item-canal-${i}" class="bg-black/40 border border-white/10 text-[10px] rounded px-1 py-1 focus:outline-none focus:border-emerald-400 text-white">
+                                <option value="Vinted" selected>Vinted</option><option value="Wallapop">Wallapop</option><option value="Web">Web</option><option value="Tienda Física">Tienda</option>
+                            </select>
+                        </div>
                     </div>`;
             });
         }
@@ -1475,7 +1489,8 @@
 
     // Sincroniza precios de productos existentes
     async function autorizarCambiosScraping() {
-        const selected = Array.from(document.querySelectorAll('.check-disc-scraper:checked')).map(cb => {
+        const checkNodes = Array.from(document.querySelectorAll('.check-disc-scraper:checked'));
+        const selected = checkNodes.map(cb => {
             const idx = cb.value;
             const item = resultadosScraperActual.discrepancias[idx];
             const tituloEditado = document.getElementById(`disc-item-title-${idx}`).value.trim() || item.prendaNueva || item.prenda;
@@ -1496,10 +1511,23 @@
             if (!response.ok) throw new Error('Fallo al actualizar.');
 
             cantarPorVoz("Precios actualizados.");
+            alert(`✅ Se han actualizado los precios de ${selected.length} artículos correctamente.`);
             if (typeof forceRefreshDataManual === "function") {
                 await forceRefreshDataManual();
             }
-            iniciarScraping(); // Recargar para ver que ya no hay discrepancias
+            
+            const indicesToRemove = checkNodes.map(cb => parseInt(cb.value));
+            resultadosScraperActual.discrepancias = resultadosScraperActual.discrepancias.filter((_, i) => !indicesToRemove.includes(i));
+            
+            const url = document.getElementById('scraper-url').value;
+            if (url) {
+                iniciarScraping();
+            } else {
+                renderizarResultadosScraping(resultadosScraperActual);
+                if (resultadosScraperActual.nuevos?.length === 0 && resultadosScraperActual.discrepancias?.length === 0) {
+                    cerrarModalScraper();
+                }
+            }
 
         } catch (error) {
             alert(error.message);
@@ -1508,18 +1536,27 @@
 
     // Importa productos nuevos
     async function importarNuevosScraping() {
-        const selected = Array.from(document.querySelectorAll('.check-new-scraper:checked')).map(cb => {
+        const checkNodes = Array.from(document.querySelectorAll('.check-new-scraper:checked'));
+        const selected = checkNodes.map(cb => {
             const idx = cb.value;
             const itemOriginal = resultadosScraperActual.nuevos[idx];
             const tituloEditado = document.getElementById(`new-item-title-${idx}`).value.trim() || itemOriginal.prenda;
             const precioEditado = parseFloat(document.getElementById(`new-item-price-${idx}`).value) || itemOriginal.precioVenta;
             const catEditada = document.getElementById(`new-item-cat-${idx}`).value || 'General';
             const tallaEditada = document.getElementById(`new-item-talla-${idx}`).value || 'Única';
-            return { ...itemOriginal, prenda: tituloEditado, precioVenta: precioEditado, categoria: catEditada, talla: tallaEditada };
+            const costEditado = parseFloat(document.getElementById(`new-item-cost-${idx}`)?.value) || 0;
+            const qtyEditada = parseInt(document.getElementById(`new-item-qty-${idx}`)?.value) || 1;
+            const canalEditado = document.getElementById(`new-item-canal-${idx}`)?.value || 'Vinted';
+
+            return { 
+                ...itemOriginal, prenda: tituloEditado, precioVenta: precioEditado, 
+                categoria: catEditada, talla: tallaEditada, precioCompra: costEditado, 
+                cantidad: qtyEditada, canalVenta: canalEditado 
+            };
         });
         if (selected.length === 0) return alert('Selecciona productos para importar.');
 
-        if (!confirm(`¿Deseas importar estos ${selected.length} productos nuevos desde Vinted a tu base de datos de MongoDB?`)) return;
+        if (!confirm(`¿Deseas confirmar la importación de estos ${selected.length} productos nuevos a tu base de datos de MongoDB?`)) return;
 
         try {
             const response = await fetch('/api/scraper/importar', {
@@ -1531,13 +1568,25 @@
             if (!response.ok) throw new Error('Fallo al importar.');
 
             const res = await response.json();
-            alert(`✅ Se han importado ${res.count} productos correctamente.`);
+            alert(`✅ Se han importado ${res.count} productos exitosamente con sus fotografías a la base de datos.\n\nYa puedes verificarlos en tu inventario.`);
             cantarPorVoz("Importación completada.");
 
             if (typeof forceRefreshDataManual === "function") {
                 await forceRefreshDataManual();
             }
-            iniciarScraping(); // Recargar
+            
+            const indicesToRemove = checkNodes.map(cb => parseInt(cb.value));
+            resultadosScraperActual.nuevos = resultadosScraperActual.nuevos.filter((_, i) => !indicesToRemove.includes(i));
+            
+            const url = document.getElementById('scraper-url').value;
+            if (url) {
+                iniciarScraping(); 
+            } else {
+                renderizarResultadosScraping(resultadosScraperActual);
+                if (resultadosScraperActual.nuevos?.length === 0 && resultadosScraperActual.discrepancias?.length === 0) {
+                    cerrarModalScraper();
+                }
+            }
 
         } catch (error) {
             alert(error.message);
@@ -1626,6 +1675,121 @@
         let LISTA_FAQS = [];
         let LISTA_ESTADOS_KANBAN = [];
         let GLOBO_INSTANCE = null;
+
+        // 📸 LÓGICA DE VISOR Y GALERÍA DE FOTOS
+        let ITEM_FOTOS_ACTUAL = null;
+        let IDX_FOTO_ACTUAL = -1; 
+
+        function abrirVisorFotos(id) {
+            const item = BASE_DATOS.find(v => v._id === id);
+            if (!item) return;
+            ITEM_FOTOS_ACTUAL = item;
+            if (!ITEM_FOTOS_ACTUAL.galeria) ITEM_FOTOS_ACTUAL.galeria = [];
+            
+            document.getElementById('visor-item-id').value = id;
+            document.getElementById('visor-fotos-titulo').innerText = item.prenda;
+            document.getElementById('modal-visor-fotos').classList.remove('hidden');
+            
+            seleccionarFotoVisor(item.imagen ? -1 : (item.galeria.length > 0 ? 0 : -1));
+            renderizarMiniaturasVisor();
+        }
+
+        function cerrarVisorFotos() {
+            document.getElementById('modal-visor-fotos').classList.add('hidden');
+            ITEM_FOTOS_ACTUAL = null;
+        }
+
+        function renderizarMiniaturasVisor() {
+            const contenedor = document.getElementById('visor-tira-miniaturas');
+            let html = '';
+            
+            if (ITEM_FOTOS_ACTUAL.imagen) {
+                html += `<img src="${ITEM_FOTOS_ACTUAL.imagen}" onclick="seleccionarFotoVisor(-1)" class="w-20 h-20 md:w-full md:h-24 object-cover rounded-xl border-2 cursor-pointer transition-all flex-shrink-0 ${IDX_FOTO_ACTUAL === -1 ? 'border-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)] scale-95' : 'border-white/10 opacity-50 hover:opacity-100'}">`;
+            }
+            
+            if (ITEM_FOTOS_ACTUAL.galeria && ITEM_FOTOS_ACTUAL.galeria.length > 0) {
+                ITEM_FOTOS_ACTUAL.galeria.forEach((imgBase64, idx) => {
+                    html += `<img src="${imgBase64}" onclick="seleccionarFotoVisor(${idx})" class="w-20 h-20 md:w-full md:h-24 object-cover rounded-xl border-2 cursor-pointer transition-all flex-shrink-0 ${IDX_FOTO_ACTUAL === idx ? 'border-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)] scale-95' : 'border-white/10 opacity-50 hover:opacity-100'}">`;
+                });
+            }
+            contenedor.innerHTML = html;
+        }
+
+        function seleccionarFotoVisor(idx) {
+            IDX_FOTO_ACTUAL = idx;
+            const imgElement = document.getElementById('visor-foto-principal');
+            const btnPortada = document.getElementById('btn-set-portada');
+            
+            if (idx === -1 && !ITEM_FOTOS_ACTUAL.imagen && ITEM_FOTOS_ACTUAL.galeria.length === 0) {
+                imgElement.src = 'https://via.placeholder.com/800x600/0f172a/ffffff?text=Sin+Fotografias';
+                btnPortada.classList.add('hidden');
+                return;
+            }
+            
+            if (idx === -1) {
+                imgElement.src = ITEM_FOTOS_ACTUAL.imagen;
+                btnPortada.classList.add('hidden');
+            } else {
+                imgElement.src = ITEM_FOTOS_ACTUAL.galeria[idx];
+                btnPortada.classList.remove('hidden');
+            }
+            
+            renderizarMiniaturasVisor();
+        }
+
+        async function agregarFotoGaleria(event) {
+            let file = event.target.files[0];
+            if (!file) return;
+            document.getElementById('visor-foto-acciones').classList.add('opacity-50', 'pointer-events-none');
+            
+            if (file.type === "image/heic" || file.type === "image/heif" || file.name.toLowerCase().endsWith(".heic")) {
+                try { const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.8 }); file = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob; } 
+                catch (err) { alert("Error al procesar foto."); document.getElementById('visor-foto-acciones').classList.remove('opacity-50', 'pointer-events-none'); return; }
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = async () => {
+                    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+                    const MAX = 800; let w = img.width; let h = img.height;
+                    if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } } else { if (h > MAX) { w *= MAX / h; h = MAX; } }
+                    canvas.width = w; canvas.height = h; ctx.drawImage(img, 0, 0, w, h);
+                    const base64 = canvas.toDataURL('image/jpeg', 0.8);
+                    
+                    if (!ITEM_FOTOS_ACTUAL.galeria) ITEM_FOTOS_ACTUAL.galeria = [];
+                    let payload = {};
+                    if (!ITEM_FOTOS_ACTUAL.imagen) { ITEM_FOTOS_ACTUAL.imagen = base64; payload = { imagen: base64 }; } 
+                    else { ITEM_FOTOS_ACTUAL.galeria.push(base64); payload = { galeria: ITEM_FOTOS_ACTUAL.galeria }; }
+
+                    try { await fetch(`${BACKEND_URL}/api/ventas/${ITEM_FOTOS_ACTUAL._id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) }); await reloadCoreData(); ITEM_FOTOS_ACTUAL = BASE_DATOS.find(v => v._id === ITEM_FOTOS_ACTUAL._id); if (!ITEM_FOTOS_ACTUAL.galeria) ITEM_FOTOS_ACTUAL.galeria = []; seleccionarFotoVisor(payload.imagen ? -1 : ITEM_FOTOS_ACTUAL.galeria.length - 1); } 
+                    catch(e) { alert("Error al guardar."); }
+                    document.getElementById('input-nueva-foto-galeria').value = ""; document.getElementById('visor-foto-acciones').classList.remove('opacity-50', 'pointer-events-none');
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function eliminarFotoActual() {
+            if (!ITEM_FOTOS_ACTUAL.imagen && ITEM_FOTOS_ACTUAL.galeria.length === 0) return;
+            if (!confirm("¿Eliminar esta fotografía?")) return;
+            
+            let payload = {};
+            if (IDX_FOTO_ACTUAL === -1) { if (ITEM_FOTOS_ACTUAL.galeria && ITEM_FOTOS_ACTUAL.galeria.length > 0) { ITEM_FOTOS_ACTUAL.imagen = ITEM_FOTOS_ACTUAL.galeria.shift(); } else { ITEM_FOTOS_ACTUAL.imagen = ''; } payload = { imagen: ITEM_FOTOS_ACTUAL.imagen, galeria: ITEM_FOTOS_ACTUAL.galeria }; } 
+            else { ITEM_FOTOS_ACTUAL.galeria.splice(IDX_FOTO_ACTUAL, 1); payload = { galeria: ITEM_FOTOS_ACTUAL.galeria }; }
+
+            try { await fetch(`${BACKEND_URL}/api/ventas/${ITEM_FOTOS_ACTUAL._id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) }); await reloadCoreData(); ITEM_FOTOS_ACTUAL = BASE_DATOS.find(v => v._id === ITEM_FOTOS_ACTUAL._id); if (!ITEM_FOTOS_ACTUAL.galeria) ITEM_FOTOS_ACTUAL.galeria = []; seleccionarFotoVisor(ITEM_FOTOS_ACTUAL.imagen ? -1 : -1); } 
+            catch(e) { alert("Error al eliminar."); }
+        }
+
+        async function establecerComoPortada() {
+            if (IDX_FOTO_ACTUAL === -1) return;
+            const fotoSeleccionada = ITEM_FOTOS_ACTUAL.galeria[IDX_FOTO_ACTUAL]; const fotoPrincipalAntigua = ITEM_FOTOS_ACTUAL.imagen;
+            ITEM_FOTOS_ACTUAL.imagen = fotoSeleccionada; ITEM_FOTOS_ACTUAL.galeria.splice(IDX_FOTO_ACTUAL, 1); if (fotoPrincipalAntigua) { ITEM_FOTOS_ACTUAL.galeria.unshift(fotoPrincipalAntigua); }
+            try { await fetch(`${BACKEND_URL}/api/ventas/${ITEM_FOTOS_ACTUAL._id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ imagen: ITEM_FOTOS_ACTUAL.imagen, galeria: ITEM_FOTOS_ACTUAL.galeria }) }); await reloadCoreData(); ITEM_FOTOS_ACTUAL = BASE_DATOS.find(v => v._id === ITEM_FOTOS_ACTUAL._id); if (!ITEM_FOTOS_ACTUAL.galeria) ITEM_FOTOS_ACTUAL.galeria = []; seleccionarFotoVisor(-1); } 
+            catch(e) { alert("Error al cambiar portada."); }
+        }
 
         // 📌 LÓGICA DE NOTAS ADHESIVAS
         async function cargarNotasBoard() {
@@ -4037,7 +4201,9 @@
                     const claseAlertaStock = esStockCritico ? 'alerta-stock-critico border-amber-500/70 bg-amber-500/5' : '';
                     card.className = `kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none ${claseAlertaStock} border-${est.color}-500/30 text-white`;
 
-                    const thumb = v.imagen ? `<img src="${v.imagen}" class="card-img-mini flex-shrink-0 border border-white/10 shadow-lg">` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20">N/A</div>`;
+                    const esScraping = (v.sku && v.sku.startsWith('VNT-')) || (v.comentariosProducto && v.comentariosProducto.includes('Importado'));
+                    const badgeScraping = esScraping ? `<div class="absolute -top-1.5 -right-1.5 bg-blue-600 rounded-full w-4 h-4 flex items-center justify-center text-[8px] shadow-lg border border-blue-300" title="Alojado en MongoDB (Vía Web/Scraping)">🌐</div>` : '';
+                    const thumb = v.imagen ? `<div class="relative flex-shrink-0"><img src="${v.imagen}" class="card-img-mini border border-white/10 shadow-lg">${badgeScraping}</div>` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20">N/A</div>`;
                     const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
                     const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
                     const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">🏬 ${v.proveedor.toUpperCase()}</span>` : '';

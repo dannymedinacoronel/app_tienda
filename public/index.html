@@ -167,26 +167,30 @@
         .card-img-mini { width: 45px; height: 45px; object-fit: cover; border-radius: 10px; background-color: #000; }
 
         /* Estilos Notas */
-        #canvas-notas-global { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 500; }
-        .sticky-note { pointer-events: auto; }
-        
         .sticky-note { 
-            position: fixed; 
-            z-index: 501;
-            padding: 8px; 
-            border-radius: 8px; 
-            font-size: 9px; 
-            font-weight: bold; 
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4); 
-            cursor: move; 
-            user-select: none;
+            position: absolute; 
+            z-index: 10;
+            padding: 12px; 
+            border-radius: 16px; 
+            font-size: 11px; 
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4); 
             color: #1e293b;
-            /* Permitir redimensionado individual */
             resize: both;
             overflow: hidden;
-            min-width: 100px;
-            min-height: 80px;
+            min-width: 200px;
+            min-height: 150px;
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: box-shadow 0.2s;
         }
+        .sticky-note:active { z-index: 50; box-shadow: 0 30px 60px -10px rgba(0,0,0,0.4); }
+
+        /* Colores Cristal Mac */
+        .note-yellow { background-color: rgba(253, 224, 71, 0.75); }
+        .note-blue { background-color: rgba(147, 197, 253, 0.75); }
+        .note-green { background-color: rgba(134, 239, 172, 0.75); }
+        .note-pink { background-color: rgba(249, 168, 212, 0.75); }
         
         @keyframes spin-once { 
             0% { transform: rotate(0deg); } 
@@ -194,10 +198,11 @@
         }
         .animate-spin-once { animation: spin-once 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
         
-        .sticky-note:active { z-index: 600; }
-        .sticky-note textarea { background: transparent; border: none; resize: none; width: 100%; height: calc(100% - 25px); outline: none; font-size: 10px; color: inherit; line-height: 1.2; }
-        .note-colors { display: none; }
-        .sticky-note:hover .note-colors { display: flex; }
+        /* Formato de texto enriquecido en Notas */
+        .note-content { width: 100%; height: calc(100% - 30px); outline: none; overflow-y: auto; line-height: 1.5; padding-top: 5px; }
+        .note-content ul { list-style: disc; margin-left: 1.2rem; margin-bottom: 0.5rem; }
+        .note-content ol { list-style: decimal; margin-left: 1.2rem; margin-bottom: 0.5rem; }
+        .note-content b, .note-content strong { font-weight: 900; color: #000; }
     </style>
 </head>
 <body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-24 transition-all duration-300">
@@ -205,8 +210,6 @@
     <div id="particles-js"></div>
 
     <div id="wrapper-core">
-        <div id="canvas-notas-global"></div>
-
         <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4">
             <div class="login-glow-card p-[2px] rounded-[2.5rem] shadow-2xl max-w-sm w-full">
                 <div class="bg-slate-950 rounded-[2.4rem] p-10 text-center">
@@ -302,6 +305,7 @@
                     <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all nav-btn-active text-white">📦 Panel</button>
                     <button onclick="navegarASeccion('sec-tareas')" id="tab-sec-tareas" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">✅ Tareas</button>
                     <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📊 Analítica</button>
+                    <button onclick="navegarASeccion('sec-notas')" id="tab-sec-notas" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📝 Notas</button>
                     <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">👥 CRM</button>
                     <button onclick="navegarASeccion('sec-usuarios')" id="tab-sec-usuarios" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">🔑 Acceso</button>
                     <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📋 Fact.</button>
@@ -493,6 +497,19 @@
                         <div id="grid-calendario-stock" class="grid grid-cols-7 gap-3 flex-1">
                             <!-- Días inyectados -->
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN NOTAS BOARD -->
+            <div id="sec-notas" class="seccion-app hidden mb-8 h-[800px]">
+                <div class="card-bg border rounded-3xl p-6 flex flex-col shadow-2xl h-full relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-4 z-[60] relative">
+                        <h3 class="text-xs font-black uppercase tracking-widest text-yellow-400">📝 Tablero de Ideas (Apple Freeform)</h3>
+                        <p class="text-[10px] opacity-60 font-mono hidden sm:block">Arrastra, redimensiona y formatea tus notas. Clic dentro y usa (B) para negritas o (•=) para listas.</p>
+                    </div>
+                    <div id="tablero-notas" class="flex-1 relative w-full h-full bg-black/10 rounded-2xl border border-white/5 overflow-auto custom-scrollbar shadow-inner" style="background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px); background-size: 20px 20px;">
+                        <!-- Inyectado vía JS -->
                     </div>
                 </div>
             </div>
@@ -1209,73 +1226,17 @@
         document.getElementById('scraper-loader').classList.remove('hidden');
 
         try {
-            let html = '';
-            const proxies = [
-                `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-                `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-                `https://corsproxy.io/?${encodeURIComponent(url)}`
-            ];
-
-            for (const proxy of proxies) {
-                try {
-                    const response = await fetch(proxy);
-                    if (response.ok) {
-                        const text = await response.text();
-                        if (!text.toLowerCase().includes('cloudflare') && !text.toLowerCase().includes('just a moment')) {
-                            html = text;
-                            break;
-                        }
-                    }
-                } catch (e) { console.warn("Proxy falló:", proxy); }
-            }
-
-            if (!html) throw new Error("Vinted bloqueó la conexión (Cloudflare) o los proxys fallaron. Usa la opción 'Subir Excel/CSV'.");
-
-            // 2. Parseamos el HTML
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-
-            // Selectores ultra-robustos
-            const items = doc.querySelectorAll('div[data-testid^="grid-item"], div[data-testid="item-card"], .new-item-box__container, .feed-grid__item, .web_ui__ItemBox__component, .item-card, .grid__item');
-            
-            const productosExtraidos = [];
-            items.forEach(item => {
-                const titulo = item.querySelector('[data-testid$="--title"], [data-testid$="--description"], .new-item-box__description h2, .new-item-box__title, .web_ui__ItemBox__title, .truncated, h4, [itemprop="name"]')?.textContent?.trim();
-                const precioTexto = item.querySelector('[data-testid$="--price-text"], [data-testid$="--price"], .new-item-box__description h4, .new-item-box__price, .web_ui__ItemBox__price, .price, h3, [itemprop="price"]')?.textContent?.trim();
-                const imgTag = item.querySelector('img');
-                const imagen = imgTag?.src || imgTag?.getAttribute('data-src') || imgTag?.getAttribute('srcset')?.split(' ')[0];
-
-                if (titulo && precioTexto) {
-                    // Limpieza profunda de precio (maneja "22,00 €", "22.00", etc)
-                    let cleanPrice = precioTexto.replace(/[^\d,.]/g, '').trim();
-                    if (cleanPrice.includes(',') && cleanPrice.includes('.')) { 
-                        cleanPrice = cleanPrice.replace(/\./g, '').replace(',', '.');
-                    } else if (cleanPrice.includes(',')) { 
-                        cleanPrice = cleanPrice.replace(',', '.');
-                    }
-                    
-                    if (!isNaN(parseFloat(cleanPrice))) {
-                        productosExtraidos.push({ titulo, precio: cleanPrice, imagen });
-                    }
-                }
-            });
-
-            if (productosExtraidos.length === 0) {
-                const isBlocked = html.toLowerCase().includes("cloudflare") || html.toLowerCase().includes("captcha");
-                if (isBlocked) throw new Error("Vinted ha detectado el scraper. Por favor, usa la opción de 'Subir Excel/CSV' con la extensión.");
-                throw new Error("No se encontraron productos en esta página. Revisa la URL.");
-            }
-
-            // 3. Enviamos los datos extraídos localmente al servidor para comparar con MongoDB
-            const response = await fetch('/api/scraper/analizar-manual', {
+            const response = await fetch(`${BACKEND_URL}/api/scraper/analizar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productosExtraidos })
+                credentials: 'include',
+                body: JSON.stringify({ url })
             });
 
+            const data = await response.json();
             if (!response.ok) throw new Error('Error al comparar con la base de datos.');
 
-            resultadosScraperActual = await response.json();
+            resultadosScraperActual = data;
             console.log("Análisis completado:", resultadosScraperActual);
             
             renderizarResultadosScraping(resultadosScraperActual);
@@ -1332,9 +1293,10 @@
                     };
                 });
 
-                const response = await fetch('/api/scraper/analizar-manual', {
+                const response = await fetch(`${BACKEND_URL}/api/scraper/analizar-manual`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ productosExtraidos: productosMapeados })
                 });
 
@@ -1585,7 +1547,7 @@
 
         // 📌 LÓGICA DE NOTAS ADHESIVAS
         async function cargarNotasBoard() {
-            const res = await fetch('/api/notas', { credentials: 'include' });
+            const res = await fetch(`${BACKEND_URL}/api/notas`, { credentials: 'include' });
             NOTAS_LOCALES = await res.json();
             renderizarNotas();
         }
@@ -1818,21 +1780,20 @@
             if(e.target.tagName === 'BUTTON') return;
             let isDragging = true;
             
-            // Obtener coordenadas relativas al contenedor padre
             const board = document.getElementById('tablero-notas');
-            const boardRect = board.getBoundingClientRect();
             
-            let startX = e.clientX - div.offsetLeft;
-            let startY = e.clientY - div.offsetTop + board.scrollTop; // Ajustar por si hay scroll en el tablero
+            let initialMouseX = e.clientX;
+            let initialMouseY = e.clientY;
+            let initialDivX = div.offsetLeft;
+            let initialDivY = div.offsetTop;
 
             const mouseMoveHandler = (moveEvent) => {
                 if (!isDragging) return;
-                let newX = moveEvent.clientX - startX;
-                let newY = moveEvent.clientY - startY + board.scrollTop;
+                let deltaX = moveEvent.clientX - initialMouseX;
+                let deltaY = moveEvent.clientY - initialMouseY;
                 
-                // Limitar que no se salga por arriba ni por la izquierda
-                newX = Math.max(0, newX);
-                newY = Math.max(0, newY);
+                let newX = Math.max(0, initialDivX + deltaX);
+                let newY = Math.max(0, initialDivY + deltaY);
                 
                 div.style.left = `${newX}px`;
                 div.style.top = `${newY}px`;
@@ -1843,7 +1804,7 @@
                 document.removeEventListener('mouseup', mouseUpHandler);
                 const x = parseInt(div.style.left);
                 const y = parseInt(div.style.top);
-                await fetch(`/api/notas/${id}`, {
+                await fetch(`${BACKEND_URL}/api/notas/${id}`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ x, y })
                 });
             };
@@ -1852,22 +1813,22 @@
         };
 
         async function actualizarNotaDimensiones(id, width, height) {
-            await fetch(`/api/notas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ width, height }) });
+            await fetch(`${BACKEND_URL}/api/notas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ width, height }) });
         }
 
         async function borrarNota(id) {
             if(confirm('¿Borrar esta nota?')) {
-                await fetch(`/api/notas/${id}`, { method: 'DELETE', credentials: 'include' });
+                await fetch(`${BACKEND_URL}/api/notas/${id}`, { method: 'DELETE', credentials: 'include' });
                 cargarNotasBoard();
             }
         }
 
         async function actualizarNotaTexto(id, texto) {
-            await fetch(`/api/notas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ texto }) });
+            await fetch(`${BACKEND_URL}/api/notas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ texto }) });
         }
 
         async function cambiarColorNota(id, color) {
-            await fetch(`/api/notas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ color }) });
+            await fetch(`${BACKEND_URL}/api/notas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ color }) });
             cargarNotasBoard();
         }
 

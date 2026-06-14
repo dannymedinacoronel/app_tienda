@@ -25,8 +25,8 @@
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
-    <script src="https://unpkg.com/three"></script>
-    <script src="https://unpkg.com/three-globe"></script>
+    <script src="//unpkg.com/three/build/three.min.js"></script>
+    <script src="//unpkg.com/three-globe/dist/three-globe.min.js"></script>
     <script src="https://unpkg.com/three/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     
@@ -2812,24 +2812,25 @@
                 if (!res.ok) throw new Error('Fallo al cargar datos de localización');
                 const data = await res.json();
 
+                const locations = data.locations || [];
                 if(loader) loader.classList.add('hidden');
 
-                if (data.length === 0) {
+                if (locations.length === 0) {
                     container.innerHTML = `<div class="flex items-center justify-center h-full text-sm opacity-40 italic">No hay datos de conexión para mostrar.</div>`;
                     return;
                 }
 
                 const globe = new ThreeGlobe()
-                    .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')
+                    .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
                     .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
                     .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
-                    .pointsData(data)
+                    .pointsData(locations)
                     .pointLat('lat')
                     .pointLng('lon')
                     .pointColor(() => '#a855f7') // Color morado
                     .pointAltitude(0.01)
                     .pointRadius(d => 0.15 + d.count * 0.08) // Radio basado en el número de conexiones
-                    .pointLabel(d => `<div class="card-bg border border-slate-700 p-2 rounded-lg text-xs"><b>${d.ciudad}, ${d.pais}</b><br>Conexiones: ${d.count}</div>`);
+                    .pointLabel(d => `<div class="card-bg border border-slate-700 p-2 rounded-lg text-xs"><b>${d.ciudad}, ${d.pais}</b><br>Conexiones: ${d.count}</div>`)
                     .onPointClick(d => {
                         const modal = document.getElementById('modal-mapa-detalle');
                         const titulo = document.getElementById('detalle-mapa-titulo');
@@ -2852,7 +2853,7 @@
 
                         modal.classList.remove('hidden');
                     })
-                    .ringsData(data)
+                    .ringsData(locations)
                     .ringLat('lat').ringLng('lon')
                     .ringColor(() => 'rgba(168, 85, 247, 0.6)')
                     .ringMaxRadius(d => 2 + d.count * 0.3).ringPropagationSpeed(3).ringRepeatPeriod(1500);
@@ -2889,6 +2890,13 @@
                 })();
 
                 GLOBO_INSTANCE = globe;
+                
+                // Nueva funcionalidad: Girar hacia la última conexión
+                if (data.lastLogin) {
+                    setTimeout(() => {
+                        globe.pointOfView({ lat: data.lastLogin.lat, lng: data.lastLogin.lon, altitude: 1.5 }, 2500);
+                    }, 1000); // Esperar 1 segundo para que el globo se cargue
+                }
 
             } catch (error) {
                 if(loader) loader.classList.add('hidden');

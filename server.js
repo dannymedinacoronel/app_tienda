@@ -805,6 +805,12 @@ app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
             lon: { $ne: null }
         }).lean();
 
+        // Adicionalmente, buscar el último log de conexión para centrar el mapa
+        const lastLoginLog = await LogAuditoria.findOne({
+            accion: "Inició sesión en el sistema core",
+            lat: { $ne: null }, lon: { $ne: null }
+        }).sort({ fechaHora: -1 }).lean();
+
         // Agrupar los datos para obtener localizaciones únicas, su contador y lista de usuarios
         const locations = {};
         loginLogs.forEach(log => {
@@ -823,8 +829,11 @@ app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
             locations[key].usuarios.add(log.usuario);
         });
 
-        const responseData = Object.values(locations).map(loc => ({ ...loc, usuarios: Array.from(loc.usuarios) }));
-        res.json(responseData);
+        res.json({
+            locations: Object.values(locations).map(loc => ({ ...loc, usuarios: Array.from(loc.usuarios) })),
+            lastLogin: lastLoginLog 
+        });
+
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar datos del mapa.' }); }
 });
 

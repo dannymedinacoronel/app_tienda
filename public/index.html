@@ -25,6 +25,9 @@
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+    <script src="https://unpkg.com/three"></script>
+    <script src="https://unpkg.com/three-globe"></script>
+    <script src="https://unpkg.com/three/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     
     <style>
@@ -775,6 +778,21 @@
                             <!-- Días inyectados vía JS -->
                         </div>
                     </div>
+
+                    <!-- Mapa de Conexiones -->
+                    <div class="mt-6 lg:col-span-4">
+                        <div class="card-bg border rounded-3xl p-6 flex flex-col shadow-xl h-[500px]">
+                            <h3 class="text-xs font-black text-purple-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+                                <span class="bg-purple-500/20 p-2.5 rounded-2xl shadow-inner text-lg">🌍</span> Mapa Global de Conexiones
+                            </h3>
+                            <div id="globe-container" class="flex-1 w-full h-full relative -mt-4 -ml-4">
+                                <div id="globe-loader" class="absolute inset-0 flex items-center justify-center flex-col gap-2 text-purple-300 font-mono text-xs">
+                                    <div class="w-8 h-8 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+                                    <span>Cargando datos geoespaciales...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -926,6 +944,20 @@
             </div>
         </div>
 
+        <!-- MODAL DETALLE CONEXIONES MAPA -->
+        <div id="modal-mapa-detalle" class="hidden fixed inset-0 z-[400] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+            <div class="card-bg border rounded-3xl p-6 w-full max-w-md flex flex-col gap-4 shadow-2xl relative max-h-[85vh]">
+                <button onclick="document.getElementById('modal-mapa-detalle').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-2xl">✕</button>
+                <div class="border-b border-white/10 pb-4">
+                    <h2 class="text-xl font-black uppercase tracking-widest text-purple-400" id="detalle-mapa-titulo">Conexiones desde Ciudad</h2>
+                </div>
+                <div id="detalle-mapa-lista" class="flex-1 overflow-y-auto space-y-2 pr-2 font-mono text-xs">
+                    <!-- Lista de usuarios inyectada -->
+                </div>
+                <button onclick="document.getElementById('modal-mapa-detalle').classList.add('hidden')" class="w-full bg-slate-800 hover:bg-slate-700 py-3 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all">Cerrar</button>
+            </div>
+        </div>
+
         <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-3xl w-[92%] transition-all backdrop-blur-md">
             <div class="text-xs font-bold font-mono">💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> MARCADOS</div>
             <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
@@ -991,7 +1023,7 @@
                 <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-lg border border-purple-400/50 shadow-inner">🤖</div>
                 <div>
                     <h3 class="text-xs font-black uppercase tracking-widest text-purple-400">Seychelles AI</h3>
-                    <p class="text-[9px] opacity-60 font-mono">Motor: OpenRouter (Gratis)</p>
+                    <p class="text-[9px] opacity-60 font-mono">Motor: Llama 3 (Together)</p>
                 </div>
             </div>
             <button onclick="toggleAIAssistant()" class="text-white/50 hover:text-white transition-colors text-lg px-2">✕</button>
@@ -1010,7 +1042,7 @@
                 <button type="button" onclick="quitarImagenIA()" class="absolute top-0 right-0 bg-rose-500 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-bl-lg">✕</button>
             </div>
             <div class="flex gap-2">
-                <button type="button" onclick="document.getElementById('ai-file-input').click()" class="bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 w-10 h-10 rounded-xl flex items-center justify-center transition-colors shadow-inner flex-shrink-0" title="Adjuntar Foto a la IA">📎</button>
+                <button type="button" onclick="document.getElementById('ai-file-input').click()" class="hidden bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 w-10 h-10 rounded-xl flex items-center justify-center transition-colors shadow-inner flex-shrink-0" title="Adjuntar Foto a la IA">📎</button>
                 <input type="file" id="ai-file-input" accept="image/*" class="hidden" onchange="procesarImagenIA(event)">
                 <input type="text" id="ai-chat-input" placeholder="Escribe duda o pídele una acción..." autocomplete="off" class="flex-1 input-bg border rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-purple-500 transition-colors shadow-inner">
                 <button type="submit" id="ai-btn-send" class="bg-gradient-to-br from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-all active:scale-90 font-black flex-shrink-0">➤</button>
@@ -1521,6 +1553,7 @@
         let LISTA_TAREAS = [];
         let LISTA_FAQS = [];
         let LISTA_ESTADOS_KANBAN = [];
+        let GLOBO_INSTANCE = null;
 
         // 📌 LÓGICA DE NOTAS ADHESIVAS
         async function cargarNotasBoard() {
@@ -1912,7 +1945,10 @@
             }
 
             if (idSeccion === 'sec-auditoria') {
-                setTimeout(() => { actualizarCalendarioAuditoria(); }, 50);
+                setTimeout(() => { 
+                    actualizarCalendarioAuditoria(); 
+                    renderizarMapaDeLogins();
+                }, 50);
             }
             if (idSeccion === 'sec-inventario') {
                 setTimeout(() => { renderCalendarioStock(); }, 50);
@@ -2669,7 +2705,7 @@
                     <div class="flex gap-2">
                         <div class="w-7 h-7 rounded-full bg-rose-600/30 border border-rose-500/30 flex items-center justify-center flex-shrink-0 text-sm mt-1">⚠️</div>
                         <div class="bg-rose-500/10 border border-rose-500/20 text-rose-300 p-3 rounded-2xl rounded-tl-none opacity-90 leading-relaxed max-w-[85%]">
-                            ${err.message || 'Error de conexión con Google Gemini.'}
+                            ${err.message || 'Error de conexión con el motor de IA.'}
                         </div>
                     </div>
                 `;
@@ -2762,6 +2798,102 @@
                 }).join('');
             }
             modal.classList.remove('hidden');
+        }
+
+        async function renderizarMapaDeLogins() {
+            const container = document.getElementById('globe-container');
+            if (!container || GLOBO_INSTANCE) return; // No re-renderizar si ya existe
+
+            const loader = document.getElementById('globe-loader');
+            if(loader) loader.classList.remove('hidden');
+
+            try {
+                const res = await fetch('/api/logs/locations', { credentials: 'include' });
+                if (!res.ok) throw new Error('Fallo al cargar datos de localización');
+                const data = await res.json();
+
+                if(loader) loader.classList.add('hidden');
+
+                if (data.length === 0) {
+                    container.innerHTML = `<div class="flex items-center justify-center h-full text-sm opacity-40 italic">No hay datos de conexión para mostrar.</div>`;
+                    return;
+                }
+
+                const globe = new ThreeGlobe()
+                    .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')
+                    .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+                    .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
+                    .pointsData(data)
+                    .pointLat('lat')
+                    .pointLng('lon')
+                    .pointColor(() => '#a855f7') // Color morado
+                    .pointAltitude(0.01)
+                    .pointRadius(d => 0.15 + d.count * 0.08) // Radio basado en el número de conexiones
+                    .pointLabel(d => `<div class="card-bg border border-slate-700 p-2 rounded-lg text-xs"><b>${d.ciudad}, ${d.pais}</b><br>Conexiones: ${d.count}</div>`);
+                    .onPointClick(d => {
+                        const modal = document.getElementById('modal-mapa-detalle');
+                        const titulo = document.getElementById('detalle-mapa-titulo');
+                        const lista = document.getElementById('detalle-mapa-lista');
+                        
+                        if (!modal || !titulo || !lista) return;
+
+                        titulo.innerText = `Conexiones desde ${d.ciudad}`;
+                        
+                        if (d.usuarios && d.usuarios.length > 0) {
+                            lista.innerHTML = d.usuarios.map(u => `
+                                <div class="p-2 bg-black/20 border border-white/5 rounded-lg flex items-center gap-2">
+                                    <span class="text-purple-400">👤</span>
+                                    <span>${u}</span>
+                                </div>
+                            `).join('');
+                        } else {
+                            lista.innerHTML = '<div class="opacity-50 italic">No hay información de usuarios para esta ubicación.</div>';
+                        }
+
+                        modal.classList.remove('hidden');
+                    })
+                    .ringsData(data)
+                    .ringLat('lat').ringLng('lon')
+                    .ringColor(() => 'rgba(168, 85, 247, 0.6)')
+                    .ringMaxRadius(d => 2 + d.count * 0.3).ringPropagationSpeed(3).ringRepeatPeriod(1500);
+
+                // Configuración del renderizador
+                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                renderer.setSize(container.offsetWidth, container.offsetHeight);
+                container.appendChild(renderer.domElement);
+
+                // Configuración de la escena
+                const scene = new THREE.Scene();
+                scene.add(globe);
+                scene.add(new THREE.AmbientLight(0xbbbbbb, 2));
+                scene.add(new THREE.DirectionalLight(0xffffff, 0.8));
+
+                // Configuración de la cámara
+                const camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.1, 1000);
+                camera.position.z = 240;
+
+                // Controles de la cámara
+                const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.1;
+                controls.enableZoom = true;
+                controls.minDistance = 150;
+                controls.maxDistance = 400;
+
+                // Bucle de animación
+                (function animate() {
+                    controls.update();
+                    renderer.render(scene, camera);
+                    requestAnimationFrame(animate);
+                    globe.rotation.y += 0.002; // Auto-rotación
+                })();
+
+                GLOBO_INSTANCE = globe;
+
+            } catch (error) {
+                if(loader) loader.classList.add('hidden');
+                container.innerHTML = `<div class="flex items-center justify-center h-full text-sm text-rose-400">Error al cargar el mapa: ${error.message}</div>`;
+            }
         }
 
         async function navegarCalendario(delta) {

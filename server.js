@@ -97,7 +97,12 @@ const VentaRopa = mongoose.models.VentaRopa || mongoose.model('VentaRopa', Venta
 const LogAuditoriaSchema = new mongoose.Schema({
     fechaHora: { type: Date, default: Date.now },
     usuario: { type: String, required: true },
-    accion: { type: String, required: true }
+    accion: { type: String, required: true },
+    ip: { type: String },
+    ciudad: { type: String },
+    pais: { type: String },
+    lat: { type: Number },
+    lon: { type: Number }
 });
 const LogAuditoria = mongoose.models.LogAuditoria || mongoose.model('LogAuditoria', LogAuditoriaSchema);
 
@@ -250,9 +255,13 @@ function exigeAdmin(req, res, next) {
     return res.status(403).json({ error: 'No autorizado.' });
 }
 
-async function registrarLog(usuario, accion) {
+async function registrarLog(usuario, accion, locationData = {}) {
     try {
-        const nuevoLog = new LogAuditoria({ usuario, accion });
+        const nuevoLog = new LogAuditoria({ 
+            usuario, 
+            accion,
+            ...locationData
+        });
         await nuevoLog.save();
     } catch (e) { console.error("Error al guardar log:", e); }
 }
@@ -429,9 +438,25 @@ app.post('/api/auth/google', async (req, res) => {
             req.session.esAdmin = true;
             req.session.email = emailUsuario;
             req.session.rol = autorizado.rol || 'Admin';
-            await registrarLog(emailUsuario, "Inició sesión en el sistema core");
             
-            // Forzar el guardado de la sesión antes de responder al cliente
+            const ip = req.ip || req.headers['x-forwarded-for']?.split(',').shift() || req.socket.remoteAddress;
+            let locationData = { ip };
+
+            try {
+                // Usar un servicio de geolocalización por IP gratuito y sin clave
+                const geoRes = await axios.get(`http://ip-api.com/json/${ip}?fields=status,message,country,city,lat,lon`);
+                if (geoRes.data && geoRes.data.status === 'success') {
+                    locationData.ciudad = geoRes.data.city;
+                    locationData.pais = geoRes.data.country;
+                    locationData.lat = geoRes.data.lat;
+                    locationData.lon = geoRes.data.lon;
+                }
+            } catch (geoError) {
+                console.warn(`[GEO-IP] No se pudo obtener la localización para la IP ${ip}:`, geoError.message);
+            }
+            
+            await registrarLog(emailUsuario, "Inició sesión en el sistema core", locationData);
+            
             return req.session.save(err => {
                 if (err) return res.status(500).json({ error: 'Fallo al guardar sesión.' });
                 res.json({ status: 'success', usuario: emailUsuario });
@@ -553,17 +578,17 @@ app.delete('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(500).send(e); }
 });
 
-// --- Ruta del Asistente IA (OpenRouter - 100% Gratis sin Tarjeta) ---
+// --- Ruta del Asistente IA (Together AI - Llama 3) ---
 app.post('/api/chat', exigeAdmin, async (req, res) => {
     const { mensaje, imagen } = req.body;
     if (!mensaje && !imagen) return res.status(400).json({ error: 'Mensaje vacío' });
 
-    const apiKey = (process.env.OPENROUTER_API_KEY || '').replace(/['"]/g, '').trim();
+    const apiKey = (process.env.TOGETHER_API_KEY || '').replace(/['"]/g, '').trim();
     
     // Fallback amigable si el usuario aún no ha configurado la API Key
     if (!apiKey) {
         return res.json({
-            respuesta: "¡Hola! Para seguir siendo 100% gratis y sin usar tarjeta de crédito, he cambiado mi motor a **OpenRouter**. Por favor, entra en **openrouter.ai**, crea una clave gratuita y ponla en la variable `OPENROUTER_API_KEY` en Render."
+            respuesta: "He migrado a un nuevo motor de IA más estable: **Together AI**. Para activarme, crea una cuenta gratuita en **api.together.ai**, genera una clave y pégala en la variable de entorno `TOGETHER_API_KEY` en Render. ¡Te dan 25$ de crédito gratis que duran meses!"
         });
     }
 
@@ -769,6 +794,38 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
         
         res.json({ logs });
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar logs.' }); }
+});
+
+app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
+    try {
+        // Buscar logs que sean de inicio de sesión y tengan datos de coordenadas
+        const loginLogs = await LogAuditoria.find({
+            accion: "Inició sesión en el sistema core",
+            lat: { $ne: null },
+            lon: { $ne: null }
+        }).lean();
+
+        // Agrupar los datos para obtener localizaciones únicas, su contador y lista de usuarios
+        const locations = {};
+        loginLogs.forEach(log => {
+            const key = `${log.lat.toFixed(4)},${log.lon.toFixed(4)}`; // Agrupar por coordenadas cercanas
+            if (!locations[key]) {
+                locations[key] = {
+                    lat: log.lat,
+                    lon: log.lon,
+                    ciudad: log.ciudad || 'Desconocida',
+                    pais: log.pais || 'Desconocido',
+                    count: 0,
+                    usuarios: new Set() // Usar un Set para usuarios únicos
+                };
+            }
+            locations[key].count++;
+            locations[key].usuarios.add(log.usuario);
+        });
+
+        const responseData = Object.values(locations).map(loc => ({ ...loc, usuarios: Array.from(loc.usuarios) }));
+        res.json(responseData);
+    } catch (e) { res.status(500).json({ error: 'Fallo al recuperar datos del mapa.' }); }
 });
 
 // --- Rutas de Clientes (CRM) ---

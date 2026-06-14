@@ -4329,7 +4329,7 @@
                     const esScraping = (v.sku && v.sku.startsWith('VNT-')) || (v.comentariosProducto && v.comentariosProducto.includes('Importado'));
                     const badgeScraping = esScraping ? `<div class="absolute -top-1.5 -right-1.5 bg-blue-600 rounded-full w-4 h-4 flex items-center justify-center text-[8px] shadow-lg border border-blue-300" title="Alojado en MongoDB (Vía Web/Scraping)">🌐</div>` : '';
                     const badgeGaleria = v.galeria && v.galeria.length > 0 ? `<div class="absolute bottom-0 right-0 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${v.galeria.length}</div>` : '';
-                    const thumb = v.imagen ? `<div class="relative flex-shrink-0 cursor-pointer hover:scale-105 transition-transform group" onclick="abrirVisorFotos('${v._id}')" title="Ver Galería de Fotos"><img src="${v.imagen}" class="card-img-mini border border-white/10 shadow-lg group-hover:border-indigo-400">${badgeScraping}${badgeGaleria}</div>` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20 cursor-pointer hover:bg-slate-700 transition-colors border border-dashed border-white/20" onclick="abrirVisorFotos('${v._id}')" title="Añadir Fotos">📸</div>`;
+                    const thumb = v.imagen ? `<div class="relative flex-shrink-0 cursor-pointer hover:scale-105 transition-transform group" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Ver Galería de Fotos"><img src="${v.imagen}" class="card-img-mini border border-white/10 shadow-lg group-hover:border-indigo-400">${badgeScraping}${badgeGaleria}</div>` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20 cursor-pointer hover:bg-slate-700 transition-colors border border-dashed border-white/20" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Añadir Fotos">📸</div>`;
                     const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
                     const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
                     const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">🏬 ${v.proveedor.toUpperCase()}</span>` : '';
@@ -4338,9 +4338,9 @@
                     const badgeEst = `<span class="bg-${est.color}-500/10 text-${est.color}-400 border border-${est.color}-500/20 px-1 py-0.5 rounded text-[8px] font-black uppercase">${est.nombre}</span>`;
 
                     card.innerHTML = `
-                        <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0">
+                        <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0" onclick="event.stopPropagation();">
                         ${thumb}
-                        <div class="flex-1 min-w-0 pointer-events-none">
+                        <div class="flex-1 min-w-0 cursor-pointer hover:opacity-80 transition-opacity" onclick="editItem('${v._id}'); event.stopPropagation();" title="Hacer clic para editar el artículo">
                             <div class="flex items-center gap-1.5 flex-wrap">
                                 <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
                                 ${badgeCanal} ${badgeTienda} ${badgeEst}
@@ -4350,10 +4350,10 @@
                             <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
                         </div>
                         <div class="flex items-center gap-1.5 flex-shrink-0 text-[11px]">
-                            <button onclick="duplicarPrendaIndividual('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg">👯</button>
-                            <button onclick="lanzarModalImpresionEtiqueta('${v._id}')" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg">🖨️</button>
-                            <button onclick="editItem('${v._id}')" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-0.5">Editar</button>
-                            <button onclick="deleteItem('${v._id}')" class="opacity-30 hover:opacity-100 text-xs px-0.5">✕</button>
+                            <button onclick="duplicarPrendaIndividual('${v._id}'); event.stopPropagation();" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg" title="Duplicar">👯</button>
+                            <button onclick="lanzarModalImpresionEtiqueta('${v._id}'); event.stopPropagation();" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg" title="Imprimir Código QR">🖨️</button>
+                            <button onclick="editItem('${v._id}'); event.stopPropagation();" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-0.5">Editar</button>
+                            <button onclick="deleteItem('${v._id}'); event.stopPropagation();" class="opacity-30 hover:opacity-100 text-xs px-0.5" title="Borrar">✕</button>
                         </div>`;
 
                     colDom.appendChild(card);

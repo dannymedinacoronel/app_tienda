@@ -1090,6 +1090,59 @@ app.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: $
  * 2. Productos nuevos encontrados en la web que no están en el sistema.
  */
 
+app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
+    try {
+        const { url } = req.body;
+        if (!url) return res.status(400).json({ error: 'URL de Vinted requerida.' });
+
+        const response = await axios.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept-Language': 'es-ES,es;q=0.9',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            },
+            timeout: 15000
+        });
+
+        const $ = cheerio.load(response.data);
+        const productosExtraidos = [];
+
+        $('div[data-testid^="grid-item"], div[data-testid="item-card"], .new-item-box__container, .feed-grid__item, .web_ui__ItemBox__component, .item-card, .grid__item').each((i, el) => {
+            const titulo = $(el).find('[data-testid$="--title"], [data-testid$="--description"], .new-item-box__description h2, .new-item-box__title, .web_ui__ItemBox__title, .truncated, h4, [itemprop="name"]').text().trim();
+            const precioTexto = $(el).find('[data-testid$="--price-text"], [data-testid$="--price"], .new-item-box__description h4, .new-item-box__price, .web_ui__ItemBox__price, .price, h3, [itemprop="price"]').text().trim();
+            const imgTag = $(el).find('img');
+            const imagen = imgTag.attr('src') || imgTag.attr('data-src') || (imgTag.attr('srcset') ? imgTag.attr('srcset').split(' ')[0] : '');
+
+            if (titulo && precioTexto) {
+                let cleanPrice = precioTexto.replace(/[^\d,.]/g, '').trim();
+                if (cleanPrice.includes(',') && cleanPrice.includes('.')) cleanPrice = cleanPrice.replace(/\./g, '').replace(',', '.');
+                else if (cleanPrice.includes(',')) cleanPrice = cleanPrice.replace(',', '.');
+                
+                if (!isNaN(parseFloat(cleanPrice))) productosExtraidos.push({ titulo, precio: cleanPrice, imagen });
+            }
+        });
+
+        if (productosExtraidos.length === 0) return res.status(400).json({ error: 'No se encontraron productos. Es posible que Vinted haya bloqueado la solicitud.' });
+
+        const resultados = { discrepancias: [], nuevos: [], identicos: [] };
+        const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
+
+        productosExtraidos.forEach(item => {
+            const precioWeb = parseFloat(item.precio);
+            const coincidencia = productosBD.find(p => p.prenda.toLowerCase().includes(item.titulo.toLowerCase()) || item.titulo.toLowerCase().includes(p.prenda.toLowerCase()));
+            if (coincidencia) {
+                if (Math.abs(coincidencia.precioVenta - precioWeb) > 0.01) resultados.discrepancias.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, valorAntiguo: coincidencia.precioVenta, valorNuevo: precioWeb, imagen: item.imagen });
+                else resultados.identicos.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, precio: coincidencia.precioVenta, imagen: item.imagen });
+            } else {
+                resultados.nuevos.push({ prenda: item.titulo, precioVenta: precioWeb, imagen: item.imagen, canalVenta: 'Vinted', estado: 'No Vendido' });
+            }
+        });
+        res.json(resultados);
+    } catch (error) {
+        res.status(500).json({ error: 'Error del servidor al intentar analizar la URL de Vinted.' });
+    }
+});
+
 /**
  * Analiza datos subidos manualmente (ej. desde un Excel de Instant Data Scraper)
  */

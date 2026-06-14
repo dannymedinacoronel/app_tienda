@@ -1162,23 +1162,23 @@
             <div class="max-h-[400px] overflow-y-auto pr-1 space-y-6">
                 <!-- Discrepancias -->
                 <div id="container-discrepancias" class="hidden">
-                    <h3 class="text-[10px] font-bold text-amber-500 uppercase mb-2 tracking-widest">⚠️ Precios modificados en Vinted</h3>
+                    <h3 class="text-[10px] font-bold text-amber-500 uppercase mb-2 tracking-widest">⚠️ Artículos que YA TIENES (Cambios detectados)</h3>
                     <div class="border border-current/10 rounded-2xl bg-black/20 p-2">
                         <table class="w-full text-left text-[11px]">
                             <thead>
                                 <tr class="border-b border-white/10 opacity-50 font-bold">
                                     <th class="pb-2 w-8"></th>
                                     <th class="pb-2 w-10">Foto</th>
-                                    <th class="pb-2 px-2">Producto</th>
-                                    <th class="pb-2 text-rose-400">En Mongo</th>
-                                    <th class="pb-2 text-emerald-400">En Vinted</th>
+                                    <th class="pb-2 px-2">Título a guardar</th>
+                                    <th class="pb-2 text-rose-400 text-right">Precio Antiguo</th>
+                                    <th class="pb-2 text-emerald-400 text-right">Nuevo Precio</th>
                                 </tr>
                             </thead>
                             <tbody id="scraper-results-body"></tbody>
                         </table>
                     </div>
                     <div class="flex justify-end mt-2">
-                        <button onclick="autorizarCambiosScraping()" class="bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white px-4 py-1.5 rounded-xl text-[10px] font-bold border border-amber-500/30 transition-all">Sincronizar Precios</button>
+                        <button onclick="autorizarCambiosScraping()" class="bg-amber-600/20 hover:bg-amber-600 text-amber-400 hover:text-white px-4 py-1.5 rounded-xl text-[10px] font-bold border border-amber-500/30 transition-all">Sincronizar Seleccionados</button>
                     </div>
                 </div>
 
@@ -1403,30 +1403,52 @@
         // Renderizar Discrepancias (Cambios de precio)
         if (discCount > 0) {
             data.discrepancias.forEach((d, i) => {
+                const tituloMostrado = d.prendaNueva || d.prenda;
                 tbody.innerHTML += `
                     <tr class="border-b border-white/5 align-middle">
-                        <td class="py-2 pr-2 w-10"><input type="checkbox" class="check-disc-scraper" value="${i}" checked></td>
+                        <td class="py-2 pr-2 w-8"><input type="checkbox" class="check-disc-scraper" value="${i}" checked></td>
                         <td class="py-2"><img src="${d.imagen || ''}" class="w-8 h-8 rounded object-cover border border-white/10" onerror="this.src='https://via.placeholder.com/60'"></td>
-                        <td class="py-2 font-bold px-2">${d.prenda}</td>
-                        <td class="py-2 text-rose-400/50 line-through">${d.valorAntiguo}€</td>
-                        <td class="py-2 text-emerald-400 font-black">${d.valorNuevo}€</td>
+                        <td class="py-2 px-2">
+                            <input type="text" id="disc-item-title-${i}" value="${tituloMostrado}" class="bg-transparent border-b border-white/10 text-[11px] font-bold uppercase w-full focus:outline-none focus:border-amber-400 px-1 py-0.5 text-white" placeholder="Título...">
+                            <div class="text-[8px] opacity-40 mt-0.5 lowercase">En Mongo: ${d.prenda}</div>
+                        </td>
+                        <td class="py-2 text-rose-400/50 line-through text-[11px] font-mono text-right">${d.valorAntiguo}€</td>
+                        <td class="py-2 text-emerald-400 font-black text-right">
+                            <input type="number" id="disc-item-price-${i}" value="${d.valorNuevo}" step="0.01" class="bg-transparent border-b border-white/10 text-[11px] text-emerald-400 font-mono w-14 focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-right"> €
+                        </td>
                     </tr>`;
             });
         }
 
         // Renderizar Nuevos Productos
         if (nuevoCount > 0) {
+            let catOptions = LISTA_CATEGORIAS_GLOBAL.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
             data.nuevos.forEach((n, i) => {
                 gridNuevos.innerHTML += `
-                    <div class="flex items-center gap-3 p-3 bg-black/20 border border-white/10 rounded-2xl hover:bg-white/5 transition-all shadow-inner">
-                        <input type="checkbox" id="check-new-${i}" class="check-new-scraper w-4 h-4 rounded text-emerald-500 bg-black/40 border-white/20 cursor-pointer" value="${i}" checked>
-                        <img src="${n.imagen || ''}" class="w-12 h-12 rounded-xl object-cover shadow-md" onerror="this.src='https://via.placeholder.com/60'">
-                        <div class="min-w-0 flex-1 flex flex-col gap-1.5">
-                            <input type="text" id="new-item-title-${i}" value="${n.prenda}" class="bg-transparent border-b border-white/10 text-[11px] font-bold uppercase w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white transition-colors" placeholder="Título...">
-                            <div class="flex items-center gap-1">
-                                <input type="number" id="new-item-price-${i}" value="${n.precioVenta}" step="0.01" class="bg-transparent border-b border-white/10 text-[11px] text-emerald-400 font-mono w-16 focus:outline-none focus:border-emerald-400 px-1 py-0.5 transition-colors text-right">
-                                <span class="text-[10px] text-emerald-400 font-mono">€</span>
+                    <div class="flex flex-col gap-2 p-3 bg-black/20 border border-white/10 rounded-2xl hover:bg-white/5 transition-all shadow-inner relative">
+                        <div class="absolute top-3 right-3">
+                            <input type="checkbox" id="check-new-${i}" class="check-new-scraper w-4 h-4 rounded text-emerald-500 bg-black/40 border-white/20 cursor-pointer" value="${i}" checked>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <img src="${n.imagen || ''}" class="w-14 h-14 rounded-xl object-cover shadow-md" onerror="this.src='https://via.placeholder.com/60'">
+                            <div class="min-w-0 flex-1 flex flex-col gap-1.5 pr-6">
+                                <input type="text" id="new-item-title-${i}" value="${n.prenda}" class="bg-transparent border-b border-white/10 text-[11px] font-bold uppercase w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white transition-colors" placeholder="Título a guardar...">
+                                <div class="flex items-center gap-1 mt-1">
+                                    <span class="text-[9px] opacity-60">Precio:</span>
+                                    <input type="number" id="new-item-price-${i}" value="${n.precioVenta}" step="0.01" class="bg-transparent border-b border-white/10 text-[11px] text-emerald-400 font-mono w-16 focus:outline-none focus:border-emerald-400 px-1 py-0.5 transition-colors text-right">
+                                    <span class="text-[10px] text-emerald-400 font-mono">€</span>
+                                </div>
                             </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 mt-1">
+                            <select id="new-item-cat-${i}" class="bg-black/40 border border-white/10 text-[10px] rounded px-1 py-1 focus:outline-none focus:border-emerald-400 text-white">
+                                <option value="General">Categoría...</option>
+                                ${catOptions}
+                            </select>
+                            <select id="new-item-talla-${i}" class="bg-black/40 border border-white/10 text-[10px] rounded px-1 py-1 focus:outline-none focus:border-emerald-400 text-white">
+                                <option value="Única">Talla: Única</option>
+                                <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option>
+                            </select>
                         </div>
                     </div>`;
             });
@@ -1453,10 +1475,16 @@
 
     // Sincroniza precios de productos existentes
     async function autorizarCambiosScraping() {
-        const selected = Array.from(document.querySelectorAll('.check-disc-scraper:checked')).map(cb => resultadosScraperActual.discrepancias[cb.value]);
-        if (selected.length === 0) return alert('Selecciona algún cambio de precio.');
+        const selected = Array.from(document.querySelectorAll('.check-disc-scraper:checked')).map(cb => {
+            const idx = cb.value;
+            const item = resultadosScraperActual.discrepancias[idx];
+            const tituloEditado = document.getElementById(`disc-item-title-${idx}`).value.trim() || item.prendaNueva || item.prenda;
+            const precioEditado = parseFloat(document.getElementById(`disc-item-price-${idx}`).value) || item.valorNuevo;
+            return { idMongo: item.idMongo, prenda: tituloEditado, valorNuevo: precioEditado };
+        });
+        if (selected.length === 0) return alert('Selecciona algún cambio a sincronizar.');
 
-        if (!confirm(`¿Estás seguro de actualizar los precios de estos ${selected.length} artículos en MongoDB basándote en lo encontrado en Vinted?`)) return;
+        if (!confirm(`¿Estás seguro de actualizar estos ${selected.length} artículos en MongoDB basándote en lo encontrado en Vinted?`)) return;
 
         try {
             const response = await fetch('/api/scraper/aplicar', {
@@ -1485,7 +1513,9 @@
             const itemOriginal = resultadosScraperActual.nuevos[idx];
             const tituloEditado = document.getElementById(`new-item-title-${idx}`).value.trim() || itemOriginal.prenda;
             const precioEditado = parseFloat(document.getElementById(`new-item-price-${idx}`).value) || itemOriginal.precioVenta;
-            return { ...itemOriginal, prenda: tituloEditado, precioVenta: precioEditado };
+            const catEditada = document.getElementById(`new-item-cat-${idx}`).value || 'General';
+            const tallaEditada = document.getElementById(`new-item-talla-${idx}`).value || 'Única';
+            return { ...itemOriginal, prenda: tituloEditado, precioVenta: precioEditado, categoria: catEditada, talla: tallaEditada };
         });
         if (selected.length === 0) return alert('Selecciona productos para importar.');
 

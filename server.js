@@ -1127,14 +1127,25 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         const resultados = { discrepancias: [], nuevos: [], identicos: [] };
         const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
 
+        const cleanStr = str => str.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+
         productosExtraidos.forEach(item => {
             const precioWeb = parseFloat(item.precio);
-            const coincidencia = productosBD.find(p => p.prenda.toLowerCase().includes(item.titulo.toLowerCase()) || item.titulo.toLowerCase().includes(p.prenda.toLowerCase()));
-            if (coincidencia) {
-                if (Math.abs(coincidencia.precioVenta - precioWeb) > 0.01) resultados.discrepancias.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, valorAntiguo: coincidencia.precioVenta, valorNuevo: precioWeb, imagen: item.imagen });
-                else resultados.identicos.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, precio: coincidencia.precioVenta, imagen: item.imagen });
-            } else {
-                resultados.nuevos.push({ prenda: item.titulo, precioVenta: precioWeb, imagen: item.imagen, canalVenta: 'Vinted', estado: 'No Vendido' });
+            if (item.titulo && !isNaN(precioWeb)) {
+                const cleanItemTitle = cleanStr(item.titulo);
+                const coincidencia = productosBD.find(p => {
+                    const cleanP = cleanStr(p.prenda);
+                    return cleanP === cleanItemTitle || (cleanP.length > 4 && cleanItemTitle.includes(cleanP)) || (cleanItemTitle.length > 4 && cleanP.includes(cleanItemTitle));
+                });
+                if (coincidencia) {
+                    if (Math.abs(coincidencia.precioVenta - precioWeb) > 0.01 || coincidencia.prenda !== item.titulo) {
+                        resultados.discrepancias.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, prendaNueva: item.titulo, valorAntiguo: coincidencia.precioVenta, valorNuevo: precioWeb, imagen: item.imagen });
+                    } else {
+                        resultados.identicos.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, precio: coincidencia.precioVenta, imagen: item.imagen });
+                    }
+                } else {
+                    resultados.nuevos.push({ prenda: item.titulo, precioVenta: precioWeb, imagen: item.imagen, canalVenta: 'Vinted', estado: 'No Vendido' });
+                }
             }
         });
         res.json(resultados);
@@ -1157,27 +1168,25 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
         const resultados = { discrepancias: [], nuevos: [], identicos: [] };
         const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
 
+        const cleanStr = str => str.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+
         productosExtraidos.forEach(item => {
             const titulo = item.titulo || '';
             const precioWeb = parseFloat(item.precio);
             const imagen = item.imagen || '';
 
             if (titulo && !isNaN(precioWeb)) {
-                const coincidencia = productosBD.find(p => 
-                    p.prenda.toLowerCase().includes(titulo.toLowerCase()) || 
-                    titulo.toLowerCase().includes(p.prenda.toLowerCase())
-                );
+                const cleanItemTitle = cleanStr(titulo);
+                const coincidencia = productosBD.find(p => {
+                    const cleanP = cleanStr(p.prenda);
+                    return cleanP === cleanItemTitle || (cleanP.length > 4 && cleanItemTitle.includes(cleanP)) || (cleanItemTitle.length > 4 && cleanP.includes(cleanItemTitle));
+                });
 
                 if (coincidencia) {
-                    if (Math.abs(coincidencia.precioVenta - precioWeb) > 0.01) {
-                        resultados.discrepancias.push({
-                            idMongo: coincidencia._id, prenda: coincidencia.prenda,
-                            valorAntiguo: coincidencia.precioVenta, valorNuevo: precioWeb, imagen
-                        });
+                    if (Math.abs(coincidencia.precioVenta - precioWeb) > 0.01 || coincidencia.prenda !== titulo) {
+                        resultados.discrepancias.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, prendaNueva: titulo, valorAntiguo: coincidencia.precioVenta, valorNuevo: precioWeb, imagen });
                     } else {
-                        resultados.identicos.push({
-                            idMongo: coincidencia._id, prenda: coincidencia.prenda, precio: coincidencia.precioVenta, imagen
-                        });
+                        resultados.identicos.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, precio: coincidencia.precioVenta, imagen });
                     }
                 } else {
                     resultados.nuevos.push({ prenda: titulo, precioVenta: precioWeb, imagen, canalVenta: 'Vinted', estado: 'No Vendido' });
@@ -1266,8 +1275,8 @@ app.post('/api/scraper/aplicar', exigeAdmin, async (req, res) => {
     try {
         const { cambios } = req.body;
         for (const cambio of cambios) {
-            await VentaRopa.findByIdAndUpdate(cambio.idMongo, { precioVenta: cambio.valorNuevo });
-            await registrarLog(req.session.email, `Sincronización precio: ${cambio.prenda} -> ${cambio.valorNuevo}€`);
+            await VentaRopa.findByIdAndUpdate(cambio.idMongo, { precioVenta: cambio.valorNuevo, prenda: cambio.prenda });
+            await registrarLog(req.session.email, `Sincronización artículo: ${cambio.prenda} -> ${cambio.valorNuevo}€`);
         }
         res.json({ success: true });
     } catch (error) {

@@ -1420,7 +1420,7 @@
                 tbody.innerHTML += `
                     <tr class="border-b border-white/5 align-middle">
                         <td class="py-2 pr-2 w-8"><input type="checkbox" class="check-disc-scraper" value="${i}" checked></td>
-                        <td class="py-2"><img src="${d.imagen || ''}" class="w-8 h-8 rounded object-cover border border-white/10" onerror="this.src='https://via.placeholder.com/60'"></td>
+                        <td class="py-2"><img src="${d.imagen || ''}" onclick="abrirVisorScraper('disc', ${i})" class="w-8 h-8 rounded object-cover border border-white/10 cursor-pointer hover:scale-110 transition-transform" title="Ver foto" onerror="this.src='https://via.placeholder.com/60'"></td>
                         <td class="py-2 px-2">
                             <input type="text" id="disc-item-title-${i}" value="${tituloMostrado}" class="bg-transparent border-b border-white/10 text-[11px] font-bold uppercase w-full focus:outline-none focus:border-amber-400 px-1 py-0.5 text-white" placeholder="Título...">
                             <div class="text-[8px] opacity-40 mt-0.5 lowercase">En Mongo: ${d.prenda}</div>
@@ -1444,8 +1444,8 @@
                             <input type="checkbox" id="check-new-${i}" class="check-new-scraper w-4 h-4 rounded text-emerald-500 bg-black/40 border-white/20 cursor-pointer" value="${i}" checked>
                         </div>
                         <div class="flex items-start gap-3">
-                                <div class="relative flex-shrink-0">
-                                    <img src="${n.imagen || ''}" class="w-14 h-14 rounded-xl object-cover shadow-md" onerror="this.src='https://via.placeholder.com/60'">
+                                <div class="relative flex-shrink-0 cursor-pointer group" onclick="abrirVisorScraper('nuevo', ${i})" title="Ver Galería">
+                                    <img src="${n.imagen || ''}" class="w-14 h-14 rounded-xl object-cover shadow-md group-hover:scale-105 transition-transform" onerror="this.src='https://via.placeholder.com/60'">
                                     ${badgeGaleriaInfo}
                                 </div>
                             <div class="min-w-0 flex-1 flex flex-col gap-1.5 pr-6">
@@ -1716,6 +1716,30 @@
         function cerrarVisorFotos() {
             document.getElementById('modal-visor-fotos').classList.add('hidden');
             ITEM_FOTOS_ACTUAL = null;
+            
+            // Restaurar botones por si se ocultaron en la vista previa del Scraper
+            const btnAcciones = document.getElementById('visor-foto-acciones');
+            if (btnAcciones) btnAcciones.style.display = '';
+            const btnAddFoto = document.getElementById('input-nueva-foto-galeria');
+            if (btnAddFoto && btnAddFoto.parentElement) btnAddFoto.parentElement.style.display = '';
+        }
+
+        function abrirVisorScraper(tipo, idx) {
+            let item;
+            if (tipo === 'nuevo') item = resultadosScraperActual.nuevos[idx];
+            if (tipo === 'disc') item = resultadosScraperActual.discrepancias[idx];
+            if (tipo === 'identico') item = resultadosScraperActual.identicos[idx];
+            if (!item) return;
+            
+            ITEM_FOTOS_ACTUAL = { _id: 'scraper-preview', prenda: item.prendaNueva || item.prenda || 'Vista Previa', imagen: item.imagen, galeria: item.galeria || [] };
+            
+            document.getElementById('visor-item-id').value = 'scraper-preview'; document.getElementById('visor-fotos-titulo').innerText = ITEM_FOTOS_ACTUAL.prenda + " (Vista Previa)";
+            document.getElementById('modal-visor-fotos').classList.remove('hidden');
+            
+            const btnAcciones = document.getElementById('visor-foto-acciones'); if(btnAcciones) btnAcciones.style.display = 'none';
+            const btnAddFoto = document.getElementById('input-nueva-foto-galeria'); if(btnAddFoto && btnAddFoto.parentElement) btnAddFoto.parentElement.style.display = 'none';
+            
+            seleccionarFotoVisor(ITEM_FOTOS_ACTUAL.imagen ? -1 : (ITEM_FOTOS_ACTUAL.galeria.length > 0 ? 0 : -1)); renderizarMiniaturasVisor();
         }
 
         function renderizarMiniaturasVisor() {

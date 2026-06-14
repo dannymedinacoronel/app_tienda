@@ -1238,7 +1238,9 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
             if (prod.galeria && Array.isArray(prod.galeria)) {
                 for (const gUrl of prod.galeria.slice(0, 12)) {
                     const b64 = await downloadAndConvertToBase64(gUrl);
-                    if (b64 && b64.startsWith('data:image')) galeriaBase64.push(b64);
+                    if (b64) {
+                        galeriaBase64.push(b64.startsWith('data:image') ? b64 : gUrl);
+                    }
                 }
             }
             const mainImg = await downloadAndConvertToBase64(prod.imagen);

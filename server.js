@@ -27,6 +27,12 @@ const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI;
 if (!MONGO_URI_FINAL) {
     console.error('\x1b[31m[ERROR]\x1b[0m No se detectó la variable MONGODB_URI en el entorno.');
 }
+
+// Función de soporte para evitar errores al notificar actualizaciones en clientes
+function notificarCambio() {
+    // Placeholder preparado para usar WebSockets en el futuro
+}
+
 // --- Modelos de MongoDB ---
 
 const TiendaSchema = new mongoose.Schema({

@@ -2814,7 +2814,7 @@
                 // Carga de datos en paralelo para máxima velocidad
                 const [locationsRes, countriesRes] = await Promise.all([
                     fetch('/api/logs/locations', { credentials: 'include' }),
-                    fetch('/data/ne_110m_admin_0_countries.geojson')
+                    fetch('/ne_110m_admin_0_countries.geojson')
                 ]);
 
                 if (!locationsRes.ok) throw new Error('Fallo al cargar datos de localización');

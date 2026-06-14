@@ -273,15 +273,23 @@
                         </div>
                     </div>
 
-                    <button onclick="forceRefreshDataManual()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md flex items-center gap-1 transition-transform active:scale-95">
-                        <span id="icon-refresh" class="inline-block">🔄</span> <span class="hidden sm:inline">Refrescar</span>
-                    </button>
-                    <button onclick="descargarBackupSeguridadLocal()" class="bg-purple-600/40 hover:bg-purple-700 border border-purple-500/30 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">💾 Backup</button>
-                    <button onclick="document.getElementById('input-restore-backup').click()" class="bg-slate-700 hover:bg-slate-600 border border-current/10 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">📂 Importar</button>
+                    <!-- MENÚ ACCIONES AGRUPADAS -->
+                    <div class="relative group">
+                        <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md tracking-wide transition-all active:scale-95">
+                            ⚙️ Acciones <span class="text-[9px] opacity-60">▼</span>
+                        </button>
+                        <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-48 dropdown-bg border rounded-2xl shadow-2xl z-[150] p-1.5 space-y-1 animate-fadeIn">
+                            <button onclick="forceRefreshDataManual()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors"><span id="icon-refresh" class="inline-block">🔄</span> Sincronizar DB</button>
+                            <button onclick="procesarScraperVinted()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors text-blue-400">👗 Scraper / CSV</button>
+                            <button onclick="exportarExcel()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors text-emerald-400">📊 Exportar Excel</button>
+                            <div class="h-px w-full bg-white/10 my-1"></div>
+                            <button onclick="descargarBackupSeguridadLocal()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors text-purple-400">💾 Bajar Backup</button>
+                            <button onclick="document.getElementById('input-restore-backup').click()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors text-amber-400">📂 Cargar Backup</button>
+                            <div class="h-px w-full bg-white/10 my-1"></div>
+                            <button onclick="logout(event)" class="w-full text-left px-3 py-2 rounded-lg text-xs font-black hover:bg-rose-500/20 text-rose-500 flex items-center gap-2 transition-colors">🚪 Cerrar Sesión</button>
+                        </div>
+                    </div>
                     <input type="file" id="input-restore-backup" class="hidden" accept=".json" onchange="importarBackupJSON(event)">
-                    <button onclick="exportarExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">📊 Excel</button>
-                    <button onclick="procesarScraperVinted()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-md transition-all">👗 Scraper</button>
-                    <button onclick="logout(event)" class="text-[11px] bg-rose-600/10 hover:bg-rose-600 hover:text-white text-rose-500 px-3 py-2 rounded-xl font-bold transition-all border border-rose-500/20">Salir</button>
                 </div>
             </header>
 
@@ -1273,25 +1281,47 @@
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                 const jsonData = XLSX.utils.sheet_to_json(firstSheet);
 
-                // Mapeo inteligente de columnas (Instant Data Scraper usa nombres variados)
-                // Priorizamos los nombres de columna del CSV de ejemplo
-                const productosMapeados = jsonData.map(row => {
-                    const rawPrice = row['web_ui__Text__text 4'] || row.price || row.precio || row.price_val || row['item-card-price'];
+                // Mapeo ultra-dinámico para Instant Data Scraper (CSV/Excel)
+                const productosMapeados = [];
+                jsonData.forEach(row => {
+                    let titulo = '', precio = '', imagen = '';
+                    
+                    for (const key in row) {
+                        const k = key.toLowerCase();
+                        const val = String(row[key] || '').trim();
+                        if (!val) continue;
+
+                        // Extraer precio
+                        if (!precio && (k.includes('price') || k.includes('precio') || val.includes('€') || k.includes('text 4'))) {
+                            precio = val;
+                        }
+                        // Extraer título
+                        else if (!titulo && (k.includes('title') || k.includes('desc') || k.includes('text') || k.includes('nombre') || k.includes('prenda'))) {
+                            if (val.length > 3 && !val.includes('http')) titulo = val;
+                        }
+                        // Extraer imagen
+                        else if (!imagen && (k.includes('src') || k.includes('img') || k.includes('image') || k.includes('foto'))) {
+                            if (val.includes('http')) imagen = val;
+                        }
+                    }
+
+                    // Limpieza de precios europeos
                     let cleanPrice = '';
-                    if (rawPrice) {
-                        cleanPrice = String(rawPrice).replace(/[^\d,.]/g, '').trim(); // Elimina todo excepto números, comas y puntos
-                        if (cleanPrice.includes(',') && cleanPrice.includes('.')) { // Si tiene ambos, asume que el punto es separador de miles y la coma decimal
+                    if (precio) {
+                        cleanPrice = precio.replace(/[^\d,.]/g, '').trim();
+                        if (cleanPrice.includes(',') && cleanPrice.includes('.')) { 
                             cleanPrice = cleanPrice.replace(/\./g, '').replace(',', '.');
-                        } else if (cleanPrice.includes(',')) { // Si solo tiene coma, asume que es decimal
+                        } else if (cleanPrice.includes(',')) { 
                             cleanPrice = cleanPrice.replace(',', '.');
                         }
                     }
-                    return {
-                        titulo: row['web_ui__Text__text'] || row.description || row.title || row.nombre || row.prenda || row['item-card-description'],
-                        precio: cleanPrice, // Enviamos el precio ya limpio al backend
-                        imagen: row['web_ui__Image__content src'] || row['image-src'] || row.image || row.foto || row.imagen || row['item-card-image-src']
-                    };
+
+                    if (titulo && cleanPrice) {
+                        productosMapeados.push({ titulo, precio: cleanPrice, imagen });
+                    }
                 });
+
+                if (productosMapeados.length === 0) throw new Error("No se detectaron columnas válidas (Título, Precio, Foto) en el CSV.");
 
                 const response = await fetch(`${BACKEND_URL}/api/scraper/analizar-manual`, {
                     method: 'POST',

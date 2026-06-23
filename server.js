@@ -524,8 +524,8 @@ app.post('/api/auth/google', async (req, res) => {
             return res.json({ success: false, setupRequired: true, email: email });
         }
     } catch (e) {
-        console.error("Error obteniendo dbStats:", e);
-        res.status(500).json({ error: 'Fallo al recuperar estadísticas de DB.' });
+        console.error("Error en login Google:", e);
+        res.status(500).json({ error: 'Error interno de autenticación' });
     }
 });
 

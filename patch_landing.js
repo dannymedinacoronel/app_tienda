@@ -1,4 +1,6 @@
-<!DOCTYPE html>
+const fs = require('fs');
+
+let html = `<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -226,4 +228,7 @@
         });
     </script>
 </body>
-</html>
+</html>`;
+
+fs.writeFileSync('public/landing.html', html);
+console.log('Landing page generated');

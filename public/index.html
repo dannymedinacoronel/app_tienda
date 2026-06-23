@@ -233,35 +233,6 @@
             </div>
         </div>
 
-
-        <div id="setup-modal" class="hidden fixed inset-0 z-[1000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-            <div class="card-bg border border-white/20 rounded-[2rem] p-8 max-w-sm w-full shadow-[0_0_50px_rgba(59,130,246,0.3)] transform transition-all">
-                <div class="text-center mb-6">
-                    <span class="text-4xl">🚀</span>
-                    <h2 class="text-2xl font-black uppercase tracking-tight mt-3">Configura tu Negocio</h2>
-                    <p class="text-xs opacity-60 font-mono mt-1">Crea tu espacio de trabajo en Seychelles.</p>
-                </div>
-                <form id="setup-form" onsubmit="enviarSetupNegocio(event)" class="space-y-4">
-                    <input type="hidden" id="setup-email">
-                    <div>
-                        <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Nombre de la Tienda / Negocio</label>
-                        <input type="text" id="setup-nombre" placeholder="Ej: Peluquería Ana, Sneakers XYZ" required class="input-bg border border-white/10 w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 font-bold">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold uppercase opacity-60 mb-1">Tipo de Negocio</label>
-                        <select id="setup-tipo" class="input-bg border border-white/10 w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 dropdown-bg font-bold">
-                            <option value="General" selected>🏢 General / Otros</option>
-                            <option value="Ropa">👗 Tienda de Ropa / Vinted</option>
-                            <option value="Peluquería">✂️ Peluquería / Barbería</option>
-                            <option value="Joyería">💍 Joyería / Relojería</option>
-                            <option value="Tecnología">💻 Tecnología / Móviles</option>
-                        </select>
-                    </div>
-                    <button type="submit" id="btn-setup" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xs py-3.5 rounded-xl shadow-lg uppercase tracking-widest hover:scale-[1.02] transition-transform">Crear Espacio</button>
-                </form>
-            </div>
-        </div>
-
         <div id="panel-control" class="hidden max-w-7xl mx-auto px-4 py-6">
             <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-6">
                 <div class="flex items-center gap-4">
@@ -425,7 +396,7 @@
                             </div>
 
                             <div>
-                                <label for="prenda" class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Modelo / Descripción</label>
+                                <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Modelo / Descripción</label>
                                 <input type="text" id="prenda" required class="input-bg border w-full rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500">
                             </div>
 
@@ -597,15 +568,6 @@
                     <div class="lg:col-span-3 card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[750px]">
                         <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest mb-4">📋 Base de Datos de Clientes</h3>
                         
-
-                        <div class="mt-4 p-3 bg-indigo-900/20 border border-indigo-500/30 rounded-2xl flex items-center justify-between gap-3">
-                            <div>
-                                <p class="text-[10px] font-black uppercase tracking-widest text-indigo-400">🔗 Link de Reservas Público</p>
-                                <input type="text" id="crm-public-link" readonly class="bg-transparent text-[9px] opacity-70 w-full mt-1 outline-none cursor-text font-mono">
-                            </div>
-                            <button onclick="copiarLinkReservas()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold shadow-md transition-all shrink-0">Copiar</button>
-                        </div>
-
                         <div class="relative mb-6">
                             <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none opacity-40 text-sm">🔍</span>
                             <input type="text" oninput="filtrarCRM(this.value)" placeholder="Buscar por nombre, DNI, email o teléfono..." class="input-bg border w-full rounded-2xl pl-10 pr-4 py-3 text-xs focus:outline-none shadow-inner">
@@ -620,25 +582,22 @@
 
             <!-- SECCIÓN GESTIÓN DE USUARIOS AUTORIZADOS -->
             <div id="sec-usuarios" class="seccion-app hidden flex flex-col gap-6 mb-8">
-
-
-
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="card-bg border p-6 rounded-3xl shadow-xl">
-                        <h3 class="text-xs font-black text-blue-400 uppercase mb-4">🔑 Añadir Empleado a Tienda</h3>
+                        <h3 class="text-xs font-black text-blue-400 uppercase mb-4">🔑 Autorizar Nueva Cuenta</h3>
                         <div class="space-y-4">
-                            <p class="text-[10px] opacity-60">Añade correos de Gmail para que tus empleados tengan acceso a tu tienda. Tú, como creador, tienes acceso total.</p>
+                            <p class="text-[10px] opacity-60">Solo los emails de Gmail añadidos aquí podrán saltar la pantalla de login.</p>
                             <input type="email" id="user-admin-email" placeholder="ejemplo@gmail.com" class="input-bg border w-full rounded-xl px-4 py-3 text-xs focus:outline-none">
                             <select id="user-admin-rol" class="input-bg border w-full rounded-xl px-4 py-3 text-xs focus:outline-none dropdown-bg">
-                                <option value="Admin">👑 Manager (Gestión de Personal y Tienda)</option>
-                                <option value="Editor" selected>📝 Empleado (Gestión de CRM y Ventas)</option>
-                                <option value="Lector">👀 Contable (Solo ver cifras y analíticas)</option>
+                                <option value="Admin">👑 Administrador (Control Total)</option>
+                                <option value="Editor" selected>📝 Editor (Gestión de Tienda)</option>
+                                <option value="Lector">👀 Lector (Solo Ver Cifras)</option>
                             </select>
                             <button onclick="agregarUsuarioAutorizado()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-xl text-[10px] tracking-widest uppercase transition-all shadow-lg">Otorgar Acceso</button>
                         </div>
                     </div>
                     <div class="lg:col-span-2 card-bg border p-6 rounded-3xl shadow-xl flex flex-col h-[500px]">
-                        <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest mb-6">👥 Empleados de la Tienda</h3>
+                        <h3 class="text-xs font-black text-indigo-400 uppercase tracking-widest mb-6">👥 Cuentas con Acceso al Core</h3>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left text-[11px]">
                                 <thead class="opacity-40 uppercase font-black border-b border-white/5">
@@ -701,9 +660,6 @@
                     </div>
                 </div>
 
-
-
-
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col justify-between">
                         <h3 class="text-xs font-black uppercase mb-3 tracking-wider text-blue-400">📈 Curva de Rendimiento Diario</h3>
@@ -738,9 +694,6 @@
             
             <!-- SECCIÓN GESTIÓN / FACTURACIÓN -->
             <div id="sec-gestion" class="seccion-app hidden flex flex-col gap-6 mb-8">
-
-
-
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <!-- Formulario de Datos -->
                     <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col gap-4">
@@ -988,9 +941,6 @@
                         <span class="bg-amber-500/20 p-2 rounded-xl">⚙️</span> Configurador del Tablero Kanban
                     </h3>
                 </div>
-
-
-
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <form id="form-estado-kanban" onsubmit="guardarEstadoKanban(event)" class="space-y-3 border border-white/10 p-5 rounded-2xl bg-black/20 shadow-inner h-fit sticky top-4">
                         <input type="hidden" id="ek-id">
@@ -2076,7 +2026,11 @@
                     credentials: 'include',
                     body: JSON.stringify({ nombre: nombre.trim() })
                 });
-
+                if (res.ok) {
+                    cantarPorVoz("Categoría añadida.");
+                    await refrescarCategoriasCloud();
+                    document.getElementById('categoria').value = nombre.trim();
+                } else {
                     const err = await res.json(); alert(err.error || "Error al crear categoría.");
                 }
             } catch(e) { alert("Fallo de conexión."); }
@@ -2097,7 +2051,215 @@
                     credentials: 'include',
                     body: JSON.stringify({ nombre: nuevoNombre.trim() })
                 });
+                if (res.ok) {
+                    cantarPorVoz("Categoría actualizada.");
+                    await refrescarCategoriasCloud();
+                }
+            } catch(e) { alert("Error al editar."); }
+        }
 
+        async function eliminarCategoriaSeleccionadaDB() {
+            const nombre = document.getElementById('categoria').value;
+            const cat = LISTA_CATEGORIAS_GLOBAL.find(c => c.nombre === nombre);
+            if (!cat) return alert("Selecciona una categoría válida.");
+
+            if (confirm(`¿Eliminar permanentemente la categoría "${nombre}"?\nNota: Los artículos actuales conservarán su categoría como texto, pero ya no aparecerá en el listado de creación.`)) {
+                try {
+                    const res = await fetch(`${BACKEND_URL}/api/categorias/${cat._id}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+                    if (res.ok) {
+                        cantarPorVoz("Categoría eliminada.");
+                        await refrescarCategoriasCloud();
+                    }
+                } catch(e) { alert("Error al borrar."); }
+            }
+        }
+
+        async function crearNotaNueva() {
+            navegarASeccion('sec-notas'); // Ir automáticamente a la pestaña
+            const res = await fetch('/api/notas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ texto: 'Escribe tu idea aquí...', x: 50, y: 50, width: 220, height: 180, color: 'note-yellow' })
+            });
+            if(res.ok) cargarNotasBoard();
+        }
+
+        function renderizarNotas() {
+            const canvas = document.getElementById('tablero-notas');
+            if(!canvas) return;
+            canvas.innerHTML = '';
+            NOTAS_LOCALES.forEach(nota => {
+                // Migración por si tuvieras notas con clases Tailwind antiguas
+                let colorClass = nota.color;
+                if(colorClass === 'bg-yellow-400') colorClass = 'note-yellow';
+                if(colorClass === 'bg-blue-300') colorClass = 'note-blue';
+                if(colorClass === 'bg-green-300') colorClass = 'note-green';
+                if(colorClass === 'bg-pink-300') colorClass = 'note-pink';
+
+                const div = document.createElement('div');
+                div.className = `sticky-note ${colorClass}`;
+                div.style.left = `${nota.x}px`;
+                div.style.top = `${nota.y}px`;
+                div.style.width = `${nota.width}px`;
+                div.style.height = `${nota.height}px`;
+
+                div.innerHTML = `
+                    <div class="flex justify-between items-center mb-1 border-b border-black/10 pb-1.5 cursor-grab active:cursor-grabbing" onmousedown="window.iniciarArrastreNota(event, this.parentElement, '${nota._id}')">
+                        <span class="text-[8px] opacity-60 font-mono font-bold uppercase pointer-events-none tracking-widest">${nota.usuario.split('@')[0]}</span>
+                        <div class="flex gap-1.5 items-center bg-white/40 px-2 py-0.5 rounded border border-white/20 shadow-sm">
+                            <button onclick="document.execCommand('bold', false, null)" class="text-[10px] hover:text-black/60 font-black px-1 transition-colors" title="Negrita">B</button>
+                            <button onclick="document.execCommand('insertUnorderedList', false, null)" class="text-[10px] hover:text-black/60 font-black px-1 transition-colors" title="Lista">•≡</button>
+                            <div class="w-px h-3 bg-black/20 mx-0.5"></div>
+                            <button onclick="borrarNota('${nota._id}')" class="text-[10px] text-red-500 hover:text-red-700 font-bold px-0.5 transition-colors" title="Borrar">✕</button>
+                        </div>
+                    </div>
+                    <div class="note-content custom-scrollbar text-[11px]" contenteditable="true" onblur="actualizarNotaTexto('${nota._id}', this.innerHTML)">${nota.texto}</div>
+                    <div class="absolute bottom-2 left-0 right-0 flex justify-center gap-2.5 opacity-0 hover:opacity-100 transition-opacity duration-300">
+                        <div onclick="cambiarColorNota('${nota._id}', 'note-yellow')" class="w-4 h-4 rounded-full bg-yellow-300 border-2 border-white/60 cursor-pointer shadow-md hover:scale-110 transition-transform"></div>
+                        <div onclick="cambiarColorNota('${nota._id}', 'note-blue')" class="w-4 h-4 rounded-full bg-blue-300 border-2 border-white/60 cursor-pointer shadow-md hover:scale-110 transition-transform"></div>
+                        <div onclick="cambiarColorNota('${nota._id}', 'note-green')" class="w-4 h-4 rounded-full bg-green-300 border-2 border-white/60 cursor-pointer shadow-md hover:scale-110 transition-transform"></div>
+                        <div onclick="cambiarColorNota('${nota._id}', 'note-pink')" class="w-4 h-4 rounded-full bg-pink-300 border-2 border-white/60 cursor-pointer shadow-md hover:scale-110 transition-transform"></div>
+                    </div>
+                `;
+
+                // Detector de redimensionado
+                new ResizeObserver(() => {
+                    const w = parseInt(div.style.width);
+                    const h = parseInt(div.style.height);
+                    if(w !== nota.width || h !== nota.height) {
+                        actualizarNotaDimensiones(nota._id, w, h);
+                    }
+                }).observe(div);
+
+                canvas.appendChild(div);
+            });
+        }
+
+        // Lógica de arrastre extraída para que funcione perfectamente en el nuevo contenedor
+        window.iniciarArrastreNota = function(e, div, id) {
+            if(e.target.tagName === 'BUTTON') return;
+            let isDragging = true;
+
+            const board = document.getElementById('tablero-notas');
+
+            let initialMouseX = e.clientX;
+            let initialMouseY = e.clientY;
+            let initialDivX = div.offsetLeft;
+            let initialDivY = div.offsetTop;
+
+            const mouseMoveHandler = (moveEvent) => {
+                if (!isDragging) return;
+                let deltaX = moveEvent.clientX - initialMouseX;
+                let deltaY = moveEvent.clientY - initialMouseY;
+
+                let newX = Math.max(0, initialDivX + deltaX);
+                let newY = Math.max(0, initialDivY + deltaY);
+
+                div.style.left = `${newX}px`;
+                div.style.top = `${newY}px`;
+            };
+            const mouseUpHandler = async () => {
+                isDragging = false;
+                document.removeEventListener('mousemove', mouseMoveHandler);
+                document.removeEventListener('mouseup', mouseUpHandler);
+                const x = parseInt(div.style.left);
+                const y = parseInt(div.style.top);
+                await fetch(`${BACKEND_URL}/api/notas/${id}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ x, y })
+                });
+            };
+            document.addEventListener('mousemove', mouseMoveHandler);
+            document.addEventListener('mouseup', mouseUpHandler);
+        };
+
+        async function actualizarNotaDimensiones(id, width, height) {
+            await fetch(`${BACKEND_URL}/api/notas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ width, height }) });
+        }
+
+        async function borrarNota(id) {
+            if(confirm('¿Borrar esta nota?')) {
+                await fetch(`${BACKEND_URL}/api/notas/${id}`, { method: 'DELETE', credentials: 'include' });
+                cargarNotasBoard();
+            }
+        }
+
+        async function actualizarNotaTexto(id, texto) {
+            await fetch(`${BACKEND_URL}/api/notas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ texto }) });
+        }
+
+        async function cambiarColorNota(id, color) {
+            await fetch(`${BACKEND_URL}/api/notas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ color }) });
+            cargarNotasBoard();
+        }
+
+        function establecerValoresPorDefecto() {
+            const selectCat = document.getElementById('categoria');
+            if (selectCat) {
+                const topOpt = Array.from(selectCat.options).find(o => o.value.toLowerCase().includes('tops'));
+                if (topOpt) selectCat.value = topOpt.value;
+            }
+            const selectProv = document.getElementById('proveedor');
+            if (selectProv) {
+                const provOpt = Array.from(selectProv.options).find(o => o.value.toLowerCase().includes('seyshelleshop'));
+                if (provOpt) selectProv.value = provOpt.value;
+            }
+        }
+
+        // 🏬 LÓGICA DE TIENDAS DESDE MONGODB
+        async function refrescarYListarTiendasCloud() {
+            const selectForm = document.getElementById('proveedor');
+            const selectFiltro = document.getElementById('an-filtro-tienda');
+            const selectMasivo = document.getElementById('tienda-masiva');
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/tiendas`, { credentials: 'include' });
+                if (!res.ok) throw new Error("Error leyendo backend");
+                const data = await res.json();
+                LISTA_TIENDAS_GLOBAL = data.tiendas || [];
+
+                selectForm.innerHTML = '<option value="">Sin asignar</option>';
+                selectFiltro.innerHTML = '<option value="TODOS">🏬 Todas las tiendas</option>';
+                if(selectMasivo) selectMasivo.innerHTML = '<option value="">🏬 Tienda...</option>';
+
+                LISTA_TIENDAS_GLOBAL.forEach(t => {
+                    const opt1 = document.createElement('option');
+                    opt1.value = t.nombre; opt1.textContent = `🏬 ${t.nombre}`;
+                    selectForm.appendChild(opt1);
+
+                    const opt2 = document.createElement('option');
+                    opt2.value = t.nombre; opt2.textContent = t.nombre;
+                    selectFiltro.appendChild(opt2);
+
+                    if(selectMasivo) {
+                        const opt3 = document.createElement('option');
+                        opt3.value = t.nombre; opt3.textContent = t.nombre;
+                        selectMasivo.appendChild(opt3);
+                    }
+                });
+                if (!document.getElementById('edit-id').value) establecerValoresPorDefecto();
+            } catch (err) {
+                console.error("Fallo de red cloud, cargando fallback...", err);
+            }
+        }
+
+        async function crearNuevaTiendaEnBaseDatos() {
+            const nombreTienda = prompt("Nombre del nuevo proveedor/tienda:");
+            if (!nombreTienda || nombreTienda.trim() === "") return;
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/tiendas`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ nombre: nombreTienda.trim() })
+                });
+                if (res.ok) {
+                    cantarPorVoz("Tienda guardada.");
+                    await refrescarYListarTiendasCloud();
+                    document.getElementById('proveedor').value = nombreTienda.trim();
+                } else {
                     const errData = await res.json(); alert(errData.error || "Error al inyectar tienda.");
                 }
             } catch (err) { alert("Error crítico de comunicación."); }
@@ -2119,7 +2281,11 @@
                         method: 'DELETE',
                         credentials: 'include'
                     });
-
+                    if (res.ok) {
+                        cantarPorVoz("Tienda eliminada.");
+                        await refrescarYListarTiendasCloud();
+                        await reloadCoreData();
+                    } else {
                         alert("No se pudo eliminar el elemento.");
                     }
                 } catch(e) { alert("Error al procesar la baja."); }
@@ -2500,7 +2666,130 @@
             
             try {
                 const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify(payload) });
+                if (res.ok) { cantarPorVoz("Tarea guardada."); cancelarEdicionTarea(); refrescarTareas(); }
+            } catch(err) { alert("Error al guardar tarea."); }
+        }
 
+        function editarTarea(id) {
+            const t = LISTA_TAREAS.find(x => x._id === id); if(!t) return;
+            document.getElementById('edit-id-tarea').value = t._id;
+            document.getElementById('tar-titulo').value = t.titulo;
+            document.getElementById('tar-desc').value = t.descripcion;
+            document.getElementById('tar-fecha').value = t.fechaVencimiento || '';
+            document.getElementById('tar-prio').value = t.prioridad;
+            document.getElementById('form-title-tarea').innerText = "✏️ Editar Tarea";
+            document.getElementById('btn-submit-tarea').innerText = "Guardar Cambios";
+            document.getElementById('btn-cancel-tarea').classList.remove('hidden');
+            document.getElementById('form-container-tarea').classList.add('border-blue-500');
+        }
+        function cancelarEdicionTarea() {
+            document.getElementById('form-tarea').reset();
+            document.getElementById('edit-id-tarea').value = '';
+            document.getElementById('form-title-tarea').innerText = "Nueva Tarea";
+            document.getElementById('btn-submit-tarea').innerText = "Añadir Tarea";
+            document.getElementById('btn-cancel-tarea').classList.add('hidden');
+            document.getElementById('form-container-tarea').classList.remove('border-blue-500');
+        }
+        async function borrarTarea(id) { if(confirm("¿Eliminar esta tarea?")) { await fetch(`/api/tareas/${id}`, { method: 'DELETE', credentials: 'include' }); refrescarTareas(); } }
+
+        // --- GESTIÓN DE FAQS DINÁMICAS ---
+        async function refrescarFaqs() {
+            try {
+                const res = await fetch('/api/faqs', { credentials: 'include' });
+                const data = await res.json();
+                LISTA_FAQS = Array.isArray(data) ? data : [];
+
+                const cont = document.getElementById('lista-faqs-admin');
+                if(!cont) return;
+
+                if(LISTA_FAQS.length === 0) {
+                    cont.innerHTML = '<div class="py-10 text-center opacity-30 italic text-[10px]">No hay FAQs configuradas en el sistema.</div>';
+                    return;
+                }
+
+                cont.innerHTML = LISTA_FAQS.map(f => `
+                    <details class="group bg-black/20 rounded-2xl border border-white/5 transition-all open:bg-black/40">
+                        <summary class="p-4 font-black text-emerald-400 cursor-pointer select-none flex justify-between items-center list-none [&::-webkit-details-marker]:hidden">
+                            <span class="flex items-center gap-2 text-[11px] uppercase tracking-widest flex-1 pr-4">${f.pregunta}</span>
+                            <div class="flex items-center gap-3">
+                                <button onclick="editarFaq('${f._id}'); event.preventDefault();" class="text-[10px] text-blue-400 hover:text-blue-300 transition-colors">✏️ Editar</button>
+                                <button onclick="borrarFaq('${f._id}'); event.preventDefault();" class="text-[10px] text-rose-400 hover:text-rose-300 transition-colors">🗑️ Borrar</button>
+                                <span class="group-open:rotate-180 transition-transform text-lg text-emerald-400">▾</span>
+                            </div>
+                        </summary>
+                        <div class="p-4 pt-0 opacity-90 text-[11px] leading-relaxed border-t border-white/5 mt-2 whitespace-pre-wrap">${f.respuesta}</div>
+                    </details>
+                `).join('');
+            } catch(e) { console.error("Error faqs:", e); }
+        }
+
+        async function manejarEnvioFaq(e) {
+            e.preventDefault();
+            const id = document.getElementById('edit-id-faq').value;
+            const payload = { pregunta: document.getElementById('faq-pregunta').value, respuesta: document.getElementById('faq-respuesta').value };
+            const url = id ? `/api/faqs/${id}` : '/api/faqs'; const method = id ? 'PUT' : 'POST';
+            try {
+                const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify(payload) });
+                if(res.ok) { cantarPorVoz("FAQ guardada."); cancelarEdicionFaq(); refrescarFaqs(); }
+            } catch(err) { alert("Error al guardar FAQ."); }
+        }
+        function editarFaq(id) {
+            const f = LISTA_FAQS.find(x => x._id === id); if(!f) return;
+            document.getElementById('edit-id-faq').value = f._id; document.getElementById('faq-pregunta').value = f.pregunta; document.getElementById('faq-respuesta').value = f.respuesta;
+            document.getElementById('form-title-faq').innerText = "✏️ Editando FAQ"; document.getElementById('btn-submit-faq').innerText = "Actualizar Pregunta"; document.getElementById('btn-cancel-faq').classList.remove('hidden');
+            document.getElementById('faq-pregunta').focus();
+        }
+        function cancelarEdicionFaq() {
+            document.getElementById('form-faq').reset(); document.getElementById('edit-id-faq').value = '';
+            document.getElementById('form-title-faq').innerText = "✍️ Crear Nueva FAQ"; document.getElementById('btn-submit-faq').innerText = "Guardar Pregunta"; document.getElementById('btn-cancel-faq').classList.add('hidden');
+        }
+        async function borrarFaq(id) { if(confirm("¿Eliminar esta FAQ del sistema permanentemente?")) { await fetch(`/api/faqs/${id}`, { method: 'DELETE', credentials: 'include' }); refrescarFaqs(); } }
+
+
+        // --- GESTIÓN DE USUARIOS AUTORIZADOS ---
+        async function refrescarUsuariosAdmin() {
+            try {
+                const res = await fetch('/api/usuarios-admin', { credentials: 'include' });
+                const usuarios = await res.json();
+                const tbody = document.getElementById('tabla-usuarios-admin');
+                if(!tbody) return;
+                tbody.innerHTML = usuarios.map(u => `
+                    <tr class="hover:bg-white/5 transition-colors">
+                        <td class="py-4 px-2 font-black lowercase">${u.email}</td>
+                        <td class="py-4 px-2 text-[10px]"><span class="bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded font-bold uppercase tracking-widest border border-indigo-500/20">${u.rol || 'Admin'}</span></td>
+                        <td class="py-4 px-2">
+                            <span class="text-[10px] font-mono ${u.ultimaConexion ? 'text-emerald-400' : 'opacity-30'}">
+                                ${u.ultimaConexion ? new Date(u.ultimaConexion).toLocaleString('es-ES', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : 'Nunca'}
+                            </span>
+                        </td>
+                        <td class="py-4 px-2 opacity-50 text-[10px]">${new Date(u.fechaAgregado).toLocaleDateString()}</td>
+                        <td class="py-4 px-2 text-right">
+                            <button onclick="eliminarUsuarioAdmin('${u._id}')" class="text-rose-500 hover:text-rose-400 p-2">🗑️</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) { console.error("Error cargando usuarios:", e); }
+        }
+
+        async function agregarUsuarioAutorizado() {
+            const emailInput = document.getElementById('user-admin-email');
+            const rolInput = document.getElementById('user-admin-rol');
+            const email = emailInput.value.trim();
+            const rol = rolInput ? rolInput.value : 'Editor';
+            if(!email) return alert("Introduce un email.");
+
+            try {
+                const res = await fetch('/api/usuarios-admin', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'include',
+                    body: JSON.stringify({ email, rol })
+                });
+                if(res.ok) {
+                    cantarPorVoz("Acceso concedido");
+                    emailInput.value = '';
+                    refrescarUsuariosAdmin();
+                } else {
                     const err = await res.json();
                     alert(err.error || "Error al autorizar.");
                 }
@@ -2724,7 +3013,49 @@
                 const data = await res.json();
                 document.getElementById(idTemp).remove();
 
+                if (res.ok) {
+                    // Parseador de Markdown básico para que la IA se vea bien
+                    const respuestaFormat = data.respuesta
+                        .replace(/\*\*(.*?)\*\*/g, '<strong class="text-purple-300">$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em class="opacity-80">$1</em>')
+                        .replace(/\n/g, '<br>');
+                    chatMessages.innerHTML += `
+                        <div class="flex gap-2 animate-fadeIn">
+                            <div class="w-7 h-7 rounded-full bg-purple-600/30 border border-purple-500/30 flex items-center justify-center flex-shrink-0 text-sm mt-1">✨</div>
+                            <div class="bg-white/5 border border-white/5 p-3 rounded-2xl rounded-tl-none opacity-90 leading-relaxed max-w-[85%] shadow-sm">
+                                ${respuestaFormat}
+                            </div>
+                        </div>
+                    `;
 
+                    if (data.accionEjecutada) {
+                        cantarPorVoz("Operación ejecutada por Inteligencia Artificial.");
+                        await reloadCoreData();
+
+                        if (data.acciones && data.acciones.length > 0) {
+                            data.acciones.forEach(acc => {
+                                if (acc.tipo === 'PREPARAR_FACTURA') {
+                                    setTimeout(() => {
+                                        navegarASeccion('sec-gestion');
+                                        setTimeout(() => {
+                                            if (acc.params.cliente) document.getElementById('fac-cliente-nombre').value = acc.params.cliente;
+
+                                            if (acc.params.sku) {
+                                                const checks = document.querySelectorAll('.fac-check-item');
+                                                checks.forEach(c => c.checked = false); // Limpiar previos
+                                                let encontrado = false;
+                                                checks.forEach(c => {
+                                                    const itemData = BASE_DATOS.find(v => v._id === c.dataset.id);
+                                                    if (itemData && itemData.sku && itemData.sku.toLowerCase() === acc.params.sku.toLowerCase()) {
+                                                        c.checked = true; encontrado = true;
+                                                    }
+                                                });
+                                                recalcularTotalesFactura();
+
+                                                if (encontrado) {
+                                                    cantarPorVoz("Generando documento PDF");
+                                                    setTimeout(() => generarFacturaPDF(), 1200);
+                                                } else {
                                                     alert("IA: No he podido facturar porque el artículo " + acc.params.sku + " no existe o no está marcado como Vendido.");
                                                 }
                                             }
@@ -3404,64 +3735,6 @@
             aplicarFiltrosFrontLineal();
         }
 
-
-        function actualizarTextosPorTipoNegocio(tipo) {
-            const textos = {
-                'Peluquería': { formLabel: 'Servicio / Corte', col1: 'Servicios Base', ventaPlural: 'Servicios Realizados', hideTalla: true, hideEnvio: true },
-                'Joyería': { formLabel: 'Joya / Reloj', col1: 'Catálogo', ventaPlural: 'Joyas Vendidas', hideTalla: true, hideEnvio: false },
-                'Tecnología': { formLabel: 'Dispositivo / Gadget', col1: 'Inventario', ventaPlural: 'Dispositivos Vendidos', hideTalla: true, hideEnvio: false },
-                'Ropa': { formLabel: 'Modelo / Descripción Prenda', col1: 'Prendas en Stock', ventaPlural: 'Prendas Vendidas', hideTalla: false, hideEnvio: false },
-                'General': { formLabel: 'Nombre del Producto/Servicio', col1: 'Inventario', ventaPlural: 'Unidades Vendidas', hideTalla: false, hideEnvio: false }
-            };
-
-            const conf = textos[tipo] || textos['General'];
-
-            // Reemplazar textos en el DOM
-            const labelPrenda = document.querySelector('label[for="prenda"]');
-            if (labelPrenda) labelPrenda.innerText = conf.formLabel;
-
-            const kpiPrendas = document.querySelector('#kpi-prendas').previousElementSibling;
-            if (kpiPrendas) kpiPrendas.innerText = conf.ventaPlural;
-
-            // Ocultar Talla
-            const containerTalla = document.getElementById('talla')?.parentElement;
-            if (containerTalla) containerTalla.style.display = conf.hideTalla ? 'none' : 'block';
-            const containerFiltroTalla = document.getElementById('filtro-talla');
-            if (containerFiltroTalla) containerFiltroTalla.style.display = conf.hideTalla ? 'none' : 'inline-block';
-            const containerAnFiltroTalla = document.getElementById('an-filtro-talla')?.parentElement;
-            if (containerAnFiltroTalla) containerAnFiltroTalla.style.display = conf.hideTalla ? 'none' : 'block';
-            const masivaTalla = document.getElementById('talla-masiva');
-            if (masivaTalla) masivaTalla.style.display = conf.hideTalla ? 'none' : 'inline-block';
-        }
-
-
-        async function actualizarAjustesNegocio(e) {
-            e.preventDefault();
-            const payload = {
-                nombre: document.getElementById('ajustes-negocio-nombre').value,
-                tipo: document.getElementById('ajustes-negocio-tipo').value
-            };
-            try {
-                const res = await fetch(`${BACKEND_URL}/api/negocio/settings`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, credentials: 'include', body: JSON.stringify(payload) });
-                if (res.ok) {
-                    cantarPorVoz("Ajustes guardados");
-                    window.location.reload();
-                } else {
-                    alert("Error al guardar ajustes");
-                }
-            } catch(e) { alert("Fallo de red"); }
-        }
-
-
-        function copiarLinkReservas() {
-            const input = document.getElementById('crm-public-link');
-            if (input && input.value) {
-                navigator.clipboard.writeText(input.value);
-                cantarPorVoz("Enlace copiado al portapapeles");
-                alert("¡Enlace público copiado! Compártelo con tus clientes.");
-            }
-        }
-
         function setTheme(theme) {
             const body = document.getElementById('main-body'); if(!body) return;
             body.className = `theme-${theme} min-h-screen font-sans antialiased pb-24 transition-all duration-300`;
@@ -3518,7 +3791,72 @@
                             method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                             body: JSON.stringify({ productos: json })
                         });
-         if(bBadge) bBadge.classList.add('hidden'); bCards.forEach(card => card.classList.remove('combo-fire-active')); }
+                        if (res.ok) { cantarPorVoz("Importación completa."); await reloadCoreData(); }
+                        else alert("Error al importar.");
+                    }
+                } catch (err) { alert("Archivo JSON no válido."); }
+            };
+            reader.readAsText(file);
+        }
+
+        function cantarPorVoz(mensajeTexto) {
+            if (!SOUND_MUTED_GLOBAL && 'speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const frase = new SpeechSynthesisUtterance(mensajeTexto);
+                frase.lang = 'es-ES';
+
+                // Buscar voces de alta calidad en el navegador
+                const voces = window.speechSynthesis.getVoices();
+                const vozNatural = voces.find(v => v.name.includes('Google español') || v.name.includes('Microsoft Sabina') || v.name.includes('Monica') || v.name.includes('Paulina')) || voces.find(v => v.lang.startsWith('es'));
+                if (vozNatural) frase.voice = vozNatural;
+
+                frase.pitch = 1.15; // Tono más natural, menos grave
+                frase.rate = 1.05;  // Velocidad un poco más fluida
+                window.speechSynthesis.speak(frase);
+            }
+        }
+
+        function tocarSonidoCajaRegistradora() {
+            if (SOUND_MUTED_GLOBAL) return;
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                const ctx = new AudioContext();
+                // Función para imitar el choque metálico de dos monedas
+                const playCoin = (fStart, fEnd, time) => {
+                    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(fStart, time);
+                    osc.frequency.exponentialRampToValueAtTime(fEnd, time + 0.1);
+                    gain.gain.setValueAtTime(0, time);
+                    gain.gain.linearRampToValueAtTime(0.5, time + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.3);
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.start(time); osc.stop(time + 0.3);
+                };
+                playCoin(2000, 8000, ctx.currentTime);
+                playCoin(3000, 9000, ctx.currentTime + 0.1);
+            } catch(e) {}
+        }
+
+        function lanzarConfetiVenta() {
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 150,
+                    spread: 80,
+                    origin: { y: 0.6 },
+                    colors: ['#10b981', '#3b82f6', '#fbbf24', '#f472b6', '#a855f7'],
+                    zIndex: 9999
+                });
+            }
+        }
+
+        function procesarMultiplicadorCombo() {
+            const tAhora = Date.now(); HISTORIAL_TIMESTAMPS_OPERACIONES = HISTORIAL_TIMESTAMPS_OPERACIONES.filter(t => (tAhora - t) < 180000); HISTORIAL_TIMESTAMPS_OPERACIONES.push(tAhora);
+            const totalCombos = HISTORIAL_TIMESTAMPS_OPERACIONES.length; const bBadge = document.getElementById('combo-badge'); const bCards = document.querySelectorAll('#kpi-container-grid > div');
+            if (totalCombos >= 3) {
+                const cc = document.getElementById('combo-count'); if(cc) cc.innerText = totalCombos;
+                if(bBadge) bBadge.classList.remove('hidden'); bCards.forEach(card => card.classList.add('combo-fire-active'));
+            } else { if(bBadge) bBadge.classList.add('hidden'); bCards.forEach(card => card.classList.remove('combo-fire-active')); }
         }
 
         function ejecutarVerificacionAlertasStock() {
@@ -3737,17 +4075,46 @@
 
             let clientLocation = null;
             const sendLogin = async () => {
-            try {
+                try {
                     const res = await fetch(`${BACKEND_URL}/api/auth/google`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ token: response.credential, clientLocation }) });
-
                     const data = await res.json();
-                    alert(`⚠️ Acceso denegado: ${data.error || 'Correo no autorizado en el sistema.'}`);
+
+                    if (data.success) {
+                        window.location.reload();
+                    } else if (data.setupRequired) {
                         loginBox.innerHTML = originalHTML;
-                }
-            } catch(e) {
-                alert("❌ Error crítico: No se pudo conectar con el servidor de Seychelles.");
+                        document.querySelector('.g_id_signin').parentElement.classList.add('hidden');
+                        document.getElementById('setup-container').classList.remove('hidden');
+
+                        document.getElementById('btn-submit-setup').onclick = async () => {
+                            const negocioNombre = document.getElementById('setup-business-name').value;
+                            if (!negocioNombre) return alert('Debes escribir un nombre para tu negocio');
+
+                            loginBox.innerHTML = '<div class="text-white text-center"><div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div><p>Creando CRM...</p></div>';
+
+                            const setupRes = await fetch(`${BACKEND_URL}/api/auth/setup`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({ token: response.credential, negocioNombre, email: data.email })
+                            });
+
+                            const setupData = await setupRes.json();
+                            if (setupData.success) {
+                                window.location.reload();
+                            } else {
+                                alert(setupData.error || 'Error configurando negocio');
+                                window.location.reload();
+                            }
+                        };
+                    } else {
+                        alert(`⚠️ Acceso denegado: ${data.error || 'Correo no autorizado en el sistema.'}`);
+                        loginBox.innerHTML = originalHTML;
+                    }
+                } catch(e) {
+                    alert("❌ Error crítico: No se pudo conectar con el servidor de Seychelles.");
                     loginBox.innerHTML = originalHTML;
-            }
+                }
             };
 
             if (navigator.geolocation) {
@@ -3758,35 +4125,6 @@
                 );
             } else { sendLogin(); }
         };
-
-
-        async function enviarSetupNegocio(e) {
-            e.preventDefault();
-            const btn = document.getElementById('btn-setup');
-            btn.innerText = "Configurando..."; btn.disabled = true;
-
-            const payload = {
-                email: document.getElementById('setup-email').value,
-                nombreNegocio: document.getElementById('setup-nombre').value,
-                tipoNegocio: document.getElementById('setup-tipo').value
-            };
-
-            try {
-                const res = await fetch(`${BACKEND_URL}/api/auth/setup`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
-                });
-                if (res.ok) {
-                    window.location.reload();
-                } else {
-                    const err = await res.json();
-                    alert("Error: " + err.error);
-                    btn.innerText = "Crear Espacio"; btn.disabled = false;
-                }
-            } catch (err) {
-                alert("Error de conexión.");
-                btn.innerText = "Crear Espacio"; btn.disabled = false;
-            }
-        }
 
         async function reloadCoreData() {
             try {
@@ -4332,32 +4670,11 @@
                 if (data.autenticado) { 
                     console.log("Sesión activa:", data.usuario);
                     setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
-
                     document.getElementById('login-box').classList.add('hidden'); 
                     document.getElementById('panel-control').classList.remove('hidden'); 
                     document.getElementById('ticker-bar').classList.remove('hidden'); 
                     document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario.split('@')[0]} [${data.rol}]`; 
                     
-                    if (data.negocio) {
-                        document.title = `${data.negocio.nombre} - Seychelles Core`;
-                        const mainHeader = document.querySelector('h1.logo-premium');
-                        if (mainHeader) mainHeader.innerText = `🌺${data.negocio.nombre}`;
-                        actualizarTextosPorTipoNegocio(data.negocio.tipo);
-
-                        // Fill settings
-                        const setNombre = document.getElementById('ajustes-negocio-nombre');
-                        const setTipo = document.getElementById('ajustes-negocio-tipo');
-                        if (setNombre) setNombre.value = data.negocio.nombre;
-                        if (setTipo) setTipo.value = data.negocio.tipo;
-
-                        // Set the public booking link
-                        const linkInput = document.getElementById('crm-public-link');
-                        if (linkInput) {
-                            linkInput.value = `${window.location.origin}/reservas.html?n=${data.negocio._id}`;
-                        }
-                    }
-
-
                     // Inicializar Efecto 3D en Tarjetas
                     const cards3D = document.querySelectorAll('.kpi-3d-card');
                     cards3D.forEach(card => {

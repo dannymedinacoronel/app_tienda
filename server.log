@@ -3,13 +3,8 @@
 > node server.js
 
 [INIT] Modo: DEV
-(node:341101) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(node:488302) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
 (Use `node --trace-deprecation ...` to show where the warning was created)
 [SERVER] Seychelles Core Activo en puerto: 3000
 [32m[OK][0m Core Estable de Seychelles conectado a MongoDB Atlas.
-[INIT] Workspace Legacy creado para alojar los datos existentes.
-[INIT] Whitelist inicial migrada a MongoDB.
-[INIT] Tiendas base inyectadas.
-[INIT] Catálogo maestro de categorías inyectado correctamente.
-[INIT] FAQs predeterminadas inyectadas.
-[INIT] Tareas predeterminadas inyectadas.
+Terminated

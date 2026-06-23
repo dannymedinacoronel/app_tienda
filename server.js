@@ -489,9 +489,23 @@ app.get('/api/auth/verificar', (req, res) => {
     return res.json({ autenticado: false });
 });
 
+
+async function verificarTokenGoogle(token) {
+    try {
+        const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID
+        });
+        return ticket.getPayload();
+    } catch (error) {
+        console.error("Error al verificar token de Google:", error);
+        return null;
+    }
+}
+
 app.post('/api/auth/google', async (req, res) => {
     try {
-        const { token, clienteInfo } = req.body;
+        const { token, clientLocation } = req.body;
         const payload = await verificarTokenGoogle(token);
         if (!payload || !payload.email) return res.status(401).json({ error: 'Token inválido' });
 
@@ -525,7 +539,7 @@ app.post('/api/auth/google', async (req, res) => {
             req.session.rol = usuario.rol;
             req.session.negocioId = usuario.negocio._id;
             
-            const locationData = await obtenerUbicacionCompleta(req, clienteInfo);
+            const locationData = await obtenerUbicacionCompleta(req, clientLocation);
             await registrarLog(usuario.email, "Inició sesión exitosamente", locationData, usuario.negocio._id);
             return res.json({ success: true, email: usuario.email, redirect: '/' });
         } else {

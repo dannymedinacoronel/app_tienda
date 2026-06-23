@@ -618,27 +618,38 @@ app.get('/api/system/db-stats', exigeAdmin, async (req, res) => {
 // --- Rutas de Gestión de Usuarios ---
 app.get('/api/usuarios-admin', exigeAdmin, async (req, res) => {
     try { 
-        res.json(await UsuarioAutorizado.find().sort({ fechaAgregado: -1 })); 
+        res.json(await UsuarioAutorizado.find({ negocio: req.session.negocioId }).sort({ fechaAgregado: -1 }));
     } catch (e) { res.status(500).send(e); }
 });
 
 app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
     try {
+        if (req.session.rol !== 'Admin') {
+            return res.status(403).json({ error: 'Solo los administradores pueden añadir usuarios a la tienda.' });
+        }
         const emailLimpio = req.body.email ? req.body.email.toLowerCase().trim() : "";
         const rolAsignado = req.body.rol || "Editor";
         if (!emailLimpio) return res.status(400).json({ error: 'Email requerido.' });
-        const nuevo = new UsuarioAutorizado({ email: emailLimpio, rol: rolAsignado });
+
+        // Comprobar si el usuario ya está en este negocio
+        const existente = await UsuarioAutorizado.findOne({ email: emailLimpio, negocio: req.session.negocioId });
+        if (existente) return res.status(400).json({ error: 'El usuario ya pertenece a esta tienda.' });
+
+        const nuevo = new UsuarioAutorizado({ email: emailLimpio, rol: rolAsignado, negocio: req.session.negocioId });
         await nuevo.save();
-        await registrarLog(req.session.email,   `Autorizó cuenta: ${emailLimpio} [Rol: ${rolAsignado}]`,  {}, req, req);
+        await registrarLog(req.session.email,   `Autorizó cuenta en tienda: ${emailLimpio} [Rol: ${rolAsignado}]`,  {}, req, req);
         res.json(nuevo);
-    } catch (e) { res.status(400).json({ error: 'El usuario ya está autorizado en la lista.' }); }
+    } catch (e) { res.status(400).json({ error: 'Error al autorizar el usuario.' }); }
 });
 
 app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
     try {
-        const u = await UsuarioAutorizado.findById(req.params.id);
+        if (req.session.rol !== 'Admin') {
+            return res.status(403).json({ error: 'Solo los administradores pueden eliminar usuarios de la tienda.' });
+        }
+        const u = await UsuarioAutorizado.findOne({ _id: req.params.id, negocio: req.session.negocioId });
         if (u) {
-            await UsuarioAutorizado.findByIdAndDelete(req.params.id);
+            await UsuarioAutorizado.findOneAndDelete({ _id: req.params.id, negocio: req.session.negocioId });
             await registrarLog(req.session.email,   `Revocó el acceso permanente a: ${u.email}`,  {}, req, req);
         }
         res.sendStatus(200);

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seychelles Core - Presentación</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b0f19;
+            color: #f1f5f9;
+            overflow-x: hidden;
+        }
+
+        /* Ocultar barra de scroll para el carrusel */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .gradient-text {
+            background: linear-gradient(to right, #60a5fa, #c084fc, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .card-glass {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card-glass:hover {
+            transform: translateY(-5px);
+            border-color: rgba(96, 165, 250, 0.3);
+            box-shadow: 0 10px 30px -10px rgba(96, 165, 250, 0.2);
+        }
+
+        /* Botones estilo pill */
+        .btn-pill {
+            border-radius: 9999px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #f1f5f9;
+            color: #0b0f19;
+        }
+
+        .btn-primary:hover {
+            background-color: #cbd5e1;
+            transform: scale(1.05);
+        }
+
+        .btn-secondary {
+            background-color: rgba(255,255,255,0.1);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(255,255,255,0.15);
+        }
+
+        /* Animación suave al cargar */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+
+        .delay-100 { animation-delay: 100ms; }
+        .delay-200 { animation-delay: 200ms; }
+        .delay-300 { animation-delay: 300ms; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Navegación Superior (Estilo Labs) -->
+    <nav class="fixed top-0 w-full z-50 bg-[#0b0f19]/80 backdrop-blur-md border-b border-white/5">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🌺</span>
+                <span class="font-black tracking-tighter text-lg uppercase">Seychelles Core</span>
+            </div>
+            <div class="hidden md:flex gap-8 text-sm font-semibold text-slate-300">
+                <a href="#about" class="hover:text-white transition-colors">Proyecto</a>
+                <a href="#features" class="hover:text-white transition-colors">Herramientas</a>
+                <a href="#crm" class="hover:text-white transition-colors">CRM & Reservas</a>
+            </div>
+            <div>
+                <a href="index.html" class="btn-pill btn-primary text-xs px-5 py-2">Iniciar Sesión</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sección Hero Principal -->
+    <section class="pt-32 pb-20 px-6 max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-12 min-h-[80vh]">
+        <div class="flex-1 opacity-0 animate-fade-in">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-bold mb-6">
+                <span class="relative flex h-2 w-2">
+                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                </span>
+                SISTEMA OPERATIVO PARA NEGOCIOS
+            </div>
+            <h1 class="text-5xl md:text-7xl font-black tracking-tighter leading-[1.1] mb-6">
+                Organiza tu empresa.<br>
+                <span class="gradient-text">Impulsa tus ventas.</span>
+            </h1>
+            <p class="text-lg text-slate-400 mb-8 max-w-xl leading-relaxed">
+                El entorno definitivo que combina gestión de inventario, CRM avanzado, análisis financiero y un portal para que tus clientes reserven citas sin necesidad de iniciar sesión.
+            </p>
+            <div class="flex flex-wrap gap-4">
+                <a href="index.html" class="btn-pill btn-primary">Pruébalo ahora</a>
+                <a href="#features" class="btn-pill btn-secondary">Explorar funciones</a>
+            </div>
+        </div>
+        <div class="flex-1 relative opacity-0 animate-fade-in delay-200">
+            <!-- Efecto de resplandor detrás de la imagen principal -->
+            <div class="absolute inset-0 bg-gradient-to-r from-blue-600/30 to-purple-600/30 blur-3xl rounded-full"></div>
+            <img src="dashboard_main.png" alt="Dashboard Principal" class="relative z-10 w-full rounded-2xl border border-white/10 shadow-2xl transform rotate-2 hover:rotate-0 transition-transform duration-500" onerror="this.src='https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=1000'; this.classList.add('opacity-80')">
+        </div>
+    </section>
+
+    <!-- Carrusel de Herramientas (Estilo Google Labs) -->
+    <section id="features" class="py-24 bg-[#080b13] border-t border-b border-white/5 overflow-hidden">
+        <div class="max-w-7xl mx-auto px-6 mb-12">
+            <h2 class="text-3xl font-black tracking-tight mb-4">Pack de herramientas exclusivo</h2>
+            <p class="text-slate-400 max-w-2xl">Descubre las funciones personalizadas diseñadas para cubrir todo lo que puedas imaginar para organizarte a nivel de empresa.</p>
+        </div>
+
+        <!-- Contenedor del Carrusel Horizontal -->
+        <div class="flex gap-6 overflow-x-auto px-6 pb-8 snap-x snap-mandatory no-scrollbar max-w-[100vw]">
+
+            <!-- Tarjeta 1: Kanban -->
+            <div class="snap-center shrink-0 w-[85vw] md:w-[600px] flex flex-col card-glass rounded-3xl overflow-hidden group">
+                <div class="h-64 overflow-hidden bg-slate-800 relative">
+                    <img src="kanban.png" alt="Tablero Kanban" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onerror="this.src='https://images.unsplash.com/photo-1540350394557-8d14678e7f91?auto=format&fit=crop&q=80&w=800'; this.classList.add('opacity-50')">
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#1e293b] to-transparent"></div>
+                </div>
+                <div class="p-8 flex-1 flex flex-col">
+                    <div class="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-2">Inventario Visual</div>
+                    <h3 class="text-2xl font-bold mb-3">Flujo de Trabajo Kanban</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed mb-6 flex-1">
+                        Controla el ciclo de vida de cada producto. Arrastra y suelta artículos entre estados (Stock, Vendido, Devuelto). Configura columnas personalizadas y calcula tu ROI automáticamente según el rol financiero de cada columna.
+                    </p>
+                    <div>
+                        <a href="#" class="text-sm font-bold text-white hover:text-emerald-400 transition-colors inline-flex items-center gap-1">Ver detalles →</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tarjeta 2: CRM -->
+            <div class="snap-center shrink-0 w-[85vw] md:w-[600px] flex flex-col card-glass rounded-3xl overflow-hidden group">
+                <div class="h-64 overflow-hidden bg-slate-800 relative">
+                    <img src="crm.png" alt="CRM de Clientes" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onerror="this.src='https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=800'; this.classList.add('opacity-50')">
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#1e293b] to-transparent"></div>
+                </div>
+                <div class="p-8 flex-1 flex flex-col">
+                    <div class="text-blue-400 text-xs font-bold uppercase tracking-widest mb-2">Gestión de Clientes</div>
+                    <h3 class="text-2xl font-bold mb-3">CRM Integrado & Citas</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed mb-6 flex-1">
+                        Fichas detalladas por cliente con historial de reservas, datos de facturación y notas internas. Tus clientes tendrán un enlace único donde podrán reservar citas y dejar sus datos, sincronizándose en tiempo real con tu panel sin que ellos necesiten cuenta.
+                    </p>
+                    <div>
+                        <a href="#crm" class="text-sm font-bold text-white hover:text-blue-400 transition-colors inline-flex items-center gap-1">Ver detalles →</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tarjeta 3: Analítica -->
+            <div class="snap-center shrink-0 w-[85vw] md:w-[600px] flex flex-col card-glass rounded-3xl overflow-hidden group">
+                <div class="h-64 overflow-hidden bg-slate-800 relative">
+                    <img src="analytics.png" alt="Panel de Analíticas" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onerror="this.src='https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=800'; this.classList.add('opacity-50')">
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#1e293b] to-transparent"></div>
+                </div>
+                <div class="p-8 flex-1 flex flex-col">
+                    <div class="text-purple-400 text-xs font-bold uppercase tracking-widest mb-2">Centro de Inteligencia</div>
+                    <h3 class="text-2xl font-bold mb-3">Analítica Avanzada y Reportes</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed mb-6 flex-1">
+                        Toma decisiones basadas en datos. Visualiza gráficas interactivas de rendimiento diario, distribución de ventas, facturación por canal y un mapa de calor de operaciones. Genera informes PDF con un clic.
+                    </p>
+                    <div>
+                        <a href="#" class="text-sm font-bold text-white hover:text-purple-400 transition-colors inline-flex items-center gap-1">Ver detalles →</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tarjeta 4: IA -->
+            <div class="snap-center shrink-0 w-[85vw] md:w-[600px] flex flex-col card-glass rounded-3xl overflow-hidden group pr-6">
+                <div class="h-64 overflow-hidden bg-slate-800 relative">
+                    <img src="ai_assistant.png" alt="Asistente de IA" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" onerror="this.src='https://images.unsplash.com/photo-1620712943543-bcc4688e7485?auto=format&fit=crop&q=80&w=800'; this.classList.add('opacity-50')">
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#1e293b] to-transparent"></div>
+                </div>
+                <div class="p-8 flex-1 flex flex-col">
+                    <div class="text-pink-400 text-xs font-bold uppercase tracking-widest mb-2">Seychelles AI</div>
+                    <h3 class="text-2xl font-bold mb-3">Asistente Virtual (LLaMA 3)</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed mb-6 flex-1">
+                        Sube fotos de tus productos y la IA detectará qué es, le asignará una categoría, un título SEO y un precio estimado. Pídele que genere facturas, modifique estados o consulte dudas conversando de forma natural.
+                    </p>
+                    <div>
+                        <a href="#" class="text-sm font-bold text-white hover:text-pink-400 transition-colors inline-flex items-center gap-1">Ver detalles →</a>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Sección Especial: Portal de Clientes -->
+    <section id="crm" class="py-24 px-6 max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-16">
+        <div class="flex-1 order-2 md:order-1 relative">
+            <div class="absolute -inset-4 bg-indigo-500/20 blur-2xl rounded-[3rem]"></div>
+            <div class="card-glass p-8 rounded-3xl relative z-10 border border-indigo-500/30 shadow-2xl">
+                <div class="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+                    <div class="text-indigo-400 font-bold tracking-widest uppercase text-xs">Vista del Cliente (Público)</div>
+                    <div class="flex gap-2">
+                        <div class="w-3 h-3 rounded-full bg-rose-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-amber-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                    </div>
+                </div>
+                <form class="space-y-4 opacity-70 pointer-events-none">
+                    <input type="text" placeholder="Nombre completo" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm" disabled>
+                    <div class="flex gap-4">
+                        <input type="email" placeholder="Email" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm" disabled>
+                        <input type="text" placeholder="Teléfono" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm" disabled>
+                    </div>
+                    <input type="date" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm" disabled>
+                    <button type="button" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mt-2">Confirmar Reserva</button>
+                </form>
+            </div>
+        </div>
+        <div class="flex-1 order-1 md:order-2">
+            <h2 class="text-4xl font-black tracking-tight mb-6">Reservas públicas, <br>sin fricciones.</h2>
+            <p class="text-lg text-slate-400 mb-6 leading-relaxed">
+                Genera tu enlace único de negocio y compártelo en tus redes sociales.
+            </p>
+            <ul class="space-y-4 text-slate-300">
+                <li class="flex items-start gap-3">
+                    <span class="text-indigo-400 mt-1">✓</span>
+                    <span><strong>No requiere inicio de sesión:</strong> Los clientes solo ponen su nombre, contacto y fecha.</span>
+                </li>
+                <li class="flex items-start gap-3">
+                    <span class="text-indigo-400 mt-1">✓</span>
+                    <span><strong>Sincronización instantánea:</strong> La reserva aparece en tu panel del CRM automáticamente.</span>
+                </li>
+                <li class="flex items-start gap-3">
+                    <span class="text-indigo-400 mt-1">✓</span>
+                    <span><strong>Multi-negocio:</strong> Si varias personas usan el sistema, cada uno tiene un portal aislado para sus propios clientes.</span>
+                </li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- Footer Simple -->
+    <footer class="bg-black py-12 border-t border-white/5">
+        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
+            <div class="flex items-center gap-2">
+                <span class="text-xl">🌺</span>
+                <span class="font-bold tracking-tighter uppercase text-slate-400">Seychelles Core Labs</span>
+            </div>
+            <div class="text-sm text-slate-600 flex gap-6">
+                <a href="index.html" class="hover:text-slate-300">Login</a>
+                <a href="#" class="hover:text-slate-300">Términos</a>
+                <a href="#" class="hover:text-slate-300">Privacidad</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

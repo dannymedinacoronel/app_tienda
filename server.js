@@ -17,10 +17,12 @@ const isProd = process.env.NODE_ENV === 'production';
 console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
 
 
-// Permite los popups de autenticación con Google
+
+
+
 app.use((req, res, next) => {
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
-    res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+    res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
     next();
 });
 

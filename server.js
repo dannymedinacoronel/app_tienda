@@ -487,12 +487,34 @@ app.post('/api/auth/google', async (req, res) => {
         if (!payload || !payload.email) return res.status(401).json({ error: 'Token inválido' });
 
         const email = payload.email.toLowerCase();
-        const usuario = await UsuarioAutorizado.findOne({ email }).populate('negocio');
+        let usuario = await UsuarioAutorizado.findOne({ email }).populate('negocio');
 
         if (usuario) {
+            // MIGRACIÓN LEGACY: Si el usuario existe pero no tiene negocio, creamos uno por defecto y asignamos todos los registros antiguos a ese negocio.
+            if (!usuario.negocio) {
+                const legacyNegocio = new Negocio({ nombre: 'Mi Negocio ' + email.split('@')[0] });
+                await legacyNegocio.save();
+                usuario.negocio = legacyNegocio._id;
+                await usuario.save();
+
+                // Migrar todos los registros huérfanos (legacy) al nuevo negocio principal
+                await Cliente.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
+                await Gasto.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
+                await EstadoKanban.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
+                await VentaRopa.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
+                await Tienda.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
+                await Categoria.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
+                await Tarea.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
+                await Faq.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
+                await Nota.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
+
+                // Recargar el usuario con el negocio
+                usuario = await UsuarioAutorizado.findOne({ email }).populate('negocio');
+            }
+
             req.session.email = usuario.email;
             req.session.rol = usuario.rol;
-            req.session.negocioId = usuario.negocio ? usuario.negocio._id : null;
+            req.session.negocioId = usuario.negocio._id;
             
             const locationData = await obtenerUbicacionCompleta(req, clienteInfo);
             await registrarLog(usuario.email, "Inició sesión exitosamente", locationData, {}, req, req);
@@ -1090,12 +1112,23 @@ app.post('/api/auth/setup', async (req, res) => {
         const nuevoNegocio = new Negocio({ nombre: negocioNombre });
         await nuevoNegocio.save();
 
+
         const adminUser = new UsuarioAutorizado({
             email: email.toLowerCase(),
             rol: 'Admin',
             negocio: nuevoNegocio._id
         });
         await adminUser.save();
+
+        // 🟢 SEED DEFAULT KANBAN STATES FOR THE NEW BUSINESS
+        const defaultStates = [
+            { negocio: nuevoNegocio._id, nombre: 'Stock', icono: '📦', color: 'slate', rolFinanciero: 'Stock', orden: 1 },
+            { negocio: nuevoNegocio._id, nombre: 'Reservado', icono: '⏳', color: 'amber', rolFinanciero: 'Oculto', orden: 2 },
+            { negocio: nuevoNegocio._id, nombre: 'Vendido', icono: '✅', color: 'emerald', rolFinanciero: 'Venta', orden: 3 },
+            { negocio: nuevoNegocio._id, nombre: 'Devuelto', icono: '↩️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
+        ];
+        await EstadoKanban.insertMany(defaultStates);
+
 
         req.session.email = adminUser.email;
         req.session.rol = adminUser.rol;

@@ -57,15 +57,17 @@ const Negocio = mongoose.model('Negocio', NegocioSchema);
 
 const TiendaSchema = new mongoose.Schema({
     negocio: { type: mongoose.Schema.Types.ObjectId, ref: 'Negocio' },
-    nombre: { type: String, required: true, unique: true, trim: true },
+    nombre: { type: String, required: true, trim: true },
     fechaCreacion: { type: Date, default: Date.now }
 });
+TiendaSchema.index({ negocio: 1, nombre: 1 }, { unique: true });
 const Tienda = mongoose.models.Tienda || mongoose.model('Tienda', TiendaSchema);
 
 const CategoriaSchema = new mongoose.Schema({
     negocio: { type: mongoose.Schema.Types.ObjectId, ref: 'Negocio' },
-    nombre: { type: String, required: true, unique: true, trim: true }
+    nombre: { type: String, required: true, trim: true }
 });
+CategoriaSchema.index({ negocio: 1, nombre: 1 }, { unique: true });
 const Categoria = mongoose.models.Categoria || mongoose.model('Categoria', CategoriaSchema);
 
 const ClienteSchema = new mongoose.Schema({
@@ -95,12 +97,13 @@ const Gasto = mongoose.models.Gasto || mongoose.model('Gasto', GastoSchema);
 
 const EstadoKanbanSchema = new mongoose.Schema({
     negocio: { type: mongoose.Schema.Types.ObjectId, ref: 'Negocio' },
-    nombre: { type: String, required: true, unique: true, trim: true },
+    nombre: { type: String, required: true, trim: true },
     icono: { type: String, default: '📦' },
     color: { type: String, default: 'slate' },
     rolFinanciero: { type: String, enum: ['Stock', 'Venta', 'Oculto'], default: 'Stock' },
     orden: { type: Number, default: 0 }
 });
+EstadoKanbanSchema.index({ negocio: 1, nombre: 1 }, { unique: true });
 const EstadoKanban = mongoose.models.EstadoKanban || mongoose.model('EstadoKanban', EstadoKanbanSchema);
 
 const VentaRopaSchema = new mongoose.Schema({
@@ -299,11 +302,25 @@ app.use(session({
 }));
 
 app.use(express.static(path.join(__dirname, 'public')));
-function exigeAdmin(req, res, next) {
+function exigeLogin(req, res, next) {
     if (req.session && req.session.email && req.session.negocioId) {
         return next();
     }
-    return res.status(401).json({ error: 'No autorizado o sesión caducada.' });
+    res.status(401).json({ error: 'No autorizado o sesión caducada.' });
+}
+
+function exigeEditor(req, res, next) {
+    if (req.session && req.session.rol && ['Admin', 'Editor', 'Manager'].includes(req.session.rol)) {
+        return next();
+    }
+    res.status(403).json({ error: 'Permisos insuficientes. Se requiere rol de Editor o superior.' });
+}
+
+function exigeAdmin(req, res, next) {
+    if (req.session && req.session.rol && ['Admin'].includes(req.session.rol)) {
+        return next();
+    }
+    res.status(403).json({ error: 'Permisos insuficientes. Se requiere rol de Administrador.' });
 }
 
 async function registrarLog(usuario, accion, locationData = {}, negocioId = null) {
@@ -411,14 +428,14 @@ setInterval(realizarBackupDiarioEmail, 24 * 60 * 60 * 1000);
 
 // --- Rutas de Categorías ---
 
-app.get('/api/categorias', exigeAdmin, async (req, res) => {
+app.get('/api/categorias', exigeLogin, async (req, res) => {
     try {
         const categorias = await Categoria.find({ negocio: req.session.negocioId }).sort({ nombre: 1 }).lean();
         res.json({ categorias });
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar categorías.' }); }
 });
 
-app.post('/api/categorias', exigeAdmin, async (req, res) => {
+app.post('/api/categorias', exigeEditor, async (req, res) => {
     try {
         const nombreLimpio = req.body.nombre ? req.body.nombre.trim() : "";
         if (!nombreLimpio) return res.status(400).json({ error: 'Nombre requerido.' });
@@ -429,7 +446,7 @@ app.post('/api/categorias', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(400).json({ error: 'La categoría ya existe.' }); }
 });
 
-app.put('/api/categorias/:id', exigeAdmin, async (req, res) => {
+app.put('/api/categorias/:id', exigeEditor, async (req, res) => {
     try {
         const { id } = req.params;
         const { nombre } = req.body;
@@ -439,7 +456,7 @@ app.put('/api/categorias/:id', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(400).json({ error: 'Error al actualizar categoría.' }); }
 });
 
-app.delete('/api/categorias/:id', exigeAdmin, async (req, res) => {
+app.delete('/api/categorias/:id', exigeEditor, async (req, res) => {
     try {
         const { id } = req.params;
         const cat = await Categoria.findOne({ _id: id, negocio: req.session.negocioId });
@@ -452,7 +469,7 @@ app.delete('/api/categorias/:id', exigeAdmin, async (req, res) => {
 
 // --- Rutas de Tiendas ---
 
-app.get('/api/tiendas', exigeAdmin, async (req, res) => {
+app.get('/api/tiendas', exigeLogin, async (req, res) => {
     try {
         const tiendas = await Tienda.find({ negocio: req.session.negocioId }).sort({ nombre: 1 }).lean();
         res.json({ tiendas });
@@ -461,7 +478,7 @@ app.get('/api/tiendas', exigeAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/tiendas', exigeAdmin, async (req, res) => {
+app.post('/api/tiendas', exigeEditor, async (req, res) => {
     try {
         const nombreLimpio = req.body.nombre ? req.body.nombre.trim() : "";
         if (!nombreLimpio) return res.status(400).json({ error: 'El nombre es obligatorio.' });
@@ -476,7 +493,7 @@ app.post('/api/tiendas', exigeAdmin, async (req, res) => {
 });
 
 // BAJA DE TIENDA
-app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
+app.delete('/api/tiendas/:id', exigeEditor, async (req, res) => {
     try {
         const { id } = req.params;
         
@@ -499,6 +516,7 @@ app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
 
 app.get('/api/auth/verificar', (req, res) => {
     if (req.session && req.session.email && req.session.negocioId) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin' });
+    if (req.session && req.session.email && req.session.negocioId) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin', plan: req.session.negocioPlan || 'free' });
     return res.json({ autenticado: false, error: 'No hay sesión activa' });
 });
 
@@ -529,6 +547,7 @@ app.post('/api/auth/google', async (req, res) => {
             req.session.email = usuario.email;
             req.session.rol = usuario.rol;
             req.session.negocioId = usuario.negocio._id;
+            req.session.negocioPlan = usuario.negocio.plan || 'free';
             if (usuario.rol === 'Admin') {
                 req.session.esAdmin = true;
             }
@@ -558,6 +577,12 @@ app.get('/api/usuarios-admin', exigeAdmin, async (req, res) => {
 
 app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
     try {
+        if (req.session.negocioPlan === 'free') {
+            const userCount = await UsuarioAutorizado.countDocuments({ negocio: req.session.negocioId });
+            if (userCount >= 2) { // Admin + 1
+                return res.status(403).json({ error: 'Has alcanzado el límite de 2 usuarios de tu plan gratuito.' });
+            }
+        }
         const emailLimpio = req.body.email ? req.body.email.toLowerCase().trim() : "";
         const rolAsignado = req.body.rol || "Editor";
         if (!emailLimpio) return res.status(400).json({ error: 'Email requerido.' });
@@ -580,10 +605,10 @@ app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
 });
 
 // --- Rutas de Tareas (Kanban) ---
-app.get('/api/tareas', exigeAdmin, async (req, res) => {
+app.get('/api/tareas', exigeLogin, async (req, res) => {
     try { res.json(await Tarea.find({ negocio: req.session.negocioId }).sort({ fechaCreacion: -1 })); } catch (e) { res.status(500).send(e); }
 });
-app.post('/api/tareas', exigeAdmin, async (req, res) => {
+app.post('/api/tareas', exigeEditor, async (req, res) => {
     try {
         const nueva = new Tarea({ ...req.body, negocio: req.session.negocioId });
         await nueva.save();
@@ -591,21 +616,21 @@ app.post('/api/tareas', exigeAdmin, async (req, res) => {
         res.json(nueva);
     } catch (e) { res.status(400).send(e); }
 });
-app.put('/api/tareas/:id', exigeAdmin, async (req, res) => {
+app.put('/api/tareas/:id', exigeEditor, async (req, res) => {
     try {
         const tarea = await Tarea.findOneAndUpdate({ _id: req.params.id, negocio: req.session.negocioId }, req.body, { new: true });
         await registrarLog(req.session.email, `Actualizó la tarea: ${tarea.titulo}`, {}, req.session.negocioId);
         res.json(tarea);
     } catch (e) { res.status(400).send(e); }
 });
-app.put('/api/tareas/:id/estado', exigeAdmin, async (req, res) => {
+app.put('/api/tareas/:id/estado', exigeEditor, async (req, res) => {
     try {
         const tarea = await Tarea.findOneAndUpdate({ _id: req.params.id, negocio: req.session.negocioId }, { estado: req.body.estado }, { new: true });
         await registrarLog(req.session.email, `Movió tarea a ${req.body.estado}: ${tarea.titulo}`, {}, req.session.negocioId);
         res.json(tarea);
     } catch (e) { res.status(400).send(e); }
 });
-app.delete('/api/tareas/:id', exigeAdmin, async (req, res) => {
+app.delete('/api/tareas/:id', exigeEditor, async (req, res) => {
     try {
         const tarea = await Tarea.findOneAndDelete({ _id: req.params.id, negocio: req.session.negocioId });
         if(tarea) await registrarLog(req.session.email, `Eliminó la tarea: ${tarea.titulo}`, {}, req.session.negocioId);
@@ -614,27 +639,27 @@ app.delete('/api/tareas/:id', exigeAdmin, async (req, res) => {
 });
 
 // --- Rutas de FAQs Dinámicas ---
-app.get('/api/faqs', exigeAdmin, async (req, res) => {
+app.get('/api/faqs', exigeLogin, async (req, res) => {
     try { res.json(await Faq.find({ negocio: req.session.negocioId }).sort({ fechaCreacion: 1 })); } catch (e) { res.status(500).send(e); }
 });
-app.post('/api/faqs', exigeAdmin, async (req, res) => {
+app.post('/api/faqs', exigeEditor, async (req, res) => {
     try {
         const nueva = new Faq({ ...req.body, negocio: req.session.negocioId }); await nueva.save();
         await registrarLog(req.session.email, `Añadió nueva FAQ`, {}, req.session.negocioId); res.json(nueva);
     } catch (e) { res.status(400).send(e); }
 });
-app.put('/api/faqs/:id', exigeAdmin, async (req, res) => {
+app.put('/api/faqs/:id', exigeEditor, async (req, res) => {
     try {
         const f = await Faq.findOneAndUpdate({ _id: req.params.id, negocio: req.session.negocioId }, req.body, { new: true });
         await registrarLog(req.session.email, `Modificó una FAQ`, {}, req.session.negocioId); res.json(f);
     } catch (e) { res.status(400).send(e); }
 });
-app.delete('/api/faqs/:id', exigeAdmin, async (req, res) => {
+app.delete('/api/faqs/:id', exigeEditor, async (req, res) => {
     try { await Faq.findOneAndDelete({ _id: req.params.id, negocio: req.session.negocioId }); await registrarLog(req.session.email, `Eliminó una FAQ`, {}, req.session.negocioId); res.sendStatus(200); } catch (e) { res.status(500).send(e); }
 });
 
 // --- Rutas de Ajustes del Tablero Kanban ---
-app.get('/api/estados-kanban', exigeAdmin, async (req, res) => {
+app.get('/api/estados-kanban', exigeLogin, async (req, res) => {
     try { res.json(await EstadoKanban.find({ negocio: req.session.negocioId }).sort({ orden: 1 })); } catch (e) { res.status(500).send(e); }
 });
 app.post('/api/estados-kanban', exigeAdmin, async (req, res) => {
@@ -657,7 +682,7 @@ app.delete('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
 });
 
 // --- Ruta del Asistente IA (Together AI - Llama 3) ---
-app.post('/api/chat', exigeAdmin, async (req, res) => {
+app.post('/api/chat', exigeEditor, async (req, res) => {
     const { mensaje, imagen } = req.body;
     if (!mensaje && !imagen) return res.status(400).json({ error: 'Mensaje vacío' });
 
@@ -818,14 +843,14 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
 // --- Rutas de Notas ---
 
-app.get('/api/notas', exigeAdmin, async (req, res) => {
+app.get('/api/notas', exigeLogin, async (req, res) => {
     try {
         const notas = await Nota.find({ negocio: req.session.negocioId }).lean();
         res.json(notas);
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar notas.' }); }
 });
 
-app.post('/api/notas', exigeAdmin, async (req, res) => {
+app.post('/api/notas', exigeEditor, async (req, res) => {
     try {
         const count = await Nota.countDocuments({ negocio: req.session.negocioId });
         if (count >= 10) return res.status(400).json({ error: 'Límite de 10 notas alcanzado.' });
@@ -835,14 +860,14 @@ app.post('/api/notas', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Error al crear nota.' }); }
 });
 
-app.put('/api/notas/:id', exigeAdmin, async (req, res) => {
+app.put('/api/notas/:id', exigeEditor, async (req, res) => {
     try {
         const notaActualizada = await Nota.findOneAndUpdate({ _id: req.params.id, negocio: req.session.negocioId }, req.body, { new: true });
         res.json(notaActualizada);
     } catch (e) { res.status(500).json({ error: 'Error al mover nota.' }); }
 });
 
-app.delete('/api/notas/:id', exigeAdmin, async (req, res) => {
+app.delete('/api/notas/:id', exigeEditor, async (req, res) => {
     try {
         const { id } = req.params;
         await Nota.findOneAndDelete({ _id: id, negocio: req.session.negocioId });
@@ -855,7 +880,7 @@ app.delete('/api/notas/:id', exigeAdmin, async (req, res) => {
 /**
  * Recupera logs de auditoría para el calendario (filtrado por mes/año)
  */
-app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
+app.get('/api/logs/calendario', exigeLogin, async (req, res) => {
     try {
         const { mes, anio } = req.query; // mes: 1-12
         if (!mes || !anio) return res.status(400).json({ error: 'Mes y año requeridos.' });
@@ -874,7 +899,7 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar logs.' }); }
 });
 
-app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
+app.get('/api/logs/locations', exigeLogin, async (req, res) => {
     try {
         // Recuperamos logs de conexiones Y desconexiones con coordenadas
         const activityLogs = await LogAuditoria.find({
@@ -917,18 +942,24 @@ app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
 });
 
 // --- Rutas de Clientes (CRM) ---
-app.get('/api/clientes', exigeAdmin, async (req, res) => {
+app.get('/api/clientes', exigeLogin, async (req, res) => {
     try { res.json(await Cliente.find({ negocio: req.session.negocioId }).sort({ nombre: 1 })); } catch (e) { res.status(500).send(e); }
 });
-app.post('/api/clientes', exigeAdmin, async (req, res) => {
+app.post('/api/clientes', exigeEditor, async (req, res) => {
     try {
+        if (req.session.negocioPlan === 'free') {
+            const clientCount = await Cliente.countDocuments({ negocio: req.session.negocioId });
+            if (clientCount >= 20) {
+                return res.status(403).json({ error: 'Has alcanzado el límite de 20 clientes de tu plan gratuito.' });
+            }
+        }
         const nuevo = new Cliente({ ...req.body, negocio: req.session.negocioId });
         await nuevo.save();
         await registrarLog(req.session.email, `Registró cliente: ${nuevo.nombre}`, {}, req.session.negocioId);
         res.json(nuevo);
     } catch (e) { res.status(400).send(e); }
 });
-app.put('/api/clientes/:id', exigeAdmin, async (req, res) => {
+app.put('/api/clientes/:id', exigeEditor, async (req, res) => {
     try {
         const cliente = await Cliente.findOneAndUpdate({ _id: req.params.id, negocio: req.session.negocioId }, req.body, { new: true });
         await registrarLog(req.session.email, `Actualizó datos del cliente: ${cliente.nombre}`, {}, req.session.negocioId);
@@ -936,7 +967,7 @@ app.put('/api/clientes/:id', exigeAdmin, async (req, res) => {
         res.json(cliente);
     } catch (e) { res.status(400).send(e); }
 });
-app.delete('/api/clientes/:id', exigeAdmin, async (req, res) => {
+app.delete('/api/clientes/:id', exigeEditor, async (req, res) => {
     try {
         await Cliente.findOneAndDelete({ _id: req.params.id, negocio: req.session.negocioId });
         notificarCambio(); // Notificar cambio para refrescar la lista de clientes en otros navegadores
@@ -945,10 +976,10 @@ app.delete('/api/clientes/:id', exigeAdmin, async (req, res) => {
 });
 
 // --- Rutas de Gastos Operativos ---
-app.get('/api/gastos', exigeAdmin, async (req, res) => {
+app.get('/api/gastos', exigeLogin, async (req, res) => {
     try { res.json(await Gasto.find({ negocio: req.session.negocioId }).sort({ fecha: -1 })); } catch (e) { res.status(500).send(e); }
 });
-app.post('/api/gastos', exigeAdmin, async (req, res) => {
+app.post('/api/gastos', exigeEditor, async (req, res) => {
     try {
         const nuevo = new Gasto({ ...req.body, negocio: req.session.negocioId });
         await nuevo.save();
@@ -956,14 +987,14 @@ app.post('/api/gastos', exigeAdmin, async (req, res) => {
         res.json(nuevo);
     } catch (e) { res.status(400).send(e); }
 });
-app.delete('/api/gastos/:id', exigeAdmin, async (req, res) => {
+app.delete('/api/gastos/:id', exigeEditor, async (req, res) => {
     try {
         await Gasto.findOneAndDelete({ _id: req.params.id, negocio: req.session.negocioId });
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
 });
 
-app.get('/api/ventas', exigeAdmin, async (req, res) => {
+app.get('/api/ventas', exigeLogin, async (req, res) => {
     try {
         const ventasRaw = await VentaRopa.find({ negocio: req.session.negocioId }).populate('tienda').sort({ _id: -1 }).lean();
         const logs = await LogAuditoria.find({ negocio: req.session.negocioId }).sort({ _id: -1 }).limit(50).lean();
@@ -1002,16 +1033,29 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
         const beneficioNeto = ingresos - inversion - gastosTotalesEnvio - totalGastosOperativos;
         const roi = (inversion + totalGastosOperativos) > 0 ? (beneficioNeto / (inversion + gastosTotalesEnvio + totalGastosOperativos)) * 100 : 0;
 
+        let resumenFinal = { ingresos, beneficio: beneficioNeto, inversion: inversion + gastosTotalesEnvio + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };
+
+        // Ocultar datos financieros para roles que no son Administrador
+        if (req.session.rol !== 'Admin') {
+            resumenFinal = { prendasVendidas, ingresos: 0, beneficio: 0, inversion: 0, roi: 0, totalGastosOperativos: 0 };
+        }
+
         return res.json({ 
-            resumen: { ingresos, beneficio: beneficioNeto, inversion: inversion + gastosTotalesEnvio + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos }, 
+            resumen: resumenFinal, 
             ventas,
             logs 
         });
     } catch (error) { return res.status(500).json({ error: 'Fallo analíticas.' }); }
 });
 
-app.post('/api/ventas', exigeAdmin, async (req, res) => {
+app.post('/api/ventas', exigeEditor, async (req, res) => {
     try {
+        if (req.session.negocioPlan === 'free') {
+            const productCount = await VentaRopa.countDocuments({ negocio: req.session.negocioId });
+            if (productCount >= 50) {
+                return res.status(403).json({ error: 'Has alcanzado el límite de 50 productos de tu plan gratuito. ¡Considera mejorar tu plan para añadir más!' });
+            }
+        }
         const { proveedor, ...datosVenta } = req.body;
         
         const tiendaDoc = await Tienda.findOne({ nombre: proveedor });
@@ -1025,7 +1069,7 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
+app.put('/api/ventas/:id', exigeEditor, async (req, res) => {
     try {
         const { id } = req.params;
         const { proveedor, ...datosVenta } = req.body;
@@ -1045,7 +1089,7 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
+app.put('/api/ventas/:id/estado', exigeEditor, async (req, res) => {
     try {
         const { id } = req.params;
         const { estado } = req.body;
@@ -1067,7 +1111,7 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
+app.put('/api/ventas/escanear/:sku', exigeEditor, async (req, res) => {
     try {
         const { sku } = req.params;
         let venta = await VentaRopa.findOne({ sku: sku, negocio: req.session.negocioId });
@@ -1104,7 +1148,7 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
+app.delete('/api/ventas/:id', exigeEditor, async (req, res) => {
     try {
         const { id } = req.params;
         const ventaEliminada = await VentaRopa.findOneAndDelete({ _id: id, negocio: req.session.negocioId });
@@ -1127,59 +1171,11 @@ app.post('/api/auth/setup', async (req, res) => {
 
         const existingBusiness = await Negocio.findOne({ nombre: negocioNombre });
         if (existingBusiness) {
-            return res.status(400).json({ error: 'El nombre del negocio ya está en uso.' });
+            return res.status(400).json({ error: 'El nombre del negocio ya está en uso. Por favor, elige otro.' });
         }
 
         const nuevoNegocio = new Negocio({ nombre: negocioNombre, tipo: tipoNegocio || 'General' });
-        await nuevoNegocio.save();
-
-
-        const adminUser = new UsuarioAutorizado({
-            email: email.toLowerCase(),
-            rol: rolUsuario || 'Admin',
-            negocio: nuevoNegocio._id
-        });
-        await adminUser.save();
-
-        // 🟢 SEED DEFAULT KANBAN STATES FOR THE NEW BUSINESS
-        const defaultStates = [
-            { negocio: nuevoNegocio._id, nombre: 'Stock', icono: '📦', color: 'slate', rolFinanciero: 'Stock', orden: 1 },
-            { negocio: nuevoNegocio._id, nombre: 'Reservado', icono: '⏳', color: 'amber', rolFinanciero: 'Oculto', orden: 2 },
-            { negocio: nuevoNegocio._id, nombre: 'Vendido', icono: '✅', color: 'emerald', rolFinanciero: 'Venta', orden: 3 },
-            { negocio: nuevoNegocio._id, nombre: 'Devuelto', icono: '↩️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
-        ];
-        await EstadoKanban.insertMany(defaultStates);
-
-
-
-        req.session.email = adminUser.email;
-        req.session.rol = adminUser.rol;
-        req.session.negocioId = nuevoNegocio._id;
-        req.session.esAdmin = true; // El primer usuario es siempre Admin
-
-        req.session.save((err) => {
-            if(err) console.error("Session save error", err);
-            res.json({ success: true, redirect: '/' });
-        });
-    } catch (error) {
-        res.status(500).json({ error: 'Error al configurar el negocio' });
-    }
-});
-
-app.post('/api/auth/setup', async (req, res) => {
-    try {
-        const { email, negocioNombre, tipoNegocio, rolUsuario, token } = req.body;
-        const payload = await verificarTokenGoogle(token);
-        if (!payload || payload.email.toLowerCase() !== email.toLowerCase()) {
-            return res.status(401).json({ error: 'Validación de Google fallida.' });
-        }
-
-        const existingBusiness = await Negocio.findOne({ nombre: negocioNombre });
-        if (existingBusiness) {
-            return res.status(400).json({ error: 'El nombre del negocio ya está en uso.' });
-        }
-
-        const nuevoNegocio = new Negocio({ nombre: negocioNombre, tipo: tipoNegocio || 'General' });
+        const nuevoNegocio = new Negocio({ nombre: negocioNombre, tipo: tipoNegocio || 'General', plan: 'free' });
         await nuevoNegocio.save();
 
 
@@ -1202,6 +1198,7 @@ app.post('/api/auth/setup', async (req, res) => {
         req.session.email = adminUser.email;
         req.session.rol = adminUser.rol;
         req.session.negocioId = nuevoNegocio._id;
+        req.session.negocioPlan = nuevoNegocio.plan;
         req.session.esAdmin = (adminUser.rol === 'Admin');
 
         req.session.save((err) => {
@@ -1209,7 +1206,8 @@ app.post('/api/auth/setup', async (req, res) => {
             res.json({ success: true, redirect: '/' });
         });
     } catch (error) {
-        res.status(500).json({ error: 'Error al configurar el negocio' });
+        console.error("Error en /api/auth/setup:", error);
+        res.status(500).json({ error: 'Error al configurar el negocio. Es posible que el email ya esté registrado o haya un problema con la base de datos.' });
     }
 });
 
@@ -1244,7 +1242,7 @@ app.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: $
  * 2. Productos nuevos encontrados en la web que no están en el sistema.
  */
 
-app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
+app.post('/api/scraper/analizar', exigeEditor, async (req, res) => {
     try {
         const { url } = req.body;
         if (!url) return res.status(400).json({ error: 'URL de Vinted requerida.' });
@@ -1311,7 +1309,7 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
 /**
  * Analiza datos subidos manualmente (ej. desde un Excel de Instant Data Scraper)
  */
-app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
+app.post('/api/scraper/analizar-manual', exigeEditor, async (req, res) => {
     try {
         const { productosExtraidos } = req.body;
         console.log(`[SCRAPER MANUAL] Recibidos ${productosExtraidos?.length || 0} productos para comparar.`);
@@ -1359,7 +1357,7 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
 /**
  * Importa productos nuevos seleccionados por el usuario
  */
-app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
+app.post('/api/scraper/importar', exigeEditor, async (req, res) => {
     try {
         const { productos } = req.body; // Array de productos seleccionados en el frontend
         if (!productos || !Array.isArray(productos)) return res.status(400).json({ error: 'Datos de productos no válidos.' });
@@ -1439,7 +1437,7 @@ app.post('/api/ventas/bulk', exigeAdmin, async (req, res) => {
 /**
  * Aplica cambios de precio a productos existentes
  */
-app.post('/api/scraper/aplicar', exigeAdmin, async (req, res) => {
+app.post('/api/scraper/aplicar', exigeEditor, async (req, res) => {
     try {
         const { cambios } = req.body;
         for (const cambio of cambios) {

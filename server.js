@@ -184,17 +184,11 @@ const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmai
 
 const MongoStore = MongoStoreModule.default || MongoStoreModule; // Obtiene la clase MongoStore, manejando el 'default' export si existe
 
-mongoose.connect(MONGO_URI_FINAL)
+mongoose.connect(MONGO_URI_FINAL || 'mongodb://localhost:27017/seychelles_crm')
     .then(async () => {
         console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.');
         
-        // Migrar whitelist inicial si la base de datos está vacía
-        const countUsers = await UsuarioAutorizado.countDocuments();
-        if (countUsers === 0) {
-            const initialEmails = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase()).filter(e => e);
-            await UsuarioAutorizado.insertMany(initialEmails.map(e => ({ email: e })));
-            console.log('[INIT] Whitelist inicial migrada a MongoDB.');
-        }
+        // Whitelist concept removed for SaaS Multi-tenant logic
         
         // Auto-poblar tiendas si la colección está vacía
         const tiendaCount = await Tienda.countDocuments();

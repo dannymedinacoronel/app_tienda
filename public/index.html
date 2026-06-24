@@ -217,6 +217,7 @@
 
     <div id="wrapper-core">
         <div id="login-box" class="flex flex-col items-center justify-center min-h-screen px-4">
+<<<<<<< HEAD
         <div id="setup-container" class="hidden absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-900 border border-slate-700 rounded-xl p-8 shadow-2xl z-50 text-center w-full max-w-md">
             <h2 class="text-white text-2xl font-bold mb-2">¡Bienvenido/a!</h2>
             <p class="text-slate-400 text-sm mb-6">Estás a un paso de crear tu espacio de trabajo.</p>
@@ -231,6 +232,12 @@
                 </select>
             </div>
             <button id="btn-submit-setup" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-lg w-full mt-6 transition-all">Crear mi Espacio de Trabajo</button>
+=======
+        <div id="setup-container" class="hidden absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-2xl z-50 text-center">
+            <h2 class="text-white text-lg font-bold mb-4">Configura tu Negocio</h2>
+            <input type="text" id="setup-business-name" placeholder="Nombre del Negocio" class="w-full bg-slate-800 text-white border border-slate-600 rounded px-3 py-2 mb-4">
+            <button id="btn-submit-setup" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded w-full">Crear CRM</button>
+>>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
         </div>
             <div class="login-glow-card p-[2px] rounded-[2.5rem] shadow-2xl max-w-sm w-full">
                 <div class="bg-slate-950 rounded-[2.4rem] p-10 text-center">
@@ -4110,9 +4117,13 @@
 
                         document.getElementById('btn-submit-setup').onclick = async () => {
                             const negocioNombre = document.getElementById('setup-business-name').value;
+<<<<<<< HEAD
                             const tipoNegocio = document.getElementById('setup-business-type').value;
                             if (!negocioNombre) return alert('Debes escribir un nombre para tu negocio');
                             if (!tipoNegocio) return alert('Debes seleccionar un tipo de negocio');
+=======
+                            if (!negocioNombre) return alert('Debes escribir un nombre para tu negocio');
+>>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
 
                             document.getElementById('setup-container').classList.add('hidden');
                             spinner.classList.remove('hidden');
@@ -4122,7 +4133,11 @@
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 credentials: 'include',
+<<<<<<< HEAD
                                 body: JSON.stringify({ token: response.credential, negocioNombre, tipoNegocio, email: data.email })
+=======
+                                body: JSON.stringify({ token: response.credential, negocioNombre, email: data.email })
+>>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
                             });
 
                             const setupData = await setupRes.json();

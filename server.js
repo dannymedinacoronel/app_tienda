@@ -49,7 +49,10 @@ function notificarCambio() {
 
 const NegocioSchema = new mongoose.Schema({
     nombre: { type: String, required: true },
+<<<<<<< HEAD
     tipo: { type: String, default: 'General' },
+=======
+>>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
     plan: { type: String, default: 'free' },
     fechaCreacion: { type: Date, default: Date.now }
 });
@@ -284,10 +287,18 @@ app.use(session({
 
 app.use(express.static(path.join(__dirname, 'public')));
 function exigeAdmin(req, res, next) {
+<<<<<<< HEAD
     if (req.session && req.session.email && req.session.negocioId) {
         return next();
     }
     return res.status(401).json({ error: 'No autorizado o sesión caducada.' });
+=======
+    if (!req.session || !req.session.email || !req.session.negocioId) {
+        return res.status(401).send('No autorizado o sesión caducada');
+    }
+    if (req.session && req.session.esAdmin) return next();
+    return res.status(403).json({ error: 'No autorizado.' });
+>>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
 }
 
 async function registrarLog(usuario, accion, locationData = {}, negocioId = null) {
@@ -482,8 +493,13 @@ app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
 // --- Rutas de Auth ---
 
 app.get('/api/auth/verificar', (req, res) => {
+<<<<<<< HEAD
     if (req.session && req.session.email && req.session.negocioId) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin' });
     return res.json({ autenticado: false, error: 'No hay sesión activa' });
+=======
+    if (req.session && req.session.esAdmin) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin' });
+    return res.json({ autenticado: false });
+>>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
 });
 
 
@@ -536,9 +552,12 @@ app.post('/api/auth/google', async (req, res) => {
             req.session.email = usuario.email;
             req.session.rol = usuario.rol;
             req.session.negocioId = usuario.negocio._id;
+<<<<<<< HEAD
             if (usuario.rol === 'Admin') {
                 req.session.esAdmin = true;
             }
+=======
+>>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
             
             const locationData = await obtenerUbicacionCompleta(req, clientLocation);
             await registrarLog(usuario.email, "Inició sesión exitosamente", locationData, usuario.negocio._id);
@@ -1125,7 +1144,11 @@ app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
 
 app.post('/api/auth/setup', async (req, res) => {
     try {
+<<<<<<< HEAD
         const { email, negocioNombre, tipoNegocio, token } = req.body;
+=======
+        const { email, negocioNombre, token } = req.body;
+>>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
         const payload = await verificarTokenGoogle(token);
         if (!payload || payload.email.toLowerCase() !== email.toLowerCase()) {
             return res.status(401).json({ error: 'Validación de Google fallida.' });
@@ -1136,7 +1159,11 @@ app.post('/api/auth/setup', async (req, res) => {
             return res.status(400).json({ error: 'El nombre del negocio ya está en uso.' });
         }
 
+<<<<<<< HEAD
         const nuevoNegocio = new Negocio({ nombre: negocioNombre, tipo: tipoNegocio || 'General' });
+=======
+        const nuevoNegocio = new Negocio({ nombre: negocioNombre });
+>>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
         await nuevoNegocio.save();
 
 
@@ -1161,7 +1188,10 @@ app.post('/api/auth/setup', async (req, res) => {
         req.session.email = adminUser.email;
         req.session.rol = adminUser.rol;
         req.session.negocioId = nuevoNegocio._id;
+<<<<<<< HEAD
         req.session.esAdmin = true; // El primer usuario es siempre Admin
+=======
+>>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
 
         req.session.save((err) => {
             if(err) console.error("Session save error", err);

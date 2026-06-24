@@ -49,10 +49,7 @@ function notificarCambio() {
 
 const NegocioSchema = new mongoose.Schema({
     nombre: { type: String, required: true },
-<<<<<<< HEAD
     tipo: { type: String, default: 'General' },
-=======
->>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
     plan: { type: String, default: 'free' },
     fechaCreacion: { type: Date, default: Date.now }
 });
@@ -177,24 +174,40 @@ const Nota = mongoose.models.Nota || mongoose.model('Nota', NotaSchema);
 
 const UsuarioAutorizadoSchema = new mongoose.Schema({
     negocio: { type: mongoose.Schema.Types.ObjectId, ref: 'Negocio' },
-    rol: { type: String, enum: ['Admin', 'Manager', 'Editor', 'Employee', 'Lector', 'Accountant'], default: 'Admin' },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    rol: { type: String, enum: ['Admin', 'Editor', 'Lector'], default: 'Editor' },
+    rol: { type: String, enum: ['Admin', 'Manager', 'Employee', 'Editor', 'Lector'], default: 'Employee' },
     fechaAgregado: { type: Date, default: Date.now },
     ultimaConexion: { type: Date }
 });
 const UsuarioAutorizado = mongoose.models.UsuarioAutorizado || mongoose.model('UsuarioAutorizado', UsuarioAutorizadoSchema);
-
-const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
 
 const MongoStore = MongoStoreModule.default || MongoStoreModule; // Obtiene la clase MongoStore, manejando el 'default' export si existe
 
 mongoose.connect(MONGO_URI_FINAL || 'mongodb://localhost:27017/seychelles_crm')
     .then(async () => {
         console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.');
-        
-        // Whitelist concept removed for SaaS Multi-tenant logic
-        
+
+        // --- MIGRACIÓN LEGACY A MULTI-TENANT ---
+        // Este bloque se ejecuta una sola vez para configurar el negocio original.
+        const legacyEmails = ['dannymedinacoronel@gmail.com', 'juliamugo2001@gmail.com'];
+        let seychellesOriginal = await Negocio.findOne({ nombre: 'Seychelles Original' });
+
+        if (!seychellesOriginal) {
+            seychellesOriginal = new Negocio({ nombre: 'Seychelles Original', tipo: 'Tienda de Ropa' });
+            await seychellesOriginal.save();
+            console.log('[MIGRATION] Creado el negocio "Seychelles Original".');
+        }
+
+        for (const email of legacyEmails) {
+            let usuario = await UsuarioAutorizado.findOne({ email });
+            if (usuario && !usuario.negocio) {
+                usuario.negocio = seychellesOriginal._id;
+                usuario.rol = 'Admin'; // Aseguramos que los usuarios legacy sean Admins
+                await usuario.save();
+                console.log(`[MIGRATION] Usuario ${email} asignado a "Seychelles Original".`);
+            }
+        }
+
         // Auto-poblar tiendas si la colección está vacía
         const tiendaCount = await Tienda.countDocuments();
         if (tiendaCount === 0) {
@@ -287,18 +300,10 @@ app.use(session({
 
 app.use(express.static(path.join(__dirname, 'public')));
 function exigeAdmin(req, res, next) {
-<<<<<<< HEAD
     if (req.session && req.session.email && req.session.negocioId) {
         return next();
     }
     return res.status(401).json({ error: 'No autorizado o sesión caducada.' });
-=======
-    if (!req.session || !req.session.email || !req.session.negocioId) {
-        return res.status(401).send('No autorizado o sesión caducada');
-    }
-    if (req.session && req.session.esAdmin) return next();
-    return res.status(403).json({ error: 'No autorizado.' });
->>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
 }
 
 async function registrarLog(usuario, accion, locationData = {}, negocioId = null) {
@@ -408,7 +413,7 @@ setInterval(realizarBackupDiarioEmail, 24 * 60 * 60 * 1000);
 
 app.get('/api/categorias', exigeAdmin, async (req, res) => {
     try {
-        const categorias = await Categoria.find().sort({ nombre: 1 }).lean();
+        const categorias = await Categoria.find({ negocio: req.session.negocioId }).sort({ nombre: 1 }).lean();
         res.json({ categorias });
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar categorías.' }); }
 });
@@ -417,7 +422,7 @@ app.post('/api/categorias', exigeAdmin, async (req, res) => {
     try {
         const nombreLimpio = req.body.nombre ? req.body.nombre.trim() : "";
         if (!nombreLimpio) return res.status(400).json({ error: 'Nombre requerido.' });
-        const nueva = new Categoria({ nombre: nombreLimpio });
+        const nueva = new Categoria({ nombre: nombreLimpio, negocio: req.session.negocioId });
         await nueva.save();
         await registrarLog(req.session.email, `Creó nueva categoría: ${nombreLimpio}`, {}, req.session.negocioId);
         res.json({ status: 'success', categoria: nueva });
@@ -428,7 +433,7 @@ app.put('/api/categorias/:id', exigeAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { nombre } = req.body;
-        const cat = await Categoria.findByIdAndUpdate(id, { nombre }, { new: true });
+        const cat = await Categoria.findOneAndUpdate({ _id: id, negocio: req.session.negocioId }, { nombre }, { new: true });
         await registrarLog(req.session.email, `Modificó categoría: ${nombre}`, {}, req.session.negocioId);
         res.json(cat);
     } catch (e) { res.status(400).json({ error: 'Error al actualizar categoría.' }); }
@@ -437,7 +442,7 @@ app.put('/api/categorias/:id', exigeAdmin, async (req, res) => {
 app.delete('/api/categorias/:id', exigeAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const cat = await Categoria.findById(id);
+        const cat = await Categoria.findOne({ _id: id, negocio: req.session.negocioId });
         if (!cat) return res.status(404).json({ error: 'No existe.' });
         await Categoria.findOneAndDelete({ _id: id, negocio: req.session.negocioId });
         await registrarLog(req.session.email, `Eliminó categoría: ${cat.nombre}`, {}, req.session.negocioId);
@@ -449,7 +454,7 @@ app.delete('/api/categorias/:id', exigeAdmin, async (req, res) => {
 
 app.get('/api/tiendas', exigeAdmin, async (req, res) => {
     try {
-        const tiendas = await Tienda.find().sort({ nombre: 1 }).lean();
+        const tiendas = await Tienda.find({ negocio: req.session.negocioId }).sort({ nombre: 1 }).lean();
         res.json({ tiendas });
     } catch (e) {
         res.status(500).json({ error: 'Fallo al recuperar tiendas.' });
@@ -461,7 +466,7 @@ app.post('/api/tiendas', exigeAdmin, async (req, res) => {
         const nombreLimpio = req.body.nombre ? req.body.nombre.trim() : "";
         if (!nombreLimpio) return res.status(400).json({ error: 'El nombre es obligatorio.' });
 
-        const nuevaTienda = new Tienda({ nombre: nombreLimpio });
+        const nuevaTienda = new Tienda({ nombre: nombreLimpio, negocio: req.session.negocioId });
         await nuevaTienda.save();
         await registrarLog(req.session.email, `Creó la tienda en MongoDB: ${nuevaTienda.nombre}`, {}, req.session.negocioId);
         res.json({ status: 'success', tienda: nuevaTienda });
@@ -475,11 +480,11 @@ app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         
-        const tiendaPorBorrar = await Tienda.findById(id);
+        const tiendaPorBorrar = await Tienda.findOne({ _id: id, negocio: req.session.negocioId });
         if (!tiendaPorBorrar) return res.status(404).json({ error: 'La tienda no existe.' });
 
         // Desasignar tienda de los productos asociados
-        await VentaRopa.updateMany({ tienda: id }, { $unset: { tienda: 1 } });
+        await VentaRopa.updateMany({ tienda: id, negocio: req.session.negocioId }, { $unset: { tienda: 1 } });
         await Tienda.findOneAndDelete({ _id: id, negocio: req.session.negocioId });
 
         await registrarLog(req.session.email, `Eliminó la tienda "${tiendaPorBorrar.nombre}".`, {}, req.session.negocioId);
@@ -493,13 +498,8 @@ app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
 // --- Rutas de Auth ---
 
 app.get('/api/auth/verificar', (req, res) => {
-<<<<<<< HEAD
     if (req.session && req.session.email && req.session.negocioId) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin' });
     return res.json({ autenticado: false, error: 'No hay sesión activa' });
-=======
-    if (req.session && req.session.esAdmin) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin' });
-    return res.json({ autenticado: false });
->>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
 });
 
 
@@ -526,38 +526,12 @@ app.post('/api/auth/google', async (req, res) => {
         let usuario = await UsuarioAutorizado.findOne({ email }).populate('negocio');
 
         if (usuario) {
-            // MIGRACIÓN LEGACY: Si el usuario existe pero no tiene negocio, creamos uno por defecto y asignamos todos los registros antiguos a ese negocio.
-            if (!usuario.negocio) {
-                const legacyNegocio = new Negocio({ nombre: 'Mi Negocio ' + email.split('@')[0] });
-                await legacyNegocio.save();
-                usuario.negocio = legacyNegocio._id;
-                await usuario.save();
-
-                // Migrar todos los registros huérfanos (legacy) al nuevo negocio principal
-                await Cliente.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
-                await Gasto.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
-                await EstadoKanban.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
-                await VentaRopa.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
-                await Tienda.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
-                await Categoria.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
-                await Tarea.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
-                await Faq.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
-                await Nota.updateMany({ negocio: { $exists: false } }, { $set: { negocio: legacyNegocio._id } });
-
-                // Recargar el usuario con el negocio
-                usuario = await UsuarioAutorizado.findOne({ email }).populate('negocio');
-            }
-
-
             req.session.email = usuario.email;
             req.session.rol = usuario.rol;
             req.session.negocioId = usuario.negocio._id;
-<<<<<<< HEAD
             if (usuario.rol === 'Admin') {
                 req.session.esAdmin = true;
             }
-=======
->>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
             
             const locationData = await obtenerUbicacionCompleta(req, clientLocation);
             await registrarLog(usuario.email, "Inició sesión exitosamente", locationData, usuario.negocio._id);
@@ -578,7 +552,7 @@ app.post('/api/auth/google', async (req, res) => {
 // --- Rutas de Gestión de Usuarios ---
 app.get('/api/usuarios-admin', exigeAdmin, async (req, res) => {
     try { 
-        res.json(await UsuarioAutorizado.find().sort({ fechaAgregado: -1 }));
+        res.json(await UsuarioAutorizado.find({ negocio: req.session.negocioId }).sort({ fechaAgregado: -1 }));
     } catch (e) { res.status(500).send(e); }
 });
 
@@ -587,7 +561,7 @@ app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
         const emailLimpio = req.body.email ? req.body.email.toLowerCase().trim() : "";
         const rolAsignado = req.body.rol || "Editor";
         if (!emailLimpio) return res.status(400).json({ error: 'Email requerido.' });
-        const nuevo = new UsuarioAutorizado({ email: emailLimpio, rol: rolAsignado });
+        const nuevo = new UsuarioAutorizado({ email: emailLimpio, rol: rolAsignado, negocio: req.session.negocioId });
         await nuevo.save();
         await registrarLog(req.session.email, `Autorizó cuenta: ${emailLimpio} [Rol: ${rolAsignado}]`, {}, req.session.negocioId);
         res.json(nuevo);
@@ -596,9 +570,9 @@ app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
 
 app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
     try {
-        const u = await UsuarioAutorizado.findById(req.params.id);
+        const u = await UsuarioAutorizado.findOne({ _id: req.params.id, negocio: req.session.negocioId });
         if (u) {
-            await UsuarioAutorizado.findByIdAndDelete(req.params.id);
+            await UsuarioAutorizado.deleteOne({ _id: req.params.id });
             await registrarLog(req.session.email, `Revocó el acceso permanente a: ${u.email}`, {}, req.session.negocioId);
         }
         res.sendStatus(200);
@@ -607,11 +581,11 @@ app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
 
 // --- Rutas de Tareas (Kanban) ---
 app.get('/api/tareas', exigeAdmin, async (req, res) => {
-    try { res.json(await Tarea.find().sort({ fechaCreacion: -1 })); } catch (e) { res.status(500).send(e); }
+    try { res.json(await Tarea.find({ negocio: req.session.negocioId }).sort({ fechaCreacion: -1 })); } catch (e) { res.status(500).send(e); }
 });
 app.post('/api/tareas', exigeAdmin, async (req, res) => {
     try {
-        const nueva = new Tarea(req.body);
+        const nueva = new Tarea({ ...req.body, negocio: req.session.negocioId });
         await nueva.save();
         await registrarLog(req.session.email, `Creó una tarea: ${nueva.titulo}`, {}, req.session.negocioId);
         res.json(nueva);
@@ -619,14 +593,14 @@ app.post('/api/tareas', exigeAdmin, async (req, res) => {
 });
 app.put('/api/tareas/:id', exigeAdmin, async (req, res) => {
     try {
-        const tarea = await Tarea.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const tarea = await Tarea.findOneAndUpdate({ _id: req.params.id, negocio: req.session.negocioId }, req.body, { new: true });
         await registrarLog(req.session.email, `Actualizó la tarea: ${tarea.titulo}`, {}, req.session.negocioId);
         res.json(tarea);
     } catch (e) { res.status(400).send(e); }
 });
 app.put('/api/tareas/:id/estado', exigeAdmin, async (req, res) => {
     try {
-        const tarea = await Tarea.findByIdAndUpdate(req.params.id, { estado: req.body.estado }, { new: true });
+        const tarea = await Tarea.findOneAndUpdate({ _id: req.params.id, negocio: req.session.negocioId }, { estado: req.body.estado }, { new: true });
         await registrarLog(req.session.email, `Movió tarea a ${req.body.estado}: ${tarea.titulo}`, {}, req.session.negocioId);
         res.json(tarea);
     } catch (e) { res.status(400).send(e); }
@@ -641,17 +615,17 @@ app.delete('/api/tareas/:id', exigeAdmin, async (req, res) => {
 
 // --- Rutas de FAQs Dinámicas ---
 app.get('/api/faqs', exigeAdmin, async (req, res) => {
-    try { res.json(await Faq.find().sort({ fechaCreacion: 1 })); } catch (e) { res.status(500).send(e); }
+    try { res.json(await Faq.find({ negocio: req.session.negocioId }).sort({ fechaCreacion: 1 })); } catch (e) { res.status(500).send(e); }
 });
 app.post('/api/faqs', exigeAdmin, async (req, res) => {
     try {
-        const nueva = new Faq(req.body); await nueva.save();
+        const nueva = new Faq({ ...req.body, negocio: req.session.negocioId }); await nueva.save();
         await registrarLog(req.session.email, `Añadió nueva FAQ`, {}, req.session.negocioId); res.json(nueva);
     } catch (e) { res.status(400).send(e); }
 });
 app.put('/api/faqs/:id', exigeAdmin, async (req, res) => {
     try {
-        const f = await Faq.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const f = await Faq.findOneAndUpdate({ _id: req.params.id, negocio: req.session.negocioId }, req.body, { new: true });
         await registrarLog(req.session.email, `Modificó una FAQ`, {}, req.session.negocioId); res.json(f);
     } catch (e) { res.status(400).send(e); }
 });
@@ -661,7 +635,7 @@ app.delete('/api/faqs/:id', exigeAdmin, async (req, res) => {
 
 // --- Rutas de Ajustes del Tablero Kanban ---
 app.get('/api/estados-kanban', exigeAdmin, async (req, res) => {
-    try { res.json(await EstadoKanban.find().sort({ orden: 1 })); } catch (e) { res.status(500).send(e); }
+    try { res.json(await EstadoKanban.find({ negocio: req.session.negocioId }).sort({ orden: 1 })); } catch (e) { res.status(500).send(e); }
 });
 app.post('/api/estados-kanban', exigeAdmin, async (req, res) => {
     try {
@@ -671,7 +645,7 @@ app.post('/api/estados-kanban', exigeAdmin, async (req, res) => {
 });
 app.put('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
     try {
-        const estado = await EstadoKanban.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const estado = await EstadoKanban.findOneAndUpdate({ _id: req.params.id, negocio: req.session.negocioId }, req.body, { new: true });
         await registrarLog(req.session.email, `Modificó estado Kanban: ${estado.nombre}`, {}, req.session.negocioId); res.json(estado);
     } catch (e) { res.status(400).send(e); }
 });
@@ -698,7 +672,7 @@ app.post('/api/chat', exigeAdmin, async (req, res) => {
 
     try {
         // 1. Damos visión del inventario a la IA para que pueda analizarlo (Máx 150 items recientes)
-        const productos = await VentaRopa.find().select('sku prenda estado precioVenta cantidad').limit(150).lean();
+        const productos = await VentaRopa.find({ negocio: req.session.negocioId }).select('sku prenda estado precioVenta cantidad').limit(150).lean();
         const inventarioContexto = productos.map(p => `[SKU: ${p.sku || 'N/A'}] ${p.prenda} (${p.cantidad} ud) - ${p.estado} - ${p.precioVenta}€`).join('\n');
 
         // Le damos personalidad y contexto a la IA
@@ -809,16 +783,17 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
             try {
                 if (actionType === 'ACTUALIZAR_PRECIO' && params.sku && params.precio) {
-                    await VentaRopa.findOneAndUpdate({ sku: params.sku }, { precioVenta: parseFloat(params.precio) });
+                    await VentaRopa.findOneAndUpdate({ sku: params.sku, negocio: req.session.negocioId }, { precioVenta: parseFloat(params.precio) });
                     await registrarLog(req.session.email, `IA actualizó precio de ${params.sku}`, {}, req.session.negocioId);
                 } else if (actionType === 'CAMBIAR_ESTADO' && params.sku && params.estado) {
-                    await VentaRopa.findOneAndUpdate({ sku: params.sku }, { estado: params.estado });
+                    await VentaRopa.findOneAndUpdate({ sku: params.sku, negocio: req.session.negocioId }, { estado: params.estado });
                     await registrarLog(req.session.email, `IA cambió estado de ${params.sku} a ${params.estado}`, {}, req.session.negocioId);
                 } else if (actionType === 'BORRAR_PRODUCTO' && params.sku) {
-                    await VentaRopa.findOneAndDelete({ sku: params.sku });
+                    await VentaRopa.findOneAndDelete({ sku: params.sku, negocio: req.session.negocioId });
                     await registrarLog(req.session.email, `IA borró producto ${params.sku}`, {}, req.session.negocioId);
                 } else if (actionType === 'CREAR_PRODUCTO' && params.prenda) {
                     const nuevo = new VentaRopa({
+                        negocio: req.session.negocioId,
                         sku: `IA-${Date.now().toString().slice(-6)}`,
                         prenda: params.prenda, precioVenta: parseFloat(params.precio) || 0,
                         categoria: params.categoria || 'General', estado: 'No Vendido',
@@ -845,16 +820,16 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
 app.get('/api/notas', exigeAdmin, async (req, res) => {
     try {
-        const notas = await Nota.find().lean();
+        const notas = await Nota.find({ negocio: req.session.negocioId }).lean();
         res.json(notas);
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar notas.' }); }
 });
 
 app.post('/api/notas', exigeAdmin, async (req, res) => {
     try {
-        const count = await Nota.countDocuments();
+        const count = await Nota.countDocuments({ negocio: req.session.negocioId });
         if (count >= 10) return res.status(400).json({ error: 'Límite de 10 notas alcanzado.' });
-        const nuevaNota = new Nota({ ...req.body, usuario: req.session.email });
+        const nuevaNota = new Nota({ ...req.body, usuario: req.session.email, negocio: req.session.negocioId });
         await nuevaNota.save();
         res.json(nuevaNota);
     } catch (e) { res.status(500).json({ error: 'Error al crear nota.' }); }
@@ -862,8 +837,7 @@ app.post('/api/notas', exigeAdmin, async (req, res) => {
 
 app.put('/api/notas/:id', exigeAdmin, async (req, res) => {
     try {
-        const { id } = req.params;
-        const notaActualizada = await Nota.findByIdAndUpdate(id, req.body, { new: true });
+        const notaActualizada = await Nota.findOneAndUpdate({ _id: req.params.id, negocio: req.session.negocioId }, req.body, { new: true });
         res.json(notaActualizada);
     } catch (e) { res.status(500).json({ error: 'Error al mover nota.' }); }
 });
@@ -944,7 +918,7 @@ app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
 
 // --- Rutas de Clientes (CRM) ---
 app.get('/api/clientes', exigeAdmin, async (req, res) => {
-    try { res.json(await Cliente.find().sort({ nombre: 1 })); } catch (e) { res.status(500).send(e); }
+    try { res.json(await Cliente.find({ negocio: req.session.negocioId }).sort({ nombre: 1 })); } catch (e) { res.status(500).send(e); }
 });
 app.post('/api/clientes', exigeAdmin, async (req, res) => {
     try {
@@ -956,7 +930,7 @@ app.post('/api/clientes', exigeAdmin, async (req, res) => {
 });
 app.put('/api/clientes/:id', exigeAdmin, async (req, res) => {
     try {
-        const cliente = await Cliente.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const cliente = await Cliente.findOneAndUpdate({ _id: req.params.id, negocio: req.session.negocioId }, req.body, { new: true });
         await registrarLog(req.session.email, `Actualizó datos del cliente: ${cliente.nombre}`, {}, req.session.negocioId);
         notificarCambio(); // Notificar cambio para refrescar la lista de clientes en otros navegadores
         res.json(cliente);
@@ -972,7 +946,7 @@ app.delete('/api/clientes/:id', exigeAdmin, async (req, res) => {
 
 // --- Rutas de Gastos Operativos ---
 app.get('/api/gastos', exigeAdmin, async (req, res) => {
-    try { res.json(await Gasto.find().sort({ fecha: -1 })); } catch (e) { res.status(500).send(e); }
+    try { res.json(await Gasto.find({ negocio: req.session.negocioId }).sort({ fecha: -1 })); } catch (e) { res.status(500).send(e); }
 });
 app.post('/api/gastos', exigeAdmin, async (req, res) => {
     try {
@@ -993,8 +967,8 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
     try {
         const ventasRaw = await VentaRopa.find({ negocio: req.session.negocioId }).populate('tienda').sort({ _id: -1 }).lean();
         const logs = await LogAuditoria.find({ negocio: req.session.negocioId }).sort({ _id: -1 }).limit(50).lean();
-        const gastosExtra = await Gasto.find().lean();
-        const estadosKanban = await EstadoKanban.find().lean();
+        const gastosExtra = await Gasto.find({ negocio: req.session.negocioId }).lean();
+        const estadosKanban = await EstadoKanban.find({ negocio: req.session.negocioId }).lean();
         const nombresEstadosVenta = estadosKanban.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
         
         let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, totalGastosOperativos = 0, costeVendidosTotal = 0;
@@ -1042,7 +1016,7 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
         
         const tiendaDoc = await Tienda.findOne({ nombre: proveedor });
 
-        const nuevaVenta = new VentaRopa({ ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null });
+        const nuevaVenta = new VentaRopa({ ...datosVenta, negocio: req.session.negocioId, tienda: tiendaDoc ? tiendaDoc._id : null });
         await nuevaVenta.save(); 
         await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`, {}, req.session.negocioId);
         return res.json({ status: "success", venta: nuevaVenta });
@@ -1056,10 +1030,10 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
         const { id } = req.params;
         const { proveedor, ...datosVenta } = req.body;
 
-        const tiendaDoc = await Tienda.findOne({ nombre: proveedor });
+        const tiendaDoc = await Tienda.findOne({ nombre: proveedor, negocio: req.session.negocioId });
 
-        const ventaActualizada = await VentaRopa.findByIdAndUpdate(
-            id,
+        const ventaActualizada = await VentaRopa.findOneAndUpdate(
+            { _id: id, negocio: req.session.negocioId },
             { ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null }, 
             { new: true }
         );
@@ -1076,7 +1050,7 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
         const { id } = req.params;
         const { estado } = req.body;
 
-        const estadoConfig = await EstadoKanban.findOne({ nombre: estado });
+        const estadoConfig = await EstadoKanban.findOne({ nombre: estado, negocio: req.session.negocioId });
         const updateData = { estado };
         
         if (estadoConfig && estadoConfig.rolFinanciero === 'Venta') {
@@ -1085,7 +1059,7 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
             updateData.fechaVenta = '';
         }
 
-        const ventaActualizada = await VentaRopa.findByIdAndUpdate(id, updateData, { new: true });
+        const ventaActualizada = await VentaRopa.findOneAndUpdate({ _id: id, negocio: req.session.negocioId }, updateData, { new: true });
         await registrarLog(req.session.email, `Transición de estado: [${ventaActualizada.prenda}] -> ${estado.toUpperCase()}`, {}, req.session.negocioId);
         return res.json({ status: "success", venta: ventaActualizada });
     } catch (error) {
@@ -1096,9 +1070,9 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
 app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
     try {
         const { sku } = req.params;
-        let venta = await VentaRopa.findOne({ sku: sku });
+        let venta = await VentaRopa.findOne({ sku: sku, negocio: req.session.negocioId });
         
-        const estadosConfig = await EstadoKanban.find().sort({ orden: 1 });
+        const estadosConfig = await EstadoKanban.find({ negocio: req.session.negocioId }).sort({ orden: 1 });
         const estStock = estadosConfig.find(e => e.rolFinanciero === 'Stock');
         const estVenta = estadosConfig.find(e => e.rolFinanciero === 'Venta');
         
@@ -1107,6 +1081,7 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
 
         if (!venta) {
             venta = new VentaRopa({
+                negocio: req.session.negocioId,
                 sku: sku,
                 prenda: 'Artículo Escaneado Nuevo',
                 estado: nombreStock
@@ -1144,11 +1119,7 @@ app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
 
 app.post('/api/auth/setup', async (req, res) => {
     try {
-<<<<<<< HEAD
-        const { email, negocioNombre, tipoNegocio, token } = req.body;
-=======
-        const { email, negocioNombre, token } = req.body;
->>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
+        const { email, negocioNombre, tipoNegocio, rolUsuario, token } = req.body;
         const payload = await verificarTokenGoogle(token);
         if (!payload || payload.email.toLowerCase() !== email.toLowerCase()) {
             return res.status(401).json({ error: 'Validación de Google fallida.' });
@@ -1159,17 +1130,13 @@ app.post('/api/auth/setup', async (req, res) => {
             return res.status(400).json({ error: 'El nombre del negocio ya está en uso.' });
         }
 
-<<<<<<< HEAD
         const nuevoNegocio = new Negocio({ nombre: negocioNombre, tipo: tipoNegocio || 'General' });
-=======
-        const nuevoNegocio = new Negocio({ nombre: negocioNombre });
->>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
         await nuevoNegocio.save();
 
 
         const adminUser = new UsuarioAutorizado({
             email: email.toLowerCase(),
-            rol: 'Admin',
+            rol: rolUsuario || 'Admin',
             negocio: nuevoNegocio._id
         });
         await adminUser.save();
@@ -1188,10 +1155,54 @@ app.post('/api/auth/setup', async (req, res) => {
         req.session.email = adminUser.email;
         req.session.rol = adminUser.rol;
         req.session.negocioId = nuevoNegocio._id;
-<<<<<<< HEAD
         req.session.esAdmin = true; // El primer usuario es siempre Admin
-=======
->>>>>>> 91b2c7ca3af8328e75c77e98d8dbed3395bddf83
+
+        req.session.save((err) => {
+            if(err) console.error("Session save error", err);
+            res.json({ success: true, redirect: '/' });
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al configurar el negocio' });
+    }
+});
+
+app.post('/api/auth/setup', async (req, res) => {
+    try {
+        const { email, negocioNombre, tipoNegocio, rolUsuario, token } = req.body;
+        const payload = await verificarTokenGoogle(token);
+        if (!payload || payload.email.toLowerCase() !== email.toLowerCase()) {
+            return res.status(401).json({ error: 'Validación de Google fallida.' });
+        }
+
+        const existingBusiness = await Negocio.findOne({ nombre: negocioNombre });
+        if (existingBusiness) {
+            return res.status(400).json({ error: 'El nombre del negocio ya está en uso.' });
+        }
+
+        const nuevoNegocio = new Negocio({ nombre: negocioNombre, tipo: tipoNegocio || 'General' });
+        await nuevoNegocio.save();
+
+
+        const adminUser = new UsuarioAutorizado({
+            email: email.toLowerCase(),
+            rol: rolUsuario || 'Admin',
+            negocio: nuevoNegocio._id
+        });
+        await adminUser.save();
+
+        // 🟢 SEED DEFAULT KANBAN STATES FOR THE NEW BUSINESS
+        const defaultStates = [
+            { negocio: nuevoNegocio._id, nombre: 'No Vendido', icono: '📦', color: 'amber', rolFinanciero: 'Stock', orden: 1 },
+            { negocio: nuevoNegocio._id, nombre: 'Vendido', icono: '💰', color: 'emerald', rolFinanciero: 'Venta', orden: 2 },
+            { negocio: nuevoNegocio._id, nombre: 'Reservado', icono: '🤝', color: 'indigo', rolFinanciero: 'Stock', orden: 3 },
+            { negocio: nuevoNegocio._id, nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
+        ];
+        await EstadoKanban.insertMany(defaultStates);
+
+        req.session.email = adminUser.email;
+        req.session.rol = adminUser.rol;
+        req.session.negocioId = nuevoNegocio._id;
+        req.session.esAdmin = (adminUser.rol === 'Admin');
 
         req.session.save((err) => {
             if(err) console.error("Session save error", err);
@@ -1268,7 +1279,7 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         if (productosExtraidos.length === 0) return res.status(400).json({ error: 'No se encontraron productos. Es posible que Vinted haya bloqueado la solicitud.' });
 
         const resultados = { discrepancias: [], nuevos: [], identicos: [] };
-        const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
+        const productosBD = await VentaRopa.find({ canalVenta: 'Vinted', negocio: req.session.negocioId }).lean();
 
         const cleanStr = str => str.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
 
@@ -1309,7 +1320,7 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
         }
 
         const resultados = { discrepancias: [], nuevos: [], identicos: [] };
-        const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
+        const productosBD = await VentaRopa.find({ canalVenta: 'Vinted', negocio: req.session.negocioId }).lean();
 
         const cleanStr = str => str.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
 
@@ -1353,9 +1364,9 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
         const { productos } = req.body; // Array de productos seleccionados en el frontend
         if (!productos || !Array.isArray(productos)) return res.status(400).json({ error: 'Datos de productos no válidos.' });
 
-        let tiendaVinted = await Tienda.findOne({ nombre: 'Vinted' });
+        let tiendaVinted = await Tienda.findOne({ nombre: 'Vinted', negocio: req.session.negocioId });
         if (!tiendaVinted) {
-            tiendaVinted = new Tienda({ nombre: 'Vinted' });
+            tiendaVinted = new Tienda({ nombre: 'Vinted', negocio: req.session.negocioId });
             await tiendaVinted.save();
         }
 
@@ -1375,6 +1386,7 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
             const nuevaVenta = new VentaRopa({
                 ...prod,
                 imagen: mainImg && mainImg.startsWith('data:image') ? mainImg : prod.imagen,
+                negocio: req.session.negocioId,
                 galeria: galeriaBase64,
                 tienda: tiendaVinted._id,
                 sku: `VNT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -1405,7 +1417,7 @@ app.post('/api/ventas/bulk', exigeAdmin, async (req, res) => {
         const productosProcesados = await Promise.all(productos.map(async (p) => {
             let tiendaId = null;
             if (p.proveedor) {
-                const t = await Tienda.findOne({ nombre: p.proveedor });
+                const t = await Tienda.findOne({ nombre: p.proveedor, negocio: req.session.negocioId });
                 if (t) tiendaId = t._id;
             }
             return {
@@ -1431,7 +1443,7 @@ app.post('/api/scraper/aplicar', exigeAdmin, async (req, res) => {
     try {
         const { cambios } = req.body;
         for (const cambio of cambios) {
-            await VentaRopa.findByIdAndUpdate(cambio.idMongo, { precioVenta: cambio.valorNuevo, prenda: cambio.prenda });
+            await VentaRopa.findOneAndUpdate({ _id: cambio.idMongo, negocio: req.session.negocioId }, { precioVenta: cambio.valorNuevo, prenda: cambio.prenda });
             await registrarLog(req.session.email, `Sincronización artículo: ${cambio.prenda} -> ${cambio.valorNuevo}€`, {}, req.session.negocioId);
         }
         res.json({ success: true });

@@ -4069,9 +4069,17 @@
         }
 
         window.handleCredentialResponse = async function(response) {
-            const loginBox = document.querySelector('.login-glow-card div');
-            const originalHTML = loginBox.innerHTML;
-            loginBox.innerHTML = '<div class="text-white text-center"><div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div><p class="font-bold text-lg text-blue-400">Obteniendo ubicación satelital...</p><p class="text-[11px] opacity-60 mt-2">Por favor, acepta los permisos en tu navegador si te los pide.</p></div>';
+            const btnContainer = document.querySelector('.g_id_signin').parentElement;
+            let spinner = document.getElementById('login-spinner');
+            if(!spinner) {
+                spinner = document.createElement('div');
+                spinner.id = 'login-spinner';
+                spinner.innerHTML = '<div class="text-white text-center mt-4"><div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div><p class="text-xs text-blue-400">Autenticando...</p></div>';
+                btnContainer.parentElement.appendChild(spinner);
+            }
+
+            btnContainer.classList.add('hidden');
+            spinner.classList.remove('hidden');
 
             let clientLocation = null;
             const sendLogin = async () => {
@@ -4082,15 +4090,16 @@
                     if (data.success) {
                         window.location.reload();
                     } else if (data.setupRequired) {
-                        loginBox.innerHTML = originalHTML;
-                        document.querySelector('.g_id_signin').parentElement.classList.add('hidden');
+                        spinner.classList.add('hidden');
                         document.getElementById('setup-container').classList.remove('hidden');
 
                         document.getElementById('btn-submit-setup').onclick = async () => {
                             const negocioNombre = document.getElementById('setup-business-name').value;
                             if (!negocioNombre) return alert('Debes escribir un nombre para tu negocio');
 
-                            loginBox.innerHTML = '<div class="text-white text-center"><div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div><p>Creando CRM...</p></div>';
+                            document.getElementById('setup-container').classList.add('hidden');
+                            spinner.classList.remove('hidden');
+                            spinner.innerHTML = '<div class="text-white text-center mt-4"><div class="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div><p class="text-xs text-emerald-400">Creando CRM...</p></div>';
 
                             const setupRes = await fetch(`${BACKEND_URL}/api/auth/setup`, {
                                 method: 'POST',
@@ -4104,16 +4113,19 @@
                                 window.location.reload();
                             } else {
                                 alert(setupData.error || 'Error configurando negocio');
-                                window.location.reload();
+                                spinner.classList.add('hidden');
+                                document.getElementById('setup-container').classList.remove('hidden');
                             }
                         };
                     } else {
                         alert(`⚠️ Acceso denegado: ${data.error || 'Correo no autorizado en el sistema.'}`);
-                        loginBox.innerHTML = originalHTML;
+                        spinner.classList.add('hidden');
+                        btnContainer.classList.remove('hidden');
                     }
                 } catch(e) {
                     alert("❌ Error crítico: No se pudo conectar con el servidor de Seychelles.");
-                    loginBox.innerHTML = originalHTML;
+                    spinner.classList.add('hidden');
+                    btnContainer.classList.remove('hidden');
                 }
             };
 

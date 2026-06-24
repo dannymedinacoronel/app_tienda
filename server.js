@@ -28,11 +28,12 @@ app.use((req, res, next) => {
 
 // Es vital para que las sesiones funcionen en plataformas como Render/Heroku
 app.set('trust proxy', 1);
+app.enable('trust proxy');
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // 🔒 CONEXIÓN DEPURADA: Purgadas las credenciales del código fuente
-const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI;
+const MONGO_URI_FINAL = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/seychelles_crm';
 
 if (!MONGO_URI_FINAL) {
     console.error('\x1b[31m[ERROR]\x1b[0m No se detectó la variable MONGODB_URI en el entorno.');
@@ -531,13 +532,17 @@ app.post('/api/auth/google', async (req, res) => {
                 usuario = await UsuarioAutorizado.findOne({ email }).populate('negocio');
             }
 
+
             req.session.email = usuario.email;
             req.session.rol = usuario.rol;
             req.session.negocioId = usuario.negocio._id;
             
             const locationData = await obtenerUbicacionCompleta(req, clientLocation);
             await registrarLog(usuario.email, "Inició sesión exitosamente", locationData, usuario.negocio._id);
-            return res.json({ success: true, email: usuario.email, redirect: '/' });
+            req.session.save((err) => {
+                if(err) console.error("Session save error", err);
+                return res.json({ success: true, email: usuario.email, redirect: '/' });
+            });
         } else {
             // No existe usuario, necesita setup de negocio
             return res.json({ success: false, setupRequired: true, email: email });
@@ -1149,11 +1154,15 @@ app.post('/api/auth/setup', async (req, res) => {
         await EstadoKanban.insertMany(defaultStates);
 
 
+
         req.session.email = adminUser.email;
         req.session.rol = adminUser.rol;
         req.session.negocioId = nuevoNegocio._id;
 
-        res.json({ success: true, redirect: '/' });
+        req.session.save((err) => {
+            if(err) console.error("Session save error", err);
+            res.json({ success: true, redirect: '/' });
+        });
     } catch (error) {
         res.status(500).json({ error: 'Error al configurar el negocio' });
     }

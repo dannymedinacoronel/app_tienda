@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sincronizador Vinted | Seychelles Core</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; }
+        .glass-card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; }
+        .img-preview { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 2px solid #334155; }
+        .product-card { transition: transform 0.2s; cursor: pointer; border: 1px solid transparent; }
+        .product-card:hover { transform: translateY(-3px); background: rgba(51, 65, 85, 0.8); border-color: #3b82f6; }
+        .spinner-border { width: 3rem; height: 3rem; }
+    </style>
+</head>
+<body class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">🔍 Sincronizador de Inventario (Vinted)</h2>
+        <a href="/" class="btn btn-outline-light btn-sm">Regresar al Panel</a>
+    </div>
+    
+    <div class="glass-card p-4 mb-5">
+        <label class="form-label text-secondary">URL del Catálogo o Perfil de Vinted</label>
+        <div class="input-group shadow-sm">
+            <input type="text" id="vintedUrl" class="form-control bg-dark text-white border-secondary" placeholder="https://www.vinted.es/member/12345...">
+            <button class="btn btn-primary px-4" id="btnAnalizar" onclick="analizarVinted()">Analizar Ahora</button>
+        </div>
+        <div id="loader" class="text-center d-none mt-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-primary fw-bold">Escaneando productos... Por favor, no cierres esta pestaña.</p>
+        </div>
+    </div>
+
+    <div id="resultados" class="d-none">
+        <!-- Sección de Precios -->
+        <div id="secDiscrepancias" class="mb-5 d-none">
+            <h4 class="text-warning mb-3">⚠️ Diferencias de Precio Detectadas</h4>
+            <div class="glass-card overflow-hidden">
+                <table class="table table-dark table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Foto</th>
+                            <th>Producto</th>
+                            <th>En Sistema</th>
+                            <th>En Vinted</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listaDiscrepancias"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Sección de Importación -->
+        <div id="secNuevos" class="d-none">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="text-success mb-0">✨ Productos Nuevos en la Web</h4>
+                <button class="btn btn-success shadow" onclick="importarSeleccionados()">Importar Marcados</button>
+            </div>
+            <div id="listaNuevos" class="row g-3"></div>
+        </div>
+    </div>
+
+    <script>
+        let localData = null;
+
+        async function analizarVinted() {
+            const url = document.getElementById('vintedUrl').value.trim();
+            if (!url) return alert("Introduce una URL válida.");
+
+            const btn = document.getElementById('btnAnalizar');
+            const loader = document.getElementById('loader');
+            btn.disabled = true;
+            loader.classList.remove('d-none');
+            document.getElementById('resultados').classList.add('d-none');
+
+            try {
+                const res = await fetch('/api/scraper/analizar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                localData = data;
+                render(data);
+            } catch (err) {
+                alert("Error: " + err.message);
+            } finally {
+                btn.disabled = false;
+                loader.classList.add('d-none');
+            }
+        }
+
+        function render(data) {
+            document.getElementById('resultados').classList.remove('d-none');
+            
+            const discCont = document.getElementById('secDiscrepancias');
+            const discTbody = document.getElementById('listaDiscrepancias');
+            discTbody.innerHTML = '';
+            if (data.discrepancias.length > 0) {
+                discCont.classList.remove('d-none');
+                data.discrepancias.forEach(d => {
+                    discTbody.innerHTML += `
+                        <tr class="align-middle">
+                            <td><img src="${d.imagen || 'https://via.placeholder.com/60'}" class="img-preview"></td>
+                            <td class="small">${d.prenda}</td>
+                            <td class="text-secondary">${d.valorAntiguo}€</td>
+                            <td class="text-warning fw-bold">${d.valorNuevo}€</td>
+                            <td><button class="btn btn-sm btn-outline-warning" onclick="syncPrice('${d.idMongo}', ${d.valorNuevo})">Actualizar</button></td>
+                        </tr>`;
+                });
+            } else { discCont.classList.add('d-none'); }
+
+            const nuevosCont = document.getElementById('secNuevos');
+            const nuevosGrid = document.getElementById('listaNuevos');
+            nuevosGrid.innerHTML = '';
+            if (data.nuevos.length > 0) {
+                nuevosCont.classList.remove('d-none');
+                data.nuevos.forEach((n, i) => {
+                    nuevosGrid.innerHTML += `
+                        <div class="col-md-4">
+                            <div class="glass-card p-3 product-card d-flex align-items-center" onclick="document.getElementById('ch-${i}').click()">
+                                <input type="checkbox" class="form-check-input me-3 check-box" id="ch-${i}" data-idx="${i}" onclick="event.stopPropagation()">
+                                <img src="${n.imagen || 'https://via.placeholder.com/60'}" class="img-preview me-3">
+                                <div class="text-truncate">
+                                    <div class="small fw-bold text-truncate">${n.prenda}</div>
+                                    <div class="text-success small">${n.precioVenta}€</div>
+                                </div>
+                            </div>
+                        </div>`;
+                });
+            } else { nuevosCont.classList.add('d-none'); }
+        }
+
+        async function importarSeleccionados() {
+            const selected = Array.from(document.querySelectorAll('.check-box:checked')).map(cb => localData.nuevos[cb.dataset.idx]);
+            if (selected.length === 0) return alert("Selecciona algún producto para importar.");
+            await fetch('/api/scraper/importar', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ productos: selected })});
+            alert("Importación completada."); analizarVinted();
+        }
+
+        async function syncPrice(id, price) {
+            await fetch('/api/scraper/aplicar', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ cambios: [{idMongo: id, valorNuevo: price}] })});
+            alert("Sincronizado."); analizarVinted();
+        }
+    </script>
+</body>
+</html>

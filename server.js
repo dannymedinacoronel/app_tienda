@@ -968,7 +968,7 @@ app.get('/api/negocio/detalles', exigeLogin, async (req, res) => {
     }
 });
 
-app.put('/api/negocio/ajustes', exigeAdmin, async (req, res) => {
+app.put('/api/negocio/ajustes', exigeLogin, exigeAdmin, async (req, res) => {
     try {
         const { nombreVisible } = req.body;
         const negocio = await Negocio.findByIdAndUpdate(
@@ -979,7 +979,8 @@ app.put('/api/negocio/ajustes', exigeAdmin, async (req, res) => {
         await registrarLog(req.session.email, `Actualizó los ajustes del negocio. Nuevo nombre: ${nombreVisible}`, {}, req.session.negocioId);
         res.json(negocio);
     } catch (e) {
-        res.status(500).json({ error: 'Error al actualizar los ajustes del negocio.' });
+        console.error("ERROR en PUT /api/negocio/ajustes:", e);
+        res.status(500).json({ error: 'Error interno del servidor al actualizar los ajustes.' });
     }
 });
 
@@ -993,8 +994,9 @@ app.get('/api/ventas', exigeLogin, async (req, res) => {
             EstadoKanban.find({ negocio: req.session.negocioId }).lean()
         ]);
         const nombresEstadosVenta = estadosKanban.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
+        const nombresEstadosStock = estadosKanban.filter(e => e.rolFinanciero === 'Stock').map(e => e.nombre);
         
-        let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, totalGastosOperativos = 0, costeVendidosTotal = 0;
+        let ingresos = 0, inversionStock = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, totalGastosOperativos = 0, costeVendidosTotal = 0;
         
         gastosExtra.forEach(g => totalGastosOperativos += g.monto);
 
@@ -1006,15 +1008,19 @@ app.get('/api/ventas', exigeLogin, async (req, res) => {
             const pVenta = parseFloat(v.precioVenta) || 0;
             const gEnvio = parseFloat(v.gastosEnvio) || 0;
 
-            inversion += (pCompra * cant);
-            gastosTotalesEnvio += (gEnvio * cant);
+            // La inversión en stock solo cuenta para los artículos que no se han vendido.
+            if (nombresEstadosStock.includes(v.estado)) {
+                inversionStock += (pCompra * cant);
+            }
 
+            // Los ingresos, costes y gastos de envío solo se cuentan para los artículos vendidos.
             if (nombresEstadosVenta.includes(v.estado) && v.canalVenta) {
                 let comisionPlataforma = 0;
                 if (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') {
                     comisionPlataforma = (pVenta * 0.05); 
                 }
                 ingresos += ((pVenta - comisionPlataforma) * cant);
+                gastosTotalesEnvio += (gEnvio * cant);
                 prendasVendidas += cant;
                 costeVendidosTotal += (pCompra * cant);
             }
@@ -1022,10 +1028,11 @@ app.get('/api/ventas', exigeLogin, async (req, res) => {
             return { ...v, proveedor: proveedorNombre };
         });
 
-        const beneficioNeto = ingresos - inversion - gastosTotalesEnvio - totalGastosOperativos;
-        const roi = (inversion + totalGastosOperativos) > 0 ? (beneficioNeto / (inversion + gastosTotalesEnvio + totalGastosOperativos)) * 100 : 0;
+        const beneficioNeto = ingresos - costeVendidosTotal - gastosTotalesEnvio - totalGastosOperativos;
+        const costesAsociadosVenta = costeVendidosTotal + gastosTotalesEnvio + totalGastosOperativos;
+        const roi = costesAsociadosVenta > 0 ? (beneficioNeto / costesAsociadosVenta) * 100 : 0;
 
-        let resumenFinal = { ingresos, beneficio: beneficioNeto, inversion: inversion + gastosTotalesEnvio + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };
+        let resumenFinal = { ingresos, beneficio: beneficioNeto, inversion: inversionStock, prendasVendidas, roi, totalGastosOperativos };
 
         // Ocultar datos financieros para roles que no son Administrador
         if (req.session.rol !== 'Admin') {

@@ -382,7 +382,7 @@
                     <p class="text-3xl font-black mt-1" id="kpi-beneficio">0.00 €</p>
                 </div>
                 <div class="kpi-3d-card bg-gradient-to-br from-amber-600 to-orange-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform duration-200 ease-out will-change-transform cursor-pointer">
-                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Inversión Stock + Envío</p>
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-75">Valor del Stock</p>
                     <p class="text-3xl font-black mt-1" id="kpi-inversion">0.00 €</p>
                 </div>
                 <div class="kpi-3d-card bg-gradient-to-br from-emerald-600 to-teal-600 p-6 rounded-2xl shadow-lg text-white transform transition-transform duration-200 ease-out will-change-transform cursor-pointer">
@@ -2326,10 +2326,11 @@
                     actualizarNombresUI(negocio);
                     cantarPorVoz("Ajustes guardados.");
                 } else {
-                    alert("Error al guardar los ajustes.");
+                    const errorData = await res.json().catch(() => ({ error: "Respuesta no válida del servidor." }));
+                    alert("Error al guardar los ajustes: " + (errorData.error || res.statusText));
                 }
             } catch (e) {
-                alert("Error de red.");
+                alert("Error de red: " + e.message);
             }
         }
 

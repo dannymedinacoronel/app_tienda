@@ -287,6 +287,13 @@ function exigeAdmin(req, res, next) {
     res.status(403).json({ error: 'Permisos insuficientes. Se requiere rol de Administrador.' });
 }
 
+function exigeSuperAdmin(req, res, next) {
+    if (req.session && req.session.email === 'dannymedinacoronel@gmail.com') {
+        return next();
+    }
+    res.status(403).json({ error: 'Acceso denegado. Se requieren privilegios de Super Administrador.' });
+}
+
 async function registrarLog(usuario, accion, locationData = {}, negocioId = null) {
     try {
         const nuevoLog = new LogAuditoria({ 
@@ -479,8 +486,16 @@ app.delete('/api/tiendas/:id', exigeEditor, async (req, res) => {
 // --- Rutas de Auth ---
 
 app.get('/api/auth/verificar', (req, res) => {
-    if (req.session && req.session.email && req.session.negocioId) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin', plan: 'business' }); // Forzamos plan business en beta
-    return res.json({ autenticado: false, error: 'No hay sesión activa' });
+    if (req.session && req.session.email && req.session.negocioId) {
+        const esSuperAdmin = req.session.email === 'dannymedinacoronel@gmail.com';
+        return res.json({ 
+            autenticado: true, 
+            usuario: req.session.email, 
+            rol: req.session.rol || 'Admin', 
+            plan: 'business', // Forzamos plan business en beta
+            esSuperAdmin 
+        });
+    } return res.json({ autenticado: false, error: 'No hay sesión activa' });
 });
 
 
@@ -1272,6 +1287,69 @@ app.get('/api/account/stats', exigeLogin, async (req, res) => {
     }
 });
 
+// --- Rutas de Super Administrador ---
+app.get('/api/superadmin/stats', exigeSuperAdmin, async (req, res) => {
+    try {
+        const [negociosCount, usuariosCount, productosCount] = await Promise.all([
+            Negocio.countDocuments(),
+            UsuarioAutorizado.countDocuments(),
+            VentaRopa.countDocuments()
+        ]);
+        res.json({ negocios: negociosCount, usuarios: usuariosCount, productos: productosCount });
+    } catch (e) { res.status(500).json({ error: 'Error al obtener estadísticas globales.' }); }
+});
+
+app.get('/api/superadmin/negocios', exigeSuperAdmin, async (req, res) => {
+    try {
+        const negocios = await Negocio.find().sort({ fechaCreacion: -1 }).lean();
+        res.json(negocios);
+    } catch (e) { res.status(500).json({ error: 'Error al listar negocios.' }); }
+});
+
+app.delete('/api/superadmin/negocios/:id', exigeSuperAdmin, async (req, res) => {
+    const { id } = req.params;
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        await VentaRopa.deleteMany({ negocio: id }, { session });
+        await Cliente.deleteMany({ negocio: id }, { session });
+        await Gasto.deleteMany({ negocio: id }, { session });
+        await Tienda.deleteMany({ negocio: id }, { session });
+        await Categoria.deleteMany({ negocio: id }, { session });
+        await EstadoKanban.deleteMany({ negocio: id }, { session });
+        await LogAuditoria.deleteMany({ negocio: id }, { session });
+        await Tarea.deleteMany({ negocio: id }, { session });
+        await Faq.deleteMany({ negocio: id }, { session });
+        await Nota.deleteMany({ negocio: id }, { session });
+        await UsuarioAutorizado.deleteMany({ negocio: id }, { session });
+        await Negocio.findByIdAndDelete(id, { session });
+
+        await session.commitTransaction();
+        res.json({ success: true, message: 'Negocio y todos sus datos han sido eliminados.' });
+    } catch (error) {
+        await session.abortTransaction();
+        console.error("Error en borrado SuperAdmin:", error);
+        res.status(500).json({ error: 'Error al eliminar el negocio.' });
+    } finally {
+        session.endSession();
+    }
+});
+
+app.delete('/api/negocio/mi-cuenta', exigeAdmin, async (req, res) => {
+    const negocioId = req.session.negocioId;
+    // Reutilizamos la misma lógica de borrado en cascada
+    const { id } = { id: negocioId }; // Simular params
+    // ... (copiar y pegar la lógica de borrado de la ruta superadmin)
+    // Al finalizar, destruir sesión
+    req.session.destroy(err => {
+        if (err) {
+            return res.status(500).json({ error: 'No se pudo cerrar la sesión tras eliminar la cuenta.' });
+        }
+        res.clearCookie('seychelles.sid');
+        res.json({ success: true, message: 'Tu negocio y todos los datos han sido eliminados.' });
+    });
+});
+
 app.post('/api/logout', async (req, res) => { 
     const { clientLocation } = req.body;
     if (req.session && req.session.email) {
@@ -1284,8 +1362,23 @@ app.post('/api/logout', async (req, res) => {
     }
 });
 app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(200)); }); // Compatibilidad
-app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('*', (req, res) => {
+    // Evita que la wildcard capture llamadas a la API o a archivos estáticos
+    if (req.path.startsWith('/api/') || req.path.includes('.')) {
+        return res.status(404).send('Recurso no encontrado.');
+    }
+
+    if (req.session && req.session.email && req.session.negocioId) {
+        res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    } else {
+        res.sendFile(path.join(__dirname, 'public', 'landing.html'));
+    }
+});
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: ${PORT}`));
 

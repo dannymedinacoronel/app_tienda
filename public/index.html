@@ -264,7 +264,7 @@
             <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-6">
                 <div class="flex items-center gap-4">
                     <div>
-                        <h1 class="text-5xl font-black uppercase tracking-tighter logo-premium bg-clip-text text-transparent drop-shadow-[0_4px_15px_rgba(217,70,239,0.4)] filter brightness-110">🌺Seychelles Shop</h1>
+                        <h1 class="text-5xl font-black uppercase tracking-tighter logo-premium bg-clip-text text-transparent drop-shadow-[0_4px_15px_rgba(217,70,239,0.4)] filter brightness-110">🌺Seychelles</h1>
                         <p class="text-xs font-mono opacity-60 mt-0.5" id="user-display">Verificando Credenciales...</p>
                     </div>
                     <div id="plan-badge-container" class="ml-4"></div>
@@ -276,7 +276,7 @@
                     </button>
                 </div>
                 
-                <div class="flex flex-wrap items-center justify-center lg:justify-end gap-2.5 w-full lg:w-auto">
+                <div class="flex flex-wrap items-center justify-center lg:justify-end gap-2 w-full lg:w-auto">
                     <!-- DB STORAGE BAR -->
                     <div id="db-storage-container" class="hidden items-center gap-2 bg-slate-800/60 border border-current/10 px-3 py-1.5 rounded-xl shadow-md" title="Uso de espacio de MongoDB Atlas (512MB Max)">
                         <span class="text-[9px] font-black uppercase opacity-60 tracking-widest">🗄️ DB</span>
@@ -298,38 +298,43 @@
                         </button>
                     </div>
 
-                    <button id="btn-mute-volumen" onclick="toggleMuteVolumenGlobal()" class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md transition-colors" title="Quitar/Poner Volumen">
-                        🔊 <span id="txt-mute-volumen">Sonido</span>
-                    </button>
-
+                    <!-- MENÚ HERRAMIENTAS -->
                     <div class="relative group">
-                        <button class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md tracking-wide">
-                            🎨 Temas <span class="text-[9px] opacity-60">▼</span>
+                        <button class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md tracking-wide">
+                            🛠️ Herramientas <span class="text-[9px] opacity-60">▼</span>
                         </button>
-                        <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-32 dropdown-bg border rounded-xl shadow-2xl z-[150] p-1 space-y-0.5 animate-fadeIn">
-                            <button onclick="setTheme('dark')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌌 Oscuro</button>
-                            <button onclick="setTheme('pink')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌸 Rosa</button>
-                            <button onclick="setTheme('light')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">☀️ Claro</button>
-                            <button onclick="setTheme('emerald')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌲 Verde</button>
-                            <button onclick="setTheme('purple')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🔮 Morado</button>
-                            <button onclick="setTheme('premium')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5 text-amber-500">👑 Premium</button>
+                        <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-48 dropdown-bg border rounded-2xl shadow-2xl z-[150] p-1.5 space-y-1">
+                            <button onclick="forceRefreshDataManual()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2"><span id="icon-refresh" class="inline-block">🔄</span> Sincronizar DB</button>
+                            <button onclick="procesarScraperVinted()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 text-blue-400">👗 Scraper / CSV</button>
+                            <button onclick="exportarExcel()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 text-emerald-400">📊 Exportar Excel</button>
+                            <div class="h-px w-full bg-white/10 my-1"></div>
+                            <button onclick="descargarBackupSeguridadLocal()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 text-purple-400">💾 Bajar Backup</button>
+                            <button onclick="document.getElementById('input-restore-backup').click()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 text-amber-400">📂 Cargar Backup</button>
                         </div>
                     </div>
 
-                    <!-- MENÚ ACCIONES AGRUPADAS -->
+                    <!-- MENÚ AJUSTES -->
                     <div class="relative group">
-                        <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md tracking-wide transition-all active:scale-95">
-                            ⚙️ Acciones <span class="text-[9px] opacity-60">▼</span>
+                        <button class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md tracking-wide">
+                            ⚙️ Ajustes <span class="text-[9px] opacity-60">▼</span>
                         </button>
-                        <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-48 dropdown-bg border rounded-2xl shadow-2xl z-[150] p-1.5 space-y-1 animate-fadeIn">
-                            <button onclick="forceRefreshDataManual()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors"><span id="icon-refresh" class="inline-block">🔄</span> Sincronizar DB</button>
-                            <button onclick="procesarScraperVinted()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors text-blue-400">👗 Scraper / CSV</button>
-                            <button onclick="exportarExcel()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors text-emerald-400">📊 Exportar Excel</button>
+                        <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-48 dropdown-bg border rounded-2xl shadow-2xl z-[150] p-1.5 space-y-1">
+                            <button onclick="navegarASeccion('sec-ajustes')" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 text-amber-400">⚙️ Ajustes Generales</button>
                             <div class="h-px w-full bg-white/10 my-1"></div>
-                            <button onclick="descargarBackupSeguridadLocal()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors text-purple-400">💾 Bajar Backup</button>
-                            <button onclick="document.getElementById('input-restore-backup').click()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors text-amber-400">📂 Cargar Backup</button>
+                            <button id="btn-mute-volumen" onclick="toggleMuteVolumenGlobal()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2">🔊 <span id="txt-mute-volumen">Sonido</span></button>
+                        </div>
+                    </div>
+
+                    <!-- MENÚ MI CUENTA -->
+                    <div class="relative group">
+                        <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md tracking-wide">
+                            👤 Mi Cuenta <span class="text-[9px] opacity-60">▼</span>
+                        </button>
+                        <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-48 dropdown-bg border rounded-2xl shadow-2xl z-[150] p-1.5 space-y-1">
+                            <button onclick="navegarASeccion('sec-mi-cuenta')" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 text-emerald-400">👑 Plan y Uso</button>
+                            <button onclick="navegarASeccion('sec-usuarios')" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2">🔑 Gestión de Accesos</button>
                             <div class="h-px w-full bg-white/10 my-1"></div>
-                            <button onclick="logout(event)" class="w-full text-left px-3 py-2 rounded-lg text-xs font-black hover:bg-rose-500/20 text-rose-500 flex items-center gap-2 transition-colors">🚪 Cerrar Sesión</button>
+                            <button onclick="logout(event)" class="w-full text-left px-3 py-2 rounded-lg text-xs font-black hover:bg-rose-500/20 text-rose-500 flex items-center gap-2">🚪 Cerrar Sesión</button>
                         </div>
                     </div>
                     <input type="file" id="input-restore-backup" class="hidden" accept=".json" onchange="importarBackupJSON(event)">
@@ -965,7 +970,20 @@
         <!-- SECCIÓN AJUSTES (NUEVA) -->
         <div id="sec-ajustes" class="seccion-app hidden flex flex-col gap-6 mb-8">
             <div class="card-bg border p-6 rounded-3xl shadow-xl">
-                <div class="flex justify-between items-center mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                        <span class="bg-amber-500/20 p-2 rounded-xl">🏢</span> Personalización del Negocio
+                    </h3>
+                </div>
+                <div class="space-y-3 max-w-md mb-8">
+                    <div>
+                        <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Nombre Público de la Tienda</label>
+                        <input type="text" id="ajustes-nombre-visible" placeholder="El nombre que verán tus clientes" class="input-bg w-full rounded-xl px-3 py-2 text-xs">
+                    </div>
+                    <button onclick="guardarAjustesNegocio()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-xl text-[10px] tracking-widest uppercase transition-all shadow-md mt-2">Guardar Personalización</button>
+                </div>
+
+                <div class="flex justify-between items-center mb-6 pt-6 border-t border-white/10">
                     <h3 class="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
                         <span class="bg-amber-500/20 p-2 rounded-xl">⚙️</span> Configurador del Tablero Kanban
                     </h3>
@@ -2291,6 +2309,37 @@
         async function cambiarColorNota(id, color) {
             await fetch(`${BACKEND_URL}/api/notas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ color }) });
             cargarNotasBoard();
+        }
+
+        // --- LÓGICA DE PERSONALIZACIÓN DEL NEGOCIO ---
+        async function guardarAjustesNegocio() {
+            const nombreVisible = document.getElementById('ajustes-nombre-visible').value;
+            try {
+                const res = await fetch('/api/negocio/ajustes', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ nombreVisible })
+                });
+                if (res.ok) {
+                    const negocio = await res.json();
+                    actualizarNombresUI(negocio);
+                    cantarPorVoz("Ajustes guardados.");
+                } else {
+                    alert("Error al guardar los ajustes.");
+                }
+            } catch (e) {
+                alert("Error de red.");
+            }
+        }
+
+        function actualizarNombresUI(negocio) {
+            const nombre = negocio.nombreVisible || negocio.nombre || 'Seychelles';
+            document.title = `Core Financiero - ${nombre} 🌺`;
+            const logoH1 = document.querySelector('#panel-control h1');
+            if (logoH1) {
+                logoH1.innerHTML = `🌺${nombre}`;
+            }
         }
 
         function establecerValoresPorDefecto() {
@@ -4808,6 +4857,17 @@
                     planContainer.innerHTML = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md">
                         <span>👑</span> Plan ${planName}
                     </span>`;
+
+                    // Cargar y aplicar personalización del negocio
+                    try {
+                        const negocioRes = await fetch(`${BACKEND_URL}/api/negocio/detalles`, { credentials: 'include' });
+                        if (negocioRes.ok) {
+                            const negocio = await negocioRes.json();
+                            actualizarNombresUI(negocio);
+                            const nombreVisibleInput = document.getElementById('ajustes-nombre-visible');
+                            if (nombreVisibleInput) nombreVisibleInput.value = negocio.nombreVisible || negocio.nombre || '';
+                        }
+                    } catch(e) { console.error("Error cargando detalles del negocio", e); }
                     
                     // --- LÓGICA DE PERMISOS POR ROL ---
                     if (ROL_USUARIO_ACTUAL === 'Lector') {

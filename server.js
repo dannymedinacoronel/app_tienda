@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
+// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Desactivado temporalmente
 const nodemailer = require('nodemailer');
 
 const app = express();
@@ -16,15 +17,14 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const isProd = process.env.NODE_ENV === 'production';
 console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
 
-
-
-
-
 app.use((req, res, next) => {
     res.setHeader('Cross-Origin-Opener-Policy', 'unsafe-none');
     res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
     next();
 });
+
+// Stripe webhook necesita el body raw, así que lo ponemos antes del parser de JSON
+// app.post('/api/stripe/webhook', ...); // Desactivado temporalmente
 
 // Es vital para que las sesiones funcionen en plataformas como Render/Heroku
 app.set('trust proxy', 1);
@@ -52,6 +52,11 @@ const NegocioSchema = new mongoose.Schema({
     tipo: { type: String, default: 'General' },
     plan: { type: String, default: 'free' },
     fechaCreacion: { type: Date, default: Date.now }
+    // Campos de Stripe desactivados temporalmente
+    // stripeCustomerId: String,
+    // stripeSubscriptionId: String,
+    // stripePriceId: String,
+    // stripeCurrentPeriodEnd: Date
 });
 const Negocio = mongoose.model('Negocio', NegocioSchema);
 
@@ -60,7 +65,7 @@ const TiendaSchema = new mongoose.Schema({
     nombre: { type: String, required: true, trim: true },
     fechaCreacion: { type: Date, default: Date.now }
 });
-TiendaSchema.index({ negocio: 1, nombre: 1 }, { unique: tru
+TiendaSchema.index({ negocio: 1, nombre: 1 }, { unique: true });
 const Tienda = mongoose.models.Tienda || mongoose.model('Tienda', TiendaSchema);
 
 const CategoriaSchema = new mongoose.Schema({
@@ -515,7 +520,7 @@ app.delete('/api/tiendas/:id', exigeEditor, async (req, res) => {
 // --- Rutas de Auth ---
 
 app.get('/api/auth/verificar', (req, res) => {
-    if (req.session && req.session.email && req.session.negocioId) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin', plan: req.session.negocioPlan || 'free' });
+    if (req.session && req.session.email && req.session.negocioId) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin', plan: 'business' }); // Forzamos plan business en beta
     return res.json({ autenticado: false, error: 'No hay sesión activa' });
 });
 
@@ -1206,6 +1211,38 @@ app.post('/api/auth/setup', async (req, res) => {
     } catch (error) {
         console.error("Error en /api/auth/setup:", error);
         res.status(500).json({ error: 'Error al configurar el negocio. Es posible que el email ya esté registrado o haya un problema con la base de datos.' });
+    }
+});
+
+app.get('/api/account/stats', exigeLogin, async (req, res) => {
+    try {
+        const negocioId = req.session.negocioId;
+        const plan = req.session.negocioPlan || 'free';
+
+        const [productCount, clientCount, userCount] = await Promise.all([
+            VentaRopa.countDocuments({ negocio: negocioId }),
+            Cliente.countDocuments({ negocio: negocioId }),
+            UsuarioAutorizado.countDocuments({ negocio: negocioId })
+        ]);
+
+        const limits = {
+            free: { products: 50, clients: 20, users: 2 },
+            professional: { products: 500, clients: Infinity, users: 5 },
+            business: { products: Infinity, clients: Infinity, users: Infinity }
+        };
+
+        res.json({
+            plan,
+            usage: {
+                products: productCount,
+                clients: clientCount,
+                users: userCount
+            },
+            limits: limits[plan] || limits.free
+        });
+
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener las estadísticas de la cuenta.' });
     }
 });
 

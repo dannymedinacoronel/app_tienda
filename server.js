@@ -60,7 +60,7 @@ const TiendaSchema = new mongoose.Schema({
     nombre: { type: String, required: true, trim: true },
     fechaCreacion: { type: Date, default: Date.now }
 });
-TiendaSchema.index({ negocio: 1, nombre: 1 }, { unique: true });
+TiendaSchema.index({ negocio: 1, nombre: 1 }, { unique: tru
 const Tienda = mongoose.models.Tienda || mongoose.model('Tienda', TiendaSchema);
 
 const CategoriaSchema = new mongoose.Schema({
@@ -515,7 +515,6 @@ app.delete('/api/tiendas/:id', exigeEditor, async (req, res) => {
 // --- Rutas de Auth ---
 
 app.get('/api/auth/verificar', (req, res) => {
-    if (req.session && req.session.email && req.session.negocioId) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin' });
     if (req.session && req.session.email && req.session.negocioId) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin', plan: req.session.negocioPlan || 'free' });
     return res.json({ autenticado: false, error: 'No hay sesión activa' });
 });
@@ -1174,7 +1173,6 @@ app.post('/api/auth/setup', async (req, res) => {
             return res.status(400).json({ error: 'El nombre del negocio ya está en uso. Por favor, elige otro.' });
         }
 
-        const nuevoNegocio = new Negocio({ nombre: negocioNombre, tipo: tipoNegocio || 'General' });
         const nuevoNegocio = new Negocio({ nombre: negocioNombre, tipo: tipoNegocio || 'General', plan: 'free' });
         await nuevoNegocio.save();
 

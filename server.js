@@ -48,8 +48,9 @@ function notificarCambio() {
 
 
 const NegocioSchema = new mongoose.Schema({
-    nombre: { type: String, required: true },
+    nombre: { type: String, required: true, unique: true },
     tipo: { type: String, default: 'General' },
+    nombreVisible: { type: String, trim: true },
     plan: { type: String, default: 'free' },
     fechaCreacion: { type: Date, default: Date.now }
     // Campos de Stripe desactivados temporalmente
@@ -195,99 +196,57 @@ mongoose.connect(MONGO_URI_FINAL || 'mongodb://localhost:27017/seychelles_crm')
     .then(async () => {
         console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.');
 
-        // --- MIGRACIÓN LEGACY A MULTI-TENANT ---
-        // Este bloque se ejecuta una sola vez para configurar el negocio original.
+        // --- MIGRACIÓN LEGACY Y SEEDING INICIAL ---
         const legacyEmails = ['dannymedinacoronel@gmail.com', 'juliamugo2001@gmail.com'];
         let seychellesOriginal = await Negocio.findOne({ nombre: 'Seychelles Original' });
 
         if (!seychellesOriginal) {
-            seychellesOriginal = new Negocio({ nombre: 'Seychelles Original', tipo: 'Tienda de Ropa' });
+            seychellesOriginal = new Negocio({ nombre: 'Seychelles Original', nombreVisible: 'Seychelles Shop', tipo: 'Tienda de Ropa' });
             await seychellesOriginal.save();
             console.log('[MIGRATION] Creado el negocio "Seychelles Original".');
         }
 
+        // Asignar usuarios legacy al negocio original
         for (const email of legacyEmails) {
             let usuario = await UsuarioAutorizado.findOne({ email });
             if (usuario && !usuario.negocio) {
                 usuario.negocio = seychellesOriginal._id;
-                usuario.rol = 'Admin'; // Aseguramos que los usuarios legacy sean Admins
+                usuario.rol = 'Admin';
                 await usuario.save();
                 console.log(`[MIGRATION] Usuario ${email} asignado a "Seychelles Original".`);
             }
         }
 
-        // Auto-poblar tiendas si la colección está vacía
-        const tiendaCount = await Tienda.countDocuments();
-        if (tiendaCount === 0) {
-            await Tienda.insertMany([{ nombre: 'seyshelleshop' }, { nombre: 'Vinted' }]);
-            console.log('[INIT] Tiendas base inyectadas.');
-        }
-
-        // Auto-poblar categorías si la colección está vacía
-        const catCount = await Categoria.countDocuments();
-        if (catCount === 0) {
-            const defaultCats = [
-                '👕 Camisetas', '🧥 Sudaderas', '👖 Pantalones', '👗 Vestidos', '👜 Accesorios',
-                '🩳 Shorts', '👗 Faldas', '🧥 Chaquetas', '🧥 Abrigos', '👟 Zapatos',
-                '👟 Zapatillas', '👙 Ropa Interior', '🩱 Bañadores', '🧢 Gorras', '👒 Sombreros',
-                '💍 Joyas', '👛 Bolsos', '👔 Camisas', '👚 Blusas', '👕 Tops', '🩳 Bermudas',
-                '👖 Leggings', '🧥 Trajes', '💤 Pijamas', '🧣 Bufandas', '🧤 Guantes',
-                '🎗️ Cinturones', '🧦 Calcetines', '⌚ Relojes', '🕶️ Gafas de sol', '👛 Monederos',
-                '👕 Polos', '🧥 Chalecos', '🥾 Botas', '👡 Sandalias', '🥋 Albornoces',
-                '👔 Corbatas', '🎀 Pajaritas', '🧣 Pañuelos', '🎒 Mochilas', '👜 Bolsos de mano',
-                '👖 Vaqueros', '🧥 Rebecas', '👕 Jerséis', '🏃 Ropa Deportiva', '🧘 Leggings Deportivos',
-                '🩱 Bikinis', '🧤 Mitones', '👒 Tocados', '👞 Mocasines', '👢 Botines', '🧤 Calentadores',
-                '👗 Monos', '👗 Petos', '👘 Kimonos', '🧥 Parkas', '🧥 Gabardinas', '🎿 Ropa de Esquí'
-            ];
-            try {
-                await Categoria.insertMany(defaultCats.map(n => ({ nombre: n })));
-                console.log('[INIT] Catálogo maestro de categorías inyectado correctamente.');
-            } catch (err) {
-                console.error("Error inyectando categorías iniciales:", err);
+        // Migrar datos sin negocio al negocio "Seychelles Original"
+        const migrateCollection = async (model, modelName) => {
+            const count = await model.countDocuments({ negocio: { $exists: false } });
+            if (count > 0) {
+                await model.updateMany({ negocio: { $exists: false } }, { $set: { negocio: seychellesOriginal._id } });
+                console.log(`[MIGRATION] ${count} documentos de ${modelName} asignados a "Seychelles Original".`);
             }
-        }
-        
-        // Auto-poblar FAQs predeterminadas si está vacío
-        const faqCount = await Faq.countDocuments();
-        if (faqCount === 0) {
-            await Faq.insertMany([
-                { pregunta: "🔄 ¿Cómo muevo un producto a 'Vendido'?", respuesta: "Puedes arrastrar la tarjeta del producto hacia la columna 'VENTAS' en el Kanban principal, o editar el producto haciendo click en el botón azul de 'Editar' y cambiar su estado." },
-                { pregunta: "⚡ ¿Cómo aplico acciones masivas?", respuesta: "Selecciona las casillas redondas de varios artículos en el Kanban para desplegar el 'Panel Flotante Oscuro' abajo. Desde ahí podrás ajustar precios o estados en lote." },
-                { pregunta: "📷 ¿Para qué sirve el escáner superior?", respuesta: "Convierte la cámara de tu móvil o tablet en una pistola láser. Imprime las etiquetas con QR de tus prendas, y al escanearlas desde aquí se marcarán automáticamente como Vendidas." },
-                { pregunta: "💸 Gastos Operativos vs Coste de Ropa", respuesta: "El sistema separa tu inversión en 2 bloques para darte un Beneficio Neto real: El Coste Unitario (lo que costó la prenda) y los Gastos Operativos (Alquiler, cajas, luz) que se añaden en la sección de Gastos." }
-            ]);
-            console.log('[INIT] FAQs predeterminadas inyectadas.');
-        }
-        
-        // Auto-poblar Configuración Kanban si está vacío
-        const estadoCount = await EstadoKanban.countDocuments();
-        if (estadoCount === 0) {
+        };
+
+        await migrateCollection(VentaRopa, 'VentaRopa');
+        await migrateCollection(Cliente, 'Cliente');
+        await migrateCollection(Gasto, 'Gasto');
+        await migrateCollection(Tienda, 'Tienda');
+        await migrateCollection(Categoria, 'Categoria');
+        await migrateCollection(EstadoKanban, 'EstadoKanban');
+        await migrateCollection(LogAuditoria, 'LogAuditoria');
+        await migrateCollection(Tarea, 'Tarea');
+        await migrateCollection(Faq, 'Faq');
+        await migrateCollection(Nota, 'Nota');
+
+        // Seedear datos si el negocio legacy no los tiene, lo que arregla el problema de visualización.
+        const legacyEstadoCount = await EstadoKanban.countDocuments({ negocio: seychellesOriginal._id });
+        if (legacyEstadoCount === 0) {
             await EstadoKanban.insertMany([
-                { nombre: 'No Vendido', icono: '📦', color: 'amber', rolFinanciero: 'Stock', orden: 1 },
-                { nombre: 'Vendido', icono: '💰', color: 'emerald', rolFinanciero: 'Venta', orden: 2 },
-                { nombre: 'Reservado', icono: '🤝', color: 'indigo', rolFinanciero: 'Stock', orden: 3 },
-                { nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
+                { negocio: seychellesOriginal._id, nombre: 'No Vendido', icono: '📦', color: 'amber', rolFinanciero: 'Stock', orden: 1 },
+                { negocio: seychellesOriginal._id, nombre: 'Vendido', icono: '💰', color: 'emerald', rolFinanciero: 'Venta', orden: 2 },
+                { negocio: seychellesOriginal._id, nombre: 'Reservado', icono: '🤝', color: 'indigo', rolFinanciero: 'Stock', orden: 3 },
+                { negocio: seychellesOriginal._id, nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
             ]);
-        } else {
-            // Migración forzada para corregir el orden de las columnas en bases de datos que ya existían
-            const estVendido = await EstadoKanban.findOne({ nombre: 'Vendido' });
-            const estReservado = await EstadoKanban.findOne({ nombre: 'Reservado' });
-            if (estVendido && estReservado && estVendido.orden > estReservado.orden) {
-                await EstadoKanban.updateOne({ nombre: 'Vendido' }, { orden: 2 });
-                await EstadoKanban.updateOne({ nombre: 'Reservado' }, { orden: 3 });
-            }
-        }
-
-        // Auto-poblar Tareas predeterminadas si está vacío
-        const tareaCount = await Tarea.countDocuments();
-        if (tareaCount === 0) {
-            await Tarea.insertMany([
-                { titulo: "📦 Inventariar nueva colección", descripcion: "Subir fotos, añadir tallas y establecer el margen de beneficio en el sistema.", estado: "Pendiente", prioridad: "Alta" },
-                { titulo: "📸 Actualizar catálogo online", descripcion: "Sincronizar artículos nuevos con Vinted / Wallapop usando el Scraper.", estado: "En Proceso", prioridad: "Media" },
-                { titulo: "🛍️ Revisar stock de packaging", descripcion: "Comprobar si quedan suficientes cajas y bolsas de envío para esta semana.", estado: "Pendiente", prioridad: "Media" },
-                { titulo: "🧾 Cuadrar contabilidad mensual", descripcion: "Exportar el Excel y revisar los Gastos Operativos (OpEx) del mes.", estado: "Completada", prioridad: "Baja" }
-            ]);
-            console.log('[INIT] Tareas predeterminadas inyectadas.');
+            console.log('[MIGRATION] Inyectados estados Kanban para "Seychelles Original".');
         }
     })
     .catch(err => console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err));
@@ -998,12 +957,41 @@ app.delete('/api/gastos/:id', exigeEditor, async (req, res) => {
     } catch (e) { res.status(500).send(e); }
 });
 
+// --- Rutas de Personalización del Negocio ---
+app.get('/api/negocio/detalles', exigeLogin, async (req, res) => {
+    try {
+        const negocio = await Negocio.findById(req.session.negocioId).lean();
+        if (!negocio) return res.status(404).json({ error: 'Negocio no encontrado.' });
+        res.json(negocio);
+    } catch (e) {
+        res.status(500).json({ error: 'Error al obtener detalles del negocio.' });
+    }
+});
+
+app.put('/api/negocio/ajustes', exigeAdmin, async (req, res) => {
+    try {
+        const { nombreVisible } = req.body;
+        const negocio = await Negocio.findByIdAndUpdate(
+            req.session.negocioId,
+            { nombreVisible },
+            { new: true }
+        ).lean();
+        await registrarLog(req.session.email, `Actualizó los ajustes del negocio. Nuevo nombre: ${nombreVisible}`, {}, req.session.negocioId);
+        res.json(negocio);
+    } catch (e) {
+        res.status(500).json({ error: 'Error al actualizar los ajustes del negocio.' });
+    }
+});
+
 app.get('/api/ventas', exigeLogin, async (req, res) => {
     try {
-        const ventasRaw = await VentaRopa.find({ negocio: req.session.negocioId }).populate('tienda').sort({ _id: -1 }).lean();
-        const logs = await LogAuditoria.find({ negocio: req.session.negocioId }).sort({ _id: -1 }).limit(50).lean();
-        const gastosExtra = await Gasto.find({ negocio: req.session.negocioId }).lean();
-        const estadosKanban = await EstadoKanban.find({ negocio: req.session.negocioId }).lean();
+        // Optimización: Ejecutar consultas en paralelo para mejorar la velocidad de carga.
+        const [ventasRaw, logs, gastosExtra, estadosKanban] = await Promise.all([
+            VentaRopa.find({ negocio: req.session.negocioId }).populate('tienda').sort({ _id: -1 }).lean(),
+            LogAuditoria.find({ negocio: req.session.negocioId }).sort({ _id: -1 }).limit(50).lean(),
+            Gasto.find({ negocio: req.session.negocioId }).lean(),
+            EstadoKanban.find({ negocio: req.session.negocioId }).lean()
+        ]);
         const nombresEstadosVenta = estadosKanban.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
         
         let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, totalGastosOperativos = 0, costeVendidosTotal = 0;
@@ -1178,7 +1166,7 @@ app.post('/api/auth/setup', async (req, res) => {
             return res.status(400).json({ error: 'El nombre del negocio ya está en uso. Por favor, elige otro.' });
         }
 
-        const nuevoNegocio = new Negocio({ nombre: negocioNombre, tipo: tipoNegocio || 'General', plan: 'free' });
+        const nuevoNegocio = new Negocio({ nombre: negocioNombre, nombreVisible: negocioNombre, tipo: tipoNegocio || 'General', plan: 'free' });
         await nuevoNegocio.save();
 
 
@@ -1189,14 +1177,45 @@ app.post('/api/auth/setup', async (req, res) => {
         });
         await adminUser.save();
 
-        // 🟢 SEED DEFAULT KANBAN STATES FOR THE NEW BUSINESS
-        const defaultStates = [
-            { negocio: nuevoNegocio._id, nombre: 'No Vendido', icono: '📦', color: 'amber', rolFinanciero: 'Stock', orden: 1 },
-            { negocio: nuevoNegocio._id, nombre: 'Vendido', icono: '💰', color: 'emerald', rolFinanciero: 'Venta', orden: 2 },
-            { negocio: nuevoNegocio._id, nombre: 'Reservado', icono: '🤝', color: 'indigo', rolFinanciero: 'Stock', orden: 3 },
-            { negocio: nuevoNegocio._id, nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
+        // 🟢 INYECCIÓN DE DATOS INICIALES PARA EL NUEVO NEGOCIO
+        const negocioId = nuevoNegocio._id;
+
+        // Estados Kanban por defecto
+        await EstadoKanban.insertMany([
+            { negocio: negocioId, nombre: 'No Vendido', icono: '📦', color: 'amber', rolFinanciero: 'Stock', orden: 1 },
+            { negocio: negocioId, nombre: 'Vendido', icono: '💰', color: 'emerald', rolFinanciero: 'Venta', orden: 2 },
+            { negocio: negocioId, nombre: 'Reservado', icono: '🤝', color: 'indigo', rolFinanciero: 'Stock', orden: 3 },
+            { negocio: negocioId, nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
+        ]);
+
+        // Tiendas por defecto
+        await Tienda.insertMany([
+            { negocio: negocioId, nombre: 'Tienda Física' }, { negocio: negocioId, nombre: 'Vinted' }, { negocio: negocioId, nombre: 'Wallapop' }
+        ]);
+
+        // Categorías por defecto
+        const defaultCats = [
+            '👕 Camisetas', '🧥 Sudaderas', '👖 Pantalones', '👗 Vestidos', '👜 Accesorios', '👟 Zapatos', '👔 Camisas'
         ];
-        await EstadoKanban.insertMany(defaultStates);
+        await Categoria.insertMany(defaultCats.map(n => ({ negocio: negocioId, nombre: n })));
+
+        // FAQs por defecto
+        await Faq.insertMany([
+            { negocio: negocioId, pregunta: "🔄 ¿Cómo muevo un producto a 'Vendido'?", respuesta: "Puedes arrastrar la tarjeta del producto hacia la columna 'VENTAS' en el Kanban principal, o editar el producto haciendo click en el botón azul de 'Editar' y cambiar su estado." },
+            { negocio: negocioId, pregunta: "⚡ ¿Cómo aplico acciones masivas?", respuesta: "Selecciona las casillas redondas de varios artículos en el Kanban para desplegar el 'Panel Flotante Oscuro' abajo. Desde ahí podrás ajustar precios o estados en lote." },
+            { negocio: negocioId, pregunta: "📷 ¿Para qué sirve el escáner superior?", respuesta: "Convierte la cámara de tu móvil o tablet en una pistola láser. Imprime las etiquetas con QR de tus prendas, y al escanearlas desde aquí se marcarán automáticamente como Vendidas." },
+            { negocio: negocioId, pregunta: "💸 Gastos Operativos vs Coste de Ropa", respuesta: "El sistema separa tu inversión en 2 bloques para darte un Beneficio Neto real: El Coste Unitario (lo que costó la prenda) y los Gastos Operativos (Alquiler, cajas, luz) que se añaden en la sección de Gastos." }
+        ]);
+
+        // Tareas de ejemplo
+        await Tarea.insertMany([
+            { negocio: negocioId, titulo: "📦 Inventariar nueva colección", descripcion: "Subir fotos, añadir tallas y establecer el margen de beneficio en el sistema.", estado: "Pendiente", prioridad: "Alta" },
+            { negocio: negocioId, titulo: "📸 Actualizar catálogo online", descripcion: "Sincronizar artículos nuevos con Vinted / Wallapop usando el Scraper.", estado: "En Proceso", prioridad: "Media" },
+            { negocio: negocioId, titulo: "🛍️ Revisar stock de packaging", descripcion: "Comprobar si quedan suficientes cajas y bolsas de envío para esta semana.", estado: "Pendiente", prioridad: "Media" },
+            { negocio: negocioId, titulo: "🧾 Cuadrar contabilidad mensual", descripcion: "Exportar el Excel y revisar los Gastos Operativos (OpEx) del mes.", estado: "Completada", prioridad: "Baja" }
+        ]);
+
+        console.log(`[SETUP] Inyectados datos iniciales para el nuevo negocio: ${negocioNombre}`);
 
         req.session.email = adminUser.email;
         req.session.rol = adminUser.rol;

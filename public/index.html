@@ -27,7 +27,7 @@
     <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
     <script src="//unpkg.com/three@0.159.0/build/three.min.js"></script>
     <script src="//unpkg.com/three-globe@2.31.0/dist/three-globe.min.js"></script>
-    <script src="https://js.stripe.com/v3/"></script>
+    <!-- <script src="https://js.stripe.com/v3/"></script> -->
     <script src="//unpkg.com/three@0.159.0/examples/js/controls/OrbitControls.js"></script>
     <script src="//unpkg.com/three@0.159.0/examples/js/postprocessing/EffectComposer.js"></script>
     <script src="//unpkg.com/three@0.159.0/examples/js/postprocessing/RenderPass.js"></script>
@@ -257,6 +257,10 @@
         </div>
 
         <div id="panel-control" class="hidden max-w-7xl mx-auto px-4 py-6">
+            <div id="beta-banner" class="bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold p-3 rounded-2xl mb-6 text-center shadow-lg">
+                <span class="font-black">MODO BETA:</span> El sistema de pagos está en construcción. ¡Disfruta de todas las funciones avanzadas de forma gratuita!
+            </div>
+
             <header class="flex flex-col lg:flex-row justify-between items-center gap-4 border-b border-current/10 pb-6 mb-6">
                 <div class="flex items-center gap-4">
                     <div>
@@ -1056,18 +1060,18 @@
                                     <p class="font-bold text-amber-400">Plan Profesional</p>
                                     <p class="text-xs opacity-60">9.99€/mes - Ideal para crecer</p>
                                 </div>
-                                <button onclick="upgradePlan('pro')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg text-sm">Mejorar</button>
+                                <button onclick="alert('El sistema de pagos está en construcción. ¡Próximamente disponible!')" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded-lg text-sm cursor-not-allowed opacity-70">Próximamente</button>
                             </div>
                             <div class="p-4 bg-black/20 rounded-xl border border-white/10 flex justify-between items-center mt-3">
                                 <div>
                                     <p class="font-bold text-purple-400">Plan Empresa</p>
                                     <p class="text-xs opacity-60">29.99€/mes - Sin límites</p>
                                 </div>
-                                <button onclick="upgradePlan('business')" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg text-sm">Mejorar</button>
+                                <button onclick="alert('El sistema de pagos está en construcción. ¡Próximamente disponible!')" class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg text-sm cursor-not-allowed opacity-70">Próximamente</button>
                             </div>
                         </div>
                         <div id="manage-subscription-option" class="hidden pt-4 border-t border-white/10">
-                             <button onclick="manageSubscription()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-sm">Gestionar mi Suscripción (Facturas, Cancelar...)</button>
+                             <button onclick="alert('El portal de clientes para gestionar tu suscripción estará disponible pronto.')" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-sm cursor-not-allowed opacity-70">Gestionar Suscripción</button>
                         </div>
                     </div>
                 </div>
@@ -2448,65 +2452,6 @@
             if (CAL_STOCK_MES > 12) { CAL_STOCK_MES = 1; CAL_STOCK_ANIO++; }
             if (CAL_STOCK_MES < 1) { CAL_STOCK_MES = 12; CAL_STOCK_ANIO--; }
             renderCalendarioStock();
-        }
-
-        async function renderizarMiCuenta() {
-            try {
-                const res = await fetch('/api/account/stats', { credentials: 'include' });
-                if (!res.ok) throw new Error('No se pudo cargar la información de la cuenta.');
-                const data = await res.json();
-
-                const planName = data.plan.charAt(0).toUpperCase() + data.plan.slice(1);
-                document.getElementById('account-plan-name').textContent = planName;
-
-                // Actualizar barras de progreso
-                const updateProgress = (type, usage, limit) => {
-                    const usageText = document.getElementById(`${type}-usage-text`);
-                    const progressBar = document.getElementById(`${type}-progress-bar`);
-                    if (!usageText || !progressBar) return;
-
-                    const isInfinite = limit === Infinity || !isFinite(limit);
-                    usageText.textContent = `${usage} / ${isInfinite ? '∞' : limit}`;
-                    const percentage = isInfinite ? 100 : (usage / limit) * 100;
-                    progressBar.style.width = `${Math.min(percentage, 100)}%`;
-                };
-
-                updateProgress('products', data.usage.products, data.limits.products);
-                updateProgress('clients', data.usage.clients, data.limits.clients);
-                updateProgress('users', data.usage.users, data.limits.users);
-
-                // Mostrar/ocultar opciones de mejora/gestión
-                if (data.plan === 'free') {
-                    document.getElementById('upgrade-options').classList.remove('hidden');
-                    document.getElementById('manage-subscription-option').classList.add('hidden');
-                } else {
-                    document.getElementById('upgrade-options').classList.add('hidden');
-                    document.getElementById('manage-subscription-option').classList.remove('hidden');
-                }
-
-            } catch (error) {
-                console.error(error);
-                document.getElementById('account-plan-name').textContent = 'Error';
-            }
-        }
-
-        async function upgradePlan(planType) {
-            const priceIds = {
-                pro: process.env.STRIPE_PRICE_ID_PRO,
-                business: process.env.STRIPE_PRICE_ID_BUSINESS
-            };
-            const priceId = priceIds[planType];
-            if (!priceId) return alert('Plan no válido o Price ID no configurado en las variables de entorno.');
-
-            const res = await fetch('/api/stripe/create-checkout-session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ priceId }) });
-            const { url } = await res.json();
-            window.location = url;
-        }
-
-        async function manageSubscription() {
-            const res = await fetch('/api/stripe/portal-session', { method: 'POST', credentials: 'include' });
-            const { url } = await res.json();
-            window.location = url;
         }
 
         function renderCalendarioStock() {
@@ -4859,16 +4804,10 @@
                     document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario.split('@')[0]} [${data.rol}]`; 
 
                     const planContainer = document.getElementById('plan-badge-container');
-                    if (data.plan === 'free') {
-                        planContainer.innerHTML = `<a href="landing.html#pricing" target="_blank" class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md hover:bg-amber-500/20 transition-colors animate-pulse">
-                            <span>🚀</span> Mejorar Plan
-                        </a>`;
-                    } else {
-                        const planName = data.plan || 'Profesional';
-                        planContainer.innerHTML = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md">
-                            <span>👑</span> Plan ${planName.charAt(0).toUpperCase() + planName.slice(1)}
-                        </span>`;
-                    }
+                    const planName = 'Business (Beta)';
+                    planContainer.innerHTML = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md">
+                        <span>👑</span> Plan ${planName}
+                    </span>`;
                     
                     // --- LÓGICA DE PERMISOS POR ROL ---
                     if (ROL_USUARIO_ACTUAL === 'Lector') {

@@ -522,6 +522,26 @@ app.post('/api/auth/google', async (req, res) => {
         let usuario = await UsuarioAutorizado.findOne({ email }).populate('negocio');
 
         if (usuario) {
+            // FIX: Añadido un guardián para usuarios sin negocio válido.
+            // Esto previene un crash si un usuario existe pero su negocio asociado fue eliminado.
+            if (!usuario.negocio) {
+                console.error(`[AUTH ERROR] El usuario ${email} existe pero no está vinculado a un negocio válido. Esto puede ser un problema de datos huérfanos.`);
+                // Intento de auto-reparación para los usuarios legacy.
+                if (['dannymedinacoronel@gmail.com', 'juliamugo2001@gmail.com'].includes(email)) {
+                    let seychellesOriginal = await Negocio.findOne({ nombre: 'Seychelles Original' });
+                    if (!seychellesOriginal) { // Si ni siquiera el negocio legacy existe, lo crea.
+                        seychellesOriginal = new Negocio({ nombre: 'Seychelles Original', nombreVisible: 'Seychelles Shop' });
+                        await seychellesOriginal.save();
+                    }
+                    usuario.negocio = seychellesOriginal._id;
+                    await usuario.save();
+                    console.log(`[AUTH FIX] Se ha re-vinculado al usuario ${email} con el negocio por defecto.`);
+                    usuario = await UsuarioAutorizado.findOne({ email }).populate('negocio'); // Recargar el usuario con el negocio populado.
+                } else {
+                     return res.status(403).json({ error: 'Tu cuenta de usuario está registrada pero no está vinculada a ningún negocio. Por favor, contacta al administrador.' });
+                }
+            }
+
             req.session.email = usuario.email;
             req.session.rol = usuario.rol;
             req.session.negocioId = usuario.negocio._id;

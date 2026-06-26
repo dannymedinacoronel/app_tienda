@@ -7,9 +7,6 @@
     <!-- Mismo favicon que la app -->
     <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌺</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/particles.js/2.0.0/particles.min.js"></script>
-    <!-- Importamos un modelo de Three.js / Canvas para hacer el fondo 3D brutal -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body { margin: 0; background-color: #0A0A12; color: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; overflow-x: hidden; }
         #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -2; opacity: 0.7; }
@@ -67,7 +64,7 @@
 
         <div class="mt-20 w-full max-w-6xl mx-auto relative fade-in-up" style="animation-delay: 0.7s; perspective: 1000px;">
             <div class="absolute inset-0 bg-gradient-to-b from-transparent to-[#0A0A12] z-10 bottom-0 top-1/2"></div>
-            <img src="dashboard_main.png" alt="Dashboard Principal" class="mockup-img w-full transform rotateX-[10deg] scale-105 opacity-80" style="transform: rotateX(15deg) scale(0.95); box-shadow: 0 -20px 60px rgba(99,102,241,0.2);">
+            <img src="dashboard_main.png" alt="Dashboard Principal" class="mockup-img w-full transform rotateX-[10deg] scale-105 opacity-80" loading="lazy" style="transform: rotateX(15deg) scale(0.95); box-shadow: 0 -20px 60px rgba(99,102,241,0.2);">
         </div>
 
         <div class="scroll-indicator opacity-50">
@@ -83,7 +80,7 @@
             <!-- Bloque 1: Kanban -->
             <div class="flex flex-col md:flex-row items-center gap-16 mb-32">
                 <div class="w-full md:w-1/2">
-                    <img src="kanban.png" alt="Kanban Dinámico" class="mockup-img w-full">
+                    <img src="kanban.png" alt="Kanban Dinámico" class="mockup-img w-full" loading="lazy">
                 </div>
                 <div class="w-full md:w-1/2 space-y-6">
                     <div class="w-12 h-12 bg-indigo-500/20 rounded-xl flex items-center justify-center text-indigo-400 text-2xl border border-indigo-500/30">📋</div>
@@ -99,7 +96,7 @@
             <!-- Bloque 2: Contabilidad -->
             <div class="flex flex-col md:flex-row-reverse items-center gap-16 mb-32">
                 <div class="w-full md:w-1/2">
-                    <img src="analytics.png" alt="Contabilidad y Analítica" class="mockup-img w-full">
+                    <img src="analytics.png" alt="Contabilidad y Analítica" class="mockup-img w-full" loading="lazy">
                 </div>
                 <div class="w-full md:w-1/2 space-y-6">
                     <div class="w-12 h-12 bg-emerald-500/20 rounded-xl flex items-center justify-center text-emerald-400 text-2xl border border-emerald-500/30">📈</div>
@@ -116,7 +113,7 @@
             <div class="flex flex-col md:flex-row items-center gap-16">
                 <div class="w-full md:w-1/2 relative">
                     <div class="absolute -inset-4 bg-gradient-to-r from-blue-600 to-purple-600 blur-2xl opacity-20 rounded-full"></div>
-                    <img src="crm.png" alt="Gestión de Roles" class="mockup-img w-full relative z-10">
+                    <img src="crm.png" alt="Gestión de Roles" class="mockup-img w-full relative z-10" loading="lazy">
                 </div>
                 <div class="w-full md:w-1/2 space-y-6">
                     <div class="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center text-purple-400 text-2xl border border-purple-500/30">👥</div>
@@ -204,7 +201,10 @@
     </section>
 
     <!-- Scripts de interactividad y 3D -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/particles.js/2.0.0/particles.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
     <script>
+        document.addEventListener('DOMContentLoaded', () => {
         // 1. Partículas
         particlesJS("particles-js", {
             "particles": {
@@ -290,6 +290,7 @@
             el.style.transform = 'translateY(40px)';
             el.style.transition = 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)';
             observer.observe(el);
+        });
         });
     </script>
 </body>

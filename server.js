@@ -175,7 +175,6 @@ const UsuarioAutorizadoSchema = new mongoose.Schema({
     negocio: { type: mongoose.Schema.Types.ObjectId, ref: 'Negocio' },
     rol: { type: String, enum: ['Admin', 'Manager', 'Editor', 'Employee', 'Lector', 'Accountant'], default: 'Admin' },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    rol: { type: String, enum: ['Admin', 'Editor', 'Lector'], default: 'Editor' },
     fechaAgregado: { type: Date, default: Date.now },
     ultimaConexion: { type: Date }
 });
@@ -408,7 +407,7 @@ app.post('/api/categorias', exigeAdmin, async (req, res) => {
         if (!nombreLimpio) return res.status(400).json({ error: 'Nombre requerido.' });
         const nueva = new Categoria({ nombre: nombreLimpio });
         await nueva.save();
-        await registrarLog(req.session.email, `Creó nueva categoría: ${nombreLimpio}`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Creó nueva categoría: ${nombreLimpio}`, req.session.negocioId);
         res.json({ status: 'success', categoria: nueva });
     } catch (e) { res.status(400).json({ error: 'La categoría ya existe.' }); }
 });
@@ -418,7 +417,7 @@ app.put('/api/categorias/:id', exigeAdmin, async (req, res) => {
         const { id } = req.params;
         const { nombre } = req.body;
         const cat = await Categoria.findByIdAndUpdate(id, { nombre }, { new: true });
-        await registrarLog(req.session.email, `Modificó categoría: ${nombre}`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Modificó categoría: ${nombre}`, req.session.negocioId);
         res.json(cat);
     } catch (e) { res.status(400).json({ error: 'Error al actualizar categoría.' }); }
 });
@@ -429,7 +428,7 @@ app.delete('/api/categorias/:id', exigeAdmin, async (req, res) => {
         const cat = await Categoria.findById(id);
         if (!cat) return res.status(404).json({ error: 'No existe.' });
         await Categoria.findOneAndDelete({ _id: id, negocio: req.session.negocioId });
-        await registrarLog(req.session.email, `Eliminó categoría: ${cat.nombre}`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Eliminó categoría: ${cat.nombre}`, req.session.negocioId);
         res.sendStatus(200);
     } catch (e) { res.status(500).json({ error: 'Error al purgar categoría.' }); }
 });
@@ -452,7 +451,7 @@ app.post('/api/tiendas', exigeAdmin, async (req, res) => {
 
         const nuevaTienda = new Tienda({ nombre: nombreLimpio });
         await nuevaTienda.save();
-        await registrarLog(req.session.email, `Creó la tienda en MongoDB: ${nuevaTienda.nombre}`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Creó la tienda en MongoDB: ${nuevaTienda.nombre}`, req.session.negocioId);
         res.json({ status: 'success', tienda: nuevaTienda });
     } catch (e) {
         res.status(400).json({ error: 'La tienda ya existe o hay un error de validación.' });
@@ -471,7 +470,7 @@ app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
         await VentaRopa.updateMany({ tienda: id }, { $unset: { tienda: 1 } });
         await Tienda.findOneAndDelete({ _id: id, negocio: req.session.negocioId });
 
-        await registrarLog(req.session.email, `Eliminó la tienda "${tiendaPorBorrar.nombre}".`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Eliminó la tienda "${tiendaPorBorrar.nombre}".`, req.session.negocioId);
         return res.sendStatus(200);
     } catch (err) {
         console.error("Error al borrar tienda:", err);
@@ -567,7 +566,7 @@ app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
         if (!emailLimpio) return res.status(400).json({ error: 'Email requerido.' });
         const nuevo = new UsuarioAutorizado({ email: emailLimpio, rol: rolAsignado });
         await nuevo.save();
-        await registrarLog(req.session.email, `Autorizó cuenta: ${emailLimpio} [Rol: ${rolAsignado}]`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Autorizó cuenta: ${emailLimpio} [Rol: ${rolAsignado}]`, req.session.negocioId);
         res.json(nuevo);
     } catch (e) { res.status(400).json({ error: 'El usuario ya está autorizado en la lista.' }); }
 });
@@ -577,7 +576,7 @@ app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
         const u = await UsuarioAutorizado.findById(req.params.id);
         if (u) {
             await UsuarioAutorizado.findByIdAndDelete(req.params.id);
-            await registrarLog(req.session.email, `Revocó el acceso permanente a: ${u.email}`, {}, req.session.negocioId);
+            await registrarLog(req.session.email, `Revocó el acceso permanente a: ${u.email}`, req.session.negocioId);
         }
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
@@ -591,28 +590,28 @@ app.post('/api/tareas', exigeAdmin, async (req, res) => {
     try {
         const nueva = new Tarea(req.body);
         await nueva.save();
-        await registrarLog(req.session.email, `Creó una tarea: ${nueva.titulo}`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Creó una tarea: ${nueva.titulo}`, req.session.negocioId);
         res.json(nueva);
     } catch (e) { res.status(400).send(e); }
 });
 app.put('/api/tareas/:id', exigeAdmin, async (req, res) => {
     try {
         const tarea = await Tarea.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        await registrarLog(req.session.email, `Actualizó la tarea: ${tarea.titulo}`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Actualizó la tarea: ${tarea.titulo}`, req.session.negocioId);
         res.json(tarea);
     } catch (e) { res.status(400).send(e); }
 });
 app.put('/api/tareas/:id/estado', exigeAdmin, async (req, res) => {
     try {
         const tarea = await Tarea.findByIdAndUpdate(req.params.id, { estado: req.body.estado }, { new: true });
-        await registrarLog(req.session.email, `Movió tarea a ${req.body.estado}: ${tarea.titulo}`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Movió tarea a ${req.body.estado}: ${tarea.titulo}`, req.session.negocioId);
         res.json(tarea);
     } catch (e) { res.status(400).send(e); }
 });
 app.delete('/api/tareas/:id', exigeAdmin, async (req, res) => {
     try {
         const tarea = await Tarea.findOneAndDelete({ _id: req.params.id, negocio: req.session.negocioId });
-        if(tarea) await registrarLog(req.session.email, `Eliminó la tarea: ${tarea.titulo}`, {}, req.session.negocioId);
+        if(tarea) await registrarLog(req.session.email, `Eliminó la tarea: ${tarea.titulo}`, req.session.negocioId);
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
 });
@@ -624,17 +623,17 @@ app.get('/api/faqs', exigeAdmin, async (req, res) => {
 app.post('/api/faqs', exigeAdmin, async (req, res) => {
     try {
         const nueva = new Faq(req.body); await nueva.save();
-        await registrarLog(req.session.email, `Añadió nueva FAQ`, {}, req.session.negocioId); res.json(nueva);
+        await registrarLog(req.session.email, `Añadió nueva FAQ`, req.session.negocioId); res.json(nueva);
     } catch (e) { res.status(400).send(e); }
 });
 app.put('/api/faqs/:id', exigeAdmin, async (req, res) => {
     try {
         const f = await Faq.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        await registrarLog(req.session.email, `Modificó una FAQ`, {}, req.session.negocioId); res.json(f);
+        await registrarLog(req.session.email, `Modificó una FAQ`, req.session.negocioId); res.json(f);
     } catch (e) { res.status(400).send(e); }
 });
 app.delete('/api/faqs/:id', exigeAdmin, async (req, res) => {
-    try { await Faq.findOneAndDelete({ _id: req.params.id, negocio: req.session.negocioId }); await registrarLog(req.session.email, `Eliminó una FAQ`, {}, req.session.negocioId); res.sendStatus(200); } catch (e) { res.status(500).send(e); }
+    try { await Faq.findOneAndDelete({ _id: req.params.id, negocio: req.session.negocioId }); await registrarLog(req.session.email, `Eliminó una FAQ`, req.session.negocioId); res.sendStatus(200); } catch (e) { res.status(500).send(e); }
 });
 
 // --- Rutas de Ajustes del Tablero Kanban ---
@@ -644,19 +643,19 @@ app.get('/api/estados-kanban', exigeAdmin, async (req, res) => {
 app.post('/api/estados-kanban', exigeAdmin, async (req, res) => {
     try {
         const nuevo = new EstadoKanban({ ...req.body, negocio: req.session.negocioId }); await nuevo.save();
-        await registrarLog(req.session.email, `Creó el estado Kanban: ${nuevo.nombre}`, {}, req.session.negocioId); res.json(nuevo);
+        await registrarLog(req.session.email, `Creó el estado Kanban: ${nuevo.nombre}`, req.session.negocioId); res.json(nuevo);
     } catch (e) { res.status(400).send(e); }
 });
 app.put('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
     try {
         const estado = await EstadoKanban.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        await registrarLog(req.session.email, `Modificó estado Kanban: ${estado.nombre}`, {}, req.session.negocioId); res.json(estado);
+        await registrarLog(req.session.email, `Modificó estado Kanban: ${estado.nombre}`, req.session.negocioId); res.json(estado);
     } catch (e) { res.status(400).send(e); }
 });
 app.delete('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
     try {
         const estado = await EstadoKanban.findOneAndDelete({ _id: req.params.id, negocio: req.session.negocioId });
-        if(estado) await registrarLog(req.session.email, `Eliminó el estado Kanban: ${estado.nombre}`, {}, req.session.negocioId); res.sendStatus(200);
+        if(estado) await registrarLog(req.session.email, `Eliminó el estado Kanban: ${estado.nombre}`, req.session.negocioId); res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
 });
 
@@ -788,13 +787,13 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
             try {
                 if (actionType === 'ACTUALIZAR_PRECIO' && params.sku && params.precio) {
                     await VentaRopa.findOneAndUpdate({ sku: params.sku }, { precioVenta: parseFloat(params.precio) });
-                    await registrarLog(req.session.email, `IA actualizó precio de ${params.sku}`, {}, req.session.negocioId);
+                    await registrarLog(req.session.email, `IA actualizó precio de ${params.sku}`, req.session.negocioId);
                 } else if (actionType === 'CAMBIAR_ESTADO' && params.sku && params.estado) {
                     await VentaRopa.findOneAndUpdate({ sku: params.sku }, { estado: params.estado });
-                    await registrarLog(req.session.email, `IA cambió estado de ${params.sku} a ${params.estado}`, {}, req.session.negocioId);
+                    await registrarLog(req.session.email, `IA cambió estado de ${params.sku} a ${params.estado}`, req.session.negocioId);
                 } else if (actionType === 'BORRAR_PRODUCTO' && params.sku) {
                     await VentaRopa.findOneAndDelete({ sku: params.sku });
-                    await registrarLog(req.session.email, `IA borró producto ${params.sku}`, {}, req.session.negocioId);
+                    await registrarLog(req.session.email, `IA borró producto ${params.sku}`, req.session.negocioId);
                 } else if (actionType === 'CREAR_PRODUCTO' && params.prenda) {
                     const nuevo = new VentaRopa({
                         sku: `IA-${Date.now().toString().slice(-6)}`,
@@ -803,7 +802,7 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
                         imagen: imagen || '' // Se guarda la foto que le pasaste en el chat directamente en la ficha del producto!
                     });
                     await nuevo.save();
-                    await registrarLog(req.session.email, `IA creó producto ${params.prenda}`, {}, req.session.negocioId);
+                    await registrarLog(req.session.email, `IA creó producto ${params.prenda}`, req.session.negocioId);
                 }
             } catch(e) { console.error("Error ejecutando orden de IA:", e); }
         }
@@ -928,14 +927,14 @@ app.post('/api/clientes', exigeAdmin, async (req, res) => {
     try {
         const nuevo = new Cliente({ ...req.body, negocio: req.session.negocioId });
         await nuevo.save();
-        await registrarLog(req.session.email, `Registró cliente: ${nuevo.nombre}`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Registró cliente: ${nuevo.nombre}`, req.session.negocioId);
         res.json(nuevo);
     } catch (e) { res.status(400).send(e); }
 });
 app.put('/api/clientes/:id', exigeAdmin, async (req, res) => {
     try {
         const cliente = await Cliente.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        await registrarLog(req.session.email, `Actualizó datos del cliente: ${cliente.nombre}`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Actualizó datos del cliente: ${cliente.nombre}`, req.session.negocioId);
         notificarCambio(); // Notificar cambio para refrescar la lista de clientes en otros navegadores
         res.json(cliente);
     } catch (e) { res.status(400).send(e); }
@@ -956,7 +955,7 @@ app.post('/api/gastos', exigeAdmin, async (req, res) => {
     try {
         const nuevo = new Gasto({ ...req.body, negocio: req.session.negocioId });
         await nuevo.save();
-        await registrarLog(req.session.email, `Registró gasto: ${nuevo.concepto} (${nuevo.monto}€)`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Registró gasto: ${nuevo.concepto} (${nuevo.monto}€)`, req.session.negocioId);
         res.json(nuevo);
     } catch (e) { res.status(400).send(e); }
 });
@@ -1022,7 +1021,7 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
 
         const nuevaVenta = new VentaRopa({ ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null });
         await nuevaVenta.save(); 
-        await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`, req.session.negocioId);
         return res.json({ status: "success", venta: nuevaVenta });
     } catch (error) { 
         return res.status(500).json({ error: 'Error al registrar artículo.' }); 
@@ -1042,7 +1041,7 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
             { new: true }
         );
 
-        await registrarLog(req.session.email, `Modificó datos de la prenda ID: ${id} (${ventaActualizada.prenda})`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Modificó datos de la prenda ID: ${id} (${ventaActualizada.prenda})`, req.session.negocioId);
         return res.json({ status: "success", venta: ventaActualizada });
     } catch (error) {
         return res.status(500).json({ error: 'Error al actualizar registro.' });
@@ -1064,7 +1063,7 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
         }
 
         const ventaActualizada = await VentaRopa.findByIdAndUpdate(id, updateData, { new: true });
-        await registrarLog(req.session.email, `Transición de estado: [${ventaActualizada.prenda}] -> ${estado.toUpperCase()}`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Transición de estado: [${ventaActualizada.prenda}] -> ${estado.toUpperCase()}`, req.session.negocioId);
         return res.json({ status: "success", venta: ventaActualizada });
     } catch (error) {
         return res.status(500).json({ error: 'Error en la actualización de la columna Kanban.' });
@@ -1112,7 +1111,7 @@ app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
         const { id } = req.params;
         const ventaEliminada = await VentaRopa.findOneAndDelete({ _id: id, negocio: req.session.negocioId });
         if (ventaEliminada) {
-            await registrarLog(req.session.email, `Eliminó permanentemente la prenda: ${ventaEliminada.prenda}`, {}, req.session.negocioId);
+            await registrarLog(req.session.email, `Eliminó permanentemente la prenda: ${ventaEliminada.prenda}`, req.session.negocioId);
         }
         return res.sendStatus(200);
     } catch (error) {
@@ -1156,6 +1155,7 @@ app.post('/api/auth/setup', async (req, res) => {
 
 
         req.session.email = adminUser.email;
+        req.session.esAdmin = true;
         req.session.rol = adminUser.rol;
         req.session.negocioId = nuevoNegocio._id;
 
@@ -1351,7 +1351,7 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
         }
         notificarCambio(); // Notificar cambio para refrescar el panel principal
 
-        await registrarLog(req.session.email, `Importó ${registrosCreados.length} productos desde Vinted: ${registrosCreados.join(', ')}`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Importó ${registrosCreados.length} productos desde Vinted: ${registrosCreados.join(', ')}`, req.session.negocioId);
         res.json({ success: true, count: registrosCreados.length });
     } catch (error) {
         console.error('Error en importación:', error);
@@ -1382,7 +1382,7 @@ app.post('/api/ventas/bulk', exigeAdmin, async (req, res) => {
         }));
 
         const insertados = await VentaRopa.insertMany(productosProcesados);
-        await registrarLog(req.session.email, `Restauración masiva: Insertados ${insertados.length} productos.`, {}, req.session.negocioId);
+        await registrarLog(req.session.email, `Restauración masiva: Insertados ${insertados.length} productos.`, req.session.negocioId);
         res.json({ success: true, count: insertados.length });
     } catch (error) {
         console.error("Error en bulk insert:", error);
@@ -1398,7 +1398,7 @@ app.post('/api/scraper/aplicar', exigeAdmin, async (req, res) => {
         const { cambios } = req.body;
         for (const cambio of cambios) {
             await VentaRopa.findByIdAndUpdate(cambio.idMongo, { precioVenta: cambio.valorNuevo, prenda: cambio.prenda });
-            await registrarLog(req.session.email, `Sincronización artículo: ${cambio.prenda} -> ${cambio.valorNuevo}€`, {}, req.session.negocioId);
+            await registrarLog(req.session.email, `Sincronización artículo: ${cambio.prenda} -> ${cambio.valorNuevo}€`, req.session.negocioId);
         }
         res.json({ success: true });
     } catch (error) {

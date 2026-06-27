@@ -31,17 +31,17 @@
             <div class="space-y-4 text-left">
                 <input type="text" id="setup-business-name" placeholder="Nombre de tu Negocio o Marca" class="w-full bg-slate-800 text-white border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors">
                 <select id="setup-business-type" class="w-full bg-slate-800 text-white border border-slate-600 rounded-lg px-4 py-3 appearance-none focus:outline-none focus:border-blue-500">
-                    <option value="" disabled selected>Tipo de negocio...</option>
+                    <option value="" disabled selected>Selecciona el tipo de negocio...</option>
                     <option value="Tienda de Ropa">🛍️ Tienda de Ropa</option>
                     <option value="Restaurante">🍽️ Restaurante / Cafetería</option>
                     <option value="Servicios">💼 Servicios Profesionales</option>
                     <option value="Otro">⚙️ Otro</option>
                 </select>
                 <select id="setup-user-role" class="w-full bg-slate-800 text-white border border-slate-600 rounded-lg px-4 py-3 appearance-none focus:outline-none focus:border-blue-500 transition-colors">
-                    <option value="" disabled selected>Tu rol en el negocio...</option>
+                    <option value="" disabled selected>¿Cuál es tu rol en el negocio?</option>
                     <option value="Admin">👑 Dueño/a del Negocio (Admin)</option>
-                    <option value="Manager">👔 Manager</option>
-                    <option value="Editor">📝 Editor</option>
+                    <option value="Manager">👔 Gerente de Tienda (Manager)</option>
+                    <option value="Employee">👤 Empleado/a</option>
                 </select>
             </div>
             <button id="btn-submit-setup" onclick="submitSetup()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-lg w-full mt-6 transition-all">Crear mi Espacio de Trabajo</button>

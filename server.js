@@ -284,13 +284,18 @@ mongoose.connect(MONGO_URI_FINAL || 'mongodb://localhost:27017/seychelles_crm')
         // Seedear datos si el negocio legacy no los tiene, lo que arregla el problema de visualización.
         const legacyEstadoCount = await EstadoKanban.countDocuments({ negocio: seychellesOriginal._id });
         if (legacyEstadoCount === 0) {
-            await EstadoKanban.insertMany([
+            const defaultStates = [
                 { negocio: seychellesOriginal._id, nombre: 'No Vendido', icono: '📦', color: 'amber', rolFinanciero: 'Stock', orden: 1 },
                 { negocio: seychellesOriginal._id, nombre: 'Vendido', icono: '💰', color: 'emerald', rolFinanciero: 'Venta', orden: 2 },
                 { negocio: seychellesOriginal._id, nombre: 'Reservado', icono: '🤝', color: 'indigo', rolFinanciero: 'Stock', orden: 3 },
                 { negocio: seychellesOriginal._id, nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
-            ]);
-            console.log('[MIGRATION] Inyectados estados Kanban para "Seychelles Original".');
+            ];
+            // Usamos `updateOne` con `upsert` para evitar errores de duplicados si la operación se interrumpe y se reintenta.
+            // Esto hace que la operación de seeding sea idempotente.
+            for (const state of defaultStates) {
+                await EstadoKanban.updateOne({ negocio: state.negocio, nombre: state.nombre }, { $setOnInsert: state }, { upsert: true });
+            }
+            console.log('[MIGRATION] Inyectados/Verificados estados Kanban para "Seychelles Original".');
         }
     })
     .catch(err => console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err));

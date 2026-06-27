@@ -50,6 +50,17 @@ const SECCIONES_DISPONIBLES = [
     { id: 'sec-mi-cuenta', nombre: '👤 Mi Cuenta', desc: 'Ver uso del plan y gestionar la suscripción.' },
     { id: 'sec-comunicaciones', nombre: '💬 Comms', desc: 'Anuncios globales y chat interno del equipo.' }];
 
+function setTheme(themeName) {
+    const body = document.getElementById('main-body');
+    if (!body) return;
+    // Lista de todos los temas posibles para limpiar
+    const themes = ['theme-dark', 'theme-light', 'theme-pink', 'theme-emerald', 'theme-purple', 'theme-premium'];
+    themes.forEach(t => body.classList.remove(t));
+    // Añadir el nuevo tema
+    body.classList.add(`theme-${themeName}`);
+    localStorage.setItem('seychelles-theme-multi', themeName);
+}
+
 // 📸 LÓGICA DE VISOR Y GALERÍA DE FOTOS
 let ITEM_FOTOS_ACTUAL = null;
 let IDX_FOTO_ACTUAL = -1; 

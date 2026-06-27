@@ -293,19 +293,17 @@ mongoose.connect(MONGO_URI_FINAL || 'mongodb://localhost:27017/seychelles_crm')
             // Usamos `updateOne` con `upsert` para evitar errores de duplicados si la operación se interrumpe y se reintenta.
             // Esto hace que la operación de seeding sea idempotente.
             for (const state of defaultStates) {
-                // La lógica de upsert es idempotente. El error de duplicado se manejará en el catch principal.
-                await EstadoKanban.updateOne({ negocio: state.negocio, nombre: state.nombre }, { $setOnInsert: state }, { upsert: true });
+                try {
+                    await EstadoKanban.updateOne({ negocio: state.negocio, nombre: state.nombre }, { $setOnInsert: state }, { upsert: true });
+                } catch (e) {
+                    if (e.code !== 11000) console.error(`[MIGRATION-ERROR] Seeding de estado fallido: ${state.nombre}`, e);
+                }
             }
             console.log('[MIGRATION] Inyectados/Verificados estados Kanban para "Seychelles Original".');
         }
     })
     .catch(err => {
-        // Si el error es de clave duplicada durante el seeding, es un comportamiento esperado en reinicios y se puede ignorar.
-        if (err.code === 11000) {
-            console.log('[DB-INFO] Se ignoró un error de clave duplicada durante el seeding inicial. El servidor continuará.');
-        } else {
-            console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err);
-        }
+        console.error('Fallo crítico en la conexión con Atlas o en la migración inicial. Verifica tus variables de entorno y la conexión a la base de datos:', err);
     });
 
 const sessionMiddleware = session({

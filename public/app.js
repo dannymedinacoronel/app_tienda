@@ -30,6 +30,11 @@ let GLOBO_INSTANCE = null;
 let FOTOS_FORMULARIO_TEMP = [];
 let ROL_USUARIO_ACTUAL = 'Admin'; // Rol por defecto hasta que se verifique
 let resultadosScraperActual = null;
+let CHAT_USUARIOS = [];
+let CHAT_GRUPOS = [];
+let CHAT_WEBSOCKET = null;
+let CHAT_CONVERSACION_ACTIVA = null; // { tipo: 'user'/'group', id: '...', nombre: '...' }
+let CHAT_NOTIFICACIONES = {}; // { email: count }
 const SECCIONES_DISPONIBLES = [
     { id: 'sec-inventario', nombre: '📦 Panel Inventario', desc: 'Vista principal del Kanban y gestión de productos.' },
     { id: 'sec-tareas', nombre: '✅ Tareas', desc: 'Tablero de tareas pendientes, en proceso y completadas.' },
@@ -42,7 +47,8 @@ const SECCIONES_DISPONIBLES = [
     { id: 'sec-usuarios', nombre: '🔑 Gestión de Acceso', desc: 'Añadir o eliminar usuarios que pueden acceder al sistema.' },
     { id: 'sec-faqs', nombre: '❓ FAQs', desc: 'Crear y editar la base de conocimiento interna.' },
     { id: 'sec-ajustes', nombre: '⚙️ Ajustes', desc: 'Configuración del negocio, Kanban y permisos.' },
-    { id: 'sec-mi-cuenta', nombre: '👤 Mi Cuenta', desc: 'Ver uso del plan y gestionar la suscripción.' }];
+    { id: 'sec-mi-cuenta', nombre: '👤 Mi Cuenta', desc: 'Ver uso del plan y gestionar la suscripción.' },
+    { id: 'sec-comunicaciones', nombre: '💬 Comms', desc: 'Anuncios globales y chat interno del equipo.' }];
 
 // 📸 LÓGICA DE VISOR Y GALERÍA DE FOTOS
 let ITEM_FOTOS_ACTUAL = null;

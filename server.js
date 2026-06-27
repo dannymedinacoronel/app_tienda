@@ -5,6 +5,7 @@ const session = require('express-session');
 const MongoStoreModule = require('connect-mongo'); // Importa el módulo completo
 const mongoose = require('mongoose');
 const path = require('path');
+const { WebSocketServer } = require('ws');
 const axios = require('axios');
 const cheerio = require('cheerio');
 // const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY); // Desactivado temporalmente
@@ -198,6 +199,40 @@ const PermisoSchema = new mongoose.Schema({
 PermisoSchema.index({ negocio: 1, rol: 1 }, { unique: true });
 const Permiso = mongoose.models.Permiso || mongoose.model('Permiso', PermisoSchema);
 
+// Modelo para Anuncios Globales
+const AnuncioSchema = new mongoose.Schema({
+    negocio: { type: mongoose.Schema.Types.ObjectId, ref: 'Negocio', required: true },
+    titulo: { type: String, required: true },
+    mensaje: { type: String, required: true },
+    tipo: { type: String, enum: ['info', 'warning', 'urgent'], default: 'info' },
+    creador: { type: String, required: true },
+    fechaCreacion: { type: Date, default: Date.now },
+    leidoPor: [{ type: String }] // Array de emails de usuarios que lo han leído
+});
+const Anuncio = mongoose.models.Anuncio || mongoose.model('Anuncio', AnuncioSchema);
+
+// Modelo para Mensajes de Chat Interno
+const MensajeChatSchema = new mongoose.Schema({
+    negocio: { type: mongoose.Schema.Types.ObjectId, ref: 'Negocio', required: true },
+    remitenteEmail: { type: String, required: true, lowercase: true, trim: true },
+    destinatarioEmail: { type: String, required: true, lowercase: true, trim: true },
+    contenido: { type: String, required: true },
+    timestamp: { type: Date, default: Date.now },
+    leido: { type: Boolean, default: false }
+});
+MensajeChatSchema.index({ negocio: 1, timestamp: -1 });
+const MensajeChat = mongoose.models.MensajeChat || mongoose.model('MensajeChat', MensajeChatSchema);
+
+// Modelo para Grupos de Chat
+const ChatGroupSchema = new mongoose.Schema({
+    negocio: { type: mongoose.Schema.Types.ObjectId, ref: 'Negocio', required: true },
+    nombre: { type: String, required: true, trim: true },
+    creadorEmail: { type: String, required: true },
+    miembros: [{ type: String, lowercase: true, trim: true }], // Array de emails
+    fechaCreacion: { type: Date, default: Date.now }
+});
+ChatGroupSchema.index({ negocio: 1, nombre: 1 });
+const ChatGroup = mongoose.models.ChatGroup || mongoose.model('ChatGroup', ChatGroupSchema);
 
 const MongoStore = MongoStoreModule.default || MongoStoreModule; // Obtiene la clase MongoStore, manejando el 'default' export si existe
 
@@ -260,7 +295,7 @@ mongoose.connect(MONGO_URI_FINAL || 'mongodb://localhost:27017/seychelles_crm')
     })
     .catch(err => console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err));
 
-app.use(session({
+const sessionMiddleware = session({
     name: 'seychelles.sid', // Nombre único para evitar conflictos
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
     resave: false, 
@@ -272,7 +307,9 @@ app.use(session({
         sameSite: isProd ? 'none' : 'lax', // Permite el flujo de Google
         maxAge: 14 * 24 * 60 * 60 * 1000 
     }
-}));
+});
+
+app.use(sessionMiddleware);
 
 app.use(express.static(path.join(__dirname, 'public')));
 function exigeLogin(req, res, next) {
@@ -758,6 +795,116 @@ app.put('/api/permisos', exigeAdmin, async (req, res) => {
         await registrarLog(req.session.email, `Modificó los permisos de los roles.`, {}, req.session.negocioId);
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: 'Error al guardar permisos.' }); }
+});
+
+// --- Rutas de Anuncios y Chat ---
+app.get('/api/anuncios', exigeLogin, async (req, res) => {
+    try {
+        const anuncios = await Anuncio.find({ negocio: req.session.negocioId }).sort({ fechaCreacion: -1 }).lean();
+        const anunciosNoLeidos = anuncios.filter(a => !a.leidoPor.includes(req.session.email));
+        res.json({ todos: anuncios, noLeidos: anunciosNoLeidos });
+    } catch (e) {
+        res.status(500).json({ error: 'Error al cargar anuncios.' });
+    }
+});
+
+app.post('/api/anuncios', exigeAdmin, async (req, res) => {
+    try {
+        const { titulo, mensaje, tipo } = req.body;
+        const nuevoAnuncio = new Anuncio({
+            negocio: req.session.negocioId,
+            titulo,
+            mensaje,
+            tipo,
+            creador: req.session.email
+        });
+        await nuevoAnuncio.save();
+        // La notificación a los clientes conectados se hará vía WebSocket
+        res.status(201).json(nuevoAnuncio);
+    } catch (e) {
+        res.status(400).json({ error: 'Datos de anuncio inválidos.' });
+    }
+});
+
+app.post('/api/anuncios/:id/leido', exigeLogin, async (req, res) => {
+    try {
+        await Anuncio.updateOne(
+            { _id: req.params.id, negocio: req.session.negocioId },
+            { $addToSet: { leidoPor: req.session.email } }
+        );
+        res.sendStatus(200);
+    } catch (e) {
+        res.status(500).json({ error: 'Error al marcar como leído.' });
+    }
+});
+
+app.delete('/api/anuncios/:id', exigeAdmin, async (req, res) => {
+    try {
+        await Anuncio.deleteOne({ _id: req.params.id, negocio: req.session.negocioId });
+        res.sendStatus(200);
+    } catch (e) {
+        res.status(500).json({ error: 'Error al eliminar anuncio.' });
+    }
+});
+
+app.get('/api/chat/conversacion/:email', exigeLogin, async (req, res) => {
+    try {
+        const miEmail = req.session.email;
+        const otroEmail = req.params.email.toLowerCase();
+        const mensajes = await MensajeChat.find({ negocio: req.session.negocioId, $or: [{ remitenteEmail: miEmail, destinatarioEmail: otroEmail }, { remitenteEmail: otroEmail, destinatarioEmail: miEmail }] }).sort({ timestamp: 1 }).limit(100).lean();
+        await MensajeChat.updateMany({ negocio: req.session.negocioId, remitenteEmail: otroEmail, destinatarioEmail: miEmail, leido: false }, { $set: { leido: true } });
+        res.json(mensajes);
+    } catch (e) { res.status(500).json({ error: 'Error al cargar la conversación.' }); }
+});
+
+app.get('/api/chat/notificaciones', exigeLogin, async (req, res) => {
+    try {
+        const notificaciones = await MensajeChat.aggregate([{ $match: { negocio: new mongoose.Types.ObjectId(req.session.negocioId), destinatarioEmail: req.session.email, leido: false } }, { $group: { _id: "$remitenteEmail", count: { $sum: 1 } } }]);
+        res.json(notificaciones);
+    } catch (e) { res.status(500).json({ error: 'Error al cargar notificaciones de chat.' }); }
+});
+
+app.get('/api/chat/grupos', exigeLogin, async (req, res) => {
+    try {
+        const grupos = await ChatGroup.find({ negocio: req.session.negocioId, miembros: req.session.email }).sort({ nombre: 1 }).lean();
+        res.json(grupos);
+    } catch (e) {
+        res.status(500).json({ error: 'Error al cargar los grupos de chat.' });
+    }
+});
+
+app.post('/api/chat/grupos', exigeEditor, async (req, res) => {
+    try {
+        const { nombre, miembros } = req.body;
+        if (!nombre || !miembros || miembros.length === 0) {
+            return res.status(400).json({ error: 'El nombre y los miembros son obligatorios.' });
+        }
+        const miembrosUnicos = [...new Set([...miembros, req.session.email])];
+        const nuevoGrupo = new ChatGroup({
+            negocio: req.session.negocioId,
+            nombre,
+            creadorEmail: req.session.email,
+            miembros: miembrosUnicos
+        });
+        await nuevoGrupo.save();
+        res.status(201).json(nuevoGrupo);
+    } catch (e) {
+        res.status(500).json({ error: 'Error al crear el grupo.' });
+    }
+});
+
+app.get('/api/chat/grupos/:id/mensajes', exigeLogin, async (req, res) => {
+    try {
+        const grupoId = req.params.id;
+        const grupo = await ChatGroup.findOne({ _id: grupoId, negocio: req.session.negocioId, miembros: req.session.email });
+        if (!grupo) {
+            return res.status(403).json({ error: 'No tienes acceso a este grupo.' });
+        }
+        const mensajes = await MensajeChat.find({ destinatarioEmail: grupoId }).sort({ timestamp: 1 }).limit(100).lean(); // Reutilizamos MensajeChat
+        res.json(mensajes);
+    } catch (e) {
+        res.status(500).json({ error: 'Error al cargar los mensajes del grupo.' });
+    }
 });
 
 // --- Ruta del Asistente IA (Together AI - Llama 3) ---
@@ -1495,8 +1642,91 @@ app.get('*', (req, res) => {
         res.sendFile(path.join(__dirname, 'public', 'landing.html'));
     }
 });
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: ${PORT}`));
+const server = app.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: ${PORT}`));
+
+// --- Servidor de WebSockets para Chat en Tiempo Real ---
+const wss = new WebSocketServer({ noServer: true });
+const clients = new Map(); // Almacena las conexiones activas: Map<email, WebSocket>
+
+server.on('upgrade', (request, socket, head) => {
+    // Usamos el middleware de sesión para autenticar la conexión WebSocket
+    sessionMiddleware(request, {}, () => {
+        if (!request.session || !request.session.email) {
+            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+            socket.destroy();
+            return;
+        }
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            wss.emit('connection', ws, request);
+        });
+    });
+});
+
+wss.on('connection', (ws, req) => {
+    const email = req.session.email;
+    const negocioId = req.session.negocioId;
+    clients.set(email, ws);
+    console.log(`[WSS] Cliente conectado: ${email}`);
+
+    broadcastOnlineStatus(negocioId);
+
+    ws.on('message', async (message) => {
+        try {
+            const data = JSON.parse(message);
+            if (data.type === 'chat_message' && data.destinatarioEmail && data.contenido) {
+                const nuevoMensaje = new MensajeChat({ negocio: negocioId, remitenteEmail: email, destinatarioEmail: data.destinatarioEmail, contenido: data.contenido });
+                await nuevoMensaje.save();
+                
+                const destinatarioSocket = clients.get(data.destinatarioEmail);
+                if (destinatarioSocket && destinatarioSocket.readyState === 1) { // 1 === WebSocket.OPEN
+                    destinatarioSocket.send(JSON.stringify({ type: 'new_message', data: nuevoMensaje }));
+                }
+                ws.send(JSON.stringify({ type: 'message_sent', data: nuevoMensaje }));
+            } else if (data.type === 'group_chat_message' && data.grupoId && data.contenido) {
+                const grupo = await ChatGroup.findOne({ _id: data.grupoId, negocio: negocioId, miembros: email }).lean();
+                if (!grupo) return;
+
+                const nuevoMensaje = new MensajeChat({
+                    negocio: negocioId,
+                    remitenteEmail: email,
+                    destinatarioEmail: data.grupoId, // Usamos destinatarioEmail para guardar el ID del grupo
+                    contenido: data.contenido
+                });
+                await nuevoMensaje.save();
+
+                grupo.miembros.forEach(miembroEmail => {
+                    const socketMiembro = clients.get(miembroEmail);
+                    if (socketMiembro && socketMiembro.readyState === 1) {
+                        socketMiembro.send(JSON.stringify({ type: 'new_group_message', data: nuevoMensaje }));
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('[WSS] Error procesando mensaje:', e);
+        }
+    });
+
+    ws.on('close', () => {
+        clients.delete(email);
+        console.log(`[WSS] Cliente desconectado: ${email}`);
+        broadcastOnlineStatus(negocioId);
+    });
+});
+
+async function broadcastOnlineStatus(negocioId) {
+    const usuariosNegocio = await UsuarioAutorizado.find({ negocio: negocioId }).select('email').lean();
+    const emailsNegocio = usuariosNegocio.map(u => u.email);
+    const onlineUsers = emailsNegocio.filter(email => clients.has(email));
+
+    emailsNegocio.forEach(email => {
+        const socket = clients.get(email);
+        if (socket && socket.readyState === 1) {
+            socket.send(JSON.stringify({ type: 'online_users', users: onlineUsers }));
+        }
+    });
+}
 
 
 //SCRIPT DE SCRAPING

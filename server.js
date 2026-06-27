@@ -555,7 +555,7 @@ app.get('/api/auth/verificar', (req, res) => {
             if (!permisoDoc) {
                 // Fallback para negocios legacy sin permisos definidos
                 const defaultPerms = {
-                    Admin: ['sec-inventario', 'sec-tareas', 'sec-analitica', 'sec-gastos', 'sec-crm', 'sec-gestion', 'sec-notas', 'sec-auditoria', 'sec-usuarios', 'sec-faqs', 'sec-ajustes', 'sec-mi-cuenta'],
+                    Admin: ['sec-inventario', 'sec-tareas', 'sec-analitica', 'sec-gastos', 'sec-crm', 'sec-gestion', 'sec-notas', 'sec-auditoria', 'sec-usuarios', 'sec-faqs', 'sec-ajustes', 'sec-mi-cuenta', 'sec-comunicaciones'],
                     Manager: ['sec-inventario', 'sec-tareas', 'sec-crm', 'sec-gestion', 'sec-notas'],
                     Editor: ['sec-inventario', 'sec-tareas', 'sec-notas'],
                     Lector: ['sec-inventario']
@@ -1482,7 +1482,7 @@ app.post('/api/auth/setup', async (req, res) => {
 
         // Permisos por defecto
         const permisosDefault = [
-            { negocio: negocioId, rol: 'Admin', seccionesPermitidas: ['sec-inventario', 'sec-tareas', 'sec-analitica', 'sec-gastos', 'sec-crm', 'sec-gestion', 'sec-notas', 'sec-auditoria', 'sec-usuarios', 'sec-faqs', 'sec-ajustes', 'sec-mi-cuenta'] },
+            { negocio: negocioId, rol: 'Admin', seccionesPermitidas: ['sec-inventario', 'sec-tareas', 'sec-analitica', 'sec-gastos', 'sec-crm', 'sec-gestion', 'sec-notas', 'sec-auditoria', 'sec-usuarios', 'sec-faqs', 'sec-ajustes', 'sec-mi-cuenta', 'sec-comunicaciones'] },
             { negocio: negocioId, rol: 'Manager', seccionesPermitidas: ['sec-inventario', 'sec-tareas', 'sec-crm', 'sec-gestion', 'sec-notas'] },
             { negocio: negocioId, rol: 'Editor', seccionesPermitidas: ['sec-inventario', 'sec-tareas', 'sec-notas'] },
             { negocio: negocioId, rol: 'Lector', seccionesPermitidas: ['sec-inventario'] }
@@ -1652,7 +1652,7 @@ app.delete('/api/negocio/mi-cuenta', exigeAdmin, async (req, res) => {
         await Tarea.deleteMany({ negocio: negocioId }, { session });
         await Faq.deleteMany({ negocio: negocioId }, { session });
         await Nota.deleteMany({ negocio: negocioId }, { session });
-        await Permiso.deleteMany({ negocio: negociocioId }, { session });
+        await Permiso.deleteMany({ negocio: negocioId }, { session });
         await UsuarioAutorizado.deleteMany({ negocio: negocioId }, { session });
         await Negocio.findByIdAndDelete(negocioId, { session });
 

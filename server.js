@@ -185,7 +185,7 @@ const Nota = mongoose.models.Nota || mongoose.model('Nota', NotaSchema);
 const UsuarioAutorizadoSchema = new mongoose.Schema({
     negocio: { type: mongoose.Schema.Types.ObjectId, ref: 'Negocio' },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    rol: { type: String, enum: ['Admin', 'Manager', 'Editor', 'Lector'], default: 'Editor' },
+    rol: { type: String, enum: ['Admin', 'Manager', 'Editor', 'Lector'], default: 'Editor' }, // Rol por defecto unificado
     fechaAgregado: { type: Date, default: Date.now },
     ultimaConexion: { type: Date }
 });
@@ -1456,12 +1456,15 @@ app.post('/api/auth/setup', async (req, res) => {
         const negocioId = nuevoNegocio._id;
 
         // Estados Kanban por defecto
-        await EstadoKanban.insertMany([
+        const defaultStates = [
             { negocio: negocioId, nombre: 'No Vendido', icono: '📦', color: 'amber', rolFinanciero: 'Stock', orden: 1 },
             { negocio: negocioId, nombre: 'Vendido', icono: '💰', color: 'emerald', rolFinanciero: 'Venta', orden: 2 },
             { negocio: negocioId, nombre: 'Reservado', icono: '🤝', color: 'indigo', rolFinanciero: 'Stock', orden: 3 },
             { negocio: negocioId, nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
-        ]);
+        ];
+        for (const state of defaultStates) {
+            await EstadoKanban.updateOne({ negocio: negocioId, nombre: state.nombre }, { $setOnInsert: state }, { upsert: true });
+        }
 
         // Permisos por defecto
         const permisosDefault = [
@@ -1470,18 +1473,25 @@ app.post('/api/auth/setup', async (req, res) => {
             { negocio: negocioId, rol: 'Editor', seccionesPermitidas: ['sec-inventario', 'sec-tareas', 'sec-notas'] },
             { negocio: negocioId, rol: 'Lector', seccionesPermitidas: ['sec-inventario'] }
         ];
-        await Permiso.insertMany(permisosDefault);
+        for (const permiso of permisosDefault) {
+            await Permiso.updateOne({ negocio: negocioId, rol: permiso.rol }, { $set: { seccionesPermitidas: permiso.seccionesPermitidas } }, { upsert: true });
+        }
 
         // Tiendas por defecto
-        await Tienda.insertMany([
+        const defaultTiendas = [
             { negocio: negocioId, nombre: 'Tienda Física' }, { negocio: negocioId, nombre: 'Vinted' }, { negocio: negocioId, nombre: 'Wallapop' }
-        ]);
+        ];
+        for (const tienda of defaultTiendas) {
+            await Tienda.updateOne({ negocio: negocioId, nombre: tienda.nombre }, { $setOnInsert: tienda }, { upsert: true });
+        }
 
         // Categorías por defecto
         const defaultCats = [
             '👕 Camisetas', '🧥 Sudaderas', '👖 Pantalones', '👗 Vestidos', '👜 Accesorios', '👟 Zapatos', '👔 Camisas'
         ];
-        await Categoria.insertMany(defaultCats.map(n => ({ negocio: negocioId, nombre: n })));
+        for (const catNombre of defaultCats) {
+            await Categoria.updateOne({ negocio: negocioId, nombre: catNombre }, { $setOnInsert: { negocio: negocioId, nombre: catNombre } }, { upsert: true });
+        }
 
         // FAQs por defecto
         await Faq.insertMany([

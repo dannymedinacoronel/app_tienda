@@ -14,9 +14,185 @@
     <meta name="apple-mobile-web-app-title" content="Seychelles">
     <link rel="apple-touch-icon" href="logo.png">
     <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        body.theme-dark { background-color: #0b0f19; color: #f1f5f9; }
+        .theme-dark .card-bg { background-color: rgba(22, 30, 49, 0.7); border-color: #1e293b; backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+        .theme-dark .input-bg { background-color: #0b0f19; border-color: #1e293b; color: #ffffff; }
+        .theme-dark .dropdown-bg { background-color: #161e31; border-color: #334155; color: #f1f5f9; }
+        .theme-dark .dropdown-item-hover:hover { background-color: #1e293b; }
+
+        body.theme-pink { background-color: #fff1f2; color: #831843; }
+        .theme-pink .card-bg { background-color: rgba(255, 255, 255, 0.75); border-color: #fbcfe8; color: #831843; box-shadow: 0 10px 30px rgba(219, 39, 119, 0.05); backdrop-filter: blur(14px); }
+        .theme-pink .input-bg { background-color: #fff5f5; border-color: #f9a8d4; color: #831843; }
+        .theme-pink .dropdown-bg { background-color: #ffffff; border-color: #fbcfe8; color: #831843; }
+        .theme-pink .dropdown-item-hover:hover { background-color: #fce7f3; }
+
+        body.theme-light { background-color: #f1f5f9; color: #0f172a; }
+        .theme-light .card-bg { background-color: rgba(255, 255, 255, 0.8); border-color: #e2e8f0; color: #0f172a; box-shadow: 0 10px 25px rgba(0,0,0,0.03); backdrop-filter: blur(14px); }
+        .theme-light .input-bg { background-color: #f8fafc; border-color: #cbd5e1; color: #0f172a; }
+        .theme-light .dropdown-bg { background-color: #ffffff; border-color: #e2e8f0; color: #0f172a; }
+        .theme-light .dropdown-item-hover:hover { background-color: #f1f5f9; }
+
+        body.theme-emerald { background-color: #022c22; color: #e6f4ea; }
+        .theme-emerald .card-bg { background-color: rgba(6, 60, 46, 0.75); border-color: #047857; backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .theme-emerald .input-bg { background-color: #022c22; border-color: #047857; color: #ffffff; }
+        .theme-emerald .dropdown-bg { background-color: #063c2e; border-color: #047857; color: #e6f4ea; }
+        .theme-emerald .dropdown-item-hover:hover { background-color: #047857; }
+
+        body.theme-purple { background-color: #0f0c24; color: #e0e7ff; }
+        .theme-purple .card-bg { background-color: rgba(30, 22, 66, 0.75); border-color: #4338ca; backdrop-filter: blur(14px); box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+        .theme-purple .input-bg { background-color: #0f0c24; border-color: #4338ca; color: #ffffff; }
+        .theme-purple .dropdown-bg { background-color: #1e1642; border-color: #4338ca; color: #e0e7ff; }
+        .theme-purple .dropdown-item-hover:hover { background-color: #4338ca; }
+
+        body.theme-premium { background-color: #050505; color: #d4af37; }
+        .theme-premium .card-bg { background-color: rgba(20, 20, 20, 0.85); border-color: #d4af37; color: #f3f4f6; box-shadow: 0 10px 40px rgba(212, 175, 55, 0.1); backdrop-filter: blur(16px); }
+        .theme-premium .input-bg { background-color: #0a0a0a; border-color: #333333; color: #f3f4f6; transition: all 0.3s; }
+        .theme-premium .dropdown-bg { background-color: #111111; border-color: #d4af37; color: #f3f4f6; }
+        .theme-premium .dropdown-item-hover:hover { background-color: rgba(212, 175, 55, 0.1); }
+
+        /* 🌟 SCROLLBARS MODERNOS GLOBALES Y POR TEMA 🌟 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { border-radius: 10px; transition: background 0.3s; }
+        ::-webkit-scrollbar-corner { background: transparent; }
+
+        .theme-dark ::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.3); }
+        .theme-dark ::-webkit-scrollbar-thumb:hover { background: rgba(59, 130, 246, 0.6); }
+
+        .theme-pink ::-webkit-scrollbar-thumb { background: rgba(236, 72, 153, 0.3); }
+        .theme-pink ::-webkit-scrollbar-thumb:hover { background: rgba(236, 72, 153, 0.6); }
+
+        .theme-light ::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.2); }
+        .theme-light ::-webkit-scrollbar-thumb:hover { background: rgba(15, 23, 42, 0.4); }
+
+        .theme-emerald ::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.3); }
+        .theme-emerald ::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.6); }
+
+        .theme-purple ::-webkit-scrollbar-thumb { background: rgba(168, 85, 247, 0.3); }
+        .theme-purple ::-webkit-scrollbar-thumb:hover { background: rgba(168, 85, 247, 0.6); }
+
+        .theme-premium ::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.4); }
+        .theme-premium ::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.8); }
+
+        .drag-over { border: 2px dashed #3b82f6 !important; background-color: rgba(59, 130, 246, 0.1) !important; }
+        .modo-edicion { border-color: #3b82f6 !important; box-shadow: 0 0 20px rgba(59, 130, 246, 0.4) !important; }
+
+        @keyframes ticker { 0% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(-50%, 0, 0); } }
+        .ticker-content { display: flex; white-space: nowrap; animation: ticker 32s linear infinite; }
+        .ticker-content:hover { animation-play-state: paused; }
+
+        @keyframes fireGlow {
+            0%, 100% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.3); border-color: #f59e0b; }
+            50% { box-shadow: 0 0 30px rgba(239, 68, 68, 0.6); border-color: #ef4444; }
+        }
+        .combo-fire-active { animation: fireGlow 0.8s infinite ease-in-out !important; }
+
+        /* 🚀 OPTIMIZACIÓN DE RENDIMIENTO Y SCROLL */
+        html { scroll-behavior: smooth; }
+        .seccion-app { will-change: transform, opacity; }
+        .card-bg { will-change: transform; transform: translateZ(0); backface-visibility: hidden; transition: box-shadow 0.3s ease-out, border-color 0.3s ease; }
+        .custom-scrollbar { scroll-behavior: smooth; overflow-y: auto; overflow-x: hidden; }
+
+        .ticker-alert-mode { background-color: #7f1d1d !important; color: #fee2e2 !important; font-weight: 900; animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.85; } }
+
+        @keyframes gold-shine {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .logo-premium {
+            background: linear-gradient(to right, #fbbf24, #f472b6, #a855f7, #fbbf24);
+            background-size: 200% auto;
+            animation: gold-shine 4s linear infinite;
+        }
+
+        @keyframes pulseBorder {
+            0%, 100% { border-color: rgba(245, 158, 11, 0.2); }
+            50% { border-color: rgba(245, 158, 11, 0.8); box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); }
+        }
+        .alerta-stock-critico { animation: pulseBorder 2s infinite ease-in-out !important; }
+
+        #reader { border: none !important; width: 100% !important; max-width: 320px; margin: 0 auto; min-height: 320px; }
+        #reader__scan_region video { object-fit: cover !important; width: 100% !important; height: 100% !important; border-radius: 1.5rem; }
+        #reader button, #reader img { display: none !important; }
+
+        .star-rating-btn { cursor: pointer; transition: transform 0.15s ease; }
+        .star-rating-btn:hover { transform: scale(1.3); }
+
+        .kanban-card { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease; backface-visibility: hidden; }
+        .dragging { opacity: 0.25 !important; border-color: #3b82f6 !important; }
+
+        #particles-js { position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; pointer-events: none; }
+        #wrapper-core { position: relative; z-index: 10; }
+        .group:hover .group-hover\:block { display: block; }
+
+        /* Estilos Calendario */
+        .calendario-dia { min-height: 100px; transition: all 0.2s; cursor: pointer; }
+        .calendario-log-item { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+        .calendario-log-item:hover { white-space: normal; position: relative; z-index: 50; background: rgba(0,0,0,0.9); }
+        #grid-calendario-audit::-webkit-scrollbar { width: 4px; height: 4px; }
+
+        /* Estilos Login Espectacular */
+        .login-glow-card {
+            position: relative;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow: hidden;
+        }
+        .login-glow-card::before {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: conic-gradient(from 0deg, transparent, #3b82f6, #ec4899, #8b5cf6, transparent);
+            animation: rotate 6s linear infinite; z-index: -1;
+        }
+        @keyframes rotate { 100% { transform: rotate(360deg); } }
+
+        /* Estilos Imágenes */
+        .preview-foto { width: 100%; height: 120px; object-fit: cover; border-radius: 1rem; border: 2px dashed rgba(255,255,255,0.1); cursor: pointer; transition: all 0.2s; }
+        .preview-foto:hover { border-color: #3b82f6; background-color: rgba(59, 130, 246, 0.05); }
+        .card-img-mini { width: 45px; height: 45px; object-fit: cover; border-radius: 10px; background-color: #000; }
+
+        /* Estilos Notas */
+        .sticky-note { 
+            position: absolute; 
+            z-index: 10;
+            padding: 12px; 
+            border-radius: 16px; 
+            font-size: 11px; 
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4); 
+            color: #1e293b;
+            resize: both;
+            overflow: hidden;
+            min-width: 200px;
+            min-height: 150px;
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: box-shadow 0.2s;
+        }
+        .sticky-note:active { z-index: 50; box-shadow: 0 30px 60px -10px rgba(0,0,0,0.4); }
+
+        /* Colores Cristal Mac */
+        .note-yellow { background-color: rgba(253, 224, 71, 0.75); }
+        .note-blue { background-color: rgba(147, 197, 253, 0.75); }
+        .note-green { background-color: rgba(134, 239, 172, 0.75); }
+        .note-pink { background-color: rgba(249, 168, 212, 0.75); }
+
+        @keyframes spin-once { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
+        .animate-spin-once { animation: spin-once 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        /* Formato de texto enriquecido en Notas */
+        .note-content { width: 100%; height: calc(100% - 30px); outline: none; overflow-y: auto; line-height: 1.5; padding-top: 5px; }
+        .note-content ul { list-style: disc; margin-left: 1.2rem; margin-bottom: 0.5rem; }
+        .note-content ol { list-style: decimal; margin-left: 1.2rem; margin-bottom: 0.5rem; }
+        .note-content b, .note-content strong { font-weight: 900; color: #000; }
+    </style>
     
 </head>
 <body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-24 transition-all duration-300">

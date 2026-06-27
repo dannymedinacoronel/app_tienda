@@ -293,18 +293,20 @@ mongoose.connect(MONGO_URI_FINAL || 'mongodb://localhost:27017/seychelles_crm')
             // Usamos `updateOne` con `upsert` para evitar errores de duplicados si la operación se interrumpe y se reintenta.
             // Esto hace que la operación de seeding sea idempotente.
             for (const state of defaultStates) {
-                try {
-                    await EstadoKanban.updateOne({ negocio: state.negocio, nombre: state.nombre }, { $setOnInsert: state }, { upsert: true });
-                } catch (e) {
-                    if (e.code !== 11000) { // Ignorar errores de clave duplicada, pero registrar otros.
-                        console.error(`[MIGRATION-ERROR] Fallo al insertar estado: ${state.nombre}`, e);
-                    }
-                }
+                // La lógica de upsert es idempotente. El error de duplicado se manejará en el catch principal.
+                await EstadoKanban.updateOne({ negocio: state.negocio, nombre: state.nombre }, { $setOnInsert: state }, { upsert: true });
             }
             console.log('[MIGRATION] Inyectados/Verificados estados Kanban para "Seychelles Original".');
         }
     })
-    .catch(err => console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err));
+    .catch(err => {
+        // Si el error es de clave duplicada durante el seeding, es un comportamiento esperado en reinicios y se puede ignorar.
+        if (err.code === 11000) {
+            console.log('[DB-INFO] Se ignoró un error de clave duplicada durante el seeding inicial. El servidor continuará.');
+        } else {
+            console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err);
+        }
+    });
 
 const sessionMiddleware = session({
     name: 'seychelles.sid', // Nombre único para evitar conflictos
@@ -567,7 +569,9 @@ app.get('/api/auth/verificar', (req, res) => {
                 permisos: permisoDoc.seccionesPermitidas
             });
         }).catch(() => res.json({ autenticado: false }));
-    } return res.json({ autenticado: false, error: 'No hay sesión activa' });
+    } else {
+        return res.json({ autenticado: false, error: 'No hay sesión activa' });
+    }
 });
 
 

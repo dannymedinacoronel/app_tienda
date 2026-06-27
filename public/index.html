@@ -344,6 +344,7 @@
                         <option value="TODOS">🌐 Canal</option>
                         <option value="Tienda Física">Tienda</option><option value="Vinted">Vinted</option><option value="Wallapop">Wallapop</option><option value="Web">Web</option>
                     </select>
+                    <button onclick="resetearFiltrosFrontLineal()" class="text-[10px] opacity-50 hover:opacity-100 underline font-mono">Reset</button>
                 </div>
 
                 <!-- DERECHA: NAV (50%) -->
@@ -787,7 +788,7 @@
                                 </div>
                                 <div class="flex-1">
                                     <p class="text-[9px] font-black uppercase opacity-40 mb-1">Impuesto IVA (%)</p>
-                                    <input type="number" id="fac-iva" value="21" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] font-mono">
+                                    <input type="number" id="fac-iva" value="21" onchange="calcularTotalesFactura()" class="input-bg w-full rounded-xl px-3 py-2 text-[11px] font-mono">
                                 </div>
                             </div>
                             
@@ -1405,6 +1406,18 @@
                 <button type="submit" id="ai-btn-send" class="bg-gradient-to-br from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transition-all active:scale-90 font-black flex-shrink-0">➤</button>
             </div>
         </form>
+    </div>
+
+    <!-- MODAL CARGAR CLIENTE CRM -->
+    <div id="modal-crm-factura" class="hidden fixed inset-0 z-[600] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="card-bg border rounded-3xl p-6 w-full max-w-lg flex flex-col gap-4 shadow-2xl relative max-h-[85vh]">
+            <button onclick="document.getElementById('modal-crm-factura').classList.add('hidden')" class="absolute top-6 right-6 text-white/50 hover:text-white font-bold text-2xl">✕</button>
+            <h2 class="text-xl font-black uppercase tracking-widest text-blue-400">👥 Cargar Cliente desde CRM</h2>
+            <input type="text" oninput="filtrarModalCRM(this.value)" placeholder="Buscar cliente..." class="input-bg w-full rounded-xl px-4 py-3 text-sm focus:outline-none">
+            <div id="lista-clientes-modal-crm" class="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar bg-black/20 p-3 rounded-xl border border-white/10">
+                <!-- Clientes inyectados -->
+            </div>
+        </div>
     </div>
 
 

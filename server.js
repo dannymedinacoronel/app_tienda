@@ -634,7 +634,7 @@ app.post('/api/auth/google', async (req, res) => {
             let permisoDoc = await Permiso.findOne({ negocio: usuario.negocio._id, rol: usuario.rol }).lean();
             if (!permisoDoc) {
                 const defaultPerms = {
-                    Admin: ['sec-inventario', 'sec-tareas', 'sec-analitica', 'sec-gastos', 'sec-crm', 'sec-gestion', 'sec-notas', 'sec-auditoria', 'sec-usuarios', 'sec-faqs', 'sec-ajustes', 'sec-mi-cuenta'],
+                    Admin: ['sec-inventario', 'sec-tareas', 'sec-analitica', 'sec-gastos', 'sec-crm', 'sec-gestion', 'sec-notas', 'sec-auditoria', 'sec-usuarios', 'sec-faqs', 'sec-ajustes', 'sec-mi-cuenta', 'sec-comunicaciones'],
                     Manager: ['sec-inventario', 'sec-tareas', 'sec-crm', 'sec-gestion', 'sec-notas'],
                     Editor: ['sec-inventario', 'sec-tareas', 'sec-notas'],
                     Lector: ['sec-inventario']

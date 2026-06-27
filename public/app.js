@@ -521,92 +521,87 @@ async function reloadCoreData() {
     }
 }
 
-function renderKanban() {
-            // Limpiar columnas antes de renderizar
-            const wrapper = document.getElementById('kanban-dynamic-wrapper');
-            if (!wrapper) return;
-            wrapper.innerHTML = '';
+function renderKanban(itemsParaRenderizar = BASE_DATOS) {
+    const wrapper = document.getElementById('kanban-dynamic-wrapper');
+    if (!wrapper) return;
+    wrapper.innerHTML = '';
 
-            LISTA_ESTADOS_KANBAN.forEach(est => {
-                const vCount = BASE_DATOS.filter(v => v.estado === est.nombre).reduce((acc, v) => acc + (v.cantidad || 1), 0);
-                
-                const colHTML = `
-                <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[600px] shadow-xl">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-[10px] font-black text-${est.color}-500 uppercase tracking-widest flex items-center gap-1.5">${est.icono} ${est.nombre}</h3>
-                        <span id="badge-kanban-${est._id}" class="bg-${est.color}-500/10 text-${est.color}-400 border border-${est.color}-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg">${vCount}</span>
+    LISTA_ESTADOS_KANBAN.forEach(est => {
+        const itemsColumna = itemsParaRenderizar.filter(v => v.estado === est.nombre);
+        const vCount = itemsColumna.reduce((acc, v) => acc + (v.cantidad || 1), 0);
+        
+        const colHTML = `
+        <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[600px] shadow-xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-[10px] font-black text-${est.color}-500 uppercase tracking-widest flex items-center gap-1.5">${est.icono} ${est.nombre}</h3>
+                <span id="badge-kanban-${est._id}" class="bg-${est.color}-500/10 text-${est.color}-400 border border-${est.color}-500/20 text-[10px] font-bold px-2 py-0.5 rounded-lg">${vCount}</span>
+            </div>
+            <div id="col-${est._id}" class="flex-1 space-y-3 overflow-y-auto pr-1 pb-10 custom-scrollbar" ondragover="allowDrop(event)" ondrop="handleDrop(event, '${est.nombre}')" ondragleave="clearDrop(event)">
+                <!-- Inyectado vía JS -->
+            </div>
+        </div>`;
+        wrapper.innerHTML += colHTML;
+    });
+
+    // Ahora que las columnas existen, llenarlas
+    LISTA_ESTADOS_KANBAN.forEach(est => {
+        const colDom = document.getElementById(`col-${est._id}`);
+        if (!colDom) return;
+
+        const itemsColumna = itemsParaRenderizar.filter(v => v.estado === est.nombre);
+
+        itemsColumna.forEach(v => {
+            const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
+            const pVentaFormateado = parseFloat(v.precioVenta || 0);
+            const stringEstrellas = '★'.repeat(v.rating || 0) + '☆'.repeat(5 - (v.rating || 0));
+            const colorEstrellas = (v.rating || 0) > 0 ? 'text-amber-400' : 'text-slate-600';
+
+            const card = document.createElement('div');
+            card.id = v._id;
+            card.draggable = ROL_USUARIO_ACTUAL !== 'Lector';
+            card.ondragstart = (e) => handleDragStart(e, v._id);
+            card.className = `kanban-card card-bg border p-3 rounded-2xl flex items-start gap-3 shadow-lg ${estaMarcado ? 'ring-2 ring-blue-500' : ''}`;
+
+            const thumb = `<div class="relative flex-shrink-0 cursor-pointer group" onclick="abrirVisorFotos('${v._id}')" title="Ver Galería">
+                              <img src="${v.imagen || 'https://via.placeholder.com/100x100/0f172a/1e293b?text=S/F'}" class="card-img-mini shadow-md group-hover:scale-105 transition-transform">
+                              ${(v.galeria && v.galeria.length > 0) ? `<div class="absolute -bottom-1 -right-1 bg-indigo-600 text-white rounded-full text-[8px] w-4 h-4 flex items-center justify-center font-black border-2 border-slate-800 pointer-events-none">+${v.galeria.length}</div>` : ''}
+                           </div>`;
+            
+            const badgeCanal = `<span class="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-current/5">${v.canalVenta || 'N/A'}</span>`;
+            const badgeTienda = v.proveedor ? `<span class="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">${v.proveedor}</span>` : '';
+            const badgeEst = `<span class="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">${v.estado}</span>`;
+
+            let botonesAccion = '';
+            if (ROL_USUARIO_ACTUAL !== 'Lector') {
+                botonesAccion = `<div class="flex items-center gap-1.5">
+                        <button onclick="lanzarModalImpresionEtiqueta('${v._id}'); event.stopPropagation();" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg" title="Imprimir Código QR">🖨️</button>
+                        <button onclick="editItem('${v._id}'); event.stopPropagation();" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-0.5">Editar</button>
+                        <button onclick="deleteItem('${v._id}'); event.stopPropagation();" class="opacity-30 hover:opacity-100 text-xs px-0.5" title="Borrar">✕</button>
+                    </div>`;
+            }
+
+            card.innerHTML = `
+                <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" 
+                       class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0" 
+                       onclick="event.stopPropagation();" ${ROL_USUARIO_ACTUAL === 'Lector' ? 'disabled' : ''}>
+                ${thumb}
+                <div class="flex-1 min-w-0 ${ROL_USUARIO_ACTUAL !== 'Lector' ? 'cursor-pointer hover:opacity-80' : ''} transition-opacity" 
+                     ${ROL_USUARIO_ACTUAL !== 'Lector' ? `onclick="editItem('${v._id}'); event.stopPropagation();"` : ''} 
+                     title="${ROL_USUARIO_ACTUAL !== 'Lector' ? 'Hacer clic para editar el artículo' : ''}">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
+                        ${badgeCanal} ${badgeTienda} ${badgeEst}
                     </div>
-                    <div id="col-${est._id}" class="flex-1 space-y-3 overflow-y-auto pr-1 pb-10 custom-scrollbar" ondragover="allowDrop(event)" ondrop="handleDrop(event, '${est.nombre}')" ondragleave="clearDrop(event)">
-                        <!-- Inyectado vía JS -->
-                    </div>
-                </div>`;
-                wrapper.innerHTML += colHTML;
-            });
+                    <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
+                    <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
+                    <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
+                </div>
+                ${botonesAccion}`;
 
-            // Ahora que las columnas existen, llenarlas
-            LISTA_ESTADOS_KANBAN.forEach(est => {
-                const colDom = document.getElementById(`col-${est._id}`);
-                if (!colDom) return;
-
-                const itemsColumna = BASE_DATOS.filter(v => v.estado === est.nombre);
-                let vCount = 0;
-
-                itemsColumna.forEach(v => {
-                    const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
-                    const pVentaFormateado = parseFloat(v.precioVenta || 0);
-                    const stringEstrellas = '★'.repeat(v.rating || 0) + '☆'.repeat(5 - (v.rating || 0));
-                    const colorEstrellas = (v.rating || 0) > 0 ? 'text-amber-400' : 'text-slate-600';
-
-                    const card = document.createElement('div');
-                    card.id = v._id;
-                    card.draggable = ROL_USUARIO_ACTUAL !== 'Lector';
-                    card.ondragstart = (e) => handleDragStart(e, v._id);
-                    card.className = `kanban-card card-bg border p-3 rounded-2xl flex items-start gap-3 shadow-lg ${estaMarcado ? 'ring-2 ring-blue-500' : ''}`;
-
-                    const thumb = `<div class="relative flex-shrink-0 cursor-pointer group" onclick="abrirVisorFotos('${v._id}')" title="Ver Galería">
-                                      <img src="${v.imagen || 'https://via.placeholder.com/100x100/0f172a/1e293b?text=S/F'}" class="card-img-mini shadow-md group-hover:scale-105 transition-transform">
-                                      ${(v.galeria && v.galeria.length > 0) ? `<div class="absolute -bottom-1 -right-1 bg-indigo-600 text-white rounded-full text-[8px] w-4 h-4 flex items-center justify-center font-black border-2 border-slate-800 pointer-events-none">+${v.galeria.length}</div>` : ''}
-                                   </div>`;
-                    
-                    const badgeCanal = `<span class="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-current/5">${v.canalVenta || 'N/A'}</span>`;
-                    const badgeTienda = v.proveedor ? `<span class="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400">${v.proveedor}</span>` : '';
-                    const badgeEst = `<span class="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400">${v.estado}</span>`;
-
-                    let botonesAccion = '';
-                    if (ROL_USUARIO_ACTUAL !== 'Lector') {
-                        botonesAccion = `<div class="flex items-center gap-1.5">
-                                <button onclick="lanzarModalImpresionEtiqueta('${v._id}'); event.stopPropagation();" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg" title="Imprimir Código QR">🖨️</button>
-                                <button onclick="editItem('${v._id}'); event.stopPropagation();" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-0.5">Editar</button>
-                                <button onclick="deleteItem('${v._id}'); event.stopPropagation();" class="opacity-30 hover:opacity-100 text-xs px-0.5" title="Borrar">✕</button>
-                            </div>`;
-                    }
-
-                    card.innerHTML = `
-                        <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" 
-                               class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0" 
-                               onclick="event.stopPropagation();" ${ROL_USUARIO_ACTUAL === 'Lector' ? 'disabled' : ''}>
-                        ${thumb}
-                        <div class="flex-1 min-w-0 ${ROL_USUARIO_ACTUAL !== 'Lector' ? 'cursor-pointer hover:opacity-80' : ''} transition-opacity" 
-                             ${ROL_USUARIO_ACTUAL !== 'Lector' ? `onclick="editItem('${v._id}'); event.stopPropagation();"` : ''} 
-                             title="${ROL_USUARIO_ACTUAL !== 'Lector' ? 'Hacer clic para editar el artículo' : ''}">
-                            <div class="flex items-center gap-1.5 flex-wrap">
-                                <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
-                                ${badgeCanal} ${badgeTienda} ${badgeEst}
-                            </div>
-                            <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
-                            <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
-                            <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
-                        </div>
-                        ${botonesAccion}`;
-
-                    colDom.appendChild(card);
-                    vCount += (v.cantidad || 1);
-                });
-                
-                const badgeDom = document.getElementById(`badge-kanban-${est._id}`);
-                if(badgeDom) badgeDom.innerText = vCount;
-            });
-        }
+            colDom.appendChild(card);
+        });
+    });
+}
 
 function updateTickerWallStreet() {
     const ticker = document.getElementById('ticker-content'); if(!ticker) return; let txt = '';
@@ -1704,21 +1699,129 @@ async function handleDrop(ev, nuevoEstado) {
 
 function autocompletarNombreLocalRapido() { alert('Función "autocompletarNombreLocalRapido" no implementada.'); }
 function lanzarModalImpresionEtiqueta(id) { alert(`Función "lanzarModalImpresionEtiqueta" para ID: ${id} no implementada.`); }
-function aplicarFiltrosFrontLineal() { alert('Función "aplicarFiltrosFrontLineal" no implementada.'); }
+
+function aplicarFiltrosFrontLineal() {
+    const catFiltro = document.getElementById('filtro-categoria').value;
+    const tallaFiltro = document.getElementById('filtro-talla').value;
+    const canalFiltro = document.getElementById('filtro-canal').value;
+
+    const itemsFiltrados = BASE_DATOS.filter(item => {
+        const catMatch = (catFiltro === 'TODOS') || (item.categoria === catFiltro);
+        const tallaMatch = (tallaFiltro === 'TODOS') || (item.talla === tallaFiltro);
+        const canalMatch = (canalFiltro === 'TODOS') || (item.canalVenta === canalFiltro);
+        return catMatch && tallaMatch && canalMatch;
+    });
+
+    renderKanban(itemsFiltrados);
+}
+
 function toggleEscanerCamara() { alert('Función "toggleEscanerCamara" no implementada.'); }
-function exportarExcel() { alert('Función "exportarExcel" no implementada.'); }
+
+function exportarExcel() {
+    // 1. Hoja de Inventario
+    const inventarioData = BASE_DATOS.map(item => ({
+        SKU: item.sku || 'N/A',
+        Prenda: item.prenda,
+        Categoria: item.categoria,
+        Talla: item.talla,
+        Estado: item.estado,
+        'Precio Compra': item.precioCompra,
+        'Precio Venta': item.precioVenta,
+        'Canal Venta': item.canalVenta,
+        Proveedor: item.proveedor || 'N/A',
+        'Fecha Registro': item.fecha,
+        'Fecha Venta': item.fechaVenta || ''
+    }));
+    const wsInventario = XLSX.utils.json_to_sheet(inventarioData);
+
+    // 2. Hoja de Gastos
+    const gastosData = LISTA_GASTOS_GLOBAL.map(gasto => ({
+        Fecha: gasto.fecha,
+        Concepto: gasto.concepto,
+        Categoria: gasto.categoria,
+        Monto: gasto.monto
+    }));
+    const wsGastos = XLSX.utils.json_to_sheet(gastosData);
+
+    // 3. Hoja de Clientes
+    const clientesData = LISTA_CLIENTES_CACHE.map(cliente => ({
+        Nombre: cliente.nombre,
+        Email: cliente.email,
+        Telefono: cliente.telefono,
+        NIF: cliente.nif,
+        Direccion: cliente.direccion,
+        'Fecha Registro': new Date(cliente.fechaRegistro).toLocaleDateString()
+    }));
+    const wsClientes = XLSX.utils.json_to_sheet(clientesData);
+
+    // Crear el libro y añadir las hojas
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsInventario, "Inventario");
+    XLSX.utils.book_append_sheet(wb, wsGastos, "Gastos");
+    XLSX.utils.book_append_sheet(wb, wsClientes, "Clientes");
+
+    // Descargar el archivo
+    const fecha = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `Reporte_Seychelles_${fecha}.xlsx`);
+    cantarPorVoz("Reporte de Excel generado.");
+}
+
 function descargarBackupSeguridadLocal() { alert('Función "descargarBackupSeguridadLocal" no implementada.'); }
 function importarBackupJSON() { alert('Función "importarBackupJSON" no implementada.'); }
 function limpiarFiltrosAnalitica() { alert('Función "limpiarFiltrosAnalitica" no implementada.'); }
-function generarInformePDF() { alert('Función "generarInformePDF" no implementada.'); }
-function lanzarModalCRM() { alert('Función "lanzarModalCRM" no implementada.'); }
-function renderGestionFacturas() { alert('Función "renderGestionFacturas" no implementada.'); }
+function generarInformePDF() { alert("La generación de PDF requiere una librería externa (jsPDF). Esta función está pendiente de implementación completa."); }
+
+async function lanzarModalCRM() {
+    const modal = document.getElementById('modal-crm-factura');
+    const container = document.getElementById('lista-clientes-modal-crm');
+    if (!modal || !container) return;
+
+    if (LISTA_CLIENTES_CACHE.length === 0) {
+        await refrescarYRenderizarClientes();
+    }
+    
+    renderListaClientesModal(LISTA_CLIENTES_CACHE);
+    modal.classList.remove('hidden');
+}
+
+async function renderGestionFacturas() {
+    const container = document.getElementById('lista-articulos-factura');
+    if (!container) return;
+
+    const estadosVenta = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
+    const itemsParaFacturar = BASE_DATOS.filter(v => estadosVenta.includes(v.estado) && !v.facturado);
+
+    if (itemsParaFacturar.length === 0) {
+        container.innerHTML = '<p class="text-center text-xs opacity-50 p-4">No hay artículos vendidos pendientes de facturar.</p>';
+        return;
+    }
+
+    container.innerHTML = itemsParaFacturar.map(item => `
+        <div class="flex items-center gap-3 p-2 bg-black/20 rounded-xl border border-white/5 hover:bg-white/10 transition-colors">
+            <input type="checkbox" onchange="calcularTotalesFactura()" value="${item._id}" data-precio="${item.precioVenta}" class="fac-item-check w-5 h-5 rounded text-blue-500 bg-black/30 border-slate-600 cursor-pointer">
+            <img src="${item.imagen || 'https://via.placeholder.com/60'}" class="w-10 h-10 object-cover rounded-lg">
+            <div class="flex-1">
+                <p class="text-xs font-bold">${item.prenda}</p>
+                <p class="text-[10px] font-mono opacity-60">${item.sku || 'N/A'} - Vendido el ${item.fechaVenta || 'N/A'}</p>
+            </div>
+            <p class="font-mono font-bold text-emerald-400">${parseFloat(item.precioVenta || 0).toFixed(2)} €</p>
+        </div>
+    `).join('');
+}
+
 function generarGuiaPDF() { alert('Función "generarGuiaPDF" no implementada.'); }
 function guardarAjustesNegocio() { alert('Función "guardarAjustesNegocio" no implementada.'); }
 function toggleAIAssistant() { alert('Función "toggleAIAssistant" no implementada.'); }
 function enviarMensajeIA() { alert('Función "enviarMensajeIA" no implementada.'); }
 function quitarImagenIA() { alert('Función "quitarImagenIA" no implementada.'); }
 function procesarImagenIA() { alert('Función "procesarImagenIA" no implementada.'); }
+
+function resetearFiltrosFrontLineal() {
+    document.getElementById('filtro-categoria').value = 'TODOS';
+    document.getElementById('filtro-talla').value = 'TODOS';
+    document.getElementById('filtro-canal').value = 'TODOS';
+    aplicarFiltrosFrontLineal();
+}
 
 function toggleMuteVolumenGlobal() {
     SOUND_MUTED_GLOBAL = !SOUND_MUTED_GLOBAL;
@@ -1764,3 +1867,49 @@ function ejecutarAjustePrecioMasivo() { alert(`Ajustar precio para ${ITEMS_SELEC
 function ejecutarAjusteCosteMasivo() { alert(`Ajustar coste para ${ITEMS_SELECCIONADOS_MASIVOS.length} items (no implementado).`); }
 function ejecutarEdicionMasivaPropiedad(prop, valor) { alert(`Cambiar "${prop}" a "${valor}" para ${ITEMS_SELECCIONADOS_MASIVOS.length} items (no implementado).`); }
 function ejecutarEliminacionMasiva() { alert(`Eliminar ${ITEMS_SELECCIONADOS_MASIVOS.length} items (no implementado).`); }
+
+function calcularTotalesFactura() {
+    let baseTotal = 0;
+    let count = 0;
+    document.querySelectorAll('.fac-item-check:checked').forEach(chk => {
+        baseTotal += parseFloat(chk.dataset.precio);
+        count++;
+    });
+
+    const ivaPorcentaje = parseFloat(document.getElementById('fac-iva').value) || 21;
+    const ivaMonto = baseTotal * (ivaPorcentaje / 100);
+    const totalFinal = baseTotal + ivaMonto;
+
+    document.getElementById('fac-count-total').innerText = count;
+    document.getElementById('fac-base-total').innerText = `${baseTotal.toFixed(2)} €`;
+    document.getElementById('fac-monto-total').innerText = `${totalFinal.toFixed(2)} €`;
+}
+
+function renderListaClientesModal(clientes) {
+    const container = document.getElementById('lista-clientes-modal-crm');
+    container.innerHTML = clientes.map(c => `
+        <div onclick="seleccionarClienteFactura('${c._id}')" class="p-3 bg-slate-800/50 hover:bg-blue-600/30 rounded-lg cursor-pointer transition-colors">
+            <p class="font-bold text-sm">${c.nombre}</p>
+            <p class="text-xs opacity-60 font-mono">${c.email || 'Sin email'}</p>
+        </div>
+    `).join('');
+}
+
+function filtrarModalCRM(filtro) {
+    const filtroLower = filtro.toLowerCase();
+    const clientesFiltrados = LISTA_CLIENTES_CACHE.filter(c => 
+        c.nombre.toLowerCase().includes(filtroLower) ||
+        (c.email && c.email.toLowerCase().includes(filtroLower))
+    );
+    renderListaClientesModal(clientesFiltrados);
+}
+
+function seleccionarClienteFactura(id) {
+    const cliente = LISTA_CLIENTES_CACHE.find(c => c._id === id);
+    if (cliente) {
+        document.getElementById('fac-cliente-nombre').value = cliente.nombre;
+        document.getElementById('fac-cliente-nif').value = cliente.nif || '';
+        document.getElementById('fac-cliente-dir').value = cliente.direccion || '';
+    }
+    document.getElementById('modal-crm-factura').classList.add('hidden');
+}

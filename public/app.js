@@ -1054,11 +1054,6 @@ function aplicarPermisosUI(permisos) {
     document.querySelector('button[onclick="crearNotaNueva()"]').style.display = esLector ? 'none' : '';
     document.getElementById('ai-assistant-btn').style.display = esLector ? 'none' : '';
 
-    // Ocultar KPIs financieros si no tiene acceso a analítica
-    const kpiGrid = document.getElementById('kpi-container-grid');
-    if (kpiGrid) {
-        kpiGrid.style.display = seccionesPermitidas.includes('sec-analitica') ? '' : 'none';
-    }
 }
 
 

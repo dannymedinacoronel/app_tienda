@@ -16,6 +16,7 @@
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     
 </head>
 <body id="main-body" class="theme-dark min-h-screen font-sans antialiased pb-24 transition-all duration-300">
@@ -43,7 +44,7 @@
                     <option value="Employee">👤 Empleado/a</option>
                 </select>
             </div>
-            <button id="btn-submit-setup" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-lg w-full mt-6 transition-all">Crear mi Espacio de Trabajo</button>
+            <button id="btn-submit-setup" onclick="submitSetup()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-lg w-full mt-6 transition-all">Crear mi Espacio de Trabajo</button>
         </div>
             <div class="login-glow-card p-[2px] rounded-[2.5rem] shadow-2xl max-w-sm w-full">
                 <div class="bg-slate-950 rounded-[2.4rem] p-10 text-center">

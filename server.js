@@ -303,7 +303,12 @@ mongoose.connect(MONGO_URI_FINAL || 'mongodb://localhost:27017/seychelles_crm')
         }
     })
     .catch(err => {
-        console.error('Fallo crítico en la conexión con Atlas o en la migración inicial. Verifica tus variables de entorno y la conexión a la base de datos:', err);
+        // Si el error es de clave duplicada durante el seeding, es un comportamiento esperado en reinicios y se puede ignorar para que el servidor no se caiga.
+        if (err.code === 11000) {
+            console.log('[DB-INFO] Se ignoró un error de clave duplicada durante el seeding inicial. El servidor continuará.');
+        } else {
+            console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err);
+        }
     });
 
 const sessionMiddleware = session({
@@ -567,7 +572,8 @@ app.get('/api/auth/verificar', (req, res) => {
                 permisos: permisoDoc.seccionesPermitidas
             });
         }).catch(() => res.json({ autenticado: false }));
-    } else {
+    }
+    else {
         return res.json({ autenticado: false, error: 'No hay sesión activa' });
     }
 });

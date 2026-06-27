@@ -451,6 +451,20 @@
                 </div>
             </div>
 
+            <!-- SECCIÓN GESTIÓN DE PERMISOS (SOLO ADMIN) -->
+            <div id="sec-permisos" class="seccion-app hidden flex flex-col gap-6 mb-8">
+                <div class="card-bg border p-6 rounded-3xl shadow-xl">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">🛡️ Gestión de Permisos por Rol</h3>
+                        <button onclick="guardarPermisosRoles()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-xl text-[10px] tracking-widest uppercase transition-all shadow-md">Guardar Permisos</button>
+                    </div>
+                    <div id="permisos-roles-container" class="overflow-x-auto">
+                        <p class="text-center p-8 opacity-50">Cargando panel de permisos...</p>
+                        <!-- Tabla de permisos inyectada por JS -->
+                    </div>
+                </div>
+            </div>
+
             <div id="sec-analitica" class="seccion-app hidden flex flex-col gap-6 mb-8">
                 <div class="card-bg border p-5 rounded-3xl shadow-xl">
                     <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -460,7 +474,19 @@
                             <button onclick="limpiarFiltrosAnalitica()" class="text-[10px] opacity-60 hover:opacity-100 underline font-mono">Restablecer Todo</button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-[10px]">
+                </div>
+            </div>
+
+            <div id="sec-analitica" class="seccion-app hidden flex flex-col gap-6 mb-8">
+                <div class="card-bg border p-5 rounded-3xl shadow-xl">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <h3 class="text-xs font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">🎛️ Centro de Control Analítico</h3>
+                        <div class="flex gap-2">
+                            <button onclick="generarInformePDF()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">📄 Descargar Informe PDF</button>
+                            <button onclick="limpiarFiltrosAnalitica()" class="text-[10px] opacity-60 hover:opacity-100 underline font-mono">Restablecer Todo</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 text-[10px]">
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Filtrar por Tienda</label>
                             <select id="an-filtro-tienda" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg"></select>
@@ -496,6 +522,14 @@
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Máx (€)</label>
                             <input type="number" id="an-filtro-precio-max" placeholder="Max" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono text-[10px]">
                         </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Fecha Inicio</label>
+                            <input type="date" id="an-filtro-fecha-inicio" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono text-[10px]">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Fecha Fin</label>
+                            <input type="date" id="an-filtro-fecha-fin" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono text-[10px]">
+                        </div>
                     </div>
                 </div>
 
@@ -518,6 +552,21 @@
                         <h3 class="text-xs font-black uppercase mb-3 tracking-wider text-purple-400">🏬 Facturación por Proveedor/Tienda</h3>
                         <div class="w-full h-64 relative flex items-center justify-center" id="contenedor-canvas-barras">
                             <canvas id="graficaBarrasTiendas"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+                    <div class="card-bg border p-6 rounded-3xl shadow-xl">
+                        <h3 class="text-xs font-black uppercase mb-3 tracking-wider text-teal-400">🏆 Top 5 Productos Más Vendidos</h3>
+                        <div class="w-full h-64 relative" id="contenedor-canvas-top-productos">
+                            <canvas id="graficaTopProductos"></canvas>
+                        </div>
+                    </div>
+                    <div class="card-bg border p-6 rounded-3xl shadow-xl">
+                        <h3 class="text-xs font-black uppercase mb-3 tracking-wider text-cyan-400">💸 Rentabilidad por Canal de Venta</h3>
+                        <div class="w-full h-64 relative" id="contenedor-canvas-rentabilidad">
+                            <canvas id="graficaRentabilidadCanal"></canvas>
                         </div>
                     </div>
                 </div>
@@ -788,6 +837,20 @@
                     <button onclick="guardarAjustesNegocio()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-xl text-[10px] tracking-widest uppercase transition-all shadow-md mt-2">Guardar Personalización</button>
                 </div>
 
+                <!-- GESTIÓN DE PERMISOS -->
+                <div class="flex justify-between items-center mb-6 pt-6 border-t border-white/10">
+                    <h3 class="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                        <span class="bg-amber-500/20 p-2 rounded-xl">🛡️</span> Gestión de Permisos por Rol
+                    </h3>
+                    <button onclick="guardarPermisosRoles()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-xl text-[10px] tracking-widest uppercase transition-all shadow-md">Guardar Permisos</button>
+                </div>
+                <div id="permisos-roles-container" class="overflow-x-auto mb-8">
+                    <p class="text-center p-8 opacity-50">Cargando panel de permisos...</p>
+                    <!-- Tabla de permisos inyectada por JS -->
+                </div>
+
+
+                <!-- CONFIGURADOR KANBAN -->
                 <div class="flex justify-between items-center mb-6 pt-6 border-t border-white/10">
                     <h3 class="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
                         <span class="bg-amber-500/20 p-2 rounded-xl">⚙️</span> Configurador del Tablero Kanban

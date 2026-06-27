@@ -190,6 +190,15 @@ const UsuarioAutorizadoSchema = new mongoose.Schema({
 });
 const UsuarioAutorizado = mongoose.models.UsuarioAutorizado || mongoose.model('UsuarioAutorizado', UsuarioAutorizadoSchema);
 
+const PermisoSchema = new mongoose.Schema({
+    negocio: { type: mongoose.Schema.Types.ObjectId, ref: 'Negocio', required: true },
+    rol: { type: String, required: true, enum: ['Admin', 'Manager', 'Editor', 'Lector'] },
+    seccionesPermitidas: { type: [String], default: [] }
+});
+PermisoSchema.index({ negocio: 1, rol: 1 }, { unique: true });
+const Permiso = mongoose.models.Permiso || mongoose.model('Permiso', PermisoSchema);
+
+
 const MongoStore = MongoStoreModule.default || MongoStoreModule; // Obtiene la clase MongoStore, manejando el 'default' export si existe
 
 mongoose.connect(MONGO_URI_FINAL || 'mongodb://localhost:27017/seychelles_crm')
@@ -488,13 +497,28 @@ app.delete('/api/tiendas/:id', exigeEditor, async (req, res) => {
 app.get('/api/auth/verificar', (req, res) => {
     if (req.session && req.session.email && req.session.negocioId) {
         const esSuperAdmin = req.session.email === 'dannymedinacoronel@gmail.com';
-        return res.json({ 
-            autenticado: true, 
-            usuario: req.session.email, 
-            rol: req.session.rol || 'Admin', 
-            plan: 'business', // Forzamos plan business en beta
-            esSuperAdmin 
-        });
+        const rolUsuario = req.session.rol || 'Admin';
+
+        Permiso.findOne({ negocio: req.session.negocioId, rol: rolUsuario }).lean().then(permisoDoc => {
+            if (!permisoDoc) {
+                // Fallback para negocios legacy sin permisos definidos
+                const defaultPerms = {
+                    Admin: ['sec-inventario', 'sec-tareas', 'sec-analitica', 'sec-gastos', 'sec-crm', 'sec-gestion', 'sec-notas', 'sec-auditoria', 'sec-usuarios', 'sec-faqs', 'sec-ajustes', 'sec-mi-cuenta'],
+                    Manager: ['sec-inventario', 'sec-tareas', 'sec-crm', 'sec-gestion', 'sec-notas'],
+                    Editor: ['sec-inventario', 'sec-tareas', 'sec-notas'],
+                    Lector: ['sec-inventario']
+                };
+                permisoDoc = { seccionesPermitidas: defaultPerms[rolUsuario] || [] };
+            }
+            return res.json({ 
+                autenticado: true, 
+                usuario: req.session.email, 
+                rol: rolUsuario, 
+                plan: 'business', // Forzamos plan business en beta
+                esSuperAdmin,
+                permisos: permisoDoc.seccionesPermitidas
+            });
+        }).catch(() => res.json({ autenticado: false }));
     } return res.json({ autenticado: false, error: 'No hay sesión activa' });
 });
 
@@ -552,9 +576,21 @@ app.post('/api/auth/google', async (req, res) => {
             
             const locationData = await obtenerUbicacionCompleta(req, clientLocation);
             await registrarLog(usuario.email, "Inició sesión exitosamente", locationData, usuario.negocio._id);
+
+            let permisoDoc = await Permiso.findOne({ negocio: usuario.negocio._id, rol: usuario.rol }).lean();
+            if (!permisoDoc) {
+                const defaultPerms = {
+                    Admin: ['sec-inventario', 'sec-tareas', 'sec-analitica', 'sec-gastos', 'sec-crm', 'sec-gestion', 'sec-notas', 'sec-auditoria', 'sec-usuarios', 'sec-faqs', 'sec-ajustes', 'sec-mi-cuenta'],
+                    Manager: ['sec-inventario', 'sec-tareas', 'sec-crm', 'sec-gestion', 'sec-notas'],
+                    Editor: ['sec-inventario', 'sec-tareas', 'sec-notas'],
+                    Lector: ['sec-inventario']
+                };
+                permisoDoc = { seccionesPermitidas: defaultPerms[usuario.rol] || [] };
+            }
+
             req.session.save((err) => {
                 if(err) console.error("Session save error", err);
-                return res.json({ success: true, email: usuario.email, redirect: '/' });
+                return res.json({ success: true, email: usuario.email, redirect: '/', permisos: permisoDoc.seccionesPermitidas });
             });
         } else {
             // No existe usuario, necesita setup de negocio
@@ -600,6 +636,24 @@ app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
         }
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
+});
+
+app.put('/api/usuarios-admin/:id/rol', exigeAdmin, async (req, res) => {
+    try {
+        const { rol } = req.body;
+        const { id } = req.params;
+        const usuario = await UsuarioAutorizado.findOneAndUpdate(
+            { _id: id, negocio: req.session.negocioId },
+            { rol },
+            { new: true }
+        );
+        if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado.' });
+        
+        await registrarLog(req.session.email, `Cambió el rol de ${usuario.email} a ${rol}`, {}, req.session.negocioId);
+        res.json(usuario);
+    } catch (e) {
+        res.status(500).json({ error: 'Error al actualizar el rol del usuario.' });
+    }
 });
 
 // --- Rutas de Tareas (Kanban) ---
@@ -677,6 +731,33 @@ app.delete('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
         const estado = await EstadoKanban.findOneAndDelete({ _id: req.params.id, negocio: req.session.negocioId });
         if(estado) await registrarLog(req.session.email, `Eliminó el estado Kanban: ${estado.nombre}`, {}, req.session.negocioId); res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
+});
+
+// --- Rutas de Permisos por Rol ---
+app.get('/api/permisos', exigeAdmin, async (req, res) => {
+    try {
+        const permisos = await Permiso.find({ negocio: req.session.negocioId });
+        res.json(permisos);
+    } catch (e) { 
+        res.status(500).json({ error: 'Error al cargar permisos.' }); 
+    }
+});
+
+app.put('/api/permisos', exigeAdmin, async (req, res) => {
+    try {
+        const { permisos } = req.body; // Espera un array de {rol: 'Editor', seccionesPermitidas: [...]}
+        for (const p of permisos) {
+            if (p.rol !== 'Admin') { // Proteger el rol de Admin
+                await Permiso.updateOne(
+                    { negocio: req.session.negocioId, rol: p.rol },
+                    { $set: { seccionesPermitidas: p.seccionesPermitidas } },
+                    { upsert: true }
+                );
+            }
+        }
+        await registrarLog(req.session.email, `Modificó los permisos de los roles.`, {}, req.session.negocioId);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: 'Error al guardar permisos.' }); }
 });
 
 // --- Ruta del Asistente IA (Together AI - Llama 3) ---
@@ -1230,6 +1311,15 @@ app.post('/api/auth/setup', async (req, res) => {
             { negocio: negocioId, nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
         ]);
 
+        // Permisos por defecto
+        const permisosDefault = [
+            { negocio: negocioId, rol: 'Admin', seccionesPermitidas: ['sec-inventario', 'sec-tareas', 'sec-analitica', 'sec-gastos', 'sec-crm', 'sec-gestion', 'sec-notas', 'sec-auditoria', 'sec-usuarios', 'sec-faqs', 'sec-ajustes', 'sec-mi-cuenta'] },
+            { negocio: negocioId, rol: 'Manager', seccionesPermitidas: ['sec-inventario', 'sec-tareas', 'sec-crm', 'sec-gestion', 'sec-notas'] },
+            { negocio: negocioId, rol: 'Editor', seccionesPermitidas: ['sec-inventario', 'sec-tareas', 'sec-notas'] },
+            { negocio: negocioId, rol: 'Lector', seccionesPermitidas: ['sec-inventario'] }
+        ];
+        await Permiso.insertMany(permisosDefault);
+
         // Tiendas por defecto
         await Tienda.insertMany([
             { negocio: negocioId, nombre: 'Tienda Física' }, { negocio: negocioId, nombre: 'Vinted' }, { negocio: negocioId, nombre: 'Wallapop' }
@@ -1266,8 +1356,13 @@ app.post('/api/auth/setup', async (req, res) => {
         req.session.esAdmin = (adminUser.rol === 'Admin');
 
         req.session.save((err) => {
-            if(err) console.error("Session save error", err);
-            res.json({ success: true, redirect: '/' });
+            if (err) {
+                console.error("Session save error", err);
+                return res.status(500).json({ error: 'Error al guardar la sesión.' });
+            }
+            // Devolvemos los permisos del admin recién creado
+            const adminPerms = permisosDefault.find(p => p.rol === 'Admin');
+            res.json({ success: true, redirect: '/', permisos: adminPerms ? adminPerms.seccionesPermitidas : [] });
         });
     } catch (error) {
         console.error("Error en /api/auth/setup:", error);
@@ -1341,6 +1436,7 @@ app.delete('/api/superadmin/negocios/:id', exigeSuperAdmin, async (req, res) => 
         await Tarea.deleteMany({ negocio: id }, { session });
         await Faq.deleteMany({ negocio: id }, { session });
         await Nota.deleteMany({ negocio: id }, { session });
+        await Permiso.deleteMany({ negocio: id }, { session });
         await UsuarioAutorizado.deleteMany({ negocio: id }, { session });
         await Negocio.findByIdAndDelete(id, { session });
 

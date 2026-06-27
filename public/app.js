@@ -8,6 +8,8 @@ let INSTANCIA_CHARTS = null;
 let INSTANCIA_TARTA = null;
 let INSTANCIA_BARRAS = null;
 let INSTANCIA_MAPA_CALOR = null;
+let INSTANCIA_TOP_PRODUCTOS = null;
+let INSTANCIA_RENTABILIDAD_CANAL = null;
 let OBJETO_ESCANER_CAMARA = null;
 let HISTORIAL_TIMESTAMPS_OPERACIONES = [];
 let LECTOR_BLOQUEADO_POR_CAPTURA = false;
@@ -28,6 +30,19 @@ let GLOBO_INSTANCE = null;
 let FOTOS_FORMULARIO_TEMP = [];
 let ROL_USUARIO_ACTUAL = 'Admin'; // Rol por defecto hasta que se verifique
 let resultadosScraperActual = null;
+const SECCIONES_DISPONIBLES = [
+    { id: 'sec-inventario', nombre: '📦 Panel Inventario', desc: 'Vista principal del Kanban y gestión de productos.' },
+    { id: 'sec-tareas', nombre: '✅ Tareas', desc: 'Tablero de tareas pendientes, en proceso y completadas.' },
+    { id: 'sec-analitica', nombre: '📊 Analítica', desc: 'Gráficos de rendimiento, ventas y rentabilidad.' },
+    { id: 'sec-gastos', nombre: '💸 Gastos', desc: 'Registro y control de gastos operativos (OpEx).' },
+    { id: 'sec-crm', nombre: '👥 CRM', desc: 'Base de datos y gestión de fichas de clientes.' },
+    { id: 'sec-gestion', nombre: '📋 Facturación', desc: 'Generador de facturas en PDF para clientes.' },
+    { id: 'sec-notas', nombre: '📝 Notas', desc: 'Tablero de notas adhesivas para ideas y recordatorios.' },
+    { id: 'sec-auditoria', nombre: '📜 Logs', desc: 'Registro de actividad y calendario de eventos.' },
+    { id: 'sec-usuarios', nombre: '🔑 Gestión de Acceso', desc: 'Añadir o eliminar usuarios que pueden acceder al sistema.' },
+    { id: 'sec-faqs', nombre: '❓ FAQs', desc: 'Crear y editar la base de conocimiento interna.' },
+    { id: 'sec-ajustes', nombre: '⚙️ Ajustes', desc: 'Configuración del negocio, Kanban y permisos.' },
+    { id: 'sec-mi-cuenta', nombre: '👤 Mi Cuenta', desc: 'Ver uso del plan y gestionar la suscripción.' }];
 
 // 📸 LÓGICA DE VISOR Y GALERÍA DE FOTOS
 let ITEM_FOTOS_ACTUAL = null;

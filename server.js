@@ -689,7 +689,7 @@ app.post('/api/chat', exigeEditor, async (req, res) => {
     // Fallback amigable si el usuario aún no ha configurado la API Key
     if (!apiKey) {
         return res.json({
-            respuesta: "He migrado a un nuevo motor de IA más estable: **Together AI**. Para activarme, crea una cuenta gratuita en **api.together.ai**, genera una clave y pégala en la variable de entorno `TOGETHER_API_KEY` en Render. ¡Te dan 25$ de crédito gratis que duran meses!"
+            respuesta: "El motor de IA ahora usa **OpenRouter** para acceder a múltiples modelos. Para activarme, crea una cuenta gratuita en **openrouter.ai**, obtén tu API Key y pégala en la variable de entorno `TOGETHER_API_KEY` (o puedes renombrarla a `OPENROUTER_API_KEY`) en Render. ¡OpenRouter ofrece créditos gratuitos para empezar!"
         });
     }
 

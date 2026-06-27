@@ -137,14 +137,27 @@
 
         async function importarSeleccionados() {
             const selected = Array.from(document.querySelectorAll('.check-box:checked')).map(cb => localData.nuevos[cb.dataset.idx]);
+            const selectedIndexes = Array.from(document.querySelectorAll('.check-box:checked')).map(cb => parseInt(cb.dataset.idx));
+
             if (selected.length === 0) return alert("Selecciona algún producto para importar.");
             await fetch('/api/scraper/importar', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ productos: selected })});
-            alert("Importación completada."); analizarVinted();
+            alert("Importación completada.");
+            localData.nuevos = localData.nuevos.filter((n, i) => !selectedIndexes.includes(i));
+            render(localData);
         }
 
         async function syncPrice(id, price) {
-            await fetch('/api/scraper/aplicar', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ cambios: [{idMongo: id, valorNuevo: price}] })});
-            alert("Sincronizado."); analizarVinted();
+            const item = localData.discrepancias.find(d => d.idMongo === id);
+            if (!item) return alert('Item no encontrado para sincronizar.');
+
+            await fetch('/api/scraper/aplicar', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ cambios: [{idMongo: id, valorNuevo: price, prenda: item.prenda}] })
+            });
+            alert("Sincronizado.");
+            localData.discrepancias = localData.discrepancias.filter(d => d.idMongo !== id);
+            render(localData);
         }
     </script>
 </body>

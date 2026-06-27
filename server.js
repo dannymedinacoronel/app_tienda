@@ -1635,17 +1635,46 @@ app.delete('/api/superadmin/negocios/:id', exigeSuperAdmin, async (req, res) => 
 
 app.delete('/api/negocio/mi-cuenta', exigeAdmin, async (req, res) => {
     const negocioId = req.session.negocioId;
-    // Reutilizamos la misma lógica de borrado en cascada
-    const { id } = { id: negocioId }; // Simular params
-    // ... (copiar y pegar la lógica de borrado de la ruta superadmin)
-    // Al finalizar, destruir sesión
-    req.session.destroy(err => {
-        if (err) {
-            return res.status(500).json({ error: 'No se pudo cerrar la sesión tras eliminar la cuenta.' });
-        }
-        res.clearCookie('seychelles.sid');
-        res.json({ success: true, message: 'Tu negocio y todos los datos han sido eliminados.' });
-    });
+    if (!negocioId) {
+        return res.status(400).json({ error: 'No se pudo identificar el negocio a eliminar.' });
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        await VentaRopa.deleteMany({ negocio: negocioId }, { session });
+        await Cliente.deleteMany({ negocio: negocioId }, { session });
+        await Gasto.deleteMany({ negocio: negocioId }, { session });
+        await Tienda.deleteMany({ negocio: negocioId }, { session });
+        await Categoria.deleteMany({ negocio: negocioId }, { session });
+        await EstadoKanban.deleteMany({ negocio: negocioId }, { session });
+        await LogAuditoria.deleteMany({ negocio: negocioId }, { session });
+        await Tarea.deleteMany({ negocio: negocioId }, { session });
+        await Faq.deleteMany({ negocio: negocioId }, { session });
+        await Nota.deleteMany({ negocio: negocioId }, { session });
+        await Permiso.deleteMany({ negocio: negociocioId }, { session });
+        await UsuarioAutorizado.deleteMany({ negocio: negocioId }, { session });
+        await Negocio.findByIdAndDelete(negocioId, { session });
+
+        await session.commitTransaction();
+        
+        req.session.destroy(err => {
+            if (err) {
+                console.error("Error destruyendo sesión tras borrado de negocio:", err);
+                res.clearCookie('seychelles.sid');
+                return res.status(200).json({ success: true, message: 'Negocio eliminado, pero la sesión no se pudo cerrar limpiamente.' });
+            }
+            res.clearCookie('seychelles.sid');
+            res.json({ success: true, message: 'Tu negocio y todos los datos han sido eliminados.' });
+        });
+
+    } catch (error) {
+        await session.abortTransaction();
+        console.error("Error en borrado de cuenta de negocio:", error);
+        res.status(500).json({ error: 'Error al eliminar el negocio.' });
+    } finally {
+        session.endSession();
+    }
 });
 
 app.post('/api/logout', async (req, res) => { 

@@ -701,7 +701,7 @@ function editItem(id) {
     document.getElementById('gastosEnvio').value = item.gastosEnvio || 0; 
     document.getElementById('canalVenta').value = item.canalVenta || 'Vinted'; 
     document.getElementById('comentariosProducto').value = item.comentariosProducto || '';
-    document.getElementById('proveedor').value = item.proveedor || 'Sin definir';
+    document.getElementById('proveedor').value = item.proveedor || '';
     
     FOTOS_FORMULARIO_TEMP = [];
     if (item.imagen) FOTOS_FORMULARIO_TEMP.push(item.imagen);
@@ -1598,3 +1598,174 @@ async function crearGrupoChat() {
     await cargarGruposChat();
     renderizarListaConversaciones();
 }
+
+// --- IMPLEMENTACIÓN DE FUNCIONES FALTANTES ---
+
+function navegarASeccion(seccionId) {
+    document.querySelectorAll('.seccion-app').forEach(sec => sec.classList.add('hidden'));
+    const seccionActiva = document.getElementById(seccionId);
+    if (seccionActiva) {
+        seccionActiva.classList.remove('hidden');
+    }
+
+    document.querySelectorAll('nav button[id^="tab-"]').forEach(btn => {
+        const esActivo = btn.id === `tab-${seccionId}`;
+        btn.classList.toggle('nav-btn-active', esActivo);
+        btn.classList.toggle('text-white', esActivo);
+        btn.classList.toggle('opacity-40', !esActivo);
+        btn.classList.toggle('hover:opacity-100', !esActivo);
+    });
+
+    // Lógica específica al navegar
+    if (seccionId === 'sec-auditoria' && typeof renderizarCalendario === 'function') renderizarCalendario();
+    if (seccionId === 'sec-inventario' && typeof renderizarCalendarioStock === 'function') renderizarCalendarioStock();
+    if (seccionId === 'sec-analitica' && typeof actualizarTodoElBloqueGrafico === 'function') actualizarTodoElBloqueGrafico();
+    if (seccionId === 'sec-usuarios' && typeof refrescarListaUsuariosAdmin === 'function') refrescarListaUsuariosAdmin();
+    if (seccionId === 'sec-ajustes') {
+        if (typeof renderListaAjustesKanban === 'function') renderListaAjustesKanban();
+        if (typeof renderizarPanelPermisos === 'function') renderizarPanelPermisos();
+    }
+    if (seccionId === 'sec-superadmin' && typeof renderSuperAdminPanel === 'function') renderSuperAdminPanel();
+    if (seccionId === 'sec-comunicaciones' && typeof inicializarComunicaciones === 'function') inicializarComunicaciones();
+}
+
+function cantarPorVoz(texto) {
+    if (SOUND_MUTED_GLOBAL || !('speechSynthesis' in window)) return;
+    const utterance = new SpeechSynthesisUtterance(texto);
+    utterance.lang = 'es-ES';
+    utterance.volume = 0.5;
+    speechSynthesis.speak(utterance);
+}
+
+function establecerValoresPorDefecto() {
+    if (LISTA_CATEGORIAS_GLOBAL.length > 0) document.getElementById('categoria').value = LISTA_CATEGORIAS_GLOBAL[0].nombre;
+    if (LISTA_ESTADOS_KANBAN.length > 0) document.getElementById('estado').value = LISTA_ESTADOS_KANBAN[0].nombre;
+}
+
+async function crearNotaNueva() {
+    if (NOTAS_LOCALES.length >= 10) return alert('Límite de 10 notas alcanzado.');
+    const nota = { texto: 'Nueva nota...', color: 'note-yellow', x: 50, y: 50, width: 200, height: 150 };
+    const res = await fetch(`${BACKEND_URL}/api/notas`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(nota) });
+    if (res.ok) await cargarNotasBoard();
+}
+
+async function forceRefreshDataManual() {
+    const icon = document.getElementById('icon-refresh');
+    if(icon) icon.classList.add('animate-spin-once');
+    await reloadCoreData();
+    cantarPorVoz("Datos sincronizados");
+    setTimeout(() => {
+        if(icon) icon.classList.remove('animate-spin-once');
+    }, 600);
+}
+
+function recalcularKPIsLocalesOptimistas() {
+    reloadCoreData();
+}
+
+// --- KANBAN DRAG & DROP ---
+function allowDrop(ev) {
+    ev.preventDefault();
+    const targetCol = ev.target.closest('.flex-1.space-y-3');
+    if (targetCol) targetCol.classList.add('drag-over');
+}
+
+function clearDrop(ev) {
+    const targetCol = ev.target.closest('.flex-1.space-y-3');
+    if (targetCol) targetCol.classList.remove('drag-over');
+}
+
+function handleDragStart(ev, id) {
+    ev.dataTransfer.setData("text/plain", id);
+    const card = document.getElementById(id);
+    if (card) setTimeout(() => card.classList.add('dragging'), 0);
+}
+
+async function handleDrop(ev, nuevoEstado) {
+    ev.preventDefault();
+    clearDrop(ev);
+    const id = ev.dataTransfer.getData("text");
+    const card = document.getElementById(id);
+    if (card) card.classList.remove('dragging');
+
+    const item = BASE_DATOS.find(v => v._id === id);
+    if (item && item.estado !== nuevoEstado) {
+        try {
+            await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ estado: nuevoEstado })
+            });
+            await reloadCoreData();
+            cantarPorVoz(nuevoEstado);
+        } catch (error) {
+            alert('Error al actualizar el estado del artículo.');
+        }
+    }
+}
+
+// --- STUBS PARA FUNCIONES FALTANTES ---
+
+function autocompletarNombreLocalRapido() { alert('Función "autocompletarNombreLocalRapido" no implementada.'); }
+function lanzarModalImpresionEtiqueta(id) { alert(`Función "lanzarModalImpresionEtiqueta" para ID: ${id} no implementada.`); }
+function aplicarFiltrosFrontLineal() { alert('Función "aplicarFiltrosFrontLineal" no implementada.'); }
+function toggleEscanerCamara() { alert('Función "toggleEscanerCamara" no implementada.'); }
+function exportarExcel() { alert('Función "exportarExcel" no implementada.'); }
+function descargarBackupSeguridadLocal() { alert('Función "descargarBackupSeguridadLocal" no implementada.'); }
+function importarBackupJSON() { alert('Función "importarBackupJSON" no implementada.'); }
+function limpiarFiltrosAnalitica() { alert('Función "limpiarFiltrosAnalitica" no implementada.'); }
+function generarInformePDF() { alert('Función "generarInformePDF" no implementada.'); }
+function lanzarModalCRM() { alert('Función "lanzarModalCRM" no implementada.'); }
+function renderGestionFacturas() { alert('Función "renderGestionFacturas" no implementada.'); }
+function generarGuiaPDF() { alert('Función "generarGuiaPDF" no implementada.'); }
+function guardarAjustesNegocio() { alert('Función "guardarAjustesNegocio" no implementada.'); }
+function toggleAIAssistant() { alert('Función "toggleAIAssistant" no implementada.'); }
+function enviarMensajeIA() { alert('Función "enviarMensajeIA" no implementada.'); }
+function quitarImagenIA() { alert('Función "quitarImagenIA" no implementada.'); }
+function procesarImagenIA() { alert('Función "procesarImagenIA" no implementada.'); }
+
+function toggleMuteVolumenGlobal() {
+    SOUND_MUTED_GLOBAL = !SOUND_MUTED_GLOBAL;
+    const txt = document.getElementById('txt-mute-volumen');
+    if (txt) txt.innerText = SOUND_MUTED_GLOBAL ? 'Sonido (OFF)' : 'Sonido (ON)';
+    cantarPorVoz(SOUND_MUTED_GLOBAL ? 'Sonido desactivado' : 'Sonido activado');
+}
+
+function manejarSeleccionCheckMasiva(id, checkbox) {
+    if (checkbox.checked) {
+        if (!ITEMS_SELECCIONADOS_MASIVOS.includes(id)) {
+            ITEMS_SELECCIONADOS_MASIVOS.push(id);
+        }
+    } else {
+        ITEMS_SELECCIONADOS_MASIVOS = ITEMS_SELECCIONADOS_MASIVOS.filter(itemId => itemId !== id);
+    }
+    actualizarPanelMasivo();
+}
+
+function actualizarPanelMasivo() {
+    const panel = document.getElementById('panel-masivo-flotante');
+    const contador = document.getElementById('contador-masivo-seleccionado');
+    if (!panel || !contador) return;
+
+    if (ITEMS_SELECCIONADOS_MASIVOS.length > 0) {
+        panel.classList.remove('hidden');
+        contador.innerText = ITEMS_SELECCIONADOS_MASIVOS.length;
+    } else {
+        panel.classList.add('hidden');
+    }
+}
+
+function limpiarSeleccionMasiva() {
+    ITEMS_SELECCIONADOS_MASIVOS = [];
+    document.querySelectorAll('.kanban-card input[type="checkbox"]').forEach(cb => cb.checked = false);
+    actualizarPanelMasivo();
+    renderKanban();
+}
+
+function ejecutarAccionMasivaEstado(nuevoEstado) { alert(`Mover ${ITEMS_SELECCIONADOS_MASIVOS.length} items a "${nuevoEstado}" (no implementado).`); }
+function ejecutarDuplicadoMasivo() { alert(`Duplicar ${ITEMS_SELECCIONADOS_MASIVOS.length} items (no implementado).`); }
+function ejecutarAjustePrecioMasivo() { alert(`Ajustar precio para ${ITEMS_SELECCIONADOS_MASIVOS.length} items (no implementado).`); }
+function ejecutarAjusteCosteMasivo() { alert(`Ajustar coste para ${ITEMS_SELECCIONADOS_MASIVOS.length} items (no implementado).`); }
+function ejecutarEdicionMasivaPropiedad(prop, valor) { alert(`Cambiar "${prop}" a "${valor}" para ${ITEMS_SELECCIONADOS_MASIVOS.length} items (no implementado).`); }
+function ejecutarEliminacionMasiva() { alert(`Eliminar ${ITEMS_SELECCIONADOS_MASIVOS.length} items (no implementado).`); }

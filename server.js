@@ -293,7 +293,6 @@ mongoose.connect(MONGO_URI_FINAL || 'mongodb://localhost:27017/seychelles_crm')
             // Usamos `updateOne` con `upsert` para evitar errores de duplicados si la operación se interrumpe y se reintenta.
             // Esto hace que la operación de seeding sea idempotente.
             for (const state of defaultStates) {
-                await EstadoKanban.updateOne({ negocio: state.negocio, nombre: state.nombre }, { $setOnInsert: state }, { upsert: true });
                 try {
                     await EstadoKanban.updateOne({ negocio: state.negocio, nombre: state.nombre }, { $setOnInsert: state }, { upsert: true });
                 } catch (e) {
@@ -1470,7 +1469,6 @@ app.post('/api/auth/setup', async (req, res) => {
             { negocio: negocioId, nombre: 'Devuelto', icono: '⚠️', color: 'rose', rolFinanciero: 'Oculto', orden: 4 }
         ];
         for (const state of defaultStates) {
-            await EstadoKanban.updateOne({ negocio: negocioId, nombre: state.nombre }, { $setOnInsert: state }, { upsert: true });
             try {
                 await EstadoKanban.updateOne({ negocio: negocioId, nombre: state.nombre }, { $setOnInsert: state }, { upsert: true });
             } catch (e) { if (e.code !== 11000) console.error(`[SETUP-ERROR] EstadoKanban:`, e); }
@@ -1484,7 +1482,6 @@ app.post('/api/auth/setup', async (req, res) => {
             { negocio: negocioId, rol: 'Lector', seccionesPermitidas: ['sec-inventario'] }
         ];
         for (const permiso of permisosDefault) {
-            await Permiso.updateOne({ negocio: negocioId, rol: permiso.rol }, { $set: { seccionesPermitidas: permiso.seccionesPermitidas } }, { upsert: true });
             try {
                 await Permiso.updateOne({ negocio: negocioId, rol: permiso.rol }, { $set: { seccionesPermitidas: permiso.seccionesPermitidas } }, { upsert: true });
             } catch (e) { if (e.code !== 11000) console.error(`[SETUP-ERROR] Permiso:`, e); }
@@ -1495,7 +1492,6 @@ app.post('/api/auth/setup', async (req, res) => {
             { negocio: negocioId, nombre: 'Tienda Física' }, { negocio: negocioId, nombre: 'Vinted' }, { negocio: negocioId, nombre: 'Wallapop' }
         ];
         for (const tienda of defaultTiendas) {
-            await Tienda.updateOne({ negocio: negocioId, nombre: tienda.nombre }, { $setOnInsert: tienda }, { upsert: true });
             try {
                 await Tienda.updateOne({ negocio: negocioId, nombre: tienda.nombre }, { $setOnInsert: tienda }, { upsert: true });
             } catch (e) { if (e.code !== 11000) console.error(`[SETUP-ERROR] Tienda:`, e); }
@@ -1506,7 +1502,6 @@ app.post('/api/auth/setup', async (req, res) => {
             '👕 Camisetas', '🧥 Sudaderas', '👖 Pantalones', '👗 Vestidos', '👜 Accesorios', '👟 Zapatos', '👔 Camisas'
         ];
         for (const catNombre of defaultCats) {
-            await Categoria.updateOne({ negocio: negocioId, nombre: catNombre }, { $setOnInsert: { negocio: negocioId, nombre: catNombre } }, { upsert: true });
             try {
                 await Categoria.updateOne({ negocio: negocioId, nombre: catNombre }, { $setOnInsert: { negocio: negocioId, nombre: catNombre } }, { upsert: true });
             } catch (e) { if (e.code !== 11000) console.error(`[SETUP-ERROR] Categoria:`, e); }

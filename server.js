@@ -185,7 +185,7 @@ const Nota = mongoose.models.Nota || mongoose.model('Nota', NotaSchema);
 const UsuarioAutorizadoSchema = new mongoose.Schema({
     negocio: { type: mongoose.Schema.Types.ObjectId, ref: 'Negocio' },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    rol: { type: String, enum: ['Admin', 'Manager', 'Employee', 'Editor', 'Lector'], default: 'Employee' },
+    rol: { type: String, enum: ['Admin', 'Manager', 'Editor', 'Lector'], default: 'Editor' },
     fechaAgregado: { type: Date, default: Date.now },
     ultimaConexion: { type: Date }
 });

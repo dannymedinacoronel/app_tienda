@@ -4515,6 +4515,12 @@
 
                     const badgeEst = `<span class="bg-${est.color}-500/10 text-${est.color}-400 border border-${est.color}-500/20 px-1 py-0.5 rounded text-[8px] font-black uppercase">${est.nombre}</span>`;
 
+                    // NUEVO: Fechas y mini-comentario
+                    const fechaAlta = v.fecha ? `<span class="text-blue-400/80">📦 ${v.fecha}</span>` : '';
+                    const fechaVenta = v.fechaVenta ? `<span class="text-emerald-400/80">💰 ${v.fechaVenta}</span>` : '';
+                    const fechasHtml = (fechaAlta || fechaVenta) ? `<div class="text-[8px] font-mono opacity-80 mt-1.5 flex flex-wrap gap-x-3">${fechaAlta} ${fechaVenta}</div>` : '';
+                    const miniComentario = v.comentariosProducto ? `<div class="text-[9px] italic opacity-60 mt-1.5 border-l-2 border-white/10 pl-2 truncate" title="${v.comentariosProducto}">${v.comentariosProducto.replace(/!importante/gi, '').replace(/^\*/, '').trim()}</div>` : '';
+
                     card.innerHTML = `
                         <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0" onclick="event.stopPropagation();">
                         ${thumb}
@@ -4525,7 +4531,10 @@
                             </div>
                             <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
                             <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
-                            <span class="text-[10px] font-bold block mt-1 font-mono">${pVentaFormateado.toFixed(2)} €</span>
+                            
+                            ${fechasHtml}
+                            ${miniComentario}
+                            <span class="text-[10px] font-bold block mt-2 font-mono">${pVentaFormateado.toFixed(2)} €</span>
                         </div>
                         <div class="flex items-center gap-1.5 flex-shrink-0 text-[11px]">
                             <button onclick="duplicarPrendaIndividual('${v._id}'); event.stopPropagation();" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg" title="Duplicar">👯</button>

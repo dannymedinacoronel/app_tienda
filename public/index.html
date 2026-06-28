@@ -371,17 +371,12 @@
                         <form id="form-venta" class="space-y-3" onsubmit="manejarEnvioVenta(event)">
                             <input type="hidden" id="edit-id" value="">
                             
-                            <!-- CARGA DE FOTO CON COMPRESIÓN -->
-                            <div class="relative mb-4">
+                            <!-- CARGA DE FOTO CON GALERÍA -->
+                            <div class="flex flex-col gap-2">
                                 <input type="file" id="input-foto-file" accept="image/*" multiple class="hidden" onchange="procesarYComprimirFoto(event)">
-                                <img id="preview-foto-form" src="" class="preview-foto hidden" onclick="document.getElementById('input-foto-file').click()">
-                                <span id="badge-fotos-extra" class="hidden absolute top-2 right-2 bg-indigo-600 text-white text-[9px] font-black px-2 py-1 rounded-lg shadow-md border border-indigo-400"></span>
-                                <div id="placeholder-foto" onclick="document.getElementById('input-foto-file').click()" class="preview-foto flex flex-col items-center justify-center bg-black/20 gap-1">
-                                    <span class="text-2xl">📸</span>
-                                    <span class="text-[9px] font-bold uppercase opacity-40">Añadir Foto(s)</span>
+                                <div id="form-fotos-galeria-container" class="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                                    <!-- Las fotos se inyectan aquí -->
                                 </div>
-                                <button type="button" id="btn-remove-foto" onclick="cancelFoto()" class="hidden mt-2 w-full text-[10px] text-rose-500 font-bold uppercase hover:underline flex items-center justify-center gap-1 transition-all">🗑️ Eliminar foto seleccionada</button>
-                                <input type="hidden" id="foto-base64" value="">
                             </div>
 
                             <div class="grid grid-cols-2 gap-2">
@@ -978,6 +973,42 @@
                     </form>
                     
                     <div class="lg:col-span-2 space-y-3" id="lista-estados-kanban-config"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL VISOR DE FOTOS -->
+        <div id="modal-visor-fotos" class="hidden fixed inset-0 z-[500] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4">
+            <div class="card-bg border rounded-3xl p-4 md:p-6 w-full max-w-6xl flex flex-col md:flex-row gap-4 shadow-2xl relative max-h-[95vh]">
+                <button onclick="cerrarVisorFotos()" class="absolute top-4 right-4 text-white/50 hover:text-white font-bold text-2xl z-50">✕</button>
+                <input type="hidden" id="visor-item-id">
+                
+                <!-- Columna de miniaturas (vertical en desktop, horizontal en móvil) -->
+                <div class="flex md:flex-col gap-2 md:gap-3 overflow-x-auto md:overflow-y-auto md:w-32 flex-shrink-0 custom-scrollbar pb-2 md:pb-0 md:pr-2">
+                    <div id="visor-tira-miniaturas" class="flex md:flex-col gap-2 md:gap-3">
+                        <!-- Miniaturas inyectadas -->
+                    </div>
+                    <label for="input-nueva-foto-galeria" class="w-20 h-20 md:w-full md:h-24 flex-shrink-0 bg-black/20 border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center text-white/40 hover:text-white hover:border-indigo-500 transition-all cursor-pointer">
+                        <span class="text-2xl">➕</span>
+                        <span class="text-[9px] font-bold uppercase">Añadir</span>
+                    </label>
+                    <input type="file" id="input-nueva-foto-galeria" class="hidden" accept="image/*" onchange="agregarFotoGaleria(event)">
+                </div>
+
+                <!-- Visor principal -->
+                <div class="flex-1 flex flex-col gap-4 min-h-0">
+                    <div class="border-b border-white/10 pb-3">
+                        <h2 class="text-lg font-black uppercase tracking-widest text-indigo-400 truncate" id="visor-fotos-titulo">Visor de Galería</h2>
+                    </div>
+                    <div id="visor-contenedor-img-parent" class="flex-1 relative flex items-center justify-center bg-black/20 rounded-2xl overflow-hidden shadow-inner">
+                        <img id="visor-foto-principal" src="" class="max-w-full max-h-full object-contain cursor-zoom-in" onclick="this.classList.toggle('max-w-full'); this.classList.toggle('max-h-full'); this.classList.toggle('object-contain');">
+                        <button id="btn-visor-prev" onclick="navegarFotoVisor(-1)" class="hidden absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-3 rounded-full hover:bg-black/80 transition-all text-xl">◀</button>
+                        <button id="btn-visor-next" onclick="navegarFotoVisor(1)" class="hidden absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 text-white p-3 rounded-full hover:bg-black/80 transition-all text-xl">▶</button>
+                    </div>
+                    <div id="visor-foto-acciones" class="flex flex-wrap gap-2 justify-end">
+                        <button id="btn-set-portada" onclick="establecerComoPortada()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-xl text-xs uppercase transition-all shadow-md">🌟 Poner de Portada</button>
+                        <button onclick="eliminarFotoActual()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold py-2 px-4 rounded-xl text-xs uppercase transition-all shadow-md">🗑️ Eliminar Foto</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -4670,6 +4701,7 @@
                     await refrescarCategoriasCloud();
                     await reloadCoreData(); 
                     await cargarNotasBoard();
+                    actualizarVistaFotosFormulario();
                 } else {
                     console.log("No hay sesión activa.");
                 }

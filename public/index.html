@@ -4502,6 +4502,17 @@
                     const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">🏬 ${v.proveedor.toUpperCase()}</span>` : '';
                     const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas); const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
                     
+                    let badgeComentarios = '';
+                    if (v.comentariosProducto) {
+                        const comentarioTexto = String(v.comentariosProducto); // Conversión segura a String
+                        const esImportante = comentarioTexto.toLowerCase().includes('!importante') || comentarioTexto.startsWith('*');
+                        const claseCss = esImportante 
+                            ? 'bg-rose-500/20 text-rose-400 border-rose-500/30 animate-pulse'
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                        const titulo = esImportante ? "Ver Comentario IMPORTANTE" : "Ver Comentarios";
+                        badgeComentarios = `<button onclick="abrirModalComentarios('${v._id}'); event.stopPropagation();" class="${claseCss} px-1.5 py-0.5 rounded text-[8px] font-mono font-bold hover:bg-white/20" title="${titulo}">💬</button>`;
+                    }
+
                     const badgeEst = `<span class="bg-${est.color}-500/10 text-${est.color}-400 border border-${est.color}-500/20 px-1 py-0.5 rounded text-[8px] font-black uppercase">${est.nombre}</span>`;
 
                     card.innerHTML = `

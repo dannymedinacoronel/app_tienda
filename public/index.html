@@ -1116,6 +1116,21 @@
             </div>
         </div>
 
+        <!-- MODAL VER COMENTARIOS -->
+        <div id="modal-ver-comentarios" class="hidden fixed inset-0 z-[460] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+            <div class="card-bg border rounded-3xl p-6 w-full max-w-lg flex flex-col gap-4 shadow-2xl relative">
+                <button onclick="cerrarModalComentarios()" class="absolute top-4 right-4 text-white/50 hover:text-white font-bold text-2xl">✕</button>
+                <div class="border-b border-white/10 pb-4">
+                    <h2 class="text-xl font-black uppercase tracking-widest text-amber-400">💬 Comentarios del Producto</h2>
+                    <p id="comentarios-prenda-titulo" class="text-xs opacity-70 mt-1"></p>
+                </div>
+                <div id="comentarios-contenido" class="text-sm leading-relaxed bg-black/20 p-4 rounded-2xl border border-white/10 max-h-60 overflow-y-auto custom-scrollbar whitespace-pre-wrap">
+                    <!-- Contenido inyectado -->
+                </div>
+                <button onclick="cerrarModalComentarios()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-xs uppercase transition-all">Cerrar</button>
+            </div>
+        </div>
+
         <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-3xl w-[92%] transition-all backdrop-blur-md">
             <div class="text-xs font-bold font-mono">💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> MARCADOS</div>
             <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
@@ -4813,6 +4828,19 @@
                 alert('Error: ' + err.message);
                 cerrarModalPostVenta(false); // Revertir visualmente
             }
+        }
+
+        function abrirModalComentarios(itemId) {
+            const item = BASE_DATOS.find(v => v._id === itemId);
+            if (!item || !item.comentariosProducto) return;
+
+            document.getElementById('comentarios-prenda-titulo').innerText = item.prenda;
+            document.getElementById('comentarios-contenido').innerText = item.comentariosProducto;
+            document.getElementById('modal-ver-comentarios').classList.remove('hidden');
+        }
+
+        function cerrarModalComentarios() {
+            document.getElementById('modal-ver-comentarios').classList.add('hidden');
         }
 
         async function deleteItem(id) { if (confirm("¿Seguro que deseas eliminar permanentemente este artículo?")) { await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }); await reloadCoreData(); } }

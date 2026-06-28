@@ -1057,6 +1057,65 @@
             </div>
         </div>
 
+        <!-- MODAL POST-VENTA -->
+        <div id="modal-post-venta" class="hidden fixed inset-0 z-[450] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+            <div class="card-bg border rounded-3xl p-6 w-full max-w-lg flex flex-col gap-4 shadow-2xl relative">
+                <input type="hidden" id="post-venta-item-ids">
+                <input type="hidden" id="post-venta-nuevo-estado">
+                <div class="border-b border-white/10 pb-4">
+                    <h2 class="text-xl font-black uppercase tracking-widest text-emerald-400">💰 Registrar Venta</h2>
+                    <p id="post-venta-prenda-titulo" class="text-xs opacity-70 mt-1">Detalles finales del artículo vendido</p>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div id="post-venta-precio-container">
+                        <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio de Venta Final (€)</label>
+                        <input type="number" id="post-venta-precio" step="0.01" class="input-bg border w-full rounded-xl p-2 text-sm font-bold focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div id="post-venta-envio-container">
+                        <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Gastos de Envío (€)</label>
+                        <input type="number" id="post-venta-envio" step="0.01" class="input-bg border w-full rounded-xl p-2 text-sm font-bold focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Fecha de Venta</label>
+                        <input type="date" id="post-venta-fecha" class="input-bg border w-full rounded-xl p-2 text-sm focus:outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Canal Comercial</label>
+                    <select id="post-venta-canal" class="input-bg border w-full rounded-xl p-2 text-sm focus:outline-none dropdown-bg">
+                        <option value="Vinted">👗 Vinted</option>
+                        <option value="Tienda Física">🏬 Tienda Física</option>
+                        <option value="Wallapop">🤝 Wallapop</option>
+                        <option value="Web">🌐 Web</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Valoración Post-Venta (Calidad)</label>
+                    <input type="hidden" id="post-venta-rating" value="0">
+                    <div class="flex items-center gap-2 bg-black/10 p-2 rounded-xl border border-current/10 justify-center text-2xl">
+                        <span onclick="setPostVentaRating(1)" id="post-star-1" class="star-rating-btn text-slate-500">☆</span>
+                        <span onclick="setPostVentaRating(2)" id="post-star-2" class="star-rating-btn text-slate-500">☆</span>
+                        <span onclick="setPostVentaRating(3)" id="post-star-3" class="star-rating-btn text-slate-500">☆</span>
+                        <span onclick="setPostVentaRating(4)" id="post-star-4" class="star-rating-btn text-slate-500">☆</span>
+                        <span onclick="setPostVentaRating(5)" id="post-star-5" class="star-rating-btn text-slate-500">☆</span>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Comentarios / Valoración del Producto</glabel>
+                    <textarea id="post-venta-comentarios" rows="3" placeholder="Añade notas sobre el estado final, el envío, el comprador..." class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none resize-none focus:border-emerald-500"></textarea>
+                </div>
+
+                <div class="flex gap-2 mt-2">
+                    <button onclick="cerrarModalPostVenta(false)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-xs uppercase transition-all">Cancelar</button>
+                    <button onclick="confirmarVentaDesdeModal()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs uppercase transition-all shadow-lg">Confirmar Venta</button>
+                </div>
+            </div>
+        </div>
+
         <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-3xl w-[92%] transition-all backdrop-blur-md">
             <div class="text-xs font-bold font-mono">💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> MARCADOS</div>
             <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
@@ -3609,39 +3668,65 @@
         window.clearDrop = function(e) { const col = e.currentTarget; if(col) col.classList.remove('drag-over'); };
         
         window.handleDragStart = function(e, id) { 
-            e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData("text/plain", id); 
+            e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData("text/plain", id);
             if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) {
                 e.dataTransfer.setData("text/lote-items", JSON.stringify(ITEMS_SELECCIONADOS_MASIVOS));
             } else { e.dataTransfer.setData("text/lote-items", JSON.stringify([id])); }
             const card = document.getElementById(id);
             if(card) { setTimeout(() => { if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) { ITEMS_SELECCIONADOS_MASIVOS.forEach(xId => { const cNode = document.getElementById(xId); if(cNode) cNode.classList.add('dragging'); }); } else { card.classList.add('dragging'); } }, 0); }
         };
-
+        
         window.handleDropColumn = async function(e, newState) {
             e.preventDefault(); window.clearDrop(e);
             const loteRaw = e.dataTransfer.getData("text/lote-items"); if (!loteRaw) return;
             const listaIds = JSON.parse(loteRaw);
             
             const estadoDestino = LISTA_ESTADOS_KANBAN.find(est => est.nombre === newState);
+
+            // Mover visualmente el item para feedback instantáneo
+            const copiasEstadosAnteriores = {};
+            listaIds.forEach(id => { 
+                const idx = BASE_DATOS.findIndex(x => x._id === id); 
+                if (idx !== -1) { 
+                    copiasEstadosAnteriores[id] = BASE_DATOS[idx].estado; 
+                    BASE_DATOS[idx].estado = newState; 
+                } 
+            });
+            recalcularKPIsLocalesOptimistas(); 
+            renderKanban();
+
+            // Si es una venta, gestionarla con el modal o en lote
             if (estadoDestino && estadoDestino.rolFinanciero === 'Venta') {
                 tocarSonidoCajaRegistradora();
                 lanzarConfetiVenta();
-            }
+                procesarMultiplicadorCombo();
 
+                // Si es un solo artículo, abrimos el modal de detalle de venta
+                if (listaIds.length === 1) {
+                    abrirModalPostVenta(listaIds[0], newState);
+                    // La confirmación del modal se encargará de la API y el refresco.
+                    return;
+                }
+            }
+            
+            // Para movimientos que no son a Venta, o para ventas en lote, usamos la lógica anterior
             cantarPorVoz(`Columna actualizada`);
             procesarMultiplicadorCombo();
 
-            const copiasEstadosAnteriores = {};
-            listaIds.forEach(id => { const idx = BASE_DATOS.findIndex(x => x._id === id); if (idx !== -1) { copiasEstadosAnteriores[id] = BASE_DATOS[idx].estado; BASE_DATOS[idx].estado = newState; } });
-            recalcularKPIsLocalesOptimistas(); renderKanban();
-
             try {
-                const promesas = listaIds.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { 
-                    method: 'PUT', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    credentials: 'include', 
-                    body: JSON.stringify({ estado: newState }) 
-                }));
+                const promesas = listaIds.map(id => {
+                    const bodyPayload = { estado: newState };
+                    // Si es una venta en lote, al menos asignamos la fecha de hoy
+                    if (estadoDestino && estadoDestino.rolFinanciero === 'Venta') {
+                        bodyPayload.fechaVenta = new Date().toISOString().split('T')[0];
+                    }
+                    return fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { 
+                        method: 'PUT', 
+                        headers: { 'Content-Type': 'application/json' }, 
+                        credentials: 'include', 
+                        body: JSON.stringify(bodyPayload) 
+                    });
+                });
                 await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
             } catch(err) {
                 listaIds.forEach(id => { const idx = BASE_DATOS.findIndex(x => x._id === id); if (idx !== -1) BASE_DATOS[idx].estado = copiasEstadosAnteriores[id]; });
@@ -3997,10 +4082,38 @@
 
         async function ejecutarAccionMasivaEstado(nuevoEstado) {
             if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
-            const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: nuevoEstado }) }));
+
+            const estadoDestino = LISTA_ESTADOS_KANBAN.find(est => est.nombre === nuevoEstado);
+            const esVenta = estadoDestino && estadoDestino.rolFinanciero === 'Venta';
+
+            // Si es una venta, usar el modal.
+            if (esVenta) {
+                abrirModalPostVenta(ITEMS_SELECCIONADOS_MASIVOS, nuevoEstado);
+                return;
+            }
+
+            // Para múltiples artículos o movimientos que no son a venta
+            const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => {
+                const bodyPayload = { estado: nuevoEstado };
+                if (esVenta) {
+                    bodyPayload.fechaVenta = new Date().toISOString().split('T')[0];
+                }
+                return fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { 
+                    method: 'PUT', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    credentials: 'include', 
+                    body: JSON.stringify(bodyPayload) 
+                });
+            });
+
             await Promise.all(promesas); 
-            const eConfig = LISTA_ESTADOS_KANBAN.find(est => est.nombre === nuevoEstado);
-            if (eConfig && eConfig.rolFinanciero === 'Venta') { tocarSonidoCajaRegistradora(); lanzarConfetiVenta(); cantarPorVoz("Lote Vendido"); }
+            
+            if (esVenta) { 
+                tocarSonidoCajaRegistradora(); 
+                lanzarConfetiVenta(); 
+                cantarPorVoz("Lote Vendido"); 
+            }
+            
             limpiarSeleccionMasiva(); await reloadCoreData();
         }
 
@@ -4540,47 +4653,60 @@
             document.getElementById('btn-cancel').classList.add('hidden');
         }
 
+        // Función auxiliar para procesar un único archivo
+        async function procesarUnArchivo(file) {
+            // Conversión de HEIC/HEIF si es necesario
+            if (file.type === "image/heic" || file.type === "image/heif" || file.name.toLowerCase().endsWith(".heic")) {
+                try {
+                    const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.8 });
+                    file = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+                } catch (err) {
+                    console.error("Error convirtiendo HEIC:", err);
+                    return null; // Omitir este archivo si falla la conversión
+                }
+            }
+
+            // Compresión y redimensión con Canvas
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        const MAX_WIDTH = 800; const MAX_HEIGHT = 800;
+                        let width = img.width; let height = img.height;
+                        if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
+                        else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
+                        canvas.width = width; canvas.height = height;
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.8));
+                    };
+                    img.onerror = () => resolve(null); // Si la imagen no se puede cargar
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => resolve(null); // Si el reader falla
+                reader.readAsDataURL(file);
+            });
+        }
+
         async function procesarYComprimirFoto(event) {
             const files = Array.from(event.target.files);
             if (!files.length) return;
             
             const btnSubmit = document.getElementById('btn-submit');
             const textoBotonOriginal = btnSubmit.innerText;
-            btnSubmit.innerText = "Comprimiendo imágenes...";
             btnSubmit.disabled = true;
 
-            for (let file of files) {
-                if (file.type === "image/heic" || file.type === "image/heif" || file.name.toLowerCase().endsWith(".heic")) {
-                    try {
-                        const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.8 });
-                        file = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-                    } catch (err) { continue; }
+            for (let i = 0; i < files.length; i++) {
+                btnSubmit.innerText = `Comprimiendo ${i + 1}/${files.length}...`;
+                const base64 = await procesarUnArchivo(files[i]);
+                if (base64) {
+                    FOTOS_FORMULARIO_TEMP.push(base64);
+                    actualizarVistaFotosFormulario(); // Actualiza la UI después de cada imagen
                 }
-
-                const base64 = await new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const img = new Image();
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            const ctx = canvas.getContext('2d');
-                            const MAX_WIDTH = 800; const MAX_HEIGHT = 800;
-                            let width = img.width; let height = img.height;
-                            if (width > height) { if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; } } 
-                            else { if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; } }
-                            canvas.width = width; canvas.height = height;
-                            ctx.drawImage(img, 0, 0, width, height);
-                            resolve(canvas.toDataURL('image/jpeg', 0.8));
-                        };
-                        img.src = e.target.result;
-                    };
-                    reader.readAsDataURL(file);
-                });
-                
-                FOTOS_FORMULARIO_TEMP.push(base64);
             }
 
-            actualizarVistaFotosFormulario();
             btnSubmit.innerText = textoBotonOriginal;
             btnSubmit.disabled = false;
             event.target.value = "";
@@ -4621,6 +4747,89 @@
         function cancelFoto() {
             FOTOS_FORMULARIO_TEMP = [];
             actualizarVistaFotosFormulario();
+        }
+
+        function setPostVentaRating(estrellasSeleccionadas) {
+            document.getElementById('post-venta-rating').value = estrellasSeleccionadas;
+            for (let i = 1; i <= 5; i++) {
+                const starElement = document.getElementById(`post-star-${i}`);
+                if (starElement) {
+                    if (i <= estrellasSeleccionadas) { starElement.innerText = "★"; starElement.className = "star-rating-btn text-amber-400 font-bold"; }
+                    else { starElement.innerText = "☆"; starElement.className = "star-rating-btn text-slate-500"; }
+                }
+            }
+        }
+
+        function abrirModalPostVenta(itemIds, nuevoEstado) {
+            if (!itemIds || itemIds.length === 0) return;
+
+            document.getElementById('post-venta-item-ids').value = JSON.stringify(itemIds);
+            document.getElementById('post-venta-nuevo-estado').value = nuevoEstado;
+
+            const tituloEl = document.getElementById('post-venta-prenda-titulo');
+            const precioContainerEl = document.getElementById('post-venta-precio-container');
+            const envioContainerEl = document.getElementById('post-venta-envio-container');
+
+            if (itemIds.length === 1) {
+                const item = BASE_DATOS.find(v => v._id === itemIds[0]);
+                if (!item) return;
+                
+                tituloEl.innerText = item.prenda;
+                precioContainerEl.classList.remove('hidden');
+                envioContainerEl.classList.remove('hidden');
+                document.getElementById('post-venta-precio').value = item.precioVenta || 0;
+                document.getElementById('post-venta-envio').value = item.gastosEnvio || 0;
+                document.getElementById('post-venta-canal').value = item.canalVenta || 'Vinted';
+                document.getElementById('post-venta-comentarios').value = item.comentariosProducto || '';
+                setPostVentaRating(item.rating || 0);
+            } else {
+                tituloEl.innerHTML = `Registrando venta de <span class="font-black text-emerald-300">${itemIds.length}</span> artículos en lote.`;
+                precioContainerEl.classList.add('hidden');
+                envioContainerEl.classList.add('hidden');
+                // Set defaults for bulk
+                document.getElementById('post-venta-precio').value = 0;
+                document.getElementById('post-venta-canal').value = 'Vinted';
+                document.getElementById('post-venta-comentarios').value = 'Venta en lote.';
+                setPostVentaRating(0);
+            }
+
+            document.getElementById('post-venta-fecha').value = new Date().toISOString().split('T')[0];
+            document.getElementById('modal-post-venta').classList.remove('hidden');
+        }
+
+        function cerrarModalPostVenta(ventaConfirmada = false) {
+            document.getElementById('modal-post-venta').classList.add('hidden');
+            // Si el usuario cancela, la prenda debe volver a su estado original visualmente
+            if (!ventaConfirmada) { reloadCoreData(); }
+        }
+
+        async function confirmarVentaDesdeModal() {
+            const itemIds = JSON.parse(document.getElementById('post-venta-item-ids').value || '[]');
+            if (itemIds.length === 0) return;
+
+            const nuevoEstado = document.getElementById('post-venta-nuevo-estado').value;
+            const fechaVenta = document.getElementById('post-venta-fecha').value;
+            const canalVenta = document.getElementById('post-venta-canal').value;
+            const rating = parseInt(document.getElementById('post-venta-rating').value) || 0;
+            const comentarios = document.getElementById('post-venta-comentarios').value.trim();
+            const precioVentaSingle = parseFloat(document.getElementById('post-venta-precio').value);
+            const gastosEnvioSingle = parseFloat(document.getElementById('post-venta-envio').value);
+
+            try {
+                const promesas = itemIds.map(id => {
+                    const itemOriginal = BASE_DATOS.find(v => v._id === id); if (!itemOriginal) return Promise.resolve();
+                    const payload = { ...itemOriginal, estado: nuevoEstado, fechaVenta: fechaVenta, canalVenta: canalVenta, rating: rating, comentariosProducto: comentarios };
+                    if (itemIds.length === 1) { payload.precioVenta = precioVentaSingle || itemOriginal.precioVenta; payload.gastosEnvio = gastosEnvioSingle || 0; }
+                    const { _id, proveedor, ...datosVenta } = payload;
+                    return fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ ...datosVenta, proveedor: payload.proveedor }) });
+                });
+                const results = await Promise.all(promesas);
+                if (results.every(res => res && res.ok)) { cerrarModalPostVenta(true); await reloadCoreData(); limpiarSeleccionMasiva(); } 
+                else { throw new Error('Fallo al actualizar uno o más artículos.'); }
+            } catch (err) {
+                alert('Error: ' + err.message);
+                cerrarModalPostVenta(false); // Revertir visualmente
+            }
         }
 
         async function deleteItem(id) { if (confirm("¿Seguro que deseas eliminar permanentemente este artículo?")) { await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }); await reloadCoreData(); } }

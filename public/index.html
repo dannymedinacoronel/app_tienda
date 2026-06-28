@@ -17,21 +17,21 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
-    <script src="//unpkg.com/three@0.159.0/build/three.min.js"></script>
-    <script src="//unpkg.com/three-globe@2.31.0/dist/three-globe.min.js"></script>
-    <script src="//unpkg.com/three@0.159.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="//unpkg.com/three@0.159.0/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="//unpkg.com/three@0.159.0/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="//unpkg.com/three@0.159.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="https://unpkg.com/html5-qrcode" defer></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/particles.js@2.0.0/particles.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js" defer></script>
+    <script src="//unpkg.com/three@0.159.0/build/three.min.js" defer></script>
+    <script src="//unpkg.com/three-globe@2.31.0/dist/three-globe.min.js" defer></script>
+    <script src="//unpkg.com/three@0.159.0/examples/js/controls/OrbitControls.js" defer></script>
+    <script src="//unpkg.com/three@0.159.0/examples/js/postprocessing/EffectComposer.js" defer></script>
+    <script src="//unpkg.com/three@0.159.0/examples/js/postprocessing/RenderPass.js" defer></script>
+    <script src="//unpkg.com/three@0.159.0/examples/js/postprocessing/UnrealBloomPass.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js" defer></script>
     
     <style>
         body.theme-dark { background-color: #0b0f19; color: #f1f5f9; }
@@ -140,7 +140,7 @@
         .star-rating-btn { cursor: pointer; transition: transform 0.15s ease; }
         .star-rating-btn:hover { transform: scale(1.3); }
         
-        .kanban-card { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease; backface-visibility: hidden; }
+        .kanban-card { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease; backface-visibility: hidden; contain: content; }
         .dragging { opacity: 0.25 !important; border-color: #3b82f6 !important; }
 
         #particles-js { position: fixed; width: 100%; height: 100%; top: 0; left: 0; z-index: 0; pointer-events: none; }
@@ -261,7 +261,7 @@
                     <div class="relative w-full sm:w-60 flex items-center gap-2">
                         <div class="relative flex-1">
                             <form id="form-escaner-pistola" autocomplete="off">
-                                <input type="text" id="input-pistola" oninput="filtrarProductosMenu(this.value)" placeholder="🔍 Buscar SKU o prenda..." class="w-full bg-black/20 border border-current/20 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40 transition-all">
+                                <input type="text" id="input-pistola" oninput="debouncedFiltrarProductosMenu(this.value)" placeholder="🔍 Buscar SKU o prenda..." class="w-full bg-black/20 border border-current/20 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-blue-500 placeholder-current/40 transition-all">
                             </form>
                             <div id="dropdown-buscador" class="hidden absolute left-0 top-full mt-2 w-80 dropdown-bg border rounded-2xl shadow-2xl z-[200] max-h-60 overflow-y-auto p-2 text-xs"></div>
                         </div>
@@ -565,7 +565,7 @@
                         
                         <div class="relative mb-6">
                             <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none opacity-40 text-sm">🔍</span>
-                            <input type="text" oninput="filtrarCRM(this.value)" placeholder="Buscar por nombre, DNI, email o teléfono..." class="input-bg border w-full rounded-2xl pl-10 pr-4 py-3 text-xs focus:outline-none shadow-inner">
+                            <input type="text" oninput="debouncedFiltrarCRM(this.value)" placeholder="Buscar por nombre, DNI, email o teléfono..." class="input-bg border w-full rounded-2xl pl-10 pr-4 py-3 text-xs focus:outline-none shadow-inner">
                         </div>
 
                         <div id="contenedor-clientes-crm" class="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto pr-2 pb-10 content-start">
@@ -1815,8 +1815,29 @@
         let LISTA_ESTADOS_KANBAN = [];
         let GLOBO_INSTANCE = null;
         let FOTOS_FORMULARIO_TEMP = [];
+    const KANBAN_PAGE_SIZE = 20; // Items a cargar por lote en el scroll infinito
+    let KANBAN_LOAD_COUNTS = {};
+    let KANBAN_OBSERVER = null;
+
+    // --- FUNCIONES DEBOUNCED PARA RENDIMIENTO ---
+    const debouncedCambiarFiltroColumna = debounce(cambiarFiltroColumna, 300);
+    const debouncedFiltrarProductosMenu = debounce(filtrarProductosMenu, 250);
+    const debouncedFiltrarCRM = debounce(filtrarCRM, 300);
 
         // 📸 LÓGICA DE VISOR Y GALERÍA DE FOTOS
+    // --- LÓGICA DE SCROLL INFINITO KANBAN ---
+    function loadMoreItems(estado) {
+        if (KANBAN_LOAD_COUNTS[estado]) {
+            KANBAN_LOAD_COUNTS[estado] += KANBAN_PAGE_SIZE;
+            renderKanban();
+        }
+    }
+    function initKanbanObserver() {
+        if (KANBAN_OBSERVER) KANBAN_OBSERVER.disconnect();
+        KANBAN_OBSERVER = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => { if (entry.isIntersecting) { const estado = entry.target.dataset.estado; observer.unobserve(entry.target); loadMoreItems(estado); } });
+        }, { rootMargin: '400px' }); // Cargar cuando esté a 400px del viewport para una experiencia más suave
+    }
         let ITEM_FOTOS_ACTUAL = null;
         let IDX_FOTO_ACTUAL = -1; 
 
@@ -4247,6 +4268,7 @@
             try {
                 const res = await fetch(`${BACKEND_URL}/api/ventas`, { credentials: 'include' }); if(!res.ok) return;
                 const data = await res.json(); BASE_DATOS = data.ventas || [];
+                KANBAN_LOAD_COUNTS = {}; // Resetear paginación en refresco completo
 
                 document.getElementById('kpi-ingresos').innerText = `${(data.resumen.ingresos || 0).toFixed(2)} €`;
                 document.getElementById('kpi-beneficio').innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
@@ -4455,7 +4477,7 @@
                             <option value="precio-asc" ${CONFIG_ORDEN_COLUMNAS[est.nombre] === 'precio-asc' ? 'selected' : ''}>💰 Precio: Menor</option>
                             <option value="nombre" ${CONFIG_ORDEN_COLUMNAS[est.nombre] === 'nombre' ? 'selected' : ''}>🔤 Nombre</option>
                         </select>
-                        <input type="text" oninput="cambiarFiltroColumna('${est.nombre}', this.value)" value="${CONFIG_FILTRO_COLUMNAS[est.nombre] || ''}" placeholder="Filtrar..." class="bg-black/10 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30 text-white">
+                        <input type="text" oninput="debouncedCambiarFiltroColumna('${est.nombre}', this.value)" value="${CONFIG_FILTRO_COLUMNAS[est.nombre] || ''}" placeholder="Filtrar..." class="bg-black/10 border border-current/10 text-[9px] rounded-lg px-2 py-1 focus:outline-none placeholder-current/30 text-white">
                     </div>
                     <div id="col-dinamica-${est._id}" class="flex-1 space-y-3 p-1 overflow-y-auto max-h-[600px] custom-scrollbar" ondragover="allowDrop(event)" ondrop="handleDropColumn(event, '${est.nombre}')" ondragleave="clearDrop(event)"></div>
                 </div>`;
@@ -4486,7 +4508,12 @@
                 const colDom = document.getElementById(`col-dinamica-${est._id}`);
                 if(!colDom) return;
 
-                filtrados.forEach(v => {
+                if (!KANBAN_LOAD_COUNTS[est.nombre]) {
+                    KANBAN_LOAD_COUNTS[est.nombre] = KANBAN_PAGE_SIZE;
+                }
+                const itemsToShow = filtrados.slice(0, KANBAN_LOAD_COUNTS[est.nombre]);
+
+                itemsToShow.forEach(v => {
                     const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
                     
                     const esStockCritico = est.rolFinanciero === 'Stock' && totalStockPorPrenda[v.prenda] < 2;
@@ -4496,7 +4523,7 @@
                     const esScraping = (v.sku && v.sku.startsWith('VNT-')) || (v.comentariosProducto && v.comentariosProducto.includes('Importado'));
                     const badgeScraping = esScraping ? `<div class="absolute -top-1.5 -right-1.5 bg-blue-600 rounded-full w-4 h-4 flex items-center justify-center text-[8px] shadow-lg border border-blue-300" title="Alojado en MongoDB (Vía Web/Scraping)">🌐</div>` : '';
                     const badgeGaleria = v.galeria && v.galeria.length > 0 ? `<div class="absolute bottom-0 right-0 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${v.galeria.length}</div>` : '';
-                    const thumb = v.imagen ? `<div class="relative flex-shrink-0 cursor-pointer hover:scale-105 transition-transform group" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Ver Galería de Fotos"><img src="${v.imagen}" class="card-img-mini border border-white/10 shadow-lg group-hover:border-indigo-400">${badgeScraping}${badgeGaleria}</div>` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20 cursor-pointer hover:bg-slate-700 transition-colors border border-dashed border-white/20" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Añadir Fotos">📸</div>`;
+                    const thumb = v.imagen ? `<div class="relative flex-shrink-0 cursor-pointer hover:scale-105 transition-transform group" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Ver Galería de Fotos"><img src="${v.imagen}" loading="lazy" decoding="async" class="card-img-mini border border-white/10 shadow-lg group-hover:border-indigo-400">${badgeScraping}${badgeGaleria}</div>` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20 cursor-pointer hover:bg-slate-700 transition-colors border border-dashed border-white/20" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Añadir Fotos">📸</div>`;
                     const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
                     const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
                     const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">🏬 ${v.proveedor.toUpperCase()}</span>` : '';
@@ -4547,6 +4574,15 @@
                     vCount += (v.cantidad || 1);
                 });
                 
+                // Añadir sentinel para scroll infinito
+                if (filtrados.length > itemsToShow.length) {
+                    const sentinel = document.createElement('div');
+                    sentinel.className = 'h-10 w-full'; // Elemento invisible para observar
+                    sentinel.dataset.estado = est.nombre;
+                    colDom.appendChild(sentinel);
+                    if (KANBAN_OBSERVER) KANBAN_OBSERVER.observe(sentinel);
+                }
+
                 const badgeDom = document.getElementById(`badge-kanban-${est._id}`);
                 if(badgeDom) badgeDom.innerText = vCount;
             });
@@ -4942,22 +4978,24 @@
                     document.getElementById('panel-control').classList.remove('hidden'); 
                     document.getElementById('ticker-bar').classList.remove('hidden'); 
                     document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario.split('@')[0]} [${data.rol}]`; 
-                    
+
                     // Inicializar Efecto 3D en Tarjetas
                     const cards3D = document.querySelectorAll('.kpi-3d-card');
+                    const handleCardMouseMove = throttle(function(e, card) {
+                        const rect = card.getBoundingClientRect();
+                        const x = e.clientX - rect.left; const y = e.clientY - rect.top;
+                        const centerX = rect.width / 2; const centerY = rect.height / 2;
+                        const rotateX = ((y - centerY) / centerY) * -12;
+                        const rotateY = ((x - centerX) / centerX) * 12;
+                        card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.03, 1.03, 1.03)`;
+                    }, 16); // ~60fps
+
                     cards3D.forEach(card => {
-                        card.addEventListener('mousemove', e => {
-                            const rect = card.getBoundingClientRect();
-                            const x = e.clientX - rect.left;
-                            const y = e.clientY - rect.top;
-                            const centerX = rect.width / 2;
-                            const centerY = rect.height / 2;
-                            const rotateX = ((y - centerY) / centerY) * -12;
-                            const rotateY = ((x - centerX) / centerX) * 12;
-                            card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.03, 1.03, 1.03)`;
-                        });
+                        card.addEventListener('mousemove', e => handleCardMouseMove(e, card));
                         card.addEventListener('mouseleave', () => { card.style.transform = `perspective(1000px) rotateX(0) rotateY(0) scale3d(1, 1, 1)`; });
                     });
+
+                    initKanbanObserver();
 
                     await refrescarEstadosKanban();
                     // 3. Cargar datos protegidos solo después de confirmar acceso

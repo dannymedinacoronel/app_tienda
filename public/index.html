@@ -1119,15 +1119,17 @@
         <!-- MODAL VER COMENTARIOS -->
         <div id="modal-ver-comentarios" class="hidden fixed inset-0 z-[460] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
             <div class="card-bg border rounded-3xl p-6 w-full max-w-lg flex flex-col gap-4 shadow-2xl relative">
-                <button onclick="cerrarModalComentarios()" class="absolute top-4 right-4 text-white/50 hover:text-white font-bold text-2xl">✕</button>
+                <input type="hidden" id="comentarios-item-id">
+                <button onclick="cerrarModalComentarios()" class="absolute top-4 right-4 text-white/50 hover:text-white font-bold text-2xl z-10">✕</button>
                 <div class="border-b border-white/10 pb-4">
                     <h2 class="text-xl font-black uppercase tracking-widest text-amber-400">💬 Comentarios del Producto</h2>
                     <p id="comentarios-prenda-titulo" class="text-xs opacity-70 mt-1"></p>
                 </div>
-                <div id="comentarios-contenido" class="text-sm leading-relaxed bg-black/20 p-4 rounded-2xl border border-white/10 max-h-60 overflow-y-auto custom-scrollbar whitespace-pre-wrap">
-                    <!-- Contenido inyectado -->
+                <textarea id="comentarios-contenido" rows="6" class="input-bg border w-full rounded-2xl p-4 text-sm focus:outline-none resize-none focus:border-amber-500 leading-relaxed custom-scrollbar whitespace-pre-wrap" placeholder="Añade o edita tus notas aquí..."></textarea>
+                <div class="flex gap-2 mt-2">
+                    <button onclick="cerrarModalComentarios()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-xs uppercase transition-all">Cancelar</button>
+                    <button onclick="guardarComentariosDesdeModal()" class="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-xl text-xs uppercase transition-all shadow-lg">Guardar Cambios</button>
                 </div>
-                <button onclick="cerrarModalComentarios()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-xs uppercase transition-all">Cerrar</button>
             </div>
         </div>
 
@@ -4832,15 +4834,37 @@
 
         function abrirModalComentarios(itemId) {
             const item = BASE_DATOS.find(v => v._id === itemId);
-            if (!item || !item.comentariosProducto) return;
+            if (!item) return;
 
+            document.getElementById('comentarios-item-id').value = itemId;
             document.getElementById('comentarios-prenda-titulo').innerText = item.prenda;
-            document.getElementById('comentarios-contenido').innerText = item.comentariosProducto;
+            document.getElementById('comentarios-contenido').value = item.comentariosProducto || '';
             document.getElementById('modal-ver-comentarios').classList.remove('hidden');
+            document.getElementById('comentarios-contenido').focus();
         }
 
         function cerrarModalComentarios() {
             document.getElementById('modal-ver-comentarios').classList.add('hidden');
+        }
+
+        async function guardarComentariosDesdeModal() {
+            const itemId = document.getElementById('comentarios-item-id').value;
+            const comentarios = document.getElementById('comentarios-contenido').value;
+            if (!itemId) return;
+
+            const itemOriginal = BASE_DATOS.find(v => v._id === itemId);
+            if (!itemOriginal) return;
+
+            const payload = { ...itemOriginal, comentariosProducto: comentarios, proveedor: itemOriginal.proveedor };
+
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/ventas/${itemId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
+                if (res.ok) {
+                    cantarPorVoz("Comentario guardado.");
+                    cerrarModalComentarios();
+                    await reloadCoreData();
+                } else { throw new Error('Fallo al guardar el comentario.'); }
+            } catch (err) { alert('Error: ' + err.message); }
         }
 
         async function deleteItem(id) { if (confirm("¿Seguro que deseas eliminar permanentemente este artículo?")) { await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' }); await reloadCoreData(); } }

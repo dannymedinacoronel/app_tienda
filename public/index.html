@@ -3683,6 +3683,16 @@
             
             const estadoDestino = LISTA_ESTADOS_KANBAN.find(est => est.nombre === newState);
 
+            // Si es una venta, gestionarla con el modal o en lote
+            if (estadoDestino && estadoDestino.rolFinanciero === 'Venta') {
+                tocarSonidoCajaRegistradora();
+                lanzarConfetiVenta();
+                procesarMultiplicadorCombo();
+                abrirModalPostVenta(listaIds, newState);
+                return; // La confirmación del modal se encargará de la API y el refresco.
+            }
+            
+            // Para movimientos que no son a Venta, o para ventas en lote, usamos la lógica anterior
             // Mover visualmente el item para feedback instantáneo
             const copiasEstadosAnteriores = {};
             listaIds.forEach(id => { 
@@ -3695,38 +3705,11 @@
             recalcularKPIsLocalesOptimistas(); 
             renderKanban();
 
-            // Si es una venta, gestionarla con el modal o en lote
-            if (estadoDestino && estadoDestino.rolFinanciero === 'Venta') {
-                tocarSonidoCajaRegistradora();
-                lanzarConfetiVenta();
-                procesarMultiplicadorCombo();
-
-                // Si es un solo artículo, abrimos el modal de detalle de venta
-                if (listaIds.length === 1) {
-                    abrirModalPostVenta(listaIds[0], newState);
-                    // La confirmación del modal se encargará de la API y el refresco.
-                    return;
-                }
-            }
-            
-            // Para movimientos que no son a Venta, o para ventas en lote, usamos la lógica anterior
             cantarPorVoz(`Columna actualizada`);
             procesarMultiplicadorCombo();
 
             try {
-                const promesas = listaIds.map(id => {
-                    const bodyPayload = { estado: newState };
-                    // Si es una venta en lote, al menos asignamos la fecha de hoy
-                    if (estadoDestino && estadoDestino.rolFinanciero === 'Venta') {
-                        bodyPayload.fechaVenta = new Date().toISOString().split('T')[0];
-                    }
-                    return fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { 
-                        method: 'PUT', 
-                        headers: { 'Content-Type': 'application/json' }, 
-                        credentials: 'include', 
-                        body: JSON.stringify(bodyPayload) 
-                    });
-                });
+                const promesas = listaIds.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: newState }) }));
                 await Promise.all(promesas); limpiarSeleccionMasiva(); await reloadCoreData();
             } catch(err) {
                 listaIds.forEach(id => { const idx = BASE_DATOS.findIndex(x => x._id === id); if (idx !== -1) BASE_DATOS[idx].estado = copiasEstadosAnteriores[id]; });

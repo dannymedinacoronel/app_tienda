@@ -923,49 +923,81 @@ app.delete('/api/gastos/:id', exigeAdmin, async (req, res) => {
 
 app.get('/api/ventas', exigeAdmin, async (req, res) => {
     try {
-        const ventasRaw = await VentaRopa.find().populate('tienda').sort({ _id: -1 }).lean();
-        const logs = await LogAuditoria.find().sort({ _id: -1 }).limit(50).lean(); 
-        const gastosExtra = await Gasto.find().lean();
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 40; // Lotes de 40 productos
+        const skip = (page - 1) * limit;
+
         const estadosKanban = await EstadoKanban.find().lean();
         const nombresEstadosVenta = estadosKanban.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
-        
-        let ingresos = 0, inversion = 0, prendasVendidas = 0, gastosTotalesEnvio = 0, totalGastosOperativos = 0, costeVendidosTotal = 0;
-        
-        gastosExtra.forEach(g => totalGastosOperativos += g.monto);
 
-        const ventas = ventasRaw.map(v => {
-            const proveedorNombre = v.tienda && v.tienda.nombre ? v.tienda.nombre : 'Sin Tienda';
-            
-            const cant = parseInt(v.cantidad, 10) || 0;
-            const pCompra = parseFloat(v.precioCompra) || 0;
-            const pVenta = parseFloat(v.precioVenta) || 0;
-            const gEnvio = parseFloat(v.gastosEnvio) || 0;
-
-            inversion += (pCompra * cant);
-            gastosTotalesEnvio += (gEnvio * cant);
-
-            if (nombresEstadosVenta.includes(v.estado) && v.canalVenta) {
-                let comisionPlataforma = 0;
-                if (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') {
-                    comisionPlataforma = (pVenta * 0.05); 
+        // Pipeline para obtener datos paginados y conteo total en una sola consulta
+        const [ventasData] = await VentaRopa.aggregate([
+            { $sort: { _id: -1 } },
+            {
+                $facet: {
+                    paginatedResults: [
+                        { $skip: skip },
+                        { $limit: limit },
+                        { $lookup: { from: 'tiendas', localField: 'tienda', foreignField: '_id', as: 'tiendaInfo' } },
+                        { $unwind: { path: '$tiendaInfo', preserveNullAndEmptyArrays: true } },
+                        { $addFields: { proveedor: '$tiendaInfo.nombre' } },
+                        { $project: { tiendaInfo: 0 } }
+                    ],
+                    totalCount: [{ $count: 'count' }]
                 }
-                ingresos += ((pVenta - comisionPlataforma) * cant);
-                prendasVendidas += cant;
-                costeVendidosTotal += (pCompra * cant);
             }
+        ]);
 
-            return { ...v, proveedor: proveedorNombre };
-        });
+        const ventas = ventasData.paginatedResults;
+        const totalVentas = ventasData.totalCount[0] ? ventasData.totalCount[0].count : 0;
 
-        const beneficioNeto = ingresos - inversion - gastosTotalesEnvio - totalGastosOperativos;
-        const roi = (inversion + totalGastosOperativos) > 0 ? (beneficioNeto / (inversion + gastosTotalesEnvio + totalGastosOperativos)) * 100 : 0;
+        // Pipeline optimizado para las estadísticas globales (se ejecuta solo una vez)
+        const [summaryData] = await VentaRopa.aggregate([
+            {
+                $group: {
+                    _id: null,
+                    totalInversion: { $sum: { $multiply: [{ $ifNull: ['$precioCompra', 0] }, { $ifNull: ['$cantidad', 1] }] } },
+                    totalGastosEnvio: { $sum: { $multiply: [{ $ifNull: ['$gastosEnvio', 0] }, { $ifNull: ['$cantidad', 1] }] } },
+                    ventas: { $push: { estado: '$estado', precioVenta: '$precioVenta', cantidad: '$cantidad', canalVenta: '$canalVenta' } }
+                }
+            }
+        ]);
 
-        return res.json({ 
-            resumen: { ingresos, beneficio: beneficioNeto, inversion: inversion + gastosTotalesEnvio + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos }, 
+        const gastosExtra = await Gasto.find().lean();
+        const totalGastosOperativos = gastosExtra.reduce((acc, g) => acc + g.monto, 0);
+
+        let ingresos = 0, prendasVendidas = 0;
+        if (summaryData) {
+            summaryData.ventas.forEach(v => {
+                if (nombresEstadosVenta.includes(v.estado)) {
+                    const pVenta = parseFloat(v.precioVenta) || 0;
+                    const cant = parseInt(v.cantidad, 10) || 1;
+                    let comision = (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') ? (pVenta * 0.05) : 0;
+                    ingresos += (pVenta - comision) * cant;
+                    prendasVendidas += cant;
+                }
+            });
+        }
+
+        const inversion = (summaryData?.totalInversion || 0) + (summaryData?.totalGastosEnvio || 0);
+        const beneficioNeto = ingresos - inversion - totalGastosOperativos;
+        const roi = (inversion + totalGastosOperativos) > 0 ? (beneficioNeto / (inversion + totalGastosOperativos)) * 100 : 0;
+
+        const resumen = { ingresos, beneficio: beneficioNeto, inversion: inversion + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };
+
+        const logs = await LogAuditoria.find().sort({ _id: -1 }).limit(50).lean();
+
+        return res.json({
+            resumen,
             ventas,
-            logs 
+            logs,
+            totalPages: Math.ceil(totalVentas / limit),
+            currentPage: page
         });
-    } catch (error) { return res.status(500).json({ error: 'Fallo analíticas.' }); }
+    } catch (error) {
+        console.error('Fallo en API /ventas:', error);
+        return res.status(500).json({ error: 'Fallo al obtener datos de ventas.' });
+    }
 });
 
 app.post('/api/ventas', exigeAdmin, async (req, res) => {
@@ -1233,21 +1265,19 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
 
         const registrosCreados = [];
         for (const prod of productos) {
-            const galeriaBase64 = [];
-            // Procesamos un máximo de 12 fotos extra por producto para galerías completas
+            // OPTIMIZACIÓN: No convertir a Base64, guardar URL directamente.
+            const galeriaUrls = [];
             if (prod.galeria && Array.isArray(prod.galeria)) {
                 for (const gUrl of prod.galeria.slice(0, 12)) {
-                    const b64 = await downloadAndConvertToBase64(gUrl);
-                    if (b64) {
-                        galeriaBase64.push(b64.startsWith('data:image') ? b64 : gUrl);
-                    }
+                    galeriaUrls.push(gUrl);
                 }
             }
-            const mainImg = await downloadAndConvertToBase64(prod.imagen);
+
             const nuevaVenta = new VentaRopa({
                 ...prod,
-                imagen: mainImg && mainImg.startsWith('data:image') ? mainImg : prod.imagen,
-                galeria: galeriaBase64,
+                // Guardar URL directamente en lugar de Base64
+                imagen: prod.imagen,
+                galeria: galeriaUrls,
                 tienda: tiendaVinted._id,
                 sku: `VNT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
                 comentariosProducto: `Importado automáticamente desde Vinted el ${new Date().toLocaleDateString()}`

@@ -497,6 +497,11 @@
                     <!-- Columnas inyectadas via Javascript -->
                 </div>
 
+                <!-- Contenedor para el botón de Cargar Más -->
+                <div id="kanban-loader-container" class="lg:col-span-4 text-center mb-8">
+                    <!-- El botón o mensaje de fin se inyectará aquí -->
+                </div>
+
                 <!-- FILA INFERIOR: CALENDARIO (Ancho completo) -->
                 <div class="lg:col-span-4 mt-6">
                     <div class="card-bg border rounded-3xl p-6 flex flex-col shadow-xl">
@@ -1330,206 +1335,6 @@
     </div>
 </div>
 
-<script>
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-
-    function throttle(func, limit) {
-        let inThrottle;
-        return function() {
-            const args = arguments;
-            const context = this;
-            if (!inThrottle) {
-                func.apply(context, args);
-                inThrottle = true;
-                setTimeout(() => inThrottle = false, limit);
-            }
-        };
-    }
-
-    let resultadosScraperActual = null;
-
-    // Abre el modal inicial
-    function procesarScraperVinted() {
-        document.getElementById('modal-scraper').classList.remove('hidden');
-        document.getElementById('scraper-step-1').classList.remove('hidden');
-        document.getElementById('scraper-step-2').classList.add('hidden');
-        document.getElementById('scraper-loader').classList.add('hidden');
-        document.getElementById('scraper-url').value = '';
-        document.getElementById('scraper-file-input').value = '';
-        document.getElementById('badge-scraper-count').classList.add('hidden');
-        renderSavedUrls();
-    }
-
-    function cerrarModalScraper() {
-        document.getElementById('modal-scraper').classList.add('hidden');
-    }
-
-    // REALIZA EL SCRAPING DESDE EL NAVEGADOR (ORDENADOR LOCAL) PARA EVITAR BLOQUEOS DE IP
-    async function iniciarScraping() {
-        const url = document.getElementById('scraper-url').value;
-        if(!url) return alert('Debes introducir una cuenta o URL.');
-
-        document.getElementById('scraper-step-1').classList.add('hidden');
-        document.getElementById('scraper-loader').classList.remove('hidden');
-
-        try {
-            const response = await fetch(`${BACKEND_URL}/api/scraper/analizar`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ url })
-            });
-
-            const data = await response.json();
-            if (!response.ok) throw new Error('Error al comparar con la base de datos.');
-
-            resultadosScraperActual = data;
-            console.log("Análisis completado:", resultadosScraperActual);
-            
-            renderizarResultadosScraping(resultadosScraperActual);
-
-            document.getElementById('scraper-loader').classList.add('hidden');
-            document.getElementById('scraper-step-2').classList.remove('hidden');
-            
-            const badge = document.getElementById('badge-scraper-count');
-            const total = (resultadosScraperActual.discrepancias?.length || 0) + (resultadosScraperActual.nuevos?.length || 0);
-            if (total > 0) {
-                badge.innerText = `${total} ACCIONES`;
-                badge.classList.remove('hidden');
-            }
-        } catch (error) {
-            alert("❌ " + error.message);
-            document.getElementById('scraper-loader').classList.add('hidden');
-            document.getElementById('scraper-step-1').classList.remove('hidden');
-        }
-    }
-
-    // Procesa el archivo Excel/CSV subido manualmente
-    async function procesarArchivoManual(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        document.getElementById('scraper-step-1').classList.add('hidden');
-        document.getElementById('scraper-loader').classList.remove('hidden');
-
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-
-                const productosMapeados = [];
-                jsonData.forEach(row => {
-                    let titulo = '', precio = '';
-                    const galeriaLocal = [];
-                    
-                    for (const key in row) {
-                        const k = key.toLowerCase();
-                        const val = String(row[key] || '').trim();
-                        if (!val) continue;
-
-                        const isUrl = val.startsWith('http');
-                        const isPrice = val.includes('€') || /^\d+[.,]\d{2}$/.test(val) || k.includes('price') || k.includes('precio') || k.includes('text 4');
-
-                        const parts = val.split(/[\s,;|]+/);
-                        let foundUrlInParts = false;
-                        
-                        parts.forEach(p => {
-                            const pUrl = p.trim();
-                            if (pUrl.startsWith('http') && (pUrl.match(/\.(jpg|jpeg|png|webp)/i) || pUrl.includes('image') || k.includes('img') || k.includes('src'))) {
-                                if (!galeriaLocal.includes(pUrl)) galeriaLocal.push(pUrl);
-                                foundUrlInParts = true;
-                            }
-                        });
-
-                        if (!precio && isPrice && !foundUrlInParts) {
-                            precio = val;
-                        } else if (!titulo && !foundUrlInParts && !isPrice && val.length > 4 && isNaN(val) && !val.startsWith('http')) {
-                            const vLower = val.toLowerCase();
-                            if (vLower !== 'novedad' && !vLower.includes('miembro') && !vLower.includes('ver todo')) titulo = val;
-                        }
-                    }
-
-                    const valTitleStrict = row['web_ui__Text__text 2'] || row['web_ui__Text__text'] || row.description || row.title || row.nombre || row.prenda || row['item-card-description'];
-                    if (valTitleStrict) titulo = String(valTitleStrict);
-                    
-                    const valUrlStrict = row['web_ui__Image__content src'] || row['image-src'] || row.image || row.foto || row.imagen || row['item-card-image-src'];
-                    if (valUrlStrict) {
-                        String(valUrlStrict).split(/[\s,;|]+/).reverse().forEach(u => {
-                            const uTrim = u.trim();
-                            if (uTrim.startsWith('http') && !galeriaLocal.includes(uTrim)) {
-                                galeriaLocal.unshift(uTrim);
-                            }
-                        });
-                    }
-
-                    // Limpieza de precios europeos
-                    let cleanPrice = '';
-                    if (precio) {
-                        cleanPrice = precio.replace(/[^\d,.]/g, '').trim();
-                        if (cleanPrice.includes(',') && cleanPrice.includes('.')) { 
-                            cleanPrice = cleanPrice.replace(/\./g, '').replace(',', '.');
-                        } else if (cleanPrice.includes(',')) { 
-                            cleanPrice = cleanPrice.replace(',', '.');
-                        }
-                    }
-
-                    if (titulo && cleanPrice) {
-                        let imagen = galeriaLocal.length > 0 ? galeriaLocal[0] : '';
-                        let galeria = galeriaLocal.length > 1 ? galeriaLocal.slice(1) : [];
-                        productosMapeados.push({ titulo, precio: cleanPrice, imagen, galeria });
-                    }
-                });
-
-                if (productosMapeados.length === 0) throw new Error("No se pudo extraer la información de los productos. Asegúrate de que el CSV tenga textos descriptivos, imágenes y un precio con euros.");
-
-                const response = await fetch(`${BACKEND_URL}/api/scraper/analizar-manual`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ productosExtraidos: productosMapeados })
-                });
-
-                if (!response.ok) throw new Error('Error al analizar el archivo.');
-
-                resultadosScraperActual = await response.json();
-                renderizarResultadosScraping(resultadosScraperActual);
-
-                document.getElementById('scraper-loader').classList.add('hidden');
-                document.getElementById('scraper-step-2').classList.remove('hidden');
-                
-                const badge = document.getElementById('badge-scraper-count');
-                const total = (resultadosScraperActual.discrepancias?.length || 0) + (resultadosScraperActual.nuevos?.length || 0) + (resultadosScraperActual.identicos?.length || 0);
-                if (total > 0) {
-                    badge.innerText = `${total} EN ARCHIVO`;
-                    badge.classList.remove('hidden');
-                }
-            } catch (error) {
-                alert("❌ Error al leer el archivo: " + error.message);
-                procesarScraperVinted();
-            }
-        };
-        reader.readAsArrayBuffer(file);
-    }
-
-    function toggleSelectAllNewItems(checked) {
-        const checkboxes = document.querySelectorAll('.check-new-scraper');
-        checkboxes.forEach(cb => cb.checked = checked);
-    }
-
-    function renderizarResultadosScraping(data) {
         const tbody = document.getElementById('scraper-results-body');
         const gridNuevos = document.getElementById('scraper-grid-nuevos');
         const gridExistentes = document.getElementById('scraper-grid-existentes');
@@ -5051,6 +4856,8 @@
             "retina_detect": true
         });
     </script>
+
+<script src="app.js" defer></script>
 
 </body>
 </html>

@@ -1845,9 +1845,9 @@
     let KANBAN_OBSERVER = null;
 
     // --- FUNCIONES DEBOUNCED PARA RENDIMIENTO ---
-    const debouncedCambiarFiltroColumna = debounce(cambiarFiltroColumna, 300);
-    const debouncedFiltrarProductosMenu = debounce(filtrarProductosMenu, 250);
-    const debouncedFiltrarCRM = debounce(filtrarCRM, 300);
+    window.debouncedCambiarFiltroColumna = debounce(cambiarFiltroColumna, 300);
+    window.debouncedFiltrarProductosMenu = debounce(filtrarProductosMenu, 250);
+    window.debouncedFiltrarCRM = debounce(filtrarCRM, 300);
 
         // 📸 LÓGICA DE VISOR Y GALERÍA DE FOTOS
     // --- LÓGICA DE SCROLL INFINITO KANBAN ---
@@ -3018,7 +3018,7 @@
         // --- LÓGICA CRM ---
         let RESERVAS_CLIENTE_EDICION = [];
 
-        window.filtrarCRM = function(query) {
+        function filtrarCRM(query) {
             const q = query.toLowerCase();
             const filtrados = LISTA_CLIENTES_CACHE.filter(c => 
                 (c.nombre && c.nombre.toLowerCase().includes(q)) || 

@@ -44,6 +44,111 @@ function construirWebhookTargets(webUrl) {
     return [...new Set(targets)];
 }
 
+function normalizarPrecio(valor) {
+    if (valor == null) return NaN;
+    const num = Number(String(valor).replace(/\s+/g, '').replace(',', '.').replace(/[^\d.-]/g, ''));
+    return Number.isFinite(num) ? num : NaN;
+}
+
+function mapearProductoVinted(item) {
+    if (!item) return null;
+
+    const titulo = item.title || item.name || item.item_title || '';
+    const precio = normalizarPrecio(
+        item?.price?.amount ??
+        item?.price_numeric ??
+        item?.total_item_price?.amount ??
+        item?.total_item_price ??
+        item?.price
+    );
+
+    const imagen =
+        item?.photo?.url ||
+        item?.photo?.full_size_url ||
+        item?.photos?.[0]?.url ||
+        item?.photos?.[0]?.full_size_url ||
+        item?.image_url ||
+        '';
+
+    if (!titulo || !Number.isFinite(precio)) return null;
+    return { titulo, precio, imagen };
+}
+
+async function extraerProductosPorApiVinted(urlObjetivo) {
+    const memberMatch = String(urlObjetivo).match(/\/member\/(\d+)/i);
+    if (!memberMatch) return [];
+
+    const userId = memberMatch[1];
+    const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+        'Referer': `https://www.vinted.es/member/${userId}`
+    };
+
+    const acumulados = [];
+    const maxPaginas = 8;
+
+    const extraerItems = (data) => {
+        if (!data || typeof data !== 'object') return [];
+        if (Array.isArray(data.items)) return data.items;
+        if (Array.isArray(data.catalog_items)) return data.catalog_items;
+        if (Array.isArray(data?.data?.items)) return data.data.items;
+        if (Array.isArray(data?.data?.catalog_items)) return data.data.catalog_items;
+        return [];
+    };
+
+    // Endpoint principal para inventario por usuario
+    for (let page = 1; page <= maxPaginas; page++) {
+        try {
+            const res = await axios.get(`https://www.vinted.es/api/v2/users/${userId}/items`, {
+                headers,
+                params: { page, per_page: 96 },
+                timeout: 15000
+            });
+            const items = extraerItems(res.data);
+            if (!items.length) break;
+            acumulados.push(...items);
+        } catch (e) {
+            break;
+        }
+    }
+
+    // Fallback alternativo si el endpoint principal no devolvió nada
+    if (acumulados.length === 0) {
+        for (let page = 1; page <= maxPaginas; page++) {
+            try {
+                const res = await axios.get('https://www.vinted.es/api/v2/catalog/items', {
+                    headers,
+                    params: { user_id: userId, page, per_page: 96, order: 'newest_first' },
+                    timeout: 15000
+                });
+                const items = extraerItems(res.data);
+                if (!items.length) break;
+                acumulados.push(...items);
+            } catch (e) {
+                break;
+            }
+        }
+    }
+
+    const normalizados = acumulados
+        .map(mapearProductoVinted)
+        .filter(Boolean);
+
+    const seen = new Set();
+    const unicos = [];
+    for (const p of normalizados) {
+        const k = `${p.titulo}__${p.precio}`;
+        if (!seen.has(k)) {
+            seen.add(k);
+            unicos.push(p);
+        }
+    }
+
+    return unicos;
+}
+
 async function run() {
     const url = process.argv[2];
     if (!url) {
@@ -117,6 +222,16 @@ async function run() {
                     productosExtraidos.push({ titulo, precio: parseFloat(cleanPrice), imagen: '' });
                 }
             });
+        }
+
+        // Fallback robusto: extraer por API de Vinted (perfil /member/:id)
+        if (productosExtraidos.length === 0) {
+            console.log('[SCRAPER] HTML devolvió 0 productos. Probando API pública de Vinted...');
+            const porApi = await extraerProductosPorApiVinted(url);
+            if (porApi.length > 0) {
+                productosExtraidos.push(...porApi);
+                console.log(`[SCRAPER] API de Vinted devolvió ${porApi.length} productos.`);
+            }
         }
 
         console.log(`[INFO] Se encontraron ${productosExtraidos.length} productos en la web.`);

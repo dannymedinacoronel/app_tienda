@@ -1,0 +1,152 @@
+/*
+  Este archivo contiene estilos personalizados que complementan a Tailwind CSS.
+  NO uses directivas como @apply o @tailwind aquí, ya que el navegador no las entiende
+  sin un proceso de compilación.
+*/
+
+/* --- Definición de Temas con Variables CSS --- */
+.theme-dark {
+  --color-bg: #0f172a;
+  --color-text: #e2e8f0;
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-card-bg: rgba(15, 23, 42, 0.75);
+  --color-input-bg: rgba(30, 41, 59, 0.6);
+  --color-dropdown-bg: rgba(23, 31, 48, 0.9);
+}
+.theme-light {
+  --color-bg: #f1f5f9;
+  --color-text: #1e293b;
+  --color-border: rgba(0, 0, 0, 0.1);
+  --color-card-bg: rgba(255, 255, 255, 0.7);
+  --color-input-bg: rgba(226, 232, 240, 0.8);
+  --color-dropdown-bg: rgba(241, 245, 249, 0.9);
+}
+.theme-pink {
+  --color-bg: #fdf2f8;
+  --color-text: #831843;
+  --color-border: rgba(219, 39, 119, 0.2);
+  --color-card-bg: rgba(253, 242, 248, 0.7);
+  --color-input-bg: rgba(251, 207, 232, 0.7);
+  --color-dropdown-bg: rgba(253, 242, 248, 0.9);
+}
+.theme-emerald {
+  --color-bg: #064e3b;
+  --color-text: #d1fae5;
+  --color-border: rgba(110, 231, 183, 0.2);
+  --color-card-bg: rgba(10, 30, 25, 0.7);
+  --color-input-bg: rgba(5, 150, 105, 0.15);
+  --color-dropdown-bg: rgba(10, 50, 40, 0.9);
+}
+.theme-purple {
+  --color-bg: #312e81;
+  --color-text: #e0e7ff;
+  --color-border: rgba(167, 139, 250, 0.2);
+  --color-card-bg: rgba(30, 27, 75, 0.7);
+  --color-input-bg: rgba(79, 70, 229, 0.15);
+  --color-dropdown-bg: rgba(40, 35, 100, 0.9);
+}
+.theme-premium {
+  --color-bg: #1C1C1C;
+  --color-text: #d4af37;
+  --color-border: rgba(212, 175, 55, 0.2);
+  --color-card-bg: rgba(10, 10, 10, 0.7);
+  --color-input-bg: rgba(212, 175, 55, 0.05);
+  --color-dropdown-bg: rgba(20, 20, 20, 0.9);
+}
+
+/* --- Aplicación de Variables a Clases Personalizadas --- */
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+.card-bg {
+  background-color: var(--color-card-bg);
+  border-color: var(--color-border);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.input-bg {
+  background-color: var(--color-input-bg);
+  border-color: var(--color-border);
+}
+
+.dropdown-bg {
+  background-color: var(--color-dropdown-bg);
+  border-color: var(--color-border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.nav-btn-active {
+  background-color: #4f46e5; /* indigo-600 */
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
+  color: white !important;
+  opacity: 1 !important;
+}
+
+/* --- Estilos y Animaciones Personalizadas --- */
+
+/* Ticker inferior */
+.ticker-content { animation: ticker-scroll 80s linear infinite; }
+@keyframes ticker-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+/* Login */
+.login-glow-card { background: linear-gradient(135deg, #60a5fa, #ec4899, #a855f7); }
+
+/* Logo Premium */
+.logo-premium { background-image: linear-gradient(to right, #FBBF24, #F59E0B, #D97706); }
+
+/* Tarjetas 3D KPIs */
+.kpi-3d-card { transform-style: preserve-3d; }
+
+/* Scrollbar */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
+
+/* Notas Adhesivas */
+.sticky-note {
+    position: absolute;
+    padding: 12px;
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -2px rgba(0,0,0,0.2);
+    border: 1px solid rgba(0,0,0,0.2);
+    resize: both;
+    overflow: auto;
+    min-width: 150px;
+    min-height: 120px;
+    color: #1f2937;
+}
+.note-content { height: calc(100% - 40px); overflow-y: auto; outline: none; }
+.note-yellow { background-color: #fef08a; }
+.note-blue { background-color: #bfdbfe; }
+.note-green { background-color: #bbf7d0; }
+.note-pink { background-color: #fbcfe8; }
+
+/* Partículas de fondo */
+#particles-js {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    z-index: -1;
+}
+#wrapper-core {
+    position: relative;
+    z-index: 1;
+}
+
+.dragging {
+    opacity: 0.3;
+    transform: scale(0.95);
+}
+.drag-over {
+    background-color: rgba(79, 70, 229, 0.2) !important; /* indigo-600/20 */
+    border-style: dashed !important;
+}

@@ -6,6 +6,11 @@ let BASE_DATOS = [];
 let LISTA_TIENDAS_GLOBAL = [];
 let LISTA_CATEGORIAS_GLOBAL = [];
 let LISTA_CLIENTES_CACHE = [];
+let USUARIO_EMAIL_ACTUAL = '';
+let USUARIO_ROL_ACTUAL = '';
+let CHAT_USUARIOS = [];
+let CHAT_USUARIO_ACTIVO = null;
+let CHAT_REFRESH_INTERVAL = null;
 let INSTANCIA_CHARTS = null;
 let INSTANCIA_TARTA = null;
 let INSTANCIA_BARRAS = null;
@@ -43,6 +48,19 @@ socket.on('connect', () => {
 
 socket.on('connect_error', (error) => {
     console.error('[SOCKET] Error de conexión:', error);
+});
+
+socket.on('mensaje_interno_nuevo', (data) => {
+    if (!USUARIO_EMAIL_ACTUAL) return;
+    if (!data) return;
+    if (data.paraEmail === USUARIO_EMAIL_ACTUAL || data.deEmail === USUARIO_EMAIL_ACTUAL) {
+        if (document.getElementById('sec-usuarios') && !document.getElementById('sec-usuarios').classList.contains('hidden')) {
+            refrescarUsuariosChat();
+            if (CHAT_USUARIO_ACTIVO && (CHAT_USUARIO_ACTIVO.email === data.deEmail || CHAT_USUARIO_ACTIVO.email === data.paraEmail)) {
+                cargarConversacionInterna(CHAT_USUARIO_ACTIVO.email);
+            }
+        }
+    }
 });
 
 socket.on('scraper_update', async (data) => {
@@ -1429,7 +1447,14 @@ window.navegarASeccion = function(idSeccion) {
         setTimeout(() => { refrescarClientesCRM(); }, 50);
     }
     if (idSeccion === 'sec-usuarios') {
-        setTimeout(() => { refrescarUsuariosAdmin(); }, 50);
+        setTimeout(() => {
+            refrescarUsuariosAdmin();
+            cargarMiPerfil();
+            refrescarUsuariosChat();
+            iniciarAutoRefreshChat();
+        }, 50);
+    } else {
+        detenerAutoRefreshChat();
     }
     if (idSeccion === 'sec-tareas') {
         setTimeout(() => { refrescarTareas(); }, 50);
@@ -1839,7 +1864,15 @@ async function refrescarUsuariosAdmin() {
         if(!tbody) return;
         tbody.innerHTML = usuarios.map(u => `
             <tr class="hover:bg-white/5 transition-colors">
-                <td class="py-4 px-2 font-black lowercase">${u.email}</td>
+                <td class="py-4 px-2">
+                    <div class="flex items-center gap-2">
+                        <img src="${construirAvatarUsuario(u)}" class="w-8 h-8 rounded-lg object-cover border border-white/10" onerror="this.src='${construirAvatarUsuario({ email: u.email })}'">
+                        <div class="min-w-0">
+                            <p class="font-black lowercase truncate">${u.email}</p>
+                            <p class="text-[9px] opacity-55 truncate">${u.nombreVisible || 'Sin nombre visible'}</p>
+                        </div>
+                    </div>
+                </td>
                 <td class="py-4 px-2 text-[10px]"><span class="bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded font-bold uppercase tracking-widest border border-indigo-500/20">${u.rol || 'Admin'}</span></td>
                 <td class="py-4 px-2">
                     <span class="text-[10px] font-mono ${u.ultimaConexion ? 'text-emerald-400' : 'opacity-30'}">
@@ -1853,6 +1886,177 @@ async function refrescarUsuariosAdmin() {
             </tr>
         `).join('');
     } catch(e) { console.error("Error cargando usuarios:", e); }
+}
+
+function construirAvatarUsuario(usuario) {
+    const inicial = (usuario?.nombreVisible || usuario?.email || '?').trim().charAt(0).toUpperCase();
+    return usuario?.fotoPerfil || `data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Crect width='120' height='120' fill='%23111827'/%3E%3Ctext x='50%25' y='55%25' dominant-baseline='middle' text-anchor='middle' font-family='monospace' font-size='56' fill='%2394a3b8'%3E${encodeURIComponent(inicial)}%3C/text%3E%3C/svg%3E`;
+}
+
+async function cargarMiPerfil() {
+    try {
+        const res = await fetch('/api/perfil', { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo cargar el perfil.');
+
+        document.getElementById('perfil-nombre-visible').value = data.nombreVisible || '';
+        document.getElementById('perfil-foto-url').value = data.fotoPerfil || '';
+        document.getElementById('perfil-foto-preview').src = construirAvatarUsuario(data);
+    } catch (e) {
+        console.error('Error perfil:', e.message);
+    }
+}
+
+function cargarFotoPerfilLocal(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const base64 = String(e.target?.result || '');
+        document.getElementById('perfil-foto-url').value = base64;
+        document.getElementById('perfil-foto-preview').src = base64;
+    };
+    reader.readAsDataURL(file);
+}
+
+async function guardarMiPerfil() {
+    const nombreVisible = document.getElementById('perfil-nombre-visible').value.trim();
+    const fotoPerfil = document.getElementById('perfil-foto-url').value.trim();
+
+    try {
+        const res = await fetch('/api/perfil', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ nombreVisible, fotoPerfil })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo guardar el perfil.');
+
+        document.getElementById('perfil-foto-preview').src = construirAvatarUsuario(data.perfil || { nombreVisible, fotoPerfil });
+        cantarPorVoz('Perfil guardado');
+        refrescarUsuariosAdmin();
+        refrescarUsuariosChat();
+    } catch (e) {
+        alert(`Error de perfil: ${e.message}`);
+    }
+}
+
+async function refrescarUsuariosChat() {
+    try {
+        const res = await fetch('/api/mensajes/usuarios', { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo cargar lista de chat.');
+
+        CHAT_USUARIOS = data.usuarios || [];
+        const cont = document.getElementById('lista-chat-usuarios');
+        if (!cont) return;
+
+        if (CHAT_USUARIOS.length === 0) {
+            cont.innerHTML = '<p class="text-[10px] opacity-50">No hay otros usuarios autorizados.</p>';
+            return;
+        }
+
+        cont.innerHTML = CHAT_USUARIOS.map(u => {
+            const activo = CHAT_USUARIO_ACTIVO && CHAT_USUARIO_ACTIVO.email === u.email;
+            const nombre = u.nombreVisible || u.email.split('@')[0];
+            return `
+                <button onclick="seleccionarUsuarioChat('${u.email.replace(/'/g, "\\'")}')" class="w-full text-left p-2 rounded-xl border transition-all ${activo ? 'bg-blue-500/20 border-blue-500/40' : 'bg-black/20 border-white/10 hover:bg-white/10'}">
+                    <div class="flex items-center gap-2">
+                        <img src="${construirAvatarUsuario(u)}" class="w-8 h-8 rounded-lg object-cover border border-white/10" onerror="this.src='${construirAvatarUsuario({ email: u.email })}'">
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[10px] font-bold uppercase truncate">${nombre}</p>
+                            <p class="text-[9px] opacity-55 truncate">${u.email}</p>
+                        </div>
+                    </div>
+                </button>`;
+        }).join('');
+    } catch (e) {
+        console.error('Error chat usuarios:', e.message);
+    }
+}
+
+function seleccionarUsuarioChat(email) {
+    CHAT_USUARIO_ACTIVO = CHAT_USUARIOS.find(u => u.email === email) || null;
+    const header = document.getElementById('chat-header-usuario');
+    if (header && CHAT_USUARIO_ACTIVO) {
+        header.innerText = `Chat con ${CHAT_USUARIO_ACTIVO.nombreVisible || CHAT_USUARIO_ACTIVO.email.split('@')[0]}`;
+    }
+    refrescarUsuariosChat();
+    cargarConversacionInterna(email);
+}
+
+async function cargarConversacionInterna(email) {
+    try {
+        const res = await fetch(`/api/mensajes?con=${encodeURIComponent(email)}`, { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo cargar la conversación.');
+
+        const cont = document.getElementById('chat-conversacion');
+        if (!cont) return;
+        const mensajes = data.mensajes || [];
+
+        if (mensajes.length === 0) {
+            cont.innerHTML = '<p class="text-[10px] opacity-45">Aún no hay mensajes en esta conversación.</p>';
+            return;
+        }
+
+        cont.innerHTML = mensajes.map(m => {
+            const mio = m.deEmail === USUARIO_EMAIL_ACTUAL;
+            const fecha = new Date(m.creadoEn).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            return `
+                <div class="flex ${mio ? 'justify-end' : 'justify-start'}">
+                    <div class="max-w-[85%] px-3 py-2 rounded-2xl border ${mio ? 'bg-blue-600/20 border-blue-500/40' : 'bg-slate-700/40 border-white/10'}">
+                        <p class="text-[11px] leading-relaxed whitespace-pre-wrap break-words">${m.texto}</p>
+                        <p class="text-[9px] opacity-50 mt-1 font-mono">${fecha}</p>
+                    </div>
+                </div>`;
+        }).join('');
+
+        cont.scrollTop = cont.scrollHeight;
+    } catch (e) {
+        console.error('Error conversación:', e.message);
+    }
+}
+
+async function enviarMensajeInterno() {
+    const input = document.getElementById('chat-input-mensaje');
+    const texto = (input?.value || '').trim();
+    if (!texto) return;
+    if (!CHAT_USUARIO_ACTIVO) return alert('Selecciona un usuario para enviar mensaje.');
+
+    try {
+        const res = await fetch('/api/mensajes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ paraEmail: CHAT_USUARIO_ACTIVO.email, texto })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo enviar el mensaje.');
+
+        input.value = '';
+        await cargarConversacionInterna(CHAT_USUARIO_ACTIVO.email);
+    } catch (e) {
+        alert(`Error enviando mensaje: ${e.message}`);
+    }
+}
+
+function iniciarAutoRefreshChat() {
+    detenerAutoRefreshChat();
+    CHAT_REFRESH_INTERVAL = setInterval(() => {
+        refrescarUsuariosChat();
+        if (CHAT_USUARIO_ACTIVO?.email) {
+            cargarConversacionInterna(CHAT_USUARIO_ACTIVO.email);
+        }
+    }, 12000);
+}
+
+function detenerAutoRefreshChat() {
+    if (CHAT_REFRESH_INTERVAL) {
+        clearInterval(CHAT_REFRESH_INTERVAL);
+        CHAT_REFRESH_INTERVAL = null;
+    }
 }
 
 async function agregarUsuarioAutorizado() {
@@ -3923,6 +4127,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const data = await res.json();
         
         if (data.autenticado) { 
+            USUARIO_EMAIL_ACTUAL = (data.usuario || '').toLowerCase();
+            USUARIO_ROL_ACTUAL = data.rol || 'Editor';
             setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
             document.getElementById('login-box').classList.add('hidden'); 
             document.getElementById('panel-control').classList.remove('hidden'); 

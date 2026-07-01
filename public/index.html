@@ -452,6 +452,44 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col gap-4">
+                        <h3 class="text-xs font-black text-emerald-400 uppercase tracking-widest">🧑 Mi Perfil</h3>
+                        <div class="flex items-center gap-3">
+                            <img id="perfil-foto-preview" src="" alt="Foto de perfil" class="w-16 h-16 rounded-2xl object-cover border border-white/15 bg-black/30">
+                            <div class="text-[10px] opacity-65 leading-tight">
+                                <p>Tu foto se mostrará en la mensajería interna.</p>
+                                <p class="font-mono opacity-70">Formatos: URL o subida local.</p>
+                            </div>
+                        </div>
+                        <input type="text" id="perfil-nombre-visible" placeholder="Nombre visible (ej: Danny)" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
+                        <input type="text" id="perfil-foto-url" placeholder="URL de foto (opcional)" class="input-bg border w-full rounded-xl px-3 py-2 text-xs focus:outline-none">
+                        <div class="flex gap-2">
+                            <input type="file" id="perfil-foto-file" accept="image/*" class="hidden" onchange="cargarFotoPerfilLocal(event)">
+                            <button onclick="document.getElementById('perfil-foto-file').click()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-xl text-[10px] uppercase">Subir Foto</button>
+                            <button onclick="guardarMiPerfil()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2 rounded-xl text-[10px] uppercase">Guardar Perfil</button>
+                        </div>
+                    </div>
+
+                    <div class="lg:col-span-2 card-bg border p-6 rounded-3xl shadow-xl grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[420px]">
+                        <div class="md:col-span-1 border border-white/10 rounded-2xl p-3 bg-black/20 flex flex-col">
+                            <h4 class="text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-2">Usuarios</h4>
+                            <div id="lista-chat-usuarios" class="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1"></div>
+                        </div>
+                        <div class="md:col-span-2 border border-white/10 rounded-2xl p-3 bg-black/20 flex flex-col">
+                            <div class="flex items-center justify-between mb-2">
+                                <h4 id="chat-header-usuario" class="text-[10px] font-black uppercase tracking-widest text-blue-300">Selecciona un usuario</h4>
+                                <span id="chat-header-estado" class="text-[9px] opacity-55">Mensajería interna</span>
+                            </div>
+                            <div id="chat-conversacion" class="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 mb-2"></div>
+                            <div class="flex gap-2">
+                                <input type="text" id="chat-input-mensaje" placeholder="Escribe un mensaje interno..." class="input-bg border flex-1 rounded-xl px-3 py-2 text-xs focus:outline-none" onkeydown="if(event.key==='Enter'){event.preventDefault(); enviarMensajeInterno();}">
+                                <button onclick="enviarMensajeInterno()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase">Enviar</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="sec-analitica" class="seccion-app hidden flex flex-col gap-6 mb-8">

@@ -153,10 +153,23 @@ const Nota = mongoose.models.Nota || mongoose.model('Nota', NotaSchema);
 const UsuarioAutorizadoSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     rol: { type: String, enum: ['Admin', 'Editor', 'Lector'], default: 'Editor' },
+    nombreVisible: { type: String, default: '', trim: true },
+    fotoPerfil: { type: String, default: '' },
     fechaAgregado: { type: Date, default: Date.now },
     ultimaConexion: { type: Date }
 });
 const UsuarioAutorizado = mongoose.models.UsuarioAutorizado || mongoose.model('UsuarioAutorizado', UsuarioAutorizadoSchema);
+
+const MensajeInternoSchema = new mongoose.Schema({
+    deEmail: { type: String, required: true, lowercase: true, trim: true },
+    paraEmail: { type: String, required: true, lowercase: true, trim: true },
+    texto: { type: String, required: true, trim: true, maxlength: 4000 },
+    leido: { type: Boolean, default: false },
+    creadoEn: { type: Date, default: Date.now }
+});
+MensajeInternoSchema.index({ deEmail: 1, paraEmail: 1, creadoEn: -1 });
+MensajeInternoSchema.index({ paraEmail: 1, leido: 1, creadoEn: -1 });
+const MensajeInterno = mongoose.models.MensajeInterno || mongoose.model('MensajeInterno', MensajeInternoSchema);
 
 const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
 
@@ -545,6 +558,122 @@ app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
         }
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
+});
+
+// --- Perfil de Usuario / Mensajería Interna ---
+app.get('/api/perfil', exigeAdmin, async (req, res) => {
+    try {
+        const email = (req.session?.email || '').toLowerCase().trim();
+        const user = await UsuarioAutorizado.findOne({ email }).lean();
+        if (!user) return res.status(404).json({ error: 'Perfil no encontrado.' });
+        res.json({
+            email: user.email,
+            rol: user.rol || 'Editor',
+            nombreVisible: user.nombreVisible || '',
+            fotoPerfil: user.fotoPerfil || ''
+        });
+    } catch (e) {
+        res.status(500).json({ error: 'Error al recuperar perfil.' });
+    }
+});
+
+app.put('/api/perfil', exigeAdmin, async (req, res) => {
+    try {
+        const email = (req.session?.email || '').toLowerCase().trim();
+        const nombreVisible = String(req.body?.nombreVisible || '').trim().slice(0, 80);
+        const fotoPerfil = String(req.body?.fotoPerfil || '').trim().slice(0, 2000000);
+
+        const actualizado = await UsuarioAutorizado.findOneAndUpdate(
+            { email },
+            { nombreVisible, fotoPerfil },
+            { new: true }
+        ).lean();
+
+        if (!actualizado) return res.status(404).json({ error: 'Perfil no encontrado.' });
+        await registrarLog(req.session.email, 'Actualizó su perfil de usuario.');
+        res.json({ success: true, perfil: actualizado });
+    } catch (e) {
+        res.status(500).json({ error: 'Error al guardar perfil.' });
+    }
+});
+
+app.get('/api/mensajes/usuarios', exigeAdmin, async (req, res) => {
+    try {
+        const emailActual = (req.session?.email || '').toLowerCase().trim();
+        const usuarios = await UsuarioAutorizado.find()
+            .sort({ fechaAgregado: -1 })
+            .lean();
+
+        const filtrados = usuarios
+            .filter(u => u.email !== emailActual)
+            .map(u => ({
+                email: u.email,
+                rol: u.rol || 'Editor',
+                nombreVisible: u.nombreVisible || '',
+                fotoPerfil: u.fotoPerfil || '',
+                ultimaConexion: u.ultimaConexion || null
+            }));
+
+        res.json({ usuarios: filtrados });
+    } catch (e) {
+        res.status(500).json({ error: 'Error al recuperar usuarios para chat.' });
+    }
+});
+
+app.get('/api/mensajes', exigeAdmin, async (req, res) => {
+    try {
+        const emailActual = (req.session?.email || '').toLowerCase().trim();
+        const conEmail = String(req.query?.con || '').toLowerCase().trim();
+        if (!conEmail) return res.status(400).json({ error: 'Falta destinatario de conversación.' });
+
+        const mensajes = await MensajeInterno.find({
+            $or: [
+                { deEmail: emailActual, paraEmail: conEmail },
+                { deEmail: conEmail, paraEmail: emailActual }
+            ]
+        })
+            .sort({ creadoEn: 1 })
+            .limit(500)
+            .lean();
+
+        await MensajeInterno.updateMany(
+            { deEmail: conEmail, paraEmail: emailActual, leido: false },
+            { $set: { leido: true } }
+        );
+
+        res.json({ mensajes });
+    } catch (e) {
+        res.status(500).json({ error: 'Error al recuperar conversación.' });
+    }
+});
+
+app.post('/api/mensajes', exigeAdmin, async (req, res) => {
+    try {
+        const emailActual = (req.session?.email || '').toLowerCase().trim();
+        const paraEmail = String(req.body?.paraEmail || '').toLowerCase().trim();
+        const texto = String(req.body?.texto || '').trim();
+
+        if (!paraEmail || !texto) return res.status(400).json({ error: 'Datos incompletos para enviar mensaje.' });
+        if (texto.length > 4000) return res.status(400).json({ error: 'Mensaje demasiado largo.' });
+
+        const existeDestino = await UsuarioAutorizado.findOne({ email: paraEmail }).lean();
+        if (!existeDestino) return res.status(404).json({ error: 'Usuario destino no encontrado.' });
+
+        const mensaje = new MensajeInterno({ deEmail: emailActual, paraEmail, texto });
+        await mensaje.save();
+
+        if (global.io) {
+            global.io.emit('mensaje_interno_nuevo', {
+                deEmail: emailActual,
+                paraEmail,
+                creadoEn: mensaje.creadoEn
+            });
+        }
+
+        res.json({ success: true, mensaje });
+    } catch (e) {
+        res.status(500).json({ error: 'Error al enviar mensaje.' });
+    }
 });
 
 // --- Rutas de Tareas (Kanban) ---

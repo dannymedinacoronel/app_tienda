@@ -154,8 +154,6 @@ const UsuarioAutorizado = mongoose.models.UsuarioAutorizado || mongoose.model('U
 
 const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
 
-const MongoStore = MongoStoreModule.default || MongoStoreModule; // Obtiene la clase MongoStore, manejando el 'default' export si existe
-
 mongoose.connect(MONGO_URI_FINAL)
     .then(async () => {
         console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.');

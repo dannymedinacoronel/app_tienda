@@ -30,6 +30,15 @@ let GLOBO_INSTANCE = null;
 let FOTOS_FORMULARIO_TEMP = [];
 let resultadosScraperActual = null;
 
+function numeroSeguro(valor, fallback = 0) {
+    const normalizado = Number(String(valor ?? '').replace(/\s+/g, '').replace(',', '.').replace(/[^\d.-]/g, ''));
+    return Number.isFinite(normalizado) ? normalizado : fallback;
+}
+
+function valorNumeroSeguro(valor, fallback = 0) {
+    return String(numeroSeguro(valor, fallback));
+}
+
 // --- NUEVO ESTADO PARA PAGINACIÓN ---
 let CURRENT_PAGE = 1;
 let TOTAL_PAGES = 1;
@@ -263,14 +272,14 @@ function renderizarResultadosScraping(data) {
             tbody.innerHTML += `
                 <tr class="border-b border-white/5 align-middle">
                     <td class="py-2 pr-2 w-8"><input type="checkbox" class="check-disc-scraper" value="${i}" checked></td>
-                    <td class="py-2"><img src="${d.imagen || ''}" onclick="abrirVisorScraper('disc', ${i})" class="w-8 h-8 rounded object-cover border border-white/10 cursor-pointer hover:scale-110 transition-transform" title="Ver foto" onerror="this.src='https://via.placeholder.com/60'"></td>
+                    <td class="py-2"><img src="${d.imagen || ''}" onclick="abrirVisorScraper('disc', ${i})" class="w-8 h-8 rounded object-cover border border-white/10 cursor-pointer hover:scale-110 transition-transform" title="Ver foto" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 60 60\'%3E%3Crect width=\'60\' height=\'60\' fill=\'%23111827\'/%3E%3Cpath d=\'M15 40l10-12 8 9 6-7 11 10\' fill=\'none\' stroke=\'%239ca3af\' stroke-width=\'3\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3Ccircle cx=\'22\' cy=\'22\' r=\'4\' fill=\'%239ca3af\'/%3E%3C/svg%3E'"></td>
                     <td class="py-2 px-2">
                         <input type="text" id="disc-item-title-${i}" value="${tituloMostrado}" class="bg-transparent border-b border-white/10 text-[11px] font-bold uppercase w-full focus:outline-none focus:border-amber-400 px-1 py-0.5 text-white" placeholder="Título...">
                         <div class="text-[8px] opacity-40 mt-0.5 lowercase">En Mongo: ${d.prenda}</div>
                     </td>
                     <td class="py-2 text-rose-400/50 line-through text-[11px] font-mono text-right">${d.valorAntiguo}€</td>
                     <td class="py-2 text-emerald-400 font-black text-right">
-                        <input type="number" id="disc-item-price-${i}" value="${d.valorNuevo}" step="0.01" class="bg-transparent border-b border-white/10 text-[11px] text-emerald-400 font-mono w-14 focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-right"> €
+                        <input type="number" id="disc-item-price-${i}" value="${valorNumeroSeguro(d.valorNuevo)}" step="0.01" class="bg-transparent border-b border-white/10 text-[11px] text-emerald-400 font-mono w-14 focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-right"> €
                     </td>
                 </tr>`;
         });
@@ -287,14 +296,14 @@ function renderizarResultadosScraping(data) {
                     </div>
                     <div class="flex items-start gap-3">
                             <div class="relative flex-shrink-0 cursor-pointer group" onclick="abrirVisorScraper('nuevo', ${i})" title="Ver Galería">
-                                <img src="${n.imagen || ''}" class="w-14 h-14 rounded-xl object-cover shadow-md group-hover:scale-105 transition-transform" onerror="this.src='https://via.placeholder.com/60'">
+                                <img src="${n.imagen || ''}" class="w-14 h-14 rounded-xl object-cover shadow-md group-hover:scale-105 transition-transform" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 60 60\'%3E%3Crect width=\'60\' height=\'60\' fill=\'%23111827\'/%3E%3Cpath d=\'M15 40l10-12 8 9 6-7 11 10\' fill=\'none\' stroke=\'%239ca3af\' stroke-width=\'3\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3Ccircle cx=\'22\' cy=\'22\' r=\'4\' fill=\'%239ca3af\'/%3E%3C/svg%3E'">
                                 ${badgeGaleriaInfo}
                             </div>
                         <div class="min-w-0 flex-1 flex flex-col gap-1.5 pr-6">
                             <input type="text" id="new-item-title-${i}" value="${n.prenda}" class="bg-transparent border-b border-white/10 text-[11px] font-bold uppercase w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white transition-colors" placeholder="Título a guardar...">
                             <div class="flex items-center gap-1 mt-1">
                                 <span class="text-[9px] opacity-60">Precio:</span>
-                                <input type="number" id="new-item-price-${i}" value="${n.precioVenta}" step="0.01" class="bg-transparent border-b border-white/10 text-[11px] text-emerald-400 font-mono w-16 focus:outline-none focus:border-emerald-400 px-1 py-0.5 transition-colors text-right">
+                                <input type="number" id="new-item-price-${i}" value="${valorNumeroSeguro(n.precioVenta)}" step="0.01" class="bg-transparent border-b border-white/10 text-[11px] text-emerald-400 font-mono w-16 focus:outline-none focus:border-emerald-400 px-1 py-0.5 transition-colors text-right">
                                 <span class="text-[10px] text-emerald-400 font-mono">€</span>
                             </div>
                         </div>
@@ -331,7 +340,7 @@ function renderizarResultadosScraping(data) {
         data.identicos.forEach((n, i) => {
             gridExistentes.innerHTML += `
                 <div class="flex items-center gap-3 p-2 bg-white/5 border border-white/5 rounded-xl">
-                    <img src="${n.imagen || ''}" class="w-8 h-8 rounded object-cover grayscale" onerror="this.src='https://via.placeholder.com/60'">
+                    <img src="${n.imagen || ''}" class="w-8 h-8 rounded object-cover grayscale" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 60 60\'%3E%3Crect width=\'60\' height=\'60\' fill=\'%23111827\'/%3E%3Cpath d=\'M15 40l10-12 8 9 6-7 11 10\' fill=\'none\' stroke=\'%239ca3af\' stroke-width=\'3\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3Ccircle cx=\'22\' cy=\'22\' r=\'4\' fill=\'%239ca3af\'/%3E%3C/svg%3E'">
                     <div class="min-w-0 flex-1">
                         <p class="text-[9px] font-bold uppercase truncate">${n.prenda}</p>
                         <p class="text-[9px] opacity-50 font-mono">${n.precio}€</p>
@@ -351,7 +360,7 @@ async function autorizarCambiosScraping() {
         const idx = cb.value;
         const item = resultadosScraperActual.discrepancias[idx];
         const tituloEditado = document.getElementById(`disc-item-title-${idx}`).value.trim() || item.prendaNueva || item.prenda;
-        const precioEditado = parseFloat(document.getElementById(`disc-item-price-${idx}`).value) || item.valorNuevo;
+        const precioEditado = numeroSeguro(document.getElementById(`disc-item-price-${idx}`).value, numeroSeguro(item.valorNuevo));
         return { idMongo: item.idMongo, prenda: tituloEditado, valorNuevo: precioEditado };
     });
     if (selected.length === 0) return alert('Selecciona algún cambio a sincronizar.');
@@ -396,10 +405,10 @@ async function importarNuevosScraping() {
         const idx = cb.value;
         const itemOriginal = resultadosScraperActual.nuevos[idx];
         const tituloEditado = document.getElementById(`new-item-title-${idx}`).value.trim() || itemOriginal.prenda;
-        const precioEditado = parseFloat(document.getElementById(`new-item-price-${idx}`).value) || itemOriginal.precioVenta;
+        const precioEditado = numeroSeguro(document.getElementById(`new-item-price-${idx}`).value, numeroSeguro(itemOriginal.precioVenta));
         const catEditada = document.getElementById(`new-item-cat-${idx}`).value || 'General';
         const tallaEditada = document.getElementById(`new-item-talla-${idx}`).value || 'Única';
-        const costEditado = parseFloat(document.getElementById(`new-item-cost-${idx}`)?.value) || 0;
+        const costEditado = numeroSeguro(document.getElementById(`new-item-cost-${idx}`)?.value, 0);
         const qtyEditada = parseInt(document.getElementById(`new-item-qty-${idx}`)?.value) || 1;
         const canalEditado = document.getElementById(`new-item-canal-${idx}`)?.value || 'Vinted';
         const galeriaOriginal = itemOriginal.galeria || [];
@@ -2798,7 +2807,7 @@ async function ejecutarLogicaEscaneo(skuParam) {
     } catch (err) {}
 }
 
-window.handleCredentialResponse = async function(response) {
+window.__handleCredentialResponseImpl = async function(response) {
     const loginBox = document.querySelector('.login-glow-card div');
     const originalHTML = loginBox.innerHTML;
     loginBox.innerHTML = '<div class="text-white text-center"><div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div><p class="font-bold text-lg text-blue-400">Obteniendo ubicación satelital...</p><p class="text-[11px] opacity-60 mt-2">Por favor, acepta los permisos en tu navegador si te los pide.</p></div>';
@@ -2828,6 +2837,14 @@ window.handleCredentialResponse = async function(response) {
         );
     } else { sendLogin(); }
 };
+
+window.handleCredentialResponse = window.__handleCredentialResponseImpl;
+
+if (window.__pendingGoogleCredential) {
+    const pendingGoogleCredential = window.__pendingGoogleCredential;
+    window.__pendingGoogleCredential = null;
+    window.handleCredentialResponse(pendingGoogleCredential);
+}
 
 async function reloadCoreData(isInitialLoad = false) {
     if (IS_LOADING_MORE && !isInitialLoad) return;

@@ -37,21 +37,20 @@ async function run() {
 
         let htmlContent = '';
         console.log(`[SCRAPER] Intento directo para: ${url}`);
+        console.log(`[SCRAPER] Intento directo para: ${url}`);
         const response = await axios.get(url, {
             headers: { 
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept-Language': 'es-ES,es;q=0.9',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
+                'Accept-Language': 'es-ES,es;q=0.9'
             },
-            timeout: 20000
+            timeout: 10000 // Reducido a 10 segundos
         });
         htmlContent = response.data;
 
         const $ = cheerio.load(htmlContent);
-
         const productosExtraidos = [];
 
-        // Lógica de extracción (idéntica a server.js)
+        // MÉTODO ULTRA RÁPIDO: Extraer del JSON interno de Vinted
         const scripts = $('script').toArray();
         for (const script of scripts) {
             const content = $(script).html();
@@ -72,6 +71,7 @@ async function run() {
                                 });
                             }
                         });
+                        if (productosExtraidos.length > 0) break; 
                     } catch (e) {}
                 }
             }
@@ -94,7 +94,8 @@ async function run() {
         let nuevos = 0;
         let actualizados = 0;
 
-        for (const item of productosExtraidos) {
+        // Procesar en lotes o más rápido
+        const bulkOperations = productosExtraidos.map(async (item) => {
             const coincidencia = await VentaRopa.findOne({ 
                 prenda: item.titulo,
                 canalVenta: 'Vinted'
@@ -117,7 +118,9 @@ async function run() {
                 });
                 nuevos++;
             }
-        }
+        });
+
+        await Promise.all(bulkOperations);
 
         console.log(`[RESUMEN] Proceso finalizado. Nuevos: ${nuevos}, Actualizados: ${actualizados}`);
 

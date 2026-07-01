@@ -317,16 +317,31 @@ function loadExternalScript(src) {
     });
 }
 
+async function loadScriptWithFallback(urls) {
+    let lastErr = null;
+    for (const url of urls) {
+        try {
+            await loadExternalScript(url);
+            return;
+        } catch (e) {
+            lastErr = e;
+        }
+    }
+    throw lastErr || new Error('No se pudo cargar script externo.');
+}
+
 async function ensureThreeStackLoaded() {
-    if (window.THREE && window.ThreeGlobe && window.THREE.OrbitControls && window.THREE.EffectComposer) return;
+    if (window.THREE && window.ThreeGlobe) return;
     if (!THREE_STACK_PROMISE) {
         THREE_STACK_PROMISE = (async () => {
-            await loadExternalScript('https://unpkg.com/three@0.159.0/build/three.min.js');
-            await loadExternalScript('https://unpkg.com/three-globe@2.31.0/dist/three-globe.min.js');
-            await loadExternalScript('https://unpkg.com/three@0.159.0/examples/js/controls/OrbitControls.js');
-            await loadExternalScript('https://unpkg.com/three@0.159.0/examples/js/postprocessing/EffectComposer.js');
-            await loadExternalScript('https://unpkg.com/three@0.159.0/examples/js/postprocessing/RenderPass.js');
-            await loadExternalScript('https://unpkg.com/three@0.159.0/examples/js/postprocessing/UnrealBloomPass.js');
+            await loadScriptWithFallback([
+                'https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js',
+                'https://unpkg.com/three@0.159.0/build/three.min.js'
+            ]);
+            await loadScriptWithFallback([
+                'https://cdn.jsdelivr.net/npm/three-globe@2.31.0/dist/three-globe.min.js',
+                'https://unpkg.com/three-globe@2.31.0/dist/three-globe.min.js'
+            ]);
         })();
     }
     await THREE_STACK_PROMISE;
@@ -2788,31 +2803,47 @@ async function renderizarMapaDeLogins() {
 
         const camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.1, 1000);
         camera.position.z = 240;
-        const controls = new THREE.OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-        controls.enableZoom = true;
-        controls.minDistance = 150;
-        controls.maxDistance = 400;
-        controls.autoRotate = true;
-        controls.autoRotateSpeed = 0.5;
 
-        const renderScene = new THREE.RenderPass(scene, camera);
-        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(container.offsetWidth, container.offsetHeight), 1.0, 0.1, 0.1);
-        const composer = new THREE.EffectComposer(renderer);
-        composer.addPass(renderScene);
-        composer.addPass(bloomPass);
+        // Interacción manual ligera para evitar dependencias frágiles de OrbitControls.
+        let isDragging = false;
+        let lastX = 0;
+        let lastY = 0;
+        let zoom = 240;
+
+        renderer.domElement.addEventListener('pointerdown', (ev) => {
+            isDragging = true;
+            lastX = ev.clientX;
+            lastY = ev.clientY;
+        });
+        renderer.domElement.addEventListener('pointerup', () => { isDragging = false; });
+        renderer.domElement.addEventListener('pointerleave', () => { isDragging = false; });
+        renderer.domElement.addEventListener('pointermove', (ev) => {
+            if (!isDragging) return;
+            const dx = ev.clientX - lastX;
+            const dy = ev.clientY - lastY;
+            globe.rotation.y += dx * 0.004;
+            globe.rotation.x += dy * 0.002;
+            globe.rotation.x = Math.max(-0.6, Math.min(0.6, globe.rotation.x));
+            lastX = ev.clientX;
+            lastY = ev.clientY;
+        });
+        renderer.domElement.addEventListener('wheel', (ev) => {
+            ev.preventDefault();
+            zoom += ev.deltaY * 0.08;
+            zoom = Math.max(150, Math.min(400, zoom));
+            camera.position.z = zoom;
+        }, { passive: false });
 
         (function animate() {
-            controls.update();
-            composer.render();
+            globe.rotation.y += 0.0015;
+            renderer.render(scene, camera);
             GLOBO_ANIM_FRAME = requestAnimationFrame(animate);
         })();
 
         GLOBO_INSTANCE = globe;
         GLOBO_RENDERER = renderer;
-        GLOBO_CONTROLS = controls;
-        GLOBO_COMPOSER = composer;
+        GLOBO_CONTROLS = null;
+        GLOBO_COMPOSER = null;
         
         if (locationsData.lastLogin) {
             setTimeout(() => {
@@ -3621,6 +3652,38 @@ async function ejecutarLogicaEscaneo(skuParam) {
         }
     } catch (err) {}
 }
+
+function toggleRegistroNegocioModal(mostrar) {
+    const modal = document.getElementById('modal-registro-negocio');
+    if (!modal) return;
+    modal.classList.toggle('hidden', !mostrar);
+}
+window.toggleRegistroNegocioModal = toggleRegistroNegocioModal;
+
+async function registrarNegocioPublico() {
+    const nombreNegocio = (document.getElementById('registro-negocio-nombre')?.value || '').trim();
+    const email = (document.getElementById('registro-negocio-email')?.value || '').trim().toLowerCase();
+    const nombreVisible = (document.getElementById('registro-negocio-nombre-visible')?.value || '').trim();
+
+    if (!nombreNegocio) return alert('Indica el nombre del negocio.');
+    if (!email || !email.includes('@')) return alert('Indica un email válido.');
+
+    try {
+        const res = await fetch('/api/public/registrar-negocio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nombreNegocio, email, nombreVisible })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo registrar el negocio.');
+
+        alert(`Negocio creado: ${data.negocio?.nombre || nombreNegocio}. Ahora inicia sesión con Google usando ${email}.`);
+        toggleRegistroNegocioModal(false);
+    } catch (e) {
+        alert(`Error: ${e.message}`);
+    }
+}
+window.registrarNegocioPublico = registrarNegocioPublico;
 
 window.__handleCredentialResponseImpl = async function(response) {
     const loginBox = document.querySelector('.login-glow-card div');

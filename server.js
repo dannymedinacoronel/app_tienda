@@ -53,18 +53,23 @@ function normalizarEmpresa(empresa) {
 // --- Modelos de MongoDB ---
 
 const TiendaSchema = new mongoose.Schema({
-    nombre: { type: String, required: true, unique: true, trim: true },
+    nombre: { type: String, required: true, trim: true },
+    empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
     fechaCreacion: { type: Date, default: Date.now }
 });
+TiendaSchema.index({ empresa: 1, nombre: 1 }, { unique: true });
 const Tienda = mongoose.models.Tienda || mongoose.model('Tienda', TiendaSchema);
 
 const CategoriaSchema = new mongoose.Schema({
-    nombre: { type: String, required: true, unique: true, trim: true }
+    nombre: { type: String, required: true, trim: true },
+    empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true }
 });
+CategoriaSchema.index({ empresa: 1, nombre: 1 }, { unique: true });
 const Categoria = mongoose.models.Categoria || mongoose.model('Categoria', CategoriaSchema);
 
 const ClienteSchema = new mongoose.Schema({
     nombre: { type: String, required: true, trim: true },
+    empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
     nif: { type: String, trim: true },
     email: { type: String, trim: true },
     telefono: { type: String, trim: true },
@@ -80,6 +85,7 @@ const Cliente = mongoose.models.Cliente || mongoose.model('Cliente', ClienteSche
 
 const GastoSchema = new mongoose.Schema({
     fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
+    empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
     concepto: { type: String, required: true },
     monto: { type: Number, required: true },
     categoria: { type: String, default: 'General' }
@@ -87,16 +93,19 @@ const GastoSchema = new mongoose.Schema({
 const Gasto = mongoose.models.Gasto || mongoose.model('Gasto', GastoSchema);
 
 const EstadoKanbanSchema = new mongoose.Schema({
-    nombre: { type: String, required: true, unique: true, trim: true },
+    nombre: { type: String, required: true, trim: true },
+    empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
     icono: { type: String, default: '📦' },
     color: { type: String, default: 'slate' },
     rolFinanciero: { type: String, enum: ['Stock', 'Venta', 'Oculto'], default: 'Stock' },
     orden: { type: Number, default: 0 }
 });
+EstadoKanbanSchema.index({ empresa: 1, nombre: 1 }, { unique: true });
 const EstadoKanban = mongoose.models.EstadoKanban || mongoose.model('EstadoKanban', EstadoKanbanSchema);
 
 const VentaRopaSchema = new mongoose.Schema({
     fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
+    empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
     fechaModificacion: { type: String, default: '' },
     sku: { type: String, default: '', trim: true },
     prenda: { type: String, default: 'Artículo Escaneado', trim: true },
@@ -121,6 +130,7 @@ const VentaRopa = mongoose.models.VentaRopa || mongoose.model('VentaRopa', Venta
 
 const LogAuditoriaSchema = new mongoose.Schema({
     fechaHora: { type: Date, default: Date.now },
+    empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
     usuario: { type: String, required: true },
     accion: { type: String, required: true },
     ip: { type: String },
@@ -136,6 +146,7 @@ const LogAuditoria = mongoose.models.LogAuditoria || mongoose.model('LogAuditori
 
 const TareaSchema = new mongoose.Schema({
     titulo: { type: String, required: true, trim: true },
+    empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
     descripcion: { type: String, default: '', trim: true },
     estado: { type: String, enum: ['Pendiente', 'En Proceso', 'Completada'], default: 'Pendiente' },
     prioridad: { type: String, enum: ['Baja', 'Media', 'Alta'], default: 'Media' },
@@ -146,6 +157,7 @@ const Tarea = mongoose.models.Tarea || mongoose.model('Tarea', TareaSchema);
 
 const FaqSchema = new mongoose.Schema({
     pregunta: { type: String, required: true, trim: true },
+    empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
     respuesta: { type: String, required: true, trim: true },
     fechaCreacion: { type: Date, default: Date.now }
 });
@@ -153,6 +165,7 @@ const Faq = mongoose.models.Faq || mongoose.model('Faq', FaqSchema);
 
 const NotaSchema = new mongoose.Schema({
     texto: { type: String, default: 'Nueva nota...', trim: true },
+    empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
     color: { type: String, default: 'bg-yellow-400' },
     x: { type: Number, default: 20 },
     y: { type: Number, default: 40 },
@@ -162,6 +175,14 @@ const NotaSchema = new mongoose.Schema({
     fecha: { type: Date, default: Date.now }
 });
 const Nota = mongoose.models.Nota || mongoose.model('Nota', NotaSchema);
+
+const NegocioSchema = new mongoose.Schema({
+    nombre: { type: String, required: true, trim: true },
+    slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    ownerEmail: { type: String, required: true, lowercase: true, trim: true },
+    fechaCreacion: { type: Date, default: Date.now }
+});
+const Negocio = mongoose.models.Negocio || mongoose.model('Negocio', NegocioSchema);
 
 const UsuarioAutorizadoSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
@@ -210,6 +231,11 @@ mongoose.connect(MONGO_URI_FINAL)
             { $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] },
             { $set: { empresa: EMPRESA_DEFAULT } }
         );
+
+        const negocioBase = await Negocio.findOne({ slug: EMPRESA_DEFAULT }).lean();
+        if (!negocioBase) {
+            await Negocio.create({ nombre: 'Seychelles', slug: EMPRESA_DEFAULT, ownerEmail: ADMIN_WHITELIST[0] || 'owner@local' });
+        }
         
         // Auto-poblar tiendas si la colección está vacía
         const tiendaCount = await Tienda.countDocuments();
@@ -500,6 +526,55 @@ app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
 });
 
 // --- Rutas de Auth ---
+
+app.post('/api/public/registrar-negocio', async (req, res) => {
+    try {
+        const nombreNegocio = String(req.body?.nombreNegocio || '').trim();
+        const email = String(req.body?.email || '').toLowerCase().trim();
+        const nombreVisible = String(req.body?.nombreVisible || '').trim().slice(0, 80);
+
+        if (!nombreNegocio) return res.status(400).json({ error: 'El nombre del negocio es obligatorio.' });
+        if (!email || !email.includes('@')) return res.status(400).json({ error: 'Email inválido.' });
+
+        const slug = normalizarEmpresa(nombreNegocio);
+        const existeNegocio = await Negocio.findOne({ slug }).lean();
+        if (existeNegocio) {
+            return res.status(409).json({ error: 'Ese nombre de negocio ya está registrado. Prueba con otro nombre.' });
+        }
+
+        const existeUsuario = await UsuarioAutorizado.findOne({ email }).lean();
+        if (existeUsuario) {
+            return res.status(409).json({ error: 'Este email ya existe en la plataforma.' });
+        }
+
+        await Negocio.create({ nombre: nombreNegocio, slug, ownerEmail: email });
+        await UsuarioAutorizado.create({ email, rol: 'Admin', empresa: slug, nombreVisible });
+
+        // Seed mínimo por negocio para onboarding profesional.
+        await Tienda.insertMany([
+            { nombre: 'Principal', empresa: slug },
+            { nombre: 'Vinted', empresa: slug }
+        ]).catch(() => {});
+        await EstadoKanban.insertMany([
+            { nombre: 'No Vendido', icono: '📦', color: 'blue', rolFinanciero: 'Stock', orden: 1, empresa: slug },
+            { nombre: 'Vendido', icono: '💰', color: 'emerald', rolFinanciero: 'Venta', orden: 2, empresa: slug },
+            { nombre: 'Reservado', icono: '🤝', color: 'amber', rolFinanciero: 'Stock', orden: 3, empresa: slug }
+        ]).catch(() => {});
+        await Categoria.insertMany([
+            { nombre: '👕 Camisetas', empresa: slug },
+            { nombre: '🧥 Sudaderas', empresa: slug },
+            { nombre: '👖 Pantalones', empresa: slug }
+        ]).catch(() => {});
+
+        return res.json({
+            success: true,
+            negocio: { nombre: nombreNegocio, slug },
+            mensaje: 'Negocio registrado. Ahora inicia sesión con Google usando ese email para entrar a tu espacio.'
+        });
+    } catch (e) {
+        return res.status(500).json({ error: 'No se pudo registrar el negocio.' });
+    }
+});
 
 app.get('/api/auth/verificar', (req, res) => {
     if (req.session && req.session.esAdmin) {

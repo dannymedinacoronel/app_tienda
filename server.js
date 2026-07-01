@@ -1328,7 +1328,10 @@ app.post('/api/scraper/webhook-github', async (req, res) => {
     const token = req.headers['x-github-token'];
     const GITHUB_SECRET = process.env.SCRAPER_TOKEN;
 
+    console.log(`[WEBHOOK] Intento de conexión. Token recibido: ${token ? 'SÍ' : 'NO'}. Match: ${token === GITHUB_SECRET}`);
+
     if (!GITHUB_SECRET || token !== GITHUB_SECRET) {
+        console.error('[WEBHOOK] Error: Token no autorizado o no configurado en Render.');
         return res.status(401).json({ error: 'No autorizado' });
     }
 

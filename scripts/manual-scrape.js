@@ -126,7 +126,7 @@ async function run() {
 
         // --- ENVIAR A LA WEB ---
         const webUrl = process.env.MY_WEB_URL;
-        const secretToken = process.env.GITHUB_SECRET_TOKEN;
+        const secretToken = process.env.SCRAPER_TOKEN; // Usamos el nombre correcto
 
         if (webUrl && secretToken) {
             console.log(`[WEBHOOK] Enviando resultados a la web: ${webUrl}`);

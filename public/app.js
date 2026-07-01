@@ -21,7 +21,17 @@ let CALENDARIO_MES = new Date().getMonth() + 1;
 let CALENDARIO_ANIO = new Date().getFullYear();
 
 // --- INICIALIZACIÓN DE SOCKET.IO ---
-const socket = io();
+const socket = io({
+    transports: ['websocket', 'polling']
+});
+
+socket.on('connect', () => {
+    console.log('[SOCKET] Conectado al servidor con ID:', socket.id);
+});
+
+socket.on('connect_error', (error) => {
+    console.error('[SOCKET] Error de conexión:', error);
+});
 
 socket.on('scraper_update', async (data) => {
     console.log('[SOCKET] Datos recibidos de GitHub:', data);
@@ -176,14 +186,16 @@ async function iniciarScraping() {
 
         // 🚀 Si el servidor nos dice que ha lanzado GitHub, avisamos y esperamos
         if (data.success && data.mensaje) {
+            document.getElementById('scraper-loader').classList.add('hidden');
+            document.getElementById('scraper-step-1').classList.remove('hidden'); // Volvemos al paso 1 o mostramos un aviso
+
             Swal.fire({
                 title: '🚀 Lanzando Scraper Remoto',
-                text: data.mensaje,
+                text: 'El análisis ha comenzado en GitHub Actions. Esto tardará unos 2 minutos. Recibirás una notificación automática cuando los resultados estén listos.',
                 icon: 'info',
-                timer: 5000,
-                showConfirmButton: false
+                confirmButtonText: 'Entendido',
+                confirmButtonColor: '#3b82f6'
             });
-            // No hacemos nada más, Socket.io se encargará de avisarnos cuando los datos lleguen por detrás
             return;
         }
 

@@ -20,6 +20,12 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Validate secrets
+        run: |
+          if [ -z "${{ secrets.MONGO_URI }}" ]; then echo "❌ MONGO_URI is missing"; exit 1; fi
+          if [ -z "${{ secrets.MY_WEB_URL }}" ]; then echo "❌ MY_WEB_URL is missing"; exit 1; fi
+          if [ -z "${{ secrets.SCRAPER_TOKEN }}" ]; then echo "❌ SCRAPER_TOKEN is missing"; exit 1; fi
+
       - name: Install Dependencies
         run: npm install
 

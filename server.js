@@ -22,6 +22,7 @@ if (!GOOGLE_CLIENT_ID) {
 }
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 const isProd = process.env.NODE_ENV === 'production';
+const EMPRESA_DEFAULT = String(process.env.APP_EMPRESA_DEFAULT || 'seychelles').trim().toLowerCase();
 console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
 
 // Es vital para que las sesiones funcionen en plataformas como Render/Heroku
@@ -39,6 +40,14 @@ if (!MONGO_URI_FINAL) {
 // Función de soporte para evitar errores al notificar actualizaciones en clientes
 function notificarCambio() {
     // Placeholder preparado para usar WebSockets en el futuro
+}
+
+function normalizarEmpresa(empresa) {
+    return String(empresa || EMPRESA_DEFAULT)
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '-')
+        .slice(0, 60) || EMPRESA_DEFAULT;
 }
 
 // --- Modelos de MongoDB ---
@@ -153,6 +162,7 @@ const Nota = mongoose.models.Nota || mongoose.model('Nota', NotaSchema);
 const UsuarioAutorizadoSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     rol: { type: String, enum: ['Admin', 'Editor', 'Lector'], default: 'Editor' },
+    empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
     nombreVisible: { type: String, default: '', trim: true },
     fotoPerfil: { type: String, default: '' },
     fechaAgregado: { type: Date, default: Date.now },
@@ -173,6 +183,13 @@ const MensajeInterno = mongoose.models.MensajeInterno || mongoose.model('Mensaje
 
 const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
 
+io.on('connection', (socket) => {
+    socket.on('join_empresa', (empresa) => {
+        const room = `empresa:${normalizarEmpresa(empresa)}`;
+        socket.join(room);
+    });
+});
+
 mongoose.connect(MONGO_URI_FINAL)
     .then(async () => {
         console.log('\x1b[32m[OK]\x1b[0m Core Estable de Seychelles conectado a MongoDB Atlas.');
@@ -181,9 +198,14 @@ mongoose.connect(MONGO_URI_FINAL)
         const countUsers = await UsuarioAutorizado.countDocuments();
         if (countUsers === 0) {
             const initialEmails = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase()).filter(e => e);
-            await UsuarioAutorizado.insertMany(initialEmails.map(e => ({ email: e })));
+            await UsuarioAutorizado.insertMany(initialEmails.map(e => ({ email: e, empresa: EMPRESA_DEFAULT })));
             console.log('[INIT] Whitelist inicial migrada a MongoDB.');
         }
+
+        await UsuarioAutorizado.updateMany(
+            { $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] },
+            { $set: { empresa: EMPRESA_DEFAULT } }
+        );
         
         // Auto-poblar tiendas si la colección está vacía
         const tiendaCount = await Tienda.countDocuments();
@@ -476,7 +498,14 @@ app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
 // --- Rutas de Auth ---
 
 app.get('/api/auth/verificar', (req, res) => {
-    if (req.session && req.session.esAdmin) return res.json({ autenticado: true, usuario: req.session.email, rol: req.session.rol || 'Admin' });
+    if (req.session && req.session.esAdmin) {
+        return res.json({
+            autenticado: true,
+            usuario: req.session.email,
+            rol: req.session.rol || 'Admin',
+            empresa: req.session.empresa || EMPRESA_DEFAULT
+        });
+    }
     return res.json({ autenticado: false });
 });
 
@@ -492,12 +521,14 @@ app.post('/api/auth/google', async (req, res) => {
         const autorizado = await UsuarioAutorizado.findOne({ email: emailUsuario });
 
         if (autorizado) {
+            autorizado.empresa = normalizarEmpresa(autorizado.empresa);
             autorizado.ultimaConexion = new Date();
             await autorizado.save();
 
             req.session.esAdmin = true;
             req.session.email = emailUsuario;
             req.session.rol = autorizado.rol || 'Admin';
+            req.session.empresa = autorizado.empresa || EMPRESA_DEFAULT;
             
             const locationData = await obtenerUbicacionCompleta(req, clientLocation);
             await registrarLog(emailUsuario, "Inició sesión en el sistema", locationData);
@@ -533,26 +564,32 @@ app.get('/api/system/db-stats', exigeAdmin, async (req, res) => {
 // --- Rutas de Gestión de Usuarios ---
 app.get('/api/usuarios-admin', exigeAdmin, async (req, res) => {
     try { 
-        res.json(await UsuarioAutorizado.find().sort({ fechaAgregado: -1 })); 
+        const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
+        res.json(await UsuarioAutorizado.find({ empresa }).sort({ fechaAgregado: -1 })); 
     } catch (e) { res.status(500).send(e); }
 });
 
 app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
     try {
+        const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
         const emailLimpio = req.body.email ? req.body.email.toLowerCase().trim() : "";
         const rolAsignado = req.body.rol || "Editor";
         if (!emailLimpio) return res.status(400).json({ error: 'Email requerido.' });
-        const nuevo = new UsuarioAutorizado({ email: emailLimpio, rol: rolAsignado });
+        const nuevo = new UsuarioAutorizado({ email: emailLimpio, rol: rolAsignado, empresa });
         await nuevo.save();
-        await registrarLog(req.session.email, `Autorizó cuenta: ${emailLimpio} [Rol: ${rolAsignado}]`);
+        await registrarLog(req.session.email, `Autorizó cuenta: ${emailLimpio} [Rol: ${rolAsignado}] [Empresa: ${empresa}]`);
         res.json(nuevo);
     } catch (e) { res.status(400).json({ error: 'El usuario ya está autorizado en la lista.' }); }
 });
 
 app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
     try {
+        const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
         const u = await UsuarioAutorizado.findById(req.params.id);
         if (u) {
+            if (normalizarEmpresa(u.empresa) !== empresa) {
+                return res.status(403).json({ error: 'No puedes eliminar usuarios de otra empresa.' });
+            }
             await UsuarioAutorizado.findByIdAndDelete(req.params.id);
             await registrarLog(req.session.email, `Revocó el acceso permanente a: ${u.email}`);
         }
@@ -569,6 +606,7 @@ app.get('/api/perfil', exigeAdmin, async (req, res) => {
         res.json({
             email: user.email,
             rol: user.rol || 'Editor',
+            empresa: normalizarEmpresa(user.empresa || EMPRESA_DEFAULT),
             nombreVisible: user.nombreVisible || '',
             fotoPerfil: user.fotoPerfil || ''
         });
@@ -600,7 +638,8 @@ app.put('/api/perfil', exigeAdmin, async (req, res) => {
 app.get('/api/mensajes/usuarios', exigeAdmin, async (req, res) => {
     try {
         const emailActual = (req.session?.email || '').toLowerCase().trim();
-        const usuarios = await UsuarioAutorizado.find()
+        const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
+        const usuarios = await UsuarioAutorizado.find({ empresa })
             .sort({ fechaAgregado: -1 })
             .lean();
 
@@ -609,6 +648,7 @@ app.get('/api/mensajes/usuarios', exigeAdmin, async (req, res) => {
             .map(u => ({
                 email: u.email,
                 rol: u.rol || 'Editor',
+                empresa: normalizarEmpresa(u.empresa || EMPRESA_DEFAULT),
                 nombreVisible: u.nombreVisible || '',
                 fotoPerfil: u.fotoPerfil || '',
                 ultimaConexion: u.ultimaConexion || null
@@ -625,6 +665,10 @@ app.get('/api/mensajes', exigeAdmin, async (req, res) => {
         const emailActual = (req.session?.email || '').toLowerCase().trim();
         const conEmail = String(req.query?.con || '').toLowerCase().trim();
         if (!conEmail) return res.status(400).json({ error: 'Falta destinatario de conversación.' });
+
+        const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
+        const destinatario = await UsuarioAutorizado.findOne({ email: conEmail, empresa }).lean();
+        if (!destinatario) return res.status(403).json({ error: 'El usuario no pertenece a tu equipo.' });
 
         const mensajes = await MensajeInterno.find({
             $or: [
@@ -656,16 +700,18 @@ app.post('/api/mensajes', exigeAdmin, async (req, res) => {
         if (!paraEmail || !texto) return res.status(400).json({ error: 'Datos incompletos para enviar mensaje.' });
         if (texto.length > 4000) return res.status(400).json({ error: 'Mensaje demasiado largo.' });
 
-        const existeDestino = await UsuarioAutorizado.findOne({ email: paraEmail }).lean();
+        const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
+        const existeDestino = await UsuarioAutorizado.findOne({ email: paraEmail, empresa }).lean();
         if (!existeDestino) return res.status(404).json({ error: 'Usuario destino no encontrado.' });
 
         const mensaje = new MensajeInterno({ deEmail: emailActual, paraEmail, texto });
         await mensaje.save();
 
         if (global.io) {
-            global.io.emit('mensaje_interno_nuevo', {
+            global.io.to(`empresa:${empresa}`).emit('mensaje_interno_nuevo', {
                 deEmail: emailActual,
                 paraEmail,
+                empresa,
                 creadoEn: mensaje.creadoEn
             });
         }

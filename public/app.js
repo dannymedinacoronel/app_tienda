@@ -8,6 +8,7 @@ let LISTA_CATEGORIAS_GLOBAL = [];
 let LISTA_CLIENTES_CACHE = [];
 let USUARIO_EMAIL_ACTUAL = '';
 let USUARIO_ROL_ACTUAL = '';
+let EMPRESA_CHAT_ACTUAL = '';
 let CHAT_USUARIOS = [];
 let CHAT_USUARIO_ACTIVO = null;
 let CHAT_REFRESH_INTERVAL = null;
@@ -54,6 +55,7 @@ socket.on('connect_error', (error) => {
 socket.on('mensaje_interno_nuevo', (data) => {
     if (!USUARIO_EMAIL_ACTUAL) return;
     if (!data) return;
+    if (data.empresa && EMPRESA_CHAT_ACTUAL && data.empresa !== EMPRESA_CHAT_ACTUAL) return;
     if (data.paraEmail === USUARIO_EMAIL_ACTUAL || data.deEmail === USUARIO_EMAIL_ACTUAL) {
         const popupAbierto = !document.getElementById('internal-chat-window')?.classList.contains('hidden');
         if (!popupAbierto && data.deEmail !== USUARIO_EMAIL_ACTUAL) {
@@ -139,6 +141,12 @@ function renderBadgeChatInterno() {
     }
 }
 
+function chatPollingDebeEstarActivo() {
+    const enUsuarios = document.getElementById('sec-usuarios') && !document.getElementById('sec-usuarios').classList.contains('hidden');
+    const popupAbierto = document.getElementById('internal-chat-window') && !document.getElementById('internal-chat-window').classList.contains('hidden');
+    return Boolean(enUsuarios || popupAbierto);
+}
+
 function toggleChatInternoPopup() {
     const chat = document.getElementById('internal-chat-window');
     if (!chat) return;
@@ -149,14 +157,48 @@ function toggleChatInternoPopup() {
         CHAT_NO_LEIDOS = 0;
         renderBadgeChatInterno();
         refrescarUsuariosChat();
+        iniciarAutoRefreshChat();
         if (CHAT_USUARIO_ACTIVO?.email) {
             cargarConversacionInterna(CHAT_USUARIO_ACTIVO.email);
         }
         const input = document.getElementById('chat-popup-input');
         if (input) input.focus();
+    } else if (!chatPollingDebeEstarActivo()) {
+        detenerAutoRefreshChat();
     }
 }
 window.toggleChatInternoPopup = toggleChatInternoPopup;
+
+function esMovilOSimilar() {
+    return window.matchMedia('(max-width: 1024px)').matches;
+}
+
+async function intentarForzarLandscape() {
+    try {
+        if (!screen?.orientation?.lock) return;
+        if (!esMovilOSimilar()) return;
+        await screen.orientation.lock('landscape');
+    } catch (_) {
+        // Algunos navegadores bloquean lock fuera de fullscreen/PWA. Mantendremos overlay de bloqueo.
+    }
+}
+
+function actualizarBloqueoOrientacion() {
+    const overlay = document.getElementById('orientation-lock-overlay');
+    if (!overlay) return;
+
+    const esPortrait = window.innerHeight > window.innerWidth;
+    const bloquear = esMovilOSimilar() && esPortrait;
+    overlay.classList.toggle('hidden', !bloquear);
+    document.body.classList.toggle('overflow-hidden', bloquear);
+}
+
+function configurarForzadoHorizontal() {
+    actualizarBloqueoOrientacion();
+    intentarForzarLandscape();
+    window.addEventListener('resize', actualizarBloqueoOrientacion);
+    window.addEventListener('orientationchange', actualizarBloqueoOrientacion);
+}
 
 function iniciarAnimacionCargaScraper(modo = 'vinted') {
     detenerAnimacionCargaScraper(true);
@@ -2107,13 +2149,18 @@ async function enviarMensajeInterno(origen = 'panel') {
 }
 
 function iniciarAutoRefreshChat() {
+    if (!chatPollingDebeEstarActivo()) return;
     detenerAutoRefreshChat();
     CHAT_REFRESH_INTERVAL = setInterval(() => {
+        if (!chatPollingDebeEstarActivo()) {
+            detenerAutoRefreshChat();
+            return;
+        }
         refrescarUsuariosChat();
         if (CHAT_USUARIO_ACTIVO?.email) {
             cargarConversacionInterna(CHAT_USUARIO_ACTIVO.email);
         }
-    }, 12000);
+    }, 16000);
 }
 
 function detenerAutoRefreshChat() {
@@ -4187,12 +4234,17 @@ document.addEventListener('keydown', (e) => {
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        configurarForzadoHorizontal();
         const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' }); 
         const data = await res.json();
         
         if (data.autenticado) { 
             USUARIO_EMAIL_ACTUAL = (data.usuario || '').toLowerCase();
             USUARIO_ROL_ACTUAL = data.rol || 'Editor';
+            EMPRESA_CHAT_ACTUAL = (data.empresa || '').toLowerCase();
+            if (EMPRESA_CHAT_ACTUAL) {
+                socket.emit('join_empresa', EMPRESA_CHAT_ACTUAL);
+            }
             setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
             document.getElementById('login-box').classList.add('hidden'); 
             document.getElementById('panel-control').classList.remove('hidden'); 
@@ -4220,8 +4272,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             await refrescarCategoriasCloud();
             await reloadCoreData(true); 
             await cargarNotasBoard();
-            await refrescarUsuariosChat();
-            iniciarAutoRefreshChat();
             actualizarVistaFotosFormulario();
         }
     } catch(e){ console.error("Error en la inicialización:", e); }

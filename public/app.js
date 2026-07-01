@@ -186,16 +186,17 @@ async function iniciarScraping() {
 
         // 🚀 Si el servidor nos dice que ha lanzado GitHub, avisamos y esperamos
         if (data.success && data.mensaje) {
-            document.getElementById('scraper-loader').classList.add('hidden');
-            document.getElementById('scraper-step-1').classList.remove('hidden'); // Volvemos al paso 1 o mostramos un aviso
+            // MOSTRAR LOADING EN EL SCRAPER
+            document.getElementById('scraper-step-1').classList.add('hidden');
+            document.getElementById('scraper-loader').classList.remove('hidden');
+            
+            // Texto dinámico para que el usuario sepa que está esperando a GitHub
+            const loaderTitle = document.querySelector('#scraper-loader h3');
+            if (loaderTitle) loaderTitle.innerText = "GitHub Actions está analizando Vinted...";
+            
+            const loaderText = document.querySelector('#scraper-loader p');
+            if (loaderText) loaderText.innerText = "Esto tardará unos 2 minutos. No cierres el modal, los resultados aparecerán aquí automáticamente.";
 
-            Swal.fire({
-                title: '🚀 Lanzando Scraper Remoto',
-                text: 'El análisis ha comenzado en GitHub Actions. Esto tardará unos 2 minutos. Recibirás una notificación automática cuando los resultados estén listos.',
-                icon: 'info',
-                confirmButtonText: 'Entendido',
-                confirmButtonColor: '#3b82f6'
-            });
             return;
         }
 

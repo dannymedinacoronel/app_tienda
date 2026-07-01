@@ -1152,108 +1152,47 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         const { url } = req.body;
         if (!url) return res.status(400).json({ error: 'URL de Vinted requerida.' });
 
-        // AVISO: El scraping directo desde Render suele fallar por bloqueo de IPs.
-        // Se recomienda usar el Scraper de GitHub Actions configurado.
+        // 🚀 NUEVA LÓGICA: En lugar de escrapear desde Render (bloqueado),
+        // le pedimos a GitHub Actions que haga el trabajo por nosotros.
         
-        const response = await axios.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                'Accept-Language': 'es-ES,es;q=0.9',
+        const GITHUB_PAT = process.env.GITHUB_PAT;
+        const REPO_OWNER = process.env.GITHUB_OWNER || 'dannymedinacoronel'; 
+        const REPO_NAME = process.env.GITHUB_REPO || 'app_tienda'; // El nombre exacto de tu repo en GitHub
+
+        if (!GITHUB_PAT) {
+            return res.status(500).json({ error: 'Falta configurar GITHUB_PAT en Render para lanzar el scraper remoto.' });
+        }
+
+        console.log(`[GITHUB-API] Lanzando scraper remoto para: ${url}`);
+
+        // Llamada a la API de GitHub para ejecutar el flujo manual-scraper.yml
+        const githubRes = await axios.post(
+            `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/manual-scraper.yml/dispatches`,
+            {
+                ref: 'main', // o la rama que estés usando
+                inputs: {
+                    vinted_url: url
+                }
             },
-            timeout: 10000
-        }).catch(err => {
-            console.error(`[SCRAPER] Error de conexión a Vinted: ${err.message}`);
-            throw new Error('Vinted ha bloqueado la conexión desde el servidor de Render. Por favor, usa el Scraper de GitHub Actions para esta URL.');
-        });
-
-        const htmlContent = response.data;
-        const $ = cheerio.load(htmlContent);
-
-        const productosExtraidos = [];
-
-        // MÉTODO 1: Búsqueda en JSON embebido (Más robusto contra cambios de CSS y bloqueos de renderizado)
-        try {
-            const scripts = $('script').toArray();
-            for (const script of scripts) {
-                const content = $(script).html();
-                if (content && (content.includes('INITIAL_STATE') || content.includes('items'))) {
-                    // Intentar extraer JSON de estados internos de React/Next
-                    const jsonMatch = content.match(/window\.__INITIAL_STATE__\s*=\s*({.*?});/s) || 
-                                    content.match(/window\.__NUXT__\s*=\s*({.*?});/s) ||
-                                    content.match(/\{"items":\[.*?\]\}/s);
-                    
-                    if (jsonMatch) {
-                        try {
-                            const data = JSON.parse(jsonMatch[1] || jsonMatch[0]);
-                            // Navegar por la estructura típica de Vinted (puede variar)
-                            const items = data?.items || data?.catalog?.items || data?.itemsOrRecommendations?.items || [];
-                            items.forEach(it => {
-                                if (it.title && it.price) {
-                                    productosExtraidos.push({
-                                        titulo: it.title,
-                                        precio: String(it.price?.amount || it.price || '0'),
-                                        imagen: it.photo?.url || it.image_url || ''
-                                    });
-                                }
-                            });
-                        } catch (e) {}
-                    }
+            {
+                headers: {
+                    'Authorization': `token ${GITHUB_PAT}`,
+                    'Accept': 'application/vnd.github.v3+json'
                 }
             }
-        } catch (e) {
-            console.error("Error al parsear JSON embebido:", e.message);
-        }
-
-        // MÉTODO 2: Selectores CSS (Como respaldo)
-        if (productosExtraidos.length === 0) {
-            $('div[data-testid^="grid-item"], div[data-testid="item-card"], .item-card, .grid__item, .feed-grid__item, .web_ui__ItemBox__component, .new-item-box__container').each((i, el) => {
-                const titulo = $(el).find('[data-testid$="--title"], [data-testid$="--description"], .new-item-box__title, .web_ui__ItemBox__title, .truncated, h4, [itemprop="name"]').text().trim();
-                const precioTexto = $(el).find('[data-testid$="--price-text"], [data-testid$="--price"], .new-item-box__price, .web_ui__ItemBox__price, .price, h3, [itemprop="price"]').text().trim();
-                const imgTag = $(el).find('img');
-                const imagen = imgTag.attr('src') || imgTag.attr('data-src') || (imgTag.attr('srcset') ? imgTag.attr('srcset').split(' ')[0] : '');
-
-                if (titulo && precioTexto) {
-                    let cleanPrice = precioTexto.replace(/\s+/g, '').replace(',', '.').replace(/[^\d.-]/g, '');
-                    if (!isNaN(parseFloat(cleanPrice))) {
-                        productosExtraidos.push({ titulo, precio: cleanPrice, imagen });
-                    }
-                }
-            });
-        }
-
-        if (productosExtraidos.length === 0) {
-            console.log("[SCRAPER] No se encontraron productos en el HTML. Longitud del body:", response.data.length);
-            return res.status(400).json({ error: 'No se encontraron productos. Vinted está bloqueando la conexión desde Render (IP de Data Center). Prueba a usar una URL de perfil más específica o intenta más tarde.' });
-        }
-
-        const resultados = { discrepancias: [], nuevos: [], identicos: [] };
-        const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
-
-        const cleanStr = str => str.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-
-        productosExtraidos.forEach(item => {
-            const precioWeb = parseFloat(item.precio);
-            if (item.titulo && !isNaN(precioWeb)) {
-                const cleanItemTitle = cleanStr(item.titulo);
-                const coincidencia = productosBD.find(p => {
-                    const cleanP = cleanStr(p.prenda);
-                    return cleanP === cleanItemTitle || (cleanP.length > 4 && cleanItemTitle.includes(cleanP)) || (cleanItemTitle.length > 4 && cleanP.includes(cleanItemTitle));
-                });
-                if (coincidencia) {
-                    if (Math.abs(coincidencia.precioVenta - precioWeb) > 0.01 || coincidencia.prenda !== item.titulo) {
-                        resultados.discrepancias.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, prendaNueva: item.titulo, valorAntiguo: coincidencia.precioVenta, valorNuevo: precioWeb, imagen: item.imagen });
-                    } else {
-                        resultados.identicos.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, precio: coincidencia.precioVenta, imagen: item.imagen });
-                    }
-                } else {
-                    resultados.nuevos.push({ prenda: item.titulo, precioVenta: precioWeb, imagen: item.imagen, canalVenta: 'Vinted', estado: 'No Vendido' });
-                }
-            }
+        ).catch(err => {
+            console.error('[GITHUB-API] Error:', err.response?.data || err.message);
+            throw new Error('No se pudo contactar con GitHub para iniciar el escaneo.');
         });
-        res.json(resultados);
+
+        res.json({ 
+            success: true, 
+            mensaje: 'GitHub está iniciando el escaneo sin bloqueos. Recibirás un aviso en esta pantalla en 1-2 minutos cuando termine.' 
+        });
+
     } catch (error) {
         console.error("Error en el scrap:", error.message);
-        res.status(500).json({ error: error.message || 'Error del servidor al intentar analizar la URL de Vinted.' });
+        res.status(500).json({ error: error.message });
     }
 });
 

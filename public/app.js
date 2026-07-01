@@ -23,9 +23,44 @@ let CALENDARIO_ANIO = new Date().getFullYear();
 // --- INICIALIZACIÓN DE SOCKET.IO ---
 const socket = io();
 
-socket.on('scraper_update', (data) => {
-    console.log('[SOCKET] Actualización del scraper de GitHub:', data);
-    mostrarNotificacionScraping(data);
+socket.on('scraper_update', async (data) => {
+    console.log('[SOCKET] Datos recibidos de GitHub:', data);
+    
+    // Si tenemos productos, los comparamos localmente para mostrar la tabla de resultados
+    if (data.productos && data.productos.length > 0) {
+        try {
+            // Llamamos a un endpoint interno para procesar la comparativa (o lo hacemos aquí)
+            // Para simplificar, vamos a pedirle al servidor que nos dé la comparativa ya hecha
+            const response = await fetch(`${BACKEND_URL}/api/scraper/analizar-manual`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productosExtraidos: data.productos.map(p => ({
+                    titulo: p.titulo,
+                    precio: p.precio,
+                    imagen: p.imagen
+                })) })
+            });
+            
+            const comparativa = await response.json();
+            resultadosScraperActual = comparativa;
+            renderizarResultadosScraping(resultadosScraperActual);
+            
+            // Mostrar notificación de éxito
+            mostrarNotificacionScraping({
+                mensaje: `¡Escaneo de ${data.productos.length} productos completado desde GitHub!`,
+                success: true
+            });
+            
+            // Si el modal estaba cerrado o en carga, lo abrimos/actualizamos
+            document.getElementById('modal-scraper').classList.remove('hidden');
+            document.getElementById('scraper-loader').classList.add('hidden');
+            document.getElementById('scraper-step-1').classList.add('hidden');
+            document.getElementById('scraper-step-2').classList.remove('hidden');
+            
+        } catch (e) {
+            console.error("Error procesando comparativa de GitHub:", e);
+        }
+    }
 });
 
 function mostrarNotificacionScraping(data) {
@@ -137,7 +172,20 @@ async function iniciarScraping() {
         });
 
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Error al comparar con la base de datos.');
+        if (!response.ok) throw new Error(data.error || 'Error al conectar con el servidor.');
+
+        // 🚀 Si el servidor nos dice que ha lanzado GitHub, avisamos y esperamos
+        if (data.success && data.mensaje) {
+            Swal.fire({
+                title: '🚀 Lanzando Scraper Remoto',
+                text: data.mensaje,
+                icon: 'info',
+                timer: 5000,
+                showConfirmButton: false
+            });
+            // No hacemos nada más, Socket.io se encargará de avisarnos cuando los datos lleguen por detrás
+            return;
+        }
 
         resultadosScraperActual = data;
         renderizarResultadosScraping(resultadosScraperActual);

@@ -21,7 +21,7 @@ console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
 // funcione correctamente y no sea bloqueado por las políticas de seguridad del navegador.
 app.use((req, res, next) => {
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
-    res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
     next();
 });
 

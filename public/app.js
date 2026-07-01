@@ -19,6 +19,41 @@ let CONFIG_ORDEN_COLUMNAS = { 'No Vendido': 'reciente', 'Vendido': 'reciente', '
 let CONFIG_FILTRO_COLUMNAS = { 'No Vendido': '', 'Vendido': '', 'Devuelto': '', 'Reservado': '' };
 let CALENDARIO_MES = new Date().getMonth() + 1;
 let CALENDARIO_ANIO = new Date().getFullYear();
+
+// --- INICIALIZACIÓN DE SOCKET.IO ---
+const socket = io();
+
+socket.on('scraper_update', (data) => {
+    console.log('[SOCKET] Actualización del scraper de GitHub:', data);
+    mostrarNotificacionScraping(data);
+});
+
+function mostrarNotificacionScraping(data) {
+    // Si ya existe un toast de scraping, lo quitamos
+    const oldToast = document.getElementById('toast-scraping');
+    if (oldToast) oldToast.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'toast-scraping';
+    toast.className = 'fixed bottom-24 left-1/2 -translate-x-1/2 z-[9999] bg-indigo-600 text-white px-6 py-4 rounded-2xl shadow-2xl flex flex-col gap-2 border border-indigo-400 animate-bounce-short';
+    toast.innerHTML = `
+        <div class="flex items-center gap-3">
+            <span class="text-2xl">🤖</span>
+            <div>
+                <p class="font-bold">Scraping de GitHub finalizado</p>
+                <p class="text-xs opacity-90">${data.mensaje}</p>
+            </div>
+            <button onclick="this.parentElement.parentElement.remove()" class="ml-4 hover:bg-white/10 p-1 rounded-full">✕</button>
+        </div>
+        <button onclick="window.location.reload()" class="bg-white/20 hover:bg-white/30 text-xs py-2 rounded-lg font-bold transition-all">
+            ACTUALIZAR VISTA AHORA
+        </button>
+    `;
+    document.body.appendChild(toast);
+    
+    // Auto-eliminar a los 15 segundos
+    setTimeout(() => { if (toast.parentElement) toast.remove(); }, 15000);
+}
 let CAL_STOCK_MES = new Date().getMonth() + 1;
 let CAL_STOCK_ANIO = new Date().getFullYear();
 let LOGS_MES_ACTUAL = {};

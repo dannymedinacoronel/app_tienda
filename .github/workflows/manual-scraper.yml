@@ -1,0 +1,31 @@
+name: Vinted Manual Scraper
+
+on:
+  workflow_dispatch:
+    inputs:
+      vinted_url:
+        description: 'URL del perfil o búsqueda de Vinted'
+        required: true
+        default: 'https://www.vinted.es/member/123456-usuario'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Execute Manual Scrape
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+          MY_WEB_URL: ${{ secrets.MY_WEB_URL }}
+          SCRAPER_TOKEN: ${{ secrets.SCRAPER_TOKEN }}
+        run: node scripts/manual-scrape.js "${{ github.event.inputs.vinted_url }}"

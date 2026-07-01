@@ -8,8 +8,14 @@ const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const nodemailer = require('nodemailer');
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+global.io = io; // Para que sea accesible en cualquier ruta
+
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 if (!GOOGLE_CLIENT_ID) {
     console.error('\x1b[33m[WARN]\x1b[0m GOOGLE_CLIENT_ID no está definido. El login fallará.');
@@ -1125,7 +1131,7 @@ app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(
 app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: ${PORT}`));
+server.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: ${PORT}`));
 
 
 //SCRIPT DE SCRAPING
@@ -1146,28 +1152,35 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         const { url } = req.body;
         if (!url) return res.status(400).json({ error: 'URL de Vinted requerida.' });
 
-        // Rotación de User-Agents y Headers mejorados para evitar bloqueos en Render
-        const response = await axios.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
-                'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
-                'Sec-Ch-Ua-Mobile': '?0',
-                'Sec-Ch-Ua-Platform': '"macOS"',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
-                'Upgrade-Insecure-Requests': '1'
-            },
-            timeout: 20000
-        });
+        let htmlContent = '';
+        const SCRAPINGBEE_KEY = process.env.SCRAPINGBEE_API_KEY;
 
-        const $ = cheerio.load(response.data);
+        if (SCRAPINGBEE_KEY) {
+            console.log(`[SCRAPER] Usando ScrapingBee para: ${url}`);
+            const sbRes = await axios.get('https://app.scrapingbee.com/api/v1', {
+                params: {
+                    'api_key': SCRAPINGBEE_KEY,
+                    'url': url,
+                    'render_js': 'false', 
+                    'premium_proxy': 'true',
+                    'country_code': 'es'
+                },
+                timeout: 30000
+            });
+            htmlContent = sbRes.data;
+        } else {
+            // Intento directo (Original)
+            const response = await axios.get(url, {
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                    'Accept-Language': 'es-ES,es;q=0.9',
+                },
+                timeout: 15000
+            });
+            htmlContent = response.data;
+        }
+
+        const $ = cheerio.load(htmlContent);
         const productosExtraidos = [];
 
         // MÉTODO 1: Búsqueda en JSON embebido (Más robusto contra cambios de CSS y bloqueos de renderizado)
@@ -1377,6 +1390,37 @@ app.post('/api/ventas/bulk', exigeAdmin, async (req, res) => {
     } catch (error) {
         console.error("Error en bulk insert:", error);
         res.status(500).json({ error: 'Fallo al procesar la inserción masiva.' });
+    }
+});
+
+/**
+ * Recibe datos del scraper ejecutado en GitHub Actions
+ */
+app.post('/api/scraper/webhook-github', async (req, res) => {
+    const token = req.headers['x-github-token'];
+    const GITHUB_SECRET = process.env.SCRAPER_TOKEN;
+
+    if (!GITHUB_SECRET || token !== GITHUB_SECRET) {
+        return res.status(401).json({ error: 'No autorizado' });
+    }
+
+    try {
+        const { productos, urlOrigen } = req.body;
+        console.log(`[GITHUB-WEBHOOK] Recibidos ${productos.length} productos de ${urlOrigen}`);
+        
+        // Notificar a los administradores conectados vía Socket.io
+        if (global.io) {
+            global.io.emit('scraper_update', { 
+                mensaje: `GitHub ha terminado de escanear ${productos.length} productos.`,
+                productos: productos,
+                urlOrigen: urlOrigen,
+                timestamp: new Date()
+            });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Error procesando webhook' });
     }
 });
 

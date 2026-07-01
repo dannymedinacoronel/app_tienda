@@ -1152,35 +1152,23 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         const { url } = req.body;
         if (!url) return res.status(400).json({ error: 'URL de Vinted requerida.' });
 
-        let htmlContent = '';
-        const SCRAPINGBEE_KEY = process.env.SCRAPINGBEE_API_KEY;
+        // AVISO: El scraping directo desde Render suele fallar por bloqueo de IPs.
+        // Se recomienda usar el Scraper de GitHub Actions configurado.
+        
+        const response = await axios.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                'Accept-Language': 'es-ES,es;q=0.9',
+            },
+            timeout: 10000
+        }).catch(err => {
+            console.error(`[SCRAPER] Error de conexión a Vinted: ${err.message}`);
+            throw new Error('Vinted ha bloqueado la conexión desde el servidor de Render. Por favor, usa el Scraper de GitHub Actions para esta URL.');
+        });
 
-        if (SCRAPINGBEE_KEY) {
-            console.log(`[SCRAPER] Usando ScrapingBee para: ${url}`);
-            const sbRes = await axios.get('https://app.scrapingbee.com/api/v1', {
-                params: {
-                    'api_key': SCRAPINGBEE_KEY,
-                    'url': url,
-                    'render_js': 'false', 
-                    'premium_proxy': 'true',
-                    'country_code': 'es'
-                },
-                timeout: 30000
-            });
-            htmlContent = sbRes.data;
-        } else {
-            // Intento directo (Original)
-            const response = await axios.get(url, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                    'Accept-Language': 'es-ES,es;q=0.9',
-                },
-                timeout: 15000
-            });
-            htmlContent = response.data;
-        }
-
+        const htmlContent = response.data;
         const $ = cheerio.load(htmlContent);
+
         const productosExtraidos = [];
 
         // MÉTODO 1: Búsqueda en JSON embebido (Más robusto contra cambios de CSS y bloqueos de renderizado)
@@ -1264,7 +1252,8 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         });
         res.json(resultados);
     } catch (error) {
-        res.status(500).json({ error: 'Error del servidor al intentar analizar la URL de Vinted.' });
+        console.error("Error en el scrap:", error.message);
+        res.status(500).json({ error: error.message || 'Error del servidor al intentar analizar la URL de Vinted.' });
     }
 });
 

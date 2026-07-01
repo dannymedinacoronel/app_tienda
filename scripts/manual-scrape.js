@@ -164,6 +164,21 @@ function mapearProductoVinted(item) {
     return { titulo, precio, imagen };
 }
 
+function deduplicarProductos(lista) {
+    const seen = new Set();
+    const unicos = [];
+    for (const p of lista) {
+        if (!p || !p.titulo || !Number.isFinite(Number(p.precio))) continue;
+        const normalizado = { titulo: String(p.titulo).trim(), precio: Number(p.precio), imagen: p.imagen || '' };
+        const k = `${normalizado.titulo}__${normalizado.precio}`;
+        if (!seen.has(k)) {
+            seen.add(k);
+            unicos.push(normalizado);
+        }
+    }
+    return unicos;
+}
+
 async function extraerProductosPorApiVinted(urlObjetivo) {
     const memberMatch = String(urlObjetivo).match(/\/member\/(\d+)/i);
     if (!memberMatch) return [];
@@ -226,17 +241,87 @@ async function extraerProductosPorApiVinted(urlObjetivo) {
         .map(mapearProductoVinted)
         .filter(Boolean);
 
-    const seen = new Set();
-    const unicos = [];
-    for (const p of normalizados) {
-        const k = `${p.titulo}__${p.precio}`;
-        if (!seen.has(k)) {
-            seen.add(k);
-            unicos.push(p);
-        }
+    return deduplicarProductos(normalizados);
+}
+
+async function extraerProductosConPlaywright(urlObjetivo) {
+    let chromium;
+    try {
+        ({ chromium } = require('playwright'));
+    } catch (e) {
+        console.log('[SCRAPER] Playwright no está disponible en este entorno.');
+        return [];
     }
 
-    return unicos;
+    const browser = await chromium.launch({
+        headless: true,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage'
+        ]
+    });
+
+    const context = await browser.newContext({
+        locale: 'es-ES',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        viewport: { width: 1366, height: 900 }
+    });
+
+    const page = await context.newPage();
+    const capturadosApi = [];
+
+    page.on('response', async (res) => {
+        try {
+            const rUrl = res.url();
+            if (!rUrl.includes('/api/v2/')) return;
+            if (!(rUrl.includes('/catalog/items') || rUrl.includes('/users/') || rUrl.includes('/items'))) return;
+            const ctype = (res.headers()['content-type'] || '').toLowerCase();
+            if (!ctype.includes('application/json')) return;
+            const body = await res.json();
+            const items = body?.items || body?.catalog_items || body?.data?.items || body?.data?.catalog_items || [];
+            if (Array.isArray(items) && items.length > 0) {
+                capturadosApi.push(...items.map(mapearProductoVinted).filter(Boolean));
+            }
+        } catch (e) {
+            // Ignorar fallos puntuales de parseo de respuesta.
+        }
+    });
+
+    try {
+        await page.goto(urlObjetivo, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        await page.waitForTimeout(3500);
+
+        const extraidosDom = await page.evaluate(() => {
+            const normalizarPrecio = (txt) => {
+                if (txt == null) return NaN;
+                const n = Number(String(txt).replace(/\s+/g, '').replace(',', '.').replace(/[^\d.-]/g, ''));
+                return Number.isFinite(n) ? n : NaN;
+            };
+
+            const out = [];
+            const cards = Array.from(document.querySelectorAll('div[data-testid^="grid-item"], .item-card, [class*="feed-grid"] [class*="item"]'));
+            for (const card of cards) {
+                const titleEl = card.querySelector('[data-testid$="--title"], h3, h4, a[title]');
+                const priceEl = card.querySelector('[data-testid$="--price-text"], [class*="price"], h2, h3');
+                const imgEl = card.querySelector('img');
+                const titulo = (titleEl?.textContent || titleEl?.getAttribute('title') || '').trim();
+                const precio = normalizarPrecio(priceEl?.textContent || '');
+                const imagen = imgEl?.src || '';
+                if (titulo && Number.isFinite(precio)) out.push({ titulo, precio, imagen });
+            }
+            return out;
+        });
+
+        const combinados = deduplicarProductos([...(extraidosDom || []), ...capturadosApi]);
+        return combinados;
+    } catch (e) {
+        console.error(`[SCRAPER] Playwright falló: ${e.message}`);
+        return deduplicarProductos(capturadosApi);
+    } finally {
+        await context.close();
+        await browser.close();
+    }
 }
 
 async function run() {
@@ -326,6 +411,19 @@ async function run() {
             }
         }
 
+        // Último fallback: navegador real con Playwright para páginas anti-bot
+        if (productosExtraidos.length === 0) {
+            console.log('[SCRAPER] API devolvió 0 productos. Probando extracción con navegador real (Playwright)...');
+            const porNavegador = await extraerProductosConPlaywright(url);
+            if (porNavegador.length > 0) {
+                productosExtraidos.push(...porNavegador);
+                console.log(`[SCRAPER] Playwright devolvió ${porNavegador.length} productos.`);
+            }
+        }
+
+        const productosUnicos = deduplicarProductos(productosExtraidos);
+        productosExtraidos.length = 0;
+        productosExtraidos.push(...productosUnicos);
         console.log(`[INFO] Se encontraron ${productosExtraidos.length} productos en la web.`);
 
         // --- ENVIAR A LA WEB ---

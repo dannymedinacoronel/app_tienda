@@ -16,15 +16,6 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const isProd = process.env.NODE_ENV === 'production';
 console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
 
-// --- Cabeceras de Seguridad para Google FedCM ---
-// Estas cabeceras son necesarias para que el nuevo sistema de login de Google (FedCM)
-// funcione correctamente y no sea bloqueado por las políticas de seguridad del navegador.
-app.use((req, res, next) => {
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
-    res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-    next();
-});
-
 // Es vital para que las sesiones funcionen en plataformas como Render/Heroku
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '50mb' }));

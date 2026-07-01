@@ -2451,8 +2451,17 @@ function limpiarFiltrosAvanzados() {
 }
 
 function setTheme(theme) {
-    const body = document.getElementById('main-body'); if(!body) return;
-    body.className = `theme-${theme} min-h-screen font-sans antialiased pb-24 transition-all duration-300`;
+    const body = document.getElementById('main-body');
+    if (!body) return;
+
+    // Lista de todas las clases de tema posibles
+    const themeClasses = ['theme-dark', 'theme-light', 'theme-pink', 'theme-emerald', 'theme-purple', 'theme-premium'];
+    // Elimina cualquier clase de tema anterior para evitar conflictos
+    body.classList.remove(...themeClasses);
+
+    // Añade solo la nueva clase de tema, conservando las demás
+    body.classList.add(`theme-${theme}`);
+
     localStorage.setItem('seychelles-theme-multi', theme);
     if(BASE_DATOS.length > 0) { actualizarTodoElBloqueGrafico(); }
 }

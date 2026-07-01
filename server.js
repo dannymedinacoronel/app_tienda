@@ -196,14 +196,15 @@ const UsuarioAutorizadoSchema = new mongoose.Schema({
 const UsuarioAutorizado = mongoose.models.UsuarioAutorizado || mongoose.model('UsuarioAutorizado', UsuarioAutorizadoSchema);
 
 const MensajeInternoSchema = new mongoose.Schema({
+    empresa: { type: String, required: true, default: EMPRESA_DEFAULT, lowercase: true, trim: true },
     deEmail: { type: String, required: true, lowercase: true, trim: true },
     paraEmail: { type: String, required: true, lowercase: true, trim: true },
     texto: { type: String, required: true, trim: true, maxlength: 4000 },
     leido: { type: Boolean, default: false },
     creadoEn: { type: Date, default: Date.now }
 });
-MensajeInternoSchema.index({ deEmail: 1, paraEmail: 1, creadoEn: -1 });
-MensajeInternoSchema.index({ paraEmail: 1, leido: 1, creadoEn: -1 });
+MensajeInternoSchema.index({ empresa: 1, deEmail: 1, paraEmail: 1, creadoEn: -1 });
+MensajeInternoSchema.index({ empresa: 1, paraEmail: 1, leido: 1, creadoEn: -1 });
 const MensajeInterno = mongoose.models.MensajeInterno || mongoose.model('MensajeInterno', MensajeInternoSchema);
 
 const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
@@ -231,6 +232,19 @@ mongoose.connect(MONGO_URI_FINAL)
             { $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] },
             { $set: { empresa: EMPRESA_DEFAULT } }
         );
+        await Promise.all([
+            Tienda.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
+            Categoria.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
+            EstadoKanban.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
+            VentaRopa.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
+            Cliente.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
+            Gasto.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
+            Nota.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
+            Tarea.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
+            Faq.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
+            LogAuditoria.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
+            MensajeInterno.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } })
+        ]);
 
         const negocioBase = await Negocio.findOne({ slug: EMPRESA_DEFAULT }).lean();
         if (!negocioBase) {
@@ -332,6 +346,10 @@ app.use(session({
 }));
 
 app.use(express.static(path.join(__dirname, 'public')));
+function empresaActual(req) {
+    return normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
+}
+
 function exigeAdmin(req, res, next) {
     if (req.session && req.session.esAdmin) return next();
     return res.status(403).json({ error: 'No autorizado.' });
@@ -339,7 +357,10 @@ function exigeAdmin(req, res, next) {
 
 async function registrarLog(usuario, accion, locationData = {}) {
     try {
+        const usuarioDoc = await UsuarioAutorizado.findOne({ email: String(usuario || '').toLowerCase().trim() }).select('empresa').lean();
+        const empresa = normalizarEmpresa(usuarioDoc?.empresa || EMPRESA_DEFAULT);
         const nuevoLog = new LogAuditoria({ 
+            empresa,
             usuario, 
             accion,
             ...locationData
@@ -443,16 +464,18 @@ setInterval(realizarBackupDiarioEmail, 24 * 60 * 60 * 1000);
 
 app.get('/api/categorias', exigeAdmin, async (req, res) => {
     try {
-        const categorias = await Categoria.find().sort({ nombre: 1 }).lean();
+        const empresa = empresaActual(req);
+        const categorias = await Categoria.find({ empresa }).sort({ nombre: 1 }).lean();
         res.json({ categorias });
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar categorías.' }); }
 });
 
 app.post('/api/categorias', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const nombreLimpio = req.body.nombre ? req.body.nombre.trim() : "";
         if (!nombreLimpio) return res.status(400).json({ error: 'Nombre requerido.' });
-        const nueva = new Categoria({ nombre: nombreLimpio });
+        const nueva = new Categoria({ nombre: nombreLimpio, empresa });
         await nueva.save();
         await registrarLog(req.session.email, `Creó nueva categoría: ${nombreLimpio}`);
         res.json({ status: 'success', categoria: nueva });
@@ -461,9 +484,11 @@ app.post('/api/categorias', exigeAdmin, async (req, res) => {
 
 app.put('/api/categorias/:id', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { id } = req.params;
         const { nombre } = req.body;
-        const cat = await Categoria.findByIdAndUpdate(id, { nombre }, { new: true });
+        const cat = await Categoria.findOneAndUpdate({ _id: id, empresa }, { nombre }, { new: true });
+        if (!cat) return res.status(404).json({ error: 'Categoría no encontrada en tu empresa.' });
         await registrarLog(req.session.email, `Modificó categoría: ${nombre}`);
         res.json(cat);
     } catch (e) { res.status(400).json({ error: 'Error al actualizar categoría.' }); }
@@ -471,10 +496,11 @@ app.put('/api/categorias/:id', exigeAdmin, async (req, res) => {
 
 app.delete('/api/categorias/:id', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { id } = req.params;
-        const cat = await Categoria.findById(id);
+        const cat = await Categoria.findOne({ _id: id, empresa });
         if (!cat) return res.status(404).json({ error: 'No existe.' });
-        await Categoria.findByIdAndDelete(id);
+        await Categoria.deleteOne({ _id: id, empresa });
         await registrarLog(req.session.email, `Eliminó categoría: ${cat.nombre}`);
         res.sendStatus(200);
     } catch (e) { res.status(500).json({ error: 'Error al purgar categoría.' }); }
@@ -484,7 +510,8 @@ app.delete('/api/categorias/:id', exigeAdmin, async (req, res) => {
 
 app.get('/api/tiendas', exigeAdmin, async (req, res) => {
     try {
-        const tiendas = await Tienda.find().sort({ nombre: 1 }).lean();
+        const empresa = empresaActual(req);
+        const tiendas = await Tienda.find({ empresa }).sort({ nombre: 1 }).lean();
         res.json({ tiendas });
     } catch (e) {
         res.status(500).json({ error: 'Fallo al recuperar tiendas.' });
@@ -493,10 +520,11 @@ app.get('/api/tiendas', exigeAdmin, async (req, res) => {
 
 app.post('/api/tiendas', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const nombreLimpio = req.body.nombre ? req.body.nombre.trim() : "";
         if (!nombreLimpio) return res.status(400).json({ error: 'El nombre es obligatorio.' });
 
-        const nuevaTienda = new Tienda({ nombre: nombreLimpio });
+        const nuevaTienda = new Tienda({ nombre: nombreLimpio, empresa });
         await nuevaTienda.save();
         await registrarLog(req.session.email, `Creó la tienda en MongoDB: ${nuevaTienda.nombre}`);
         res.json({ status: 'success', tienda: nuevaTienda });
@@ -508,14 +536,15 @@ app.post('/api/tiendas', exigeAdmin, async (req, res) => {
 // BAJA DE TIENDA
 app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { id } = req.params;
         
-        const tiendaPorBorrar = await Tienda.findById(id);
+        const tiendaPorBorrar = await Tienda.findOne({ _id: id, empresa });
         if (!tiendaPorBorrar) return res.status(404).json({ error: 'La tienda no existe.' });
 
         // Desasignar tienda de los productos asociados
-        await VentaRopa.updateMany({ tienda: id }, { $unset: { tienda: 1 } });
-        await Tienda.findByIdAndDelete(id);
+        await VentaRopa.updateMany({ tienda: id, empresa }, { $unset: { tienda: 1 } });
+        await Tienda.deleteOne({ _id: id, empresa });
 
         await registrarLog(req.session.email, `Eliminó la tienda "${tiendaPorBorrar.nombre}".`);
         return res.sendStatus(200);
@@ -788,6 +817,7 @@ app.get('/api/mensajes', exigeAdmin, async (req, res) => {
         if (!destinatario) return res.status(403).json({ error: 'El usuario no pertenece a tu equipo.' });
 
         const mensajes = await MensajeInterno.find({
+            empresa,
             $or: [
                 { deEmail: emailActual, paraEmail: conEmail },
                 { deEmail: conEmail, paraEmail: emailActual }
@@ -798,7 +828,7 @@ app.get('/api/mensajes', exigeAdmin, async (req, res) => {
             .lean();
 
         await MensajeInterno.updateMany(
-            { deEmail: conEmail, paraEmail: emailActual, leido: false },
+            { empresa, deEmail: conEmail, paraEmail: emailActual, leido: false },
             { $set: { leido: true } }
         );
 
@@ -821,7 +851,7 @@ app.post('/api/mensajes', exigeAdmin, async (req, res) => {
         const existeDestino = await UsuarioAutorizado.findOne({ email: paraEmail, empresa }).lean();
         if (!existeDestino) return res.status(404).json({ error: 'Usuario destino no encontrado.' });
 
-        const mensaje = new MensajeInterno({ deEmail: emailActual, paraEmail, texto });
+        const mensaje = new MensajeInterno({ empresa, deEmail: emailActual, paraEmail, texto });
         await mensaje.save();
 
         if (global.io) {
@@ -841,11 +871,15 @@ app.post('/api/mensajes', exigeAdmin, async (req, res) => {
 
 // --- Rutas de Tareas (Kanban) ---
 app.get('/api/tareas', exigeAdmin, async (req, res) => {
-    try { res.json(await Tarea.find().sort({ fechaCreacion: -1 })); } catch (e) { res.status(500).send(e); }
+    try {
+        const empresa = empresaActual(req);
+        res.json(await Tarea.find({ empresa }).sort({ fechaCreacion: -1 }));
+    } catch (e) { res.status(500).send(e); }
 });
 app.post('/api/tareas', exigeAdmin, async (req, res) => {
     try {
-        const nueva = new Tarea(req.body);
+        const empresa = empresaActual(req);
+        const nueva = new Tarea({ ...req.body, empresa });
         await nueva.save();
         await registrarLog(req.session.email, `Creó una tarea: ${nueva.titulo}`);
         res.json(nueva);
@@ -853,21 +887,26 @@ app.post('/api/tareas', exigeAdmin, async (req, res) => {
 });
 app.put('/api/tareas/:id', exigeAdmin, async (req, res) => {
     try {
-        const tarea = await Tarea.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const empresa = empresaActual(req);
+        const tarea = await Tarea.findOneAndUpdate({ _id: req.params.id, empresa }, req.body, { new: true });
+        if (!tarea) return res.status(404).json({ error: 'Tarea no encontrada en tu empresa.' });
         await registrarLog(req.session.email, `Actualizó la tarea: ${tarea.titulo}`);
         res.json(tarea);
     } catch (e) { res.status(400).send(e); }
 });
 app.put('/api/tareas/:id/estado', exigeAdmin, async (req, res) => {
     try {
-        const tarea = await Tarea.findByIdAndUpdate(req.params.id, { estado: req.body.estado }, { new: true });
+        const empresa = empresaActual(req);
+        const tarea = await Tarea.findOneAndUpdate({ _id: req.params.id, empresa }, { estado: req.body.estado }, { new: true });
+        if (!tarea) return res.status(404).json({ error: 'Tarea no encontrada en tu empresa.' });
         await registrarLog(req.session.email, `Movió tarea a ${req.body.estado}: ${tarea.titulo}`);
         res.json(tarea);
     } catch (e) { res.status(400).send(e); }
 });
 app.delete('/api/tareas/:id', exigeAdmin, async (req, res) => {
     try {
-        const tarea = await Tarea.findByIdAndDelete(req.params.id);
+        const empresa = empresaActual(req);
+        const tarea = await Tarea.findOneAndDelete({ _id: req.params.id, empresa });
         if(tarea) await registrarLog(req.session.email, `Eliminó la tarea: ${tarea.titulo}`);
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
@@ -875,43 +914,61 @@ app.delete('/api/tareas/:id', exigeAdmin, async (req, res) => {
 
 // --- Rutas de FAQs Dinámicas ---
 app.get('/api/faqs', exigeAdmin, async (req, res) => {
-    try { res.json(await Faq.find().sort({ fechaCreacion: 1 })); } catch (e) { res.status(500).send(e); }
+    try {
+        const empresa = empresaActual(req);
+        res.json(await Faq.find({ empresa }).sort({ fechaCreacion: 1 }));
+    } catch (e) { res.status(500).send(e); }
 });
 app.post('/api/faqs', exigeAdmin, async (req, res) => {
     try {
-        const nueva = new Faq(req.body); await nueva.save();
+        const empresa = empresaActual(req);
+        const nueva = new Faq({ ...req.body, empresa }); await nueva.save();
         await registrarLog(req.session.email, `Añadió nueva FAQ`); res.json(nueva);
     } catch (e) { res.status(400).send(e); }
 });
 app.put('/api/faqs/:id', exigeAdmin, async (req, res) => {
     try {
-        const f = await Faq.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const empresa = empresaActual(req);
+        const f = await Faq.findOneAndUpdate({ _id: req.params.id, empresa }, req.body, { new: true });
+        if (!f) return res.status(404).json({ error: 'FAQ no encontrada en tu empresa.' });
         await registrarLog(req.session.email, `Modificó una FAQ`); res.json(f);
     } catch (e) { res.status(400).send(e); }
 });
 app.delete('/api/faqs/:id', exigeAdmin, async (req, res) => {
-    try { await Faq.findByIdAndDelete(req.params.id); await registrarLog(req.session.email, `Eliminó una FAQ`); res.sendStatus(200); } catch (e) { res.status(500).send(e); }
+    try {
+        const empresa = empresaActual(req);
+        await Faq.deleteOne({ _id: req.params.id, empresa });
+        await registrarLog(req.session.email, `Eliminó una FAQ`);
+        res.sendStatus(200);
+    } catch (e) { res.status(500).send(e); }
 });
 
 // --- Rutas de Ajustes del Tablero Kanban ---
 app.get('/api/estados-kanban', exigeAdmin, async (req, res) => {
-    try { res.json(await EstadoKanban.find().sort({ orden: 1 })); } catch (e) { res.status(500).send(e); }
+    try {
+        const empresa = empresaActual(req);
+        res.json(await EstadoKanban.find({ empresa }).sort({ orden: 1 }));
+    } catch (e) { res.status(500).send(e); }
 });
 app.post('/api/estados-kanban', exigeAdmin, async (req, res) => {
     try {
-        const nuevo = new EstadoKanban(req.body); await nuevo.save();
+        const empresa = empresaActual(req);
+        const nuevo = new EstadoKanban({ ...req.body, empresa }); await nuevo.save();
         await registrarLog(req.session.email, `Creó el estado Kanban: ${nuevo.nombre}`); res.json(nuevo);
     } catch (e) { res.status(400).send(e); }
 });
 app.put('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
     try {
-        const estado = await EstadoKanban.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const empresa = empresaActual(req);
+        const estado = await EstadoKanban.findOneAndUpdate({ _id: req.params.id, empresa }, req.body, { new: true });
+        if (!estado) return res.status(404).json({ error: 'Estado no encontrado en tu empresa.' });
         await registrarLog(req.session.email, `Modificó estado Kanban: ${estado.nombre}`); res.json(estado);
     } catch (e) { res.status(400).send(e); }
 });
 app.delete('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
     try {
-        const estado = await EstadoKanban.findByIdAndDelete(req.params.id);
+        const empresa = empresaActual(req);
+        const estado = await EstadoKanban.findOneAndDelete({ _id: req.params.id, empresa });
         if(estado) await registrarLog(req.session.email, `Eliminó el estado Kanban: ${estado.nombre}`); res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
 });
@@ -920,6 +977,7 @@ app.delete('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
 app.post('/api/chat', exigeAdmin, async (req, res) => {
     const { mensaje, imagen } = req.body;
     if (!mensaje && !imagen) return res.status(400).json({ error: 'Mensaje vacío' });
+    const empresa = empresaActual(req);
 
     const apiKey = (process.env.TOGETHER_API_KEY || '').replace(/['"]/g, '').trim();
     
@@ -932,7 +990,7 @@ app.post('/api/chat', exigeAdmin, async (req, res) => {
 
     try {
         // 1. Damos visión del inventario a la IA para que pueda analizarlo (Máx 150 items recientes)
-        const productos = await VentaRopa.find().select('sku prenda estado precioVenta cantidad').limit(150).lean();
+        const productos = await VentaRopa.find({ empresa }).select('sku prenda estado precioVenta cantidad').limit(150).lean();
         const inventarioContexto = productos.map(p => `[SKU: ${p.sku || 'N/A'}] ${p.prenda} (${p.cantidad} ud) - ${p.estado} - ${p.precioVenta}€`).join('\n');
 
         // Le damos personalidad y contexto a la IA
@@ -1043,16 +1101,17 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
             try {
                 if (actionType === 'ACTUALIZAR_PRECIO' && params.sku && params.precio) {
-                    await VentaRopa.findOneAndUpdate({ sku: params.sku }, { precioVenta: parseFloat(params.precio) });
+                    await VentaRopa.findOneAndUpdate({ sku: params.sku, empresa }, { precioVenta: parseFloat(params.precio), fechaModificacion: new Date().toISOString().slice(0, 10) });
                     await registrarLog(req.session.email, `IA actualizó precio de ${params.sku}`);
                 } else if (actionType === 'CAMBIAR_ESTADO' && params.sku && params.estado) {
-                    await VentaRopa.findOneAndUpdate({ sku: params.sku }, { estado: params.estado });
+                    await VentaRopa.findOneAndUpdate({ sku: params.sku, empresa }, { estado: params.estado, fechaModificacion: new Date().toISOString().slice(0, 10) });
                     await registrarLog(req.session.email, `IA cambió estado de ${params.sku} a ${params.estado}`);
                 } else if (actionType === 'BORRAR_PRODUCTO' && params.sku) {
-                    await VentaRopa.findOneAndDelete({ sku: params.sku });
+                    await VentaRopa.findOneAndDelete({ sku: params.sku, empresa });
                     await registrarLog(req.session.email, `IA borró producto ${params.sku}`);
                 } else if (actionType === 'CREAR_PRODUCTO' && params.prenda) {
                     const nuevo = new VentaRopa({
+                        empresa,
                         sku: `IA-${Date.now().toString().slice(-6)}`,
                         prenda: params.prenda, precioVenta: parseFloat(params.precio) || 0,
                         categoria: params.categoria || 'General', estado: 'No Vendido',
@@ -1079,16 +1138,18 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
 
 app.get('/api/notas', exigeAdmin, async (req, res) => {
     try {
-        const notas = await Nota.find().lean();
+        const empresa = empresaActual(req);
+        const notas = await Nota.find({ empresa }).lean();
         res.json(notas);
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar notas.' }); }
 });
 
 app.post('/api/notas', exigeAdmin, async (req, res) => {
     try {
-        const count = await Nota.countDocuments();
+        const empresa = empresaActual(req);
+        const count = await Nota.countDocuments({ empresa });
         if (count >= 10) return res.status(400).json({ error: 'Límite de 10 notas alcanzado.' });
-        const nuevaNota = new Nota({ ...req.body, usuario: req.session.email });
+        const nuevaNota = new Nota({ ...req.body, empresa, usuario: req.session.email });
         await nuevaNota.save();
         res.json(nuevaNota);
     } catch (e) { res.status(500).json({ error: 'Error al crear nota.' }); }
@@ -1096,16 +1157,19 @@ app.post('/api/notas', exigeAdmin, async (req, res) => {
 
 app.put('/api/notas/:id', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { id } = req.params;
-        const notaActualizada = await Nota.findByIdAndUpdate(id, req.body, { new: true });
+        const notaActualizada = await Nota.findOneAndUpdate({ _id: id, empresa }, req.body, { new: true });
+        if (!notaActualizada) return res.status(404).json({ error: 'Nota no encontrada en tu empresa.' });
         res.json(notaActualizada);
     } catch (e) { res.status(500).json({ error: 'Error al mover nota.' }); }
 });
 
 app.delete('/api/notas/:id', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { id } = req.params;
-        await Nota.findByIdAndDelete(id);
+        await Nota.deleteOne({ _id: id, empresa });
         res.sendStatus(200);
     } catch (e) { res.status(500).json({ error: 'Error al borrar nota.' }); }
 });
@@ -1230,11 +1294,15 @@ app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
 
 // --- Rutas de Clientes (CRM) ---
 app.get('/api/clientes', exigeAdmin, async (req, res) => {
-    try { res.json(await Cliente.find().sort({ nombre: 1 })); } catch (e) { res.status(500).send(e); }
+    try {
+        const empresa = empresaActual(req);
+        res.json(await Cliente.find({ empresa }).sort({ nombre: 1 }));
+    } catch (e) { res.status(500).send(e); }
 });
 app.post('/api/clientes', exigeAdmin, async (req, res) => {
     try {
-        const nuevo = new Cliente(req.body);
+        const empresa = empresaActual(req);
+        const nuevo = new Cliente({ ...req.body, empresa });
         await nuevo.save();
         await registrarLog(req.session.email, `Registró cliente: ${nuevo.nombre}`);
         res.json(nuevo);
@@ -1242,7 +1310,9 @@ app.post('/api/clientes', exigeAdmin, async (req, res) => {
 });
 app.put('/api/clientes/:id', exigeAdmin, async (req, res) => {
     try {
-        const cliente = await Cliente.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        const empresa = empresaActual(req);
+        const cliente = await Cliente.findOneAndUpdate({ _id: req.params.id, empresa }, req.body, { new: true });
+        if (!cliente) return res.status(404).json({ error: 'Cliente no encontrado en tu empresa.' });
         await registrarLog(req.session.email, `Actualizó datos del cliente: ${cliente.nombre}`);
         notificarCambio(); // Notificar cambio para refrescar la lista de clientes en otros navegadores
         res.json(cliente);
@@ -1250,7 +1320,8 @@ app.put('/api/clientes/:id', exigeAdmin, async (req, res) => {
 });
 app.delete('/api/clientes/:id', exigeAdmin, async (req, res) => {
     try {
-        await Cliente.findByIdAndDelete(req.params.id);
+        const empresa = empresaActual(req);
+        await Cliente.deleteOne({ _id: req.params.id, empresa });
         notificarCambio(); // Notificar cambio para refrescar la lista de clientes en otros navegadores
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
@@ -1258,11 +1329,15 @@ app.delete('/api/clientes/:id', exigeAdmin, async (req, res) => {
 
 // --- Rutas de Gastos Operativos ---
 app.get('/api/gastos', exigeAdmin, async (req, res) => {
-    try { res.json(await Gasto.find().sort({ fecha: -1 })); } catch (e) { res.status(500).send(e); }
+    try {
+        const empresa = empresaActual(req);
+        res.json(await Gasto.find({ empresa }).sort({ fecha: -1 }));
+    } catch (e) { res.status(500).send(e); }
 });
 app.post('/api/gastos', exigeAdmin, async (req, res) => {
     try {
-        const nuevo = new Gasto(req.body);
+        const empresa = empresaActual(req);
+        const nuevo = new Gasto({ ...req.body, empresa });
         await nuevo.save();
         await registrarLog(req.session.email, `Registró gasto: ${nuevo.concepto} (${nuevo.monto}€)`);
         res.json(nuevo);
@@ -1270,29 +1345,32 @@ app.post('/api/gastos', exigeAdmin, async (req, res) => {
 });
 app.delete('/api/gastos/:id', exigeAdmin, async (req, res) => {
     try {
-        await Gasto.findByIdAndDelete(req.params.id);
+        const empresa = empresaActual(req);
+        await Gasto.deleteOne({ _id: req.params.id, empresa });
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
 });
 
 app.get('/api/ventas', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 40; // Lotes de 40 productos
         const skip = (page - 1) * limit;
 
-        const estadosKanban = await EstadoKanban.find().lean();
+        const estadosKanban = await EstadoKanban.find({ empresa }).lean();
         const nombresEstadosVenta = estadosKanban.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
 
         // Pipeline para obtener datos paginados y conteo total en una sola consulta
         const [ventasData] = await VentaRopa.aggregate([
+            { $match: { empresa } },
             { $sort: { _id: -1 } },
             {
                 $facet: {
                     paginatedResults: [
                         { $skip: skip },
                         { $limit: limit },
-                        { $lookup: { from: 'tiendas', localField: 'tienda', foreignField: '_id', as: 'tiendaInfo' } },
+                        { $lookup: { from: 'tiendas', let: { tiendaId: '$tienda' }, pipeline: [ { $match: { $expr: { $and: [ { $eq: ['$_id', '$$tiendaId'] }, { $eq: ['$empresa', empresa] } ] } } } ], as: 'tiendaInfo' } },
                         { $unwind: { path: '$tiendaInfo', preserveNullAndEmptyArrays: true } },
                         { $addFields: { proveedor: '$tiendaInfo.nombre' } },
                         { $project: { tiendaInfo: 0 } }
@@ -1307,6 +1385,7 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
 
         // Pipeline optimizado para las estadísticas globales (se ejecuta solo una vez)
         const [summaryData] = await VentaRopa.aggregate([
+            { $match: { empresa } },
             {
                 $group: {
                     _id: null,
@@ -1317,7 +1396,7 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
             }
         ]);
 
-        const gastosExtra = await Gasto.find().lean();
+        const gastosExtra = await Gasto.find({ empresa }).lean();
         const totalGastosOperativos = gastosExtra.reduce((acc, g) => acc + g.monto, 0);
 
         let ingresos = 0, prendasVendidas = 0;
@@ -1339,7 +1418,6 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
 
         const resumen = { ingresos, beneficio: beneficioNeto, inversion: inversion + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };
 
-        const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
         const usuariosEquipo = await UsuarioAutorizado.find({ empresa }).select('email').lean();
         const emailsEquipo = usuariosEquipo.map(u => String(u.email || '').toLowerCase().trim()).filter(Boolean);
         const logs = emailsEquipo.length
@@ -1365,12 +1443,13 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
 
 app.post('/api/ventas', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { proveedor, ...datosVenta } = req.body;
         
-        const tiendaDoc = await Tienda.findOne({ nombre: proveedor });
+        const tiendaDoc = await Tienda.findOne({ nombre: proveedor, empresa });
 
         if (datosVenta.estado) {
-            const estadoCfg = await EstadoKanban.findOne({ nombre: datosVenta.estado }).lean();
+            const estadoCfg = await EstadoKanban.findOne({ nombre: datosVenta.estado, empresa }).lean();
             const esVenta = estadoCfg && estadoCfg.rolFinanciero === 'Venta';
             if (esVenta && !datosVenta.fechaVenta) {
                 datosVenta.fechaVenta = new Date().toISOString().split('T')[0];
@@ -1380,7 +1459,7 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
             }
         }
 
-        const nuevaVenta = new VentaRopa({ ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null });
+        const nuevaVenta = new VentaRopa({ ...datosVenta, empresa, tienda: tiendaDoc ? tiendaDoc._id : null });
         await nuevaVenta.save(); 
         await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`);
         return res.json({ status: "success", venta: nuevaVenta });
@@ -1391,13 +1470,14 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
 
 app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { id } = req.params;
         const { proveedor, ...datosVenta } = req.body;
 
-        const tiendaDoc = await Tienda.findOne({ nombre: proveedor });
+        const tiendaDoc = await Tienda.findOne({ nombre: proveedor, empresa });
 
         if (datosVenta.estado) {
-            const estadoCfg = await EstadoKanban.findOne({ nombre: datosVenta.estado }).lean();
+            const estadoCfg = await EstadoKanban.findOne({ nombre: datosVenta.estado, empresa }).lean();
             const esVenta = estadoCfg && estadoCfg.rolFinanciero === 'Venta';
             if (esVenta && !datosVenta.fechaVenta) {
                 datosVenta.fechaVenta = new Date().toISOString().split('T')[0];
@@ -1408,10 +1488,11 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
         }
 
         const ventaActualizada = await VentaRopa.findByIdAndUpdate(
-            id, 
+            { _id: id, empresa }, 
             { ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null, fechaModificacion: new Date().toISOString().slice(0, 10) }, 
             { new: true }
         );
+        if (!ventaActualizada) return res.status(404).json({ error: 'Producto no encontrado en tu empresa.' });
 
         await registrarLog(req.session.email, `Modificó datos de la prenda ID: ${id} (${ventaActualizada.prenda})`);
         return res.json({ status: "success", venta: ventaActualizada });
@@ -1422,10 +1503,11 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
 
 app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { id } = req.params;
         const { estado, fechaVenta, comentariosProducto } = req.body;
 
-        const estadoConfig = await EstadoKanban.findOne({ nombre: estado });
+        const estadoConfig = await EstadoKanban.findOne({ nombre: estado, empresa });
         const updateData = { estado };
         updateData.fechaModificacion = new Date().toISOString().slice(0, 10);
         
@@ -1438,7 +1520,8 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
             updateData.fechaVenta = '';
         }
 
-        const ventaActualizada = await VentaRopa.findByIdAndUpdate(id, updateData, { new: true });
+        const ventaActualizada = await VentaRopa.findOneAndUpdate({ _id: id, empresa }, updateData, { new: true });
+        if (!ventaActualizada) return res.status(404).json({ error: 'Producto no encontrado en tu empresa.' });
         await registrarLog(req.session.email, `Transición de estado: [${ventaActualizada.prenda}] -> ${estado.toUpperCase()}`);
         return res.json({ status: "success", venta: ventaActualizada });
     } catch (error) {
@@ -1448,10 +1531,11 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
 
 app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { sku } = req.params;
-        let venta = await VentaRopa.findOne({ sku: sku });
+        let venta = await VentaRopa.findOne({ sku: sku, empresa });
         
-        const estadosConfig = await EstadoKanban.find().sort({ orden: 1 });
+        const estadosConfig = await EstadoKanban.find({ empresa }).sort({ orden: 1 });
         const estStock = estadosConfig.find(e => e.rolFinanciero === 'Stock');
         const estVenta = estadosConfig.find(e => e.rolFinanciero === 'Venta');
         
@@ -1460,6 +1544,7 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
 
         if (!venta) {
             venta = new VentaRopa({
+                empresa,
                 sku: sku,
                 prenda: 'Artículo Escaneado Nuevo',
                 estado: nombreStock
@@ -1487,8 +1572,9 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
 
 app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { id } = req.params;
-        const ventaEliminada = await VentaRopa.findByIdAndDelete(id);
+        const ventaEliminada = await VentaRopa.findOneAndDelete({ _id: id, empresa });
         if (ventaEliminada) {
             await registrarLog(req.session.email, `Eliminó permanentemente la prenda: ${ventaEliminada.prenda}`);
         }
@@ -1606,6 +1692,7 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
  */
 app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { productosExtraidos } = req.body;
         console.log(`[SCRAPER MANUAL] Recibidos ${productosExtraidos?.length || 0} productos para comparar.`);
         if (!productosExtraidos || !Array.isArray(productosExtraidos)) {
@@ -1613,7 +1700,7 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
         }
 
         const resultados = { discrepancias: [], nuevos: [], identicos: [], desaparecidos: [] };
-        const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
+        const productosBD = await VentaRopa.find({ canalVenta: 'Vinted', empresa }).lean();
 
         const cleanStr = str => str.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
         const hayCoincidenciaFlexible = (a, b) => {
@@ -1696,6 +1783,7 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
  */
 app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { productos } = req.body; // Array de productos seleccionados en el frontend
         if (!productos || !Array.isArray(productos)) return res.status(400).json({ error: 'Datos de productos no válidos.' });
 
@@ -1705,9 +1793,9 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
             if (!limpio) return null;
             if (tiendasCache.has(limpio)) return tiendasCache.get(limpio);
 
-            let tiendaDoc = await Tienda.findOne({ nombre: limpio });
+            let tiendaDoc = await Tienda.findOne({ nombre: limpio, empresa });
             if (!tiendaDoc) {
-                tiendaDoc = new Tienda({ nombre: limpio });
+                tiendaDoc = new Tienda({ nombre: limpio, empresa });
                 await tiendaDoc.save();
             }
             tiendasCache.set(limpio, tiendaDoc);
@@ -1731,6 +1819,7 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
 
             const nuevaVenta = new VentaRopa({
                 ...prod,
+                empresa,
                 // Guardar URL directamente en lugar de Base64
                 imagen: prod.imagen,
                 galeria: galeriaUrls,
@@ -1756,6 +1845,7 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
  */
 app.post('/api/ventas/bulk', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { productos } = req.body;
         if (!productos || !Array.isArray(productos)) return res.status(400).json({ error: 'Lista de productos no válida.' });
 
@@ -1763,11 +1853,12 @@ app.post('/api/ventas/bulk', exigeAdmin, async (req, res) => {
         const productosProcesados = await Promise.all(productos.map(async (p) => {
             let tiendaId = null;
             if (p.proveedor) {
-                const t = await Tienda.findOne({ nombre: p.proveedor });
+                const t = await Tienda.findOne({ nombre: p.proveedor, empresa });
                 if (t) tiendaId = t._id;
             }
             return {
                 ...p,
+                empresa,
                 tienda: tiendaId,
                 sku: p.sku || `BK-${Date.now()}-${Math.floor(Math.random() * 1000)}`
             };
@@ -1821,9 +1912,10 @@ app.post('/api/scraper/webhook-github', async (req, res) => {
  */
 app.post('/api/scraper/aplicar', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { cambios } = req.body;
         for (const cambio of cambios) {
-            await VentaRopa.findByIdAndUpdate(cambio.idMongo, { precioVenta: cambio.valorNuevo, prenda: cambio.prenda });
+            await VentaRopa.findOneAndUpdate({ _id: cambio.idMongo, empresa }, { precioVenta: cambio.valorNuevo, prenda: cambio.prenda, fechaModificacion: new Date().toISOString().slice(0, 10) });
             await registrarLog(req.session.email, `Sincronización artículo: ${cambio.prenda} -> ${cambio.valorNuevo}€`);
         }
         res.json({ success: true });

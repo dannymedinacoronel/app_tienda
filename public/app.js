@@ -301,8 +301,36 @@ let GLOBO_RENDERER = null;
 let GLOBO_CONTROLS = null;
 let GLOBO_COMPOSER = null;
 let GLOBO_ANIM_FRAME = null;
+let THREE_STACK_PROMISE = null;
 let FOTOS_FORMULARIO_TEMP = [];
 let resultadosScraperActual = null;
+
+function loadExternalScript(src) {
+    return new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) return resolve();
+        const script = document.createElement('script');
+        script.src = src;
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`No se pudo cargar ${src}`));
+        document.head.appendChild(script);
+    });
+}
+
+async function ensureThreeStackLoaded() {
+    if (window.THREE && window.ThreeGlobe && window.THREE.OrbitControls && window.THREE.EffectComposer) return;
+    if (!THREE_STACK_PROMISE) {
+        THREE_STACK_PROMISE = (async () => {
+            await loadExternalScript('https://unpkg.com/three@0.159.0/build/three.min.js');
+            await loadExternalScript('https://unpkg.com/three-globe@2.31.0/dist/three-globe.min.js');
+            await loadExternalScript('https://unpkg.com/three@0.159.0/examples/js/controls/OrbitControls.js');
+            await loadExternalScript('https://unpkg.com/three@0.159.0/examples/js/postprocessing/EffectComposer.js');
+            await loadExternalScript('https://unpkg.com/three@0.159.0/examples/js/postprocessing/RenderPass.js');
+            await loadExternalScript('https://unpkg.com/three@0.159.0/examples/js/postprocessing/UnrealBloomPass.js');
+        })();
+    }
+    await THREE_STACK_PROMISE;
+}
 
 function numeroSeguro(valor, fallback = 0) {
     const normalizado = Number(String(valor ?? '').replace(/\s+/g, '').replace(',', '.').replace(/[^\d.-]/g, ''));
@@ -1568,19 +1596,34 @@ function renderCalendarioStock() {
     if(txtMes) txtMes.innerText = `${nombresMeses[CAL_STOCK_MES-1]} ${CAL_STOCK_ANIO}`;
     const grid = document.getElementById('grid-calendario-stock');
     if(!grid) return;
-    const addsPorDia = {}; const salesPorDia = {};
+    const addsPorDia = {}; const salesPorDia = {}; const modsPorDia = {};
+
+    const parseFechaParts = (fechaRaw) => {
+        if (!fechaRaw) return null;
+        const fechaTxt = String(fechaRaw).slice(0, 10);
+        const fParts = fechaTxt.split('-');
+        if (fParts.length !== 3) return null;
+        const y = parseInt(fParts[0], 10);
+        const m = parseInt(fParts[1], 10);
+        const d = parseInt(fParts[2], 10);
+        if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return null;
+        return { y, m, d };
+    };
+
     BASE_DATOS.forEach(v => {
-        if (v.fecha) {
-            const fParts = v.fecha.split('-');
-            if (parseInt(fParts[0]) === CAL_STOCK_ANIO && parseInt(fParts[1]) === CAL_STOCK_MES) {
-                const d = parseInt(fParts[2]); addsPorDia[d] = (addsPorDia[d] || 0) + 1;
-            }
+        const alta = parseFechaParts(v.fecha);
+        if (alta && alta.y === CAL_STOCK_ANIO && alta.m === CAL_STOCK_MES) {
+            addsPorDia[alta.d] = (addsPorDia[alta.d] || 0) + 1;
         }
-        if (v.fechaVenta) {
-            const fParts = v.fechaVenta.split('-');
-            if (parseInt(fParts[0]) === CAL_STOCK_ANIO && parseInt(fParts[1]) === CAL_STOCK_MES) {
-                const d = parseInt(fParts[2]); salesPorDia[d] = (salesPorDia[d] || 0) + 1;
-            }
+
+        const venta = parseFechaParts(v.fechaVenta);
+        if (venta && venta.y === CAL_STOCK_ANIO && venta.m === CAL_STOCK_MES) {
+            salesPorDia[venta.d] = (salesPorDia[venta.d] || 0) + 1;
+        }
+
+        const mod = parseFechaParts(v.fechaModificacion || v.updatedAt);
+        if (mod && mod.y === CAL_STOCK_ANIO && mod.m === CAL_STOCK_MES) {
+            modsPorDia[mod.d] = (modsPorDia[mod.d] || 0) + 1;
         }
     });
     const primerDiaMes = new Date(CAL_STOCK_ANIO, CAL_STOCK_MES - 1, 1).getDay();
@@ -1600,6 +1643,11 @@ function renderCalendarioStock() {
             <div class="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[8px] font-black px-2 py-0.5 rounded-lg shadow-sm">
                 <span class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span>${salesPorDia[d]} VENTA${salesPorDia[d] > 1 ? 'S' : ''}</span>
+            </div>`;
+        if (modsPorDia[d]) info += `
+            <div class="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[8px] font-black px-2 py-0.5 rounded-lg shadow-sm">
+                <span class="w-1 h-1 rounded-full bg-amber-500 animate-pulse"></span>
+                <span>${modsPorDia[d]} MOD${modsPorDia[d] > 1 ? 'S' : ''}</span>
             </div>`;
 
         grid.innerHTML += ` 
@@ -2634,6 +2682,7 @@ async function renderizarMapaDeLogins() {
     if(loader) loader.classList.remove('hidden');
 
     try {
+        await ensureThreeStackLoaded();
         const filtroUsuario = document.getElementById('logs-map-user-filter')?.value || '';
         const query = filtroUsuario ? `?usuario=${encodeURIComponent(filtroUsuario)}` : '';
         const [locationsRes, countriesRes] = await Promise.all([
@@ -2675,10 +2724,6 @@ async function renderizarMapaDeLogins() {
             .polygonStrokeColor(() => '#6b21a8')
             .pointsData(locations).pointLat('lat').pointLng('lon')
             .pointColor(() => '#67e8f9').pointAltitude(0.02).pointRadius(d => 0.15 + d.count * 0.08)
-            .pointLabel(d => {
-                const ipsTxt = (d.ips || []).slice(0, 3).map(ip => `${ip.ip} (${ip.count})`).join('<br>');
-                return `<div class="bg-slate-900/95 border border-cyan-500/40 p-2 rounded-lg text-xs text-cyan-100"><b>${d.ciudad}, ${d.pais}</b><br>Eventos: ${d.count}<br>${ipsTxt || 'Sin IP'}</div>`;
-            })
             .onPointClick(d => {
                 const modal = document.getElementById('modal-mapa-detalle'), titulo = document.getElementById('detalle-mapa-titulo'), lista = document.getElementById('detalle-mapa-lista');
                 if (!modal || !titulo || !lista) return;
@@ -2707,6 +2752,13 @@ async function renderizarMapaDeLogins() {
             .ringsData(locations).ringLat('lat').ringLng('lon')
             .ringColor(() => (t) => `rgba(34, 211, 238, ${1-t})`)
             .ringMaxRadius(d => 3 + d.count * 0.5).ringPropagationSpeed(d => 2 + d.count * 0.2).ringRepeatPeriod(1000);
+
+        if (typeof globe.pointLabel === 'function') {
+            globe.pointLabel(d => {
+                const ipsTxt = (d.ips || []).slice(0, 3).map(ip => `${ip.ip} (${ip.count})`).join('<br>');
+                return `<div class="bg-slate-900/95 border border-cyan-500/40 p-2 rounded-lg text-xs text-cyan-100"><b>${d.ciudad}, ${d.pais}</b><br>Eventos: ${d.count}<br>${ipsTxt || 'Sin IP'}</div>`;
+            });
+        }
         scene.add(globe);
 
         const atmosphere = new THREE.Mesh(

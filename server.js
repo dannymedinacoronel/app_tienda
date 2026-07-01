@@ -97,6 +97,7 @@ const EstadoKanban = mongoose.models.EstadoKanban || mongoose.model('EstadoKanba
 
 const VentaRopaSchema = new mongoose.Schema({
     fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
+    fechaModificacion: { type: String, default: '' },
     sku: { type: String, default: '', trim: true },
     prenda: { type: String, default: 'Artículo Escaneado', trim: true },
     categoria: { type: String, default: 'Camisetas' },
@@ -128,6 +129,9 @@ const LogAuditoriaSchema = new mongoose.Schema({
     lat: { type: Number },
     lon: { type: Number }
 });
+LogAuditoriaSchema.index({ fechaHora: -1 });
+LogAuditoriaSchema.index({ usuario: 1, fechaHora: -1 });
+LogAuditoriaSchema.index({ lat: 1, lon: 1, fechaHora: -1 });
 const LogAuditoria = mongoose.models.LogAuditoria || mongoose.model('LogAuditoria', LogAuditoriaSchema);
 
 const TareaSchema = new mongoose.Schema({
@@ -1041,6 +1045,11 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
         const { mes, anio } = req.query; // mes: 1-12
         if (!mes || !anio) return res.status(400).json({ error: 'Mes y año requeridos.' });
 
+        const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
+        const usuariosEquipo = await UsuarioAutorizado.find({ empresa }).select('email').lean();
+        const emailsEquipo = usuariosEquipo.map(u => String(u.email || '').toLowerCase().trim()).filter(Boolean);
+        if (emailsEquipo.length === 0) return res.json({ logs: [] });
+
         const m = parseInt(mes);
         const a = parseInt(anio);
         
@@ -1048,8 +1057,12 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
         const fechaFin = new Date(Date.UTC(a, m, 0, 23, 59, 59)); 
         
         const logs = await LogAuditoria.find({
-            fechaHora: { $gte: fechaInicio, $lte: fechaFin }
-        }).sort({ fechaHora: 1 }).lean();
+            fechaHora: { $gte: fechaInicio, $lte: fechaFin },
+            usuario: { $in: emailsEquipo }
+        })
+            .select('fechaHora usuario accion ip ciudad pais lat lon')
+            .sort({ fechaHora: 1 })
+            .lean();
         
         res.json({ logs });
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar logs.' }); }
@@ -1076,6 +1089,7 @@ app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
 
         // Recuperamos logs de conexiones Y desconexiones con coordenadas
         const activityLogs = await LogAuditoria.find(filtroBase)
+            .select('usuario accion fechaHora ip ciudad pais lat lon')
             .sort({ fechaHora: -1 })
             .limit(2500)
             .lean();
@@ -1086,7 +1100,10 @@ app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
             lat: { $ne: null },
             lon: { $ne: null },
             usuario: usuarioFiltro || { $in: emailsEquipo }
-        }).sort({ fechaHora: -1 }).lean();
+        })
+            .select('usuario fechaHora ip ciudad pais lat lon')
+            .sort({ fechaHora: -1 })
+            .lean();
 
         // Agrupar los datos para obtener localizaciones únicas y sus eventos
         const locations = {};
@@ -1247,7 +1264,16 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
 
         const resumen = { ingresos, beneficio: beneficioNeto, inversion: inversion + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };
 
-        const logs = await LogAuditoria.find().sort({ _id: -1 }).limit(50).lean();
+        const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
+        const usuariosEquipo = await UsuarioAutorizado.find({ empresa }).select('email').lean();
+        const emailsEquipo = usuariosEquipo.map(u => String(u.email || '').toLowerCase().trim()).filter(Boolean);
+        const logs = emailsEquipo.length
+            ? await LogAuditoria.find({ usuario: { $in: emailsEquipo } })
+                .select('fechaHora usuario accion')
+                .sort({ _id: -1 })
+                .limit(25)
+                .lean()
+            : [];
 
         return res.json({
             resumen,
@@ -1308,7 +1334,7 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
 
         const ventaActualizada = await VentaRopa.findByIdAndUpdate(
             id, 
-            { ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null }, 
+            { ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null, fechaModificacion: new Date().toISOString().slice(0, 10) }, 
             { new: true }
         );
 
@@ -1326,6 +1352,7 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
 
         const estadoConfig = await EstadoKanban.findOne({ nombre: estado });
         const updateData = { estado };
+        updateData.fechaModificacion = new Date().toISOString().slice(0, 10);
         
         if (estadoConfig && estadoConfig.rolFinanciero === 'Venta') {
             updateData.fechaVenta = fechaVenta || new Date().toISOString().split('T')[0];

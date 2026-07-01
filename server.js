@@ -305,11 +305,11 @@ mongoose.connect(MONGO_URI_FINAL)
             ]);
         } else {
             // Migración forzada para corregir el orden de las columnas en bases de datos que ya existían
-            const estVendido = await EstadoKanban.findOne({ nombre: 'Vendido' });
-            const estReservado = await EstadoKanban.findOne({ nombre: 'Reservado' });
+            const estVendido = await EstadoKanban.findOne({ nombre: 'Vendido', empresa: EMPRESA_DEFAULT });
+            const estReservado = await EstadoKanban.findOne({ nombre: 'Reservado', empresa: EMPRESA_DEFAULT });
             if (estVendido && estReservado && estVendido.orden > estReservado.orden) {
-                await EstadoKanban.updateOne({ nombre: 'Vendido' }, { orden: 2 });
-                await EstadoKanban.updateOne({ nombre: 'Reservado' }, { orden: 3 });
+                await EstadoKanban.updateOne({ nombre: 'Vendido', empresa: EMPRESA_DEFAULT }, { orden: 2 });
+                await EstadoKanban.updateOne({ nombre: 'Reservado', empresa: EMPRESA_DEFAULT }, { orden: 3 });
             }
         }
 
@@ -1196,6 +1196,7 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
         const fechaFin = new Date(Date.UTC(a, m, 0, 23, 59, 59)); 
         
         const logs = await LogAuditoria.find({
+            empresa,
             fechaHora: { $gte: fechaInicio, $lte: fechaFin },
             usuario: { $in: emailsEquipo }
         })
@@ -1220,6 +1221,7 @@ app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
         }
 
         const filtroBase = {
+            empresa,
             lat: { $ne: null },
             lon: { $ne: null },
             accion: { $in: [/Inició sesión/i, /Cerró sesión/i] },
@@ -1235,6 +1237,7 @@ app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
 
         // Adicionalmente, buscar el último log de conexión para centrar el mapa
         const lastLoginLog = await LogAuditoria.findOne({
+            empresa,
             accion: /Inició sesión/i,
             lat: { $ne: null },
             lon: { $ne: null },

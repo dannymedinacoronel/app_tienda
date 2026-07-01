@@ -638,7 +638,7 @@ function seleccionarFotoVisor(idx) {
     imgElement.classList.add('max-w-full', 'max-h-full', 'object-contain'); // Reset zoom
     
     if (idx === -1 && !ITEM_FOTOS_ACTUAL.imagen && ITEM_FOTOS_ACTUAL.galeria.length === 0) {
-        imgElement.src = 'https://via.placeholder.com/800x600/0f172a/ffffff?text=Sin+Fotografias';
+        imgElement.src = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' fill='%23111827'/%3E%3Cpath d='M15 40l10-12 8 9 6-7 11 10' fill='none' stroke='%23334155' stroke-width='2'/%3E%3C/svg%3E";
         btnPortada.classList.add('hidden');
         return;
     }

@@ -103,9 +103,10 @@
             if (data.discrepancias.length > 0) {
                 discCont.classList.remove('d-none');
                 data.discrepancias.forEach(d => {
+                    const fallbackImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' fill='%23333'/%3E%3C/svg%3E";
                     discTbody.innerHTML += `
                         <tr class="align-middle">
-                            <td><img src="${d.imagen || 'https://via.placeholder.com/60'}" class="img-preview"></td>
+                            <td><img src="${d.imagen || fallbackImg}" class="img-preview" onerror="this.src='${fallbackImg}'"></td>
                             <td class="small">${d.prenda}</td>
                             <td class="text-secondary">${d.valorAntiguo}€</td>
                             <td class="text-warning fw-bold">${d.valorNuevo}€</td>
@@ -120,11 +121,12 @@
             if (data.nuevos.length > 0) {
                 nuevosCont.classList.remove('d-none');
                 data.nuevos.forEach((n, i) => {
+                    const fallbackImg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' fill='%23333'/%3E%3C/svg%3E";
                     nuevosGrid.innerHTML += `
                         <div class="col-md-4">
                             <div class="glass-card p-3 product-card d-flex align-items-center" onclick="document.getElementById('ch-${i}').click()">
                                 <input type="checkbox" class="form-check-input me-3 check-box" id="ch-${i}" data-idx="${i}" onclick="event.stopPropagation()">
-                                <img src="${n.imagen || 'https://via.placeholder.com/60'}" class="img-preview me-3">
+                                <img src="${n.imagen || fallbackImg}" class="img-preview me-3" onerror="this.src='${fallbackImg}'">
                                 <div class="text-truncate">
                                     <div class="small fw-bold text-truncate">${n.prenda}</div>
                                     <div class="text-success small">${n.precioVenta}€</div>

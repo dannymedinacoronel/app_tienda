@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { OAuth2Client } = require('google-auth-library'); 
 const session = require('express-session'); 
-const MongoStoreModule = require('connect-mongo'); // Importa el módulo completo
+const MongoStore = require('connect-mongo'); // Cambiado de MongoStoreModule a MongoStore
 const mongoose = require('mongoose');
 const path = require('path');
 const axios = require('axios');
@@ -10,9 +10,11 @@ const cheerio = require('cheerio');
 const nodemailer = require('nodemailer');
 
 const app = express();
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-// ⚙️ CONFIGURACIÓN DE ENTORNO
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+if (!GOOGLE_CLIENT_ID) {
+    console.error('\x1b[33m[WARN]\x1b[0m GOOGLE_CLIENT_ID no está definido. El login fallará.');
+}
+const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 const isProd = process.env.NODE_ENV === 'production';
 console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
 
@@ -243,15 +245,19 @@ mongoose.connect(MONGO_URI_FINAL)
     .catch(err => console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err));
 
 app.use(session({
-    name: 'seychelles.sid', // Nombre único para evitar conflictos
+    name: 'seychelles.sid', 
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
     resave: false, 
     saveUninitialized: false, 
-    proxy: true, // Necesario para que las cookies funcionen tras el balanceador de carga de Render
-    store: MongoStore.create({ mongoUrl: MONGO_URI_FINAL, collectionName: 'sesiones_activas', ttl: 14 * 24 * 60 * 60 }),
+    proxy: true, 
+    store: MONGO_URI_FINAL ? MongoStore.create({ 
+        mongoUrl: MONGO_URI_FINAL, 
+        collectionName: 'sesiones_activas', 
+        ttl: 14 * 24 * 60 * 60 
+    }) : undefined,
     cookie: { 
         secure: isProd, 
-        sameSite: isProd ? 'none' : 'lax', // Permite el flujo de Google
+        sameSite: isProd ? 'none' : 'lax', 
         maxAge: 14 * 24 * 60 * 60 * 1000 
     }
 }));
@@ -1161,9 +1167,9 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
             const imagen = imgTag.attr('src') || imgTag.attr('data-src') || (imgTag.attr('srcset') ? imgTag.attr('srcset').split(' ')[0] : '');
 
             if (titulo && precioTexto) {
-                let cleanPrice = precioTexto.replace(/[^\d,.]/g, '').trim();
-                if (cleanPrice.includes(',') && cleanPrice.includes('.')) cleanPrice = cleanPrice.replace(/\./g, '').replace(',', '.');
-                else if (cleanPrice.includes(',')) cleanPrice = cleanPrice.replace(',', '.');
+                // Sanitización robusta de precios para evitar NaN (Coincide con numeroSeguro de app.js)
+                let cleanPrice = precioTexto.replace(/\s+/g, '').replace(',', '.').replace(/[^\d.-]/g, '');
+                const precioNumerico = parseFloat(cleanPrice) || 0;
                 
                 if (!isNaN(parseFloat(cleanPrice))) productosExtraidos.push({ titulo, precio: cleanPrice, imagen });
             }

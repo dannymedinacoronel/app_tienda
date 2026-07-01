@@ -91,6 +91,34 @@ function abrirAccesoDesdeLanding(modo = 'login') {
 }
 window.abrirAccesoDesdeLanding = abrirAccesoDesdeLanding;
 
+function setParticlesEnabled(enabled) {
+    try {
+        const hasParticles = Array.isArray(window.pJSDom) && window.pJSDom.length > 0;
+        if (enabled) {
+            if (!hasParticles && typeof window.particlesJS === 'function') {
+                particlesJS("particles-js", {
+                    "particles": {
+                        "number": { "value": 35, "density": { "enable": true, "value_area": 800 } },
+                        "color": { "value": ["#22d3ee", "#60a5fa", "#fbbf24"] },
+                        "shape": { "type": ["circle"] },
+                        "opacity": { "value": 0.45, "random": true },
+                        "size": { "value": 3.2, "random": true },
+                        "line_linked": { "enable": true, "distance": 110, "color": "#38bdf8", "opacity": 0.18, "width": 1 },
+                        "move": { "enable": true, "speed": 1.5, "direction": "none", "random": true, "out_mode": "out" }
+                    },
+                    "interactivity": { "events": { "onhover": { "enable": true, "mode": "grab" }, "resize": true } },
+                    "retina_detect": true
+                });
+            }
+        } else if (hasParticles) {
+            window.pJSDom.forEach(p => p?.pJS?.fn?.vendors?.destroypJS?.());
+            window.pJSDom = [];
+            const node = document.getElementById('particles-js');
+            if (node) node.innerHTML = '';
+        }
+    } catch (_) {}
+}
+
         if (data.deEmail !== USUARIO_EMAIL_ACTUAL) {
             reproducirSonidoMensaje('receive');
         }
@@ -2727,7 +2755,8 @@ async function renderizarMapaDeLogins() {
     try {
         await ensureThreeStackLoaded();
         const filtroUsuario = document.getElementById('logs-map-user-filter')?.value || '';
-        const query = filtroUsuario ? `?usuario=${encodeURIComponent(filtroUsuario)}` : '';
+        const queryBase = filtroUsuario ? `usuario=${encodeURIComponent(filtroUsuario)}&` : '';
+        const query = `?${queryBase}limit=1200`;
         const [locationsRes, countriesRes] = await Promise.all([
             fetch(`/api/logs/locations${query}`, { credentials: 'include' }),
             fetch('/ne_110m_admin_0_countries.geojson')
@@ -2791,16 +2820,16 @@ async function renderizarMapaDeLogins() {
         };
 
         const globe = new ThreeGlobe({ waitForGlobeReady: true, animateIn: true })
-            .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')
+            .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
             .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
             .polygonsData(countriesData.features)
-            .polygonCapColor(() => 'rgba(168, 85, 247, 0.15)')
-            .polygonSideColor(() => 'rgba(168, 85, 247, 0.05)')
-            .polygonStrokeColor(() => '#6b21a8')
+            .polygonCapColor(() => 'rgba(148, 163, 184, 0.18)')
+            .polygonSideColor(() => 'rgba(15, 23, 42, 0.18)')
+            .polygonStrokeColor(() => 'rgba(226, 232, 240, 0.32)')
             .pointsData(locations).pointLat('lat').pointLng('lon')
-            .pointColor(() => '#67e8f9').pointAltitude(0.02).pointRadius(d => 0.15 + d.count * 0.08)
+            .pointColor(() => '#f59e0b').pointAltitude(0.03).pointRadius(d => 0.12 + d.count * 0.07)
             .ringsData(locations).ringLat('lat').ringLng('lon')
-            .ringColor(() => (t) => `rgba(34, 211, 238, ${1-t})`)
+            .ringColor(() => (t) => `rgba(14, 165, 233, ${1-t})`)
             .ringMaxRadius(d => 3 + d.count * 0.5).ringPropagationSpeed(d => 2 + d.count * 0.2).ringRepeatPeriod(1000);
 
         if (typeof globe.pointLabel === 'function') {
@@ -2815,7 +2844,7 @@ async function renderizarMapaDeLogins() {
             new THREE.SphereGeometry(globe.getGlobeRadius() * 1.1, 75, 75),
             new THREE.ShaderMaterial({
                 vertexShader: `varying vec3 vNormal; void main() { vNormal = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-                fragmentShader: `varying vec3 vNormal; void main() { float intensity = pow(0.6 - dot(vNormal, vec3(0, 0, 1.0)), 2.0); gl_FragColor = vec4(0.5, 0.2, 0.8, 1.0) * intensity; }`,
+                fragmentShader: `varying vec3 vNormal; void main() { float intensity = pow(0.62 - dot(vNormal, vec3(0, 0, 1.0)), 2.0); gl_FragColor = vec4(0.22, 0.57, 0.95, 1.0) * intensity; }`,
                 blending: THREE.AdditiveBlending, side: THREE.BackSide
             })
         );
@@ -3809,10 +3838,12 @@ async function reloadCoreData(isInitialLoad = false) {
         document.getElementById('kpi-roi').innerText = `${(data.resumen.roi || 0).toFixed(1)}%`;
 
         renderKanban(true);
-        updateTickerWallStreet();
-        ejecutarVerificacionAlertasStock();
-        actualizarVisibilidadPanelMasivo();
-        renderCalendarioStock();
+        requestAnimationFrame(() => {
+            updateTickerWallStreet();
+            ejecutarVerificacionAlertasStock();
+            actualizarVisibilidadPanelMasivo();
+            renderCalendarioStock();
+        });
         
         if (!document.getElementById('sec-analitica').classList.contains('hidden')) {
             actualizarTodoElBloqueGrafico();
@@ -3845,7 +3876,7 @@ async function loadMoreData() {
     }
 
     try {
-        const res = await fetch(`${BACKEND_URL}/api/ventas?page=${CURRENT_PAGE}`, { credentials: 'include' });
+        const res = await fetch(`${BACKEND_URL}/api/ventas?page=${CURRENT_PAGE}&lightweight=1`, { credentials: 'include' });
         if (!res.ok) throw new Error('Fallo al cargar más datos');
         const data = await res.json();
 
@@ -4548,6 +4579,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 socket.emit('join_empresa', EMPRESA_CHAT_ACTUAL);
             }
             setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
+            setParticlesEnabled(false);
             document.getElementById('landing-page')?.classList.add('hidden');
             document.getElementById('login-box').classList.add('hidden'); 
             document.getElementById('panel-control').classList.remove('hidden'); 
@@ -4582,16 +4614,4 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(err => {}); }); }
 
-particlesJS("particles-js", {
-    "particles": {
-        "number": { "value": 35, "density": { "enable": true, "value_area": 800 } },
-        "color": { "value": ["#d4af37", "#fbbf24", "#f59e0b"] },
-        "shape": { "type": ["circle"] },
-        "opacity": { "value": 0.5, "random": true },
-        "size": { "value": 3.5, "random": true },
-        "line_linked": { "enable": true, "distance": 110, "color": "#d4af37", "opacity": 0.2, "width": 1 },
-        "move": { "enable": true, "speed": 1.5, "direction": "none", "random": true, "out_mode": "out" }
-    },
-    "interactivity": { "events": { "onhover": { "enable": true, "mode": "grab" }, "resize": true } },
-    "retina_detect": true
-});
+setParticlesEnabled(true);

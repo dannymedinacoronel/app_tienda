@@ -1211,6 +1211,7 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
 app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
     try {
         const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
+        const maxRegistros = Math.max(300, Math.min(parseInt(req.query?.limit, 10) || 1200, 2500));
         const usuariosEquipo = await UsuarioAutorizado.find({ empresa }).select('email').lean();
         const emailsEquipo = usuariosEquipo.map(u => String(u.email || '').toLowerCase().trim()).filter(Boolean);
         if (emailsEquipo.length === 0) return res.json({ locations: [], lastLogin: null, usuariosDisponibles: [], topIps: [] });
@@ -1232,7 +1233,7 @@ app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
         const activityLogs = await LogAuditoria.find(filtroBase)
             .select('usuario accion fechaHora ip ciudad pais lat lon')
             .sort({ fechaHora: -1 })
-            .limit(2500)
+            .limit(maxRegistros)
             .lean();
 
         // Adicionalmente, buscar el último log de conexión para centrar el mapa
@@ -1360,9 +1361,13 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 40; // Lotes de 40 productos
         const skip = (page - 1) * limit;
+        const lightweight = String(req.query.lightweight || '').toLowerCase() === '1' || page > 1;
 
-        const estadosKanban = await EstadoKanban.find({ empresa }).lean();
-        const nombresEstadosVenta = estadosKanban.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
+        let nombresEstadosVenta = [];
+        if (!lightweight) {
+            const estadosKanban = await EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean();
+            nombresEstadosVenta = estadosKanban.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
+        }
 
         // Pipeline para obtener datos paginados y conteo total en una sola consulta
         const [ventasData] = await VentaRopa.aggregate([
@@ -1386,50 +1391,80 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
         const ventas = ventasData.paginatedResults;
         const totalVentas = ventasData.totalCount[0] ? ventasData.totalCount[0].count : 0;
 
-        // Pipeline optimizado para las estadísticas globales (se ejecuta solo una vez)
-        const [summaryData] = await VentaRopa.aggregate([
-            { $match: { empresa } },
-            {
-                $group: {
-                    _id: null,
-                    totalInversion: { $sum: { $multiply: [{ $ifNull: ['$precioCompra', 0] }, { $ifNull: ['$cantidad', 1] }] } },
-                    totalGastosEnvio: { $sum: { $multiply: [{ $ifNull: ['$gastosEnvio', 0] }, { $ifNull: ['$cantidad', 1] }] } },
-                    ventas: { $push: { estado: '$estado', precioVenta: '$precioVenta', cantidad: '$cantidad', canalVenta: '$canalVenta' } }
-                }
-            }
-        ]);
+        let resumen = { ingresos: 0, beneficio: 0, inversion: 0, prendasVendidas: 0, roi: 0, totalGastosOperativos: 0 };
+        let logs = [];
 
-        const gastosExtra = await Gasto.find({ empresa }).lean();
-        const totalGastosOperativos = gastosExtra.reduce((acc, g) => acc + g.monto, 0);
-
-        let ingresos = 0, prendasVendidas = 0;
-        if (summaryData) {
-            summaryData.ventas.forEach(v => {
-                if (nombresEstadosVenta.includes(v.estado)) {
-                    const pVenta = parseFloat(v.precioVenta) || 0;
-                    const cant = parseInt(v.cantidad, 10) || 1;
-                    let comision = (v.canalVenta === 'Vinted' || v.canalVenta === 'Wallapop') ? (pVenta * 0.05) : 0;
-                    ingresos += (pVenta - comision) * cant;
-                    prendasVendidas += cant;
+        if (!lightweight) {
+            // Cálculo financiero en aggregate sin cargar arrays grandes en memoria.
+            const [summaryData] = await VentaRopa.aggregate([
+                { $match: { empresa } },
+                {
+                    $group: {
+                        _id: null,
+                        totalInversion: { $sum: { $multiply: [{ $ifNull: ['$precioCompra', 0] }, { $ifNull: ['$cantidad', 1] }] } },
+                        totalGastosEnvio: { $sum: { $multiply: [{ $ifNull: ['$gastosEnvio', 0] }, { $ifNull: ['$cantidad', 1] }] } },
+                        ingresosNetos: {
+                            $sum: {
+                                $cond: [
+                                    { $in: ['$estado', nombresEstadosVenta] },
+                                    {
+                                        $multiply: [
+                                            {
+                                                $subtract: [
+                                                    { $ifNull: ['$precioVenta', 0] },
+                                                    {
+                                                        $cond: [
+                                                            { $in: ['$canalVenta', ['Vinted', 'Wallapop']] },
+                                                            { $multiply: [{ $ifNull: ['$precioVenta', 0] }, 0.05] },
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            { $ifNull: ['$cantidad', 1] }
+                                        ]
+                                    },
+                                    0
+                                ]
+                            }
+                        },
+                        prendasVendidas: {
+                            $sum: {
+                                $cond: [
+                                    { $in: ['$estado', nombresEstadosVenta] },
+                                    { $ifNull: ['$cantidad', 1] },
+                                    0
+                                ]
+                            }
+                        }
+                    }
                 }
-            });
+            ]);
+
+            const [gastosAgg] = await Gasto.aggregate([
+                { $match: { empresa } },
+                { $group: { _id: null, totalGastosOperativos: { $sum: { $ifNull: ['$monto', 0] } } } }
+            ]);
+
+            const totalGastosOperativos = gastosAgg?.totalGastosOperativos || 0;
+            const ingresos = summaryData?.ingresosNetos || 0;
+            const prendasVendidas = summaryData?.prendasVendidas || 0;
+            const inversion = (summaryData?.totalInversion || 0) + (summaryData?.totalGastosEnvio || 0);
+            const beneficioNeto = ingresos - inversion - totalGastosOperativos;
+            const roi = (inversion + totalGastosOperativos) > 0 ? (beneficioNeto / (inversion + totalGastosOperativos)) * 100 : 0;
+
+            resumen = { ingresos, beneficio: beneficioNeto, inversion: inversion + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };
+
+            const usuariosEquipo = await UsuarioAutorizado.find({ empresa }).select('email').lean();
+            const emailsEquipo = usuariosEquipo.map(u => String(u.email || '').toLowerCase().trim()).filter(Boolean);
+            logs = emailsEquipo.length
+                ? await LogAuditoria.find({ empresa, usuario: { $in: emailsEquipo } })
+                    .select('fechaHora usuario accion')
+                    .sort({ _id: -1 })
+                    .limit(25)
+                    .lean()
+                : [];
         }
-
-        const inversion = (summaryData?.totalInversion || 0) + (summaryData?.totalGastosEnvio || 0);
-        const beneficioNeto = ingresos - inversion - totalGastosOperativos;
-        const roi = (inversion + totalGastosOperativos) > 0 ? (beneficioNeto / (inversion + totalGastosOperativos)) * 100 : 0;
-
-        const resumen = { ingresos, beneficio: beneficioNeto, inversion: inversion + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };
-
-        const usuariosEquipo = await UsuarioAutorizado.find({ empresa }).select('email').lean();
-        const emailsEquipo = usuariosEquipo.map(u => String(u.email || '').toLowerCase().trim()).filter(Boolean);
-        const logs = emailsEquipo.length
-            ? await LogAuditoria.find({ usuario: { $in: emailsEquipo } })
-                .select('fechaHora usuario accion')
-                .sort({ _id: -1 })
-                .limit(25)
-                .lean()
-            : [];
 
         return res.json({
             resumen,

@@ -35,41 +35,38 @@ socket.on('connect_error', (error) => {
 
 socket.on('scraper_update', async (data) => {
     console.log('[SOCKET] Datos recibidos de GitHub:', data);
-    
-    // Si tenemos productos, los comparamos localmente para mostrar la tabla de resultados
-    if (data.productos && data.productos.length > 0) {
-        try {
-            // Llamamos a un endpoint interno para procesar la comparativa (o lo hacemos aquí)
-            // Para simplificar, vamos a pedirle al servidor que nos dé la comparativa ya hecha
-            const response = await fetch(`${BACKEND_URL}/api/scraper/analizar-manual`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productosExtraidos: data.productos.map(p => ({
-                    titulo: p.titulo,
-                    precio: p.precio,
-                    imagen: p.imagen
-                })) })
-            });
-            
-            const comparativa = await response.json();
-            resultadosScraperActual = comparativa;
-            renderizarResultadosScraping(resultadosScraperActual);
-            
-            // Mostrar notificación de éxito
-            mostrarNotificacionScraping({
-                mensaje: `¡Escaneo de ${data.productos.length} productos completado desde GitHub!`,
-                success: true
-            });
-            
-            // Si el modal estaba cerrado o en carga, lo abrimos/actualizamos
-            document.getElementById('modal-scraper').classList.remove('hidden');
-            document.getElementById('scraper-loader').classList.add('hidden');
-            document.getElementById('scraper-step-1').classList.add('hidden');
-            document.getElementById('scraper-step-2').classList.remove('hidden');
-            
-        } catch (e) {
-            console.error("Error procesando comparativa de GitHub:", e);
-        }
+
+    const productos = Array.isArray(data?.productos) ? data.productos : [];
+
+    try {
+        const response = await fetch(`${BACKEND_URL}/api/scraper/analizar-manual`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productosExtraidos: productos.map(p => ({
+                titulo: p.titulo,
+                precio: p.precio,
+                imagen: p.imagen
+            })) })
+        });
+
+        const comparativa = await response.json();
+        resultadosScraperActual = comparativa;
+        renderizarResultadosScraping(resultadosScraperActual);
+
+        mostrarNotificacionScraping({
+            mensaje: `Escaneo finalizado. Productos detectados: ${productos.length}.`,
+            success: true
+        });
+
+        document.getElementById('modal-scraper').classList.remove('hidden');
+        document.getElementById('scraper-loader').classList.add('hidden');
+        document.getElementById('scraper-step-1').classList.add('hidden');
+        document.getElementById('scraper-step-2').classList.remove('hidden');
+    } catch (e) {
+        console.error('Error procesando comparativa de GitHub:', e);
+        document.getElementById('scraper-loader').classList.add('hidden');
+        document.getElementById('scraper-step-1').classList.remove('hidden');
+        alert('No se pudieron procesar los resultados del scraper remoto. Revisa logs de Render/GitHub.');
     }
 });
 

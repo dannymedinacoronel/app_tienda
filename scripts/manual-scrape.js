@@ -15,6 +15,35 @@ const VentaRopaSchema = new mongoose.Schema({
 
 const VentaRopa = mongoose.models.VentaRopa || mongoose.model('VentaRopa', VentaRopaSchema);
 
+function construirWebhookTargets(webUrl) {
+    if (!webUrl || typeof webUrl !== 'string') return [];
+
+    const raw = webUrl.trim().replace(/\/+$/, '');
+    if (!raw) return [];
+
+    const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    const targets = [];
+
+    try {
+        const parsed = new URL(withProtocol);
+        const origin = parsed.origin.replace(/\/+$/, '');
+        const path = parsed.pathname.replace(/\/+$/, '');
+
+        if (path.endsWith('/api/scraper/webhook-github')) {
+            targets.push(withProtocol);
+        } else if (path === '/api') {
+            targets.push(`${origin}/api/scraper/webhook-github`);
+        } else {
+            targets.push(`${withProtocol}/api/scraper/webhook-github`);
+            targets.push(`${origin}/api/scraper/webhook-github`);
+        }
+    } catch (e) {
+        targets.push(`${withProtocol}/api/scraper/webhook-github`);
+    }
+
+    return [...new Set(targets)];
+}
+
 async function run() {
     const url = process.argv[2];
     if (!url) {
@@ -127,17 +156,39 @@ async function run() {
 
         // --- ENVIAR A LA WEB ---
         const webUrl = process.env.MY_WEB_URL;
-        const secretToken = process.env.SCRAPER_TOKEN; // Usamos el nombre correcto
+        const secretToken = process.env.SCRAPER_TOKEN;
 
         if (webUrl && secretToken) {
-            console.log(`[WEBHOOK] Enviando resultados a la web: ${webUrl}`);
-            await axios.post(`${webUrl}/api/scraper/webhook-github`, {
-                productos: productosExtraidos,
-                urlOrigen: url
-            }, {
-                headers: { 'x-github-token': secretToken }
-            });
-            console.log(`[WEBHOOK] ¡Datos enviados con éxito!`);
+            const webhookTargets = construirWebhookTargets(webUrl);
+            let enviado = false;
+            let ultimoError = null;
+
+            for (const target of webhookTargets) {
+                try {
+                    console.log(`[WEBHOOK] Enviando resultados a: ${target}`);
+                    await axios.post(target, {
+                        productos: productosExtraidos,
+                        urlOrigen: url
+                    }, {
+                        headers: { 'x-github-token': secretToken },
+                        timeout: 15000
+                    });
+                    console.log('[WEBHOOK] ¡Datos enviados con éxito!');
+                    enviado = true;
+                    break;
+                } catch (err) {
+                    ultimoError = err;
+                    const status = err?.response?.status || 'sin-status';
+                    console.error(`[WEBHOOK] Fallo en ${target} -> status: ${status}`);
+                }
+            }
+
+            if (!enviado) {
+                const detalle = ultimoError?.response?.data?.error || ultimoError?.message || 'error desconocido';
+                throw new Error(`No se pudo entregar el webhook a MY_WEB_URL. Revisa que apunte al dominio raiz de Render (sin /api). Detalle: ${detalle}`);
+            }
+        } else {
+            console.warn('[WEBHOOK] Saltado: faltan MY_WEB_URL o SCRAPER_TOKEN en GitHub Secrets.');
         }
 
         process.exit(0);

@@ -1163,10 +1163,14 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
             return res.status(500).json({ error: 'Falta configurar GITHUB_PAT en Render para lanzar el scraper remoto.' });
         }
 
+        if (!REPO_OWNER || !REPO_NAME) {
+            return res.status(500).json({ error: 'Falta configurar GITHUB_OWNER o GITHUB_REPO en Render.' });
+        }
+
         console.log(`[GITHUB-API] Lanzando scraper remoto para: ${url}`);
 
         // Llamada a la API de GitHub para ejecutar el flujo manual-scraper.yml
-        const githubRes = await axios.post(
+        await axios.post(
             `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/manual-scraper.yml/dispatches`,
             {
                 ref: 'main', // o la rama que estés usando
@@ -1180,10 +1184,7 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
                     'Accept': 'application/vnd.github.v3+json'
                 }
             }
-        ).catch(err => {
-            console.error('[GITHUB-API] Error:', err.response?.data || err.message);
-            throw new Error('No se pudo contactar con GitHub para iniciar el escaneo.');
-        });
+        );
 
         res.json({ 
             success: true, 
@@ -1191,8 +1192,30 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Error en el scrap:", error.message);
-        res.status(500).json({ error: error.message });
+        const ghStatus = error?.response?.status;
+        const ghData = error?.response?.data;
+
+        console.error('[GITHUB-API] Error al lanzar workflow:', ghStatus || error.message, ghData || '');
+
+        if (ghStatus === 404) {
+            return res.status(500).json({
+                error: 'GitHub no encontró el repo o el workflow. Revisa GITHUB_OWNER/GITHUB_REPO y que exista .github/workflows/manual-scraper.yml en main.'
+            });
+        }
+
+        if (ghStatus === 401 || ghStatus === 403) {
+            return res.status(500).json({
+                error: 'GITHUB_PAT inválido o sin permisos repo/workflow. Regenera el token y habilita permisos para Actions en el repositorio.'
+            });
+        }
+
+        if (ghStatus === 422) {
+            return res.status(500).json({
+                error: 'GitHub rechazó el dispatch (posible rama o workflow incorrecto). Verifica que la rama main exista y el archivo manual-scraper.yml esté en esa rama.'
+            });
+        }
+
+        res.status(500).json({ error: 'No se pudo iniciar el scraper remoto en GitHub Actions.' });
     }
 });
 

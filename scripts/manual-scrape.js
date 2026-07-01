@@ -32,11 +32,13 @@ function construirWebhookTargets(webUrl) {
 }
 
 function extraerObjetoAsignado(scriptContent, nombreVariable) {
-    const token = `${nombreVariable}=`;
-    const idxAsignacion = scriptContent.indexOf(token);
-    if (idxAsignacion === -1) return null;
+    const escapedName = nombreVariable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`${escapedName}\\s*=`, 'm');
+    const match = scriptContent.match(regex);
+    if (!match || typeof match.index !== 'number') return null;
 
-    const startIdx = scriptContent.indexOf('{', idxAsignacion + token.length);
+    const idxAsignacion = match.index + match[0].length;
+    const startIdx = scriptContent.indexOf('{', idxAsignacion);
     if (startIdx === -1) return null;
 
     let depth = 0;
@@ -79,6 +81,57 @@ function extraerObjetoAsignado(scriptContent, nombreVariable) {
     }
 
     return null;
+}
+
+function extraerProductosDesdeLdJson($) {
+    const productos = [];
+    $('script[type="application/ld+json"]').each((_, el) => {
+        const raw = $(el).html();
+        if (!raw) return;
+
+        try {
+            const parsed = JSON.parse(raw);
+            const bloques = Array.isArray(parsed) ? parsed : [parsed];
+
+            const recolectar = (node) => {
+                if (!node || typeof node !== 'object') return;
+
+                const tipo = String(node['@type'] || '').toLowerCase();
+                if (tipo.includes('product')) {
+                    const titulo = node.name || node.title || '';
+                    const precio = normalizarPrecio(node?.offers?.price ?? node?.price);
+                    const imagen = Array.isArray(node.image) ? (node.image[0] || '') : (node.image || '');
+                    if (titulo && Number.isFinite(precio)) {
+                        productos.push({ titulo, precio, imagen });
+                    }
+                }
+
+                if (Array.isArray(node.itemListElement)) {
+                    node.itemListElement.forEach((it) => {
+                        if (it?.item) recolectar(it.item);
+                        else recolectar(it);
+                    });
+                }
+
+                Object.values(node).forEach((v) => {
+                    if (Array.isArray(v)) v.forEach(recolectar);
+                    else if (v && typeof v === 'object') recolectar(v);
+                });
+            };
+
+            bloques.forEach(recolectar);
+        } catch (e) {
+            // Ignoramos bloques ld+json inválidos y seguimos.
+        }
+    });
+
+    const seen = new Set();
+    return productos.filter((p) => {
+        const key = `${p.titulo}__${p.precio}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
 }
 
 function normalizarPrecio(valor) {
@@ -254,6 +307,15 @@ async function run() {
             });
         }
 
+        // Fallback adicional: datos estructurados JSON-LD
+        if (productosExtraidos.length === 0) {
+            const porLdJson = extraerProductosDesdeLdJson($);
+            if (porLdJson.length > 0) {
+                productosExtraidos.push(...porLdJson);
+                console.log(`[SCRAPER] JSON-LD devolvió ${porLdJson.length} productos.`);
+            }
+        }
+
         // Fallback robusto: extraer por API de Vinted (perfil /member/:id)
         if (productosExtraidos.length === 0) {
             console.log('[SCRAPER] HTML devolvió 0 productos. Probando API pública de Vinted...');
@@ -268,7 +330,6 @@ async function run() {
 
         // --- ENVIAR A LA WEB ---
         const webUrl = process.env.MY_WEB_URL;
-        const secretToken = process.env.SCRAPER_TOKEN;
 
         if (webUrl && secretToken) {
             const webhookTargets = construirWebhookTargets(webUrl);

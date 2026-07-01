@@ -50,6 +50,30 @@ function normalizarEmpresa(empresa) {
         .slice(0, 60) || EMPRESA_DEFAULT;
 }
 
+const KPI_CACHE_TTL_MS = Math.max(10000, Math.min(parseInt(process.env.KPI_CACHE_TTL_MS, 10) || 15000, 20000));
+const kpiResumenCache = new Map();
+
+function getKpiResumenCache(empresa) {
+    const key = normalizarEmpresa(empresa);
+    const hit = kpiResumenCache.get(key);
+    if (!hit) return null;
+    if ((Date.now() - hit.ts) > KPI_CACHE_TTL_MS) {
+        kpiResumenCache.delete(key);
+        return null;
+    }
+    return hit.value;
+}
+
+function setKpiResumenCache(empresa, value) {
+    const key = normalizarEmpresa(empresa);
+    kpiResumenCache.set(key, { ts: Date.now(), value });
+}
+
+function invalidateKpiResumenCache(empresa) {
+    const key = normalizarEmpresa(empresa);
+    kpiResumenCache.delete(key);
+}
+
 // --- Modelos de MongoDB ---
 
 const TiendaSchema = new mongoose.Schema({
@@ -1102,12 +1126,15 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
             try {
                 if (actionType === 'ACTUALIZAR_PRECIO' && params.sku && params.precio) {
                     await VentaRopa.findOneAndUpdate({ sku: params.sku, empresa }, { precioVenta: parseFloat(params.precio), fechaModificacion: new Date().toISOString().slice(0, 10) });
+                    invalidateKpiResumenCache(empresa);
                     await registrarLog(req.session.email, `IA actualizó precio de ${params.sku}`);
                 } else if (actionType === 'CAMBIAR_ESTADO' && params.sku && params.estado) {
                     await VentaRopa.findOneAndUpdate({ sku: params.sku, empresa }, { estado: params.estado, fechaModificacion: new Date().toISOString().slice(0, 10) });
+                    invalidateKpiResumenCache(empresa);
                     await registrarLog(req.session.email, `IA cambió estado de ${params.sku} a ${params.estado}`);
                 } else if (actionType === 'BORRAR_PRODUCTO' && params.sku) {
                     await VentaRopa.findOneAndDelete({ sku: params.sku, empresa });
+                    invalidateKpiResumenCache(empresa);
                     await registrarLog(req.session.email, `IA borró producto ${params.sku}`);
                 } else if (actionType === 'CREAR_PRODUCTO' && params.prenda) {
                     const nuevo = new VentaRopa({
@@ -1118,6 +1145,7 @@ Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, 
                         imagen: imagen || '' // Se guarda la foto que le pasaste en el chat directamente en la ficha del producto!
                     });
                     await nuevo.save();
+                    invalidateKpiResumenCache(empresa);
                     await registrarLog(req.session.email, `IA creó producto ${params.prenda}`);
                 }
             } catch(e) { console.error("Error ejecutando orden de IA:", e); }
@@ -1343,6 +1371,7 @@ app.post('/api/gastos', exigeAdmin, async (req, res) => {
         const empresa = empresaActual(req);
         const nuevo = new Gasto({ ...req.body, empresa });
         await nuevo.save();
+        invalidateKpiResumenCache(empresa);
         await registrarLog(req.session.email, `Registró gasto: ${nuevo.concepto} (${nuevo.monto}€)`);
         res.json(nuevo);
     } catch (e) { res.status(400).send(e); }
@@ -1351,6 +1380,7 @@ app.delete('/api/gastos/:id', exigeAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         await Gasto.deleteOne({ _id: req.params.id, empresa });
+        invalidateKpiResumenCache(empresa);
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
 });
@@ -1395,65 +1425,71 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
         let logs = [];
 
         if (!lightweight) {
-            // Cálculo financiero en aggregate sin cargar arrays grandes en memoria.
-            const [summaryData] = await VentaRopa.aggregate([
-                { $match: { empresa } },
-                {
-                    $group: {
-                        _id: null,
-                        totalInversion: { $sum: { $multiply: [{ $ifNull: ['$precioCompra', 0] }, { $ifNull: ['$cantidad', 1] }] } },
-                        totalGastosEnvio: { $sum: { $multiply: [{ $ifNull: ['$gastosEnvio', 0] }, { $ifNull: ['$cantidad', 1] }] } },
-                        ingresosNetos: {
-                            $sum: {
-                                $cond: [
-                                    { $in: ['$estado', nombresEstadosVenta] },
-                                    {
-                                        $multiply: [
-                                            {
-                                                $subtract: [
-                                                    { $ifNull: ['$precioVenta', 0] },
-                                                    {
-                                                        $cond: [
-                                                            { $in: ['$canalVenta', ['Vinted', 'Wallapop']] },
-                                                            { $multiply: [{ $ifNull: ['$precioVenta', 0] }, 0.05] },
-                                                            0
-                                                        ]
-                                                    }
-                                                ]
-                                            },
-                                            { $ifNull: ['$cantidad', 1] }
-                                        ]
-                                    },
-                                    0
-                                ]
-                            }
-                        },
-                        prendasVendidas: {
-                            $sum: {
-                                $cond: [
-                                    { $in: ['$estado', nombresEstadosVenta] },
-                                    { $ifNull: ['$cantidad', 1] },
-                                    0
-                                ]
+            const cachedResumen = getKpiResumenCache(empresa);
+            if (cachedResumen) {
+                resumen = cachedResumen;
+            } else {
+                // Cálculo financiero en aggregate sin cargar arrays grandes en memoria.
+                const [summaryData] = await VentaRopa.aggregate([
+                    { $match: { empresa } },
+                    {
+                        $group: {
+                            _id: null,
+                            totalInversion: { $sum: { $multiply: [{ $ifNull: ['$precioCompra', 0] }, { $ifNull: ['$cantidad', 1] }] } },
+                            totalGastosEnvio: { $sum: { $multiply: [{ $ifNull: ['$gastosEnvio', 0] }, { $ifNull: ['$cantidad', 1] }] } },
+                            ingresosNetos: {
+                                $sum: {
+                                    $cond: [
+                                        { $in: ['$estado', nombresEstadosVenta] },
+                                        {
+                                            $multiply: [
+                                                {
+                                                    $subtract: [
+                                                        { $ifNull: ['$precioVenta', 0] },
+                                                        {
+                                                            $cond: [
+                                                                { $in: ['$canalVenta', ['Vinted', 'Wallapop']] },
+                                                                { $multiply: [{ $ifNull: ['$precioVenta', 0] }, 0.05] },
+                                                                0
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                { $ifNull: ['$cantidad', 1] }
+                                            ]
+                                        },
+                                        0
+                                    ]
+                                }
+                            },
+                            prendasVendidas: {
+                                $sum: {
+                                    $cond: [
+                                        { $in: ['$estado', nombresEstadosVenta] },
+                                        { $ifNull: ['$cantidad', 1] },
+                                        0
+                                    ]
+                                }
                             }
                         }
                     }
-                }
-            ]);
+                ]);
 
-            const [gastosAgg] = await Gasto.aggregate([
-                { $match: { empresa } },
-                { $group: { _id: null, totalGastosOperativos: { $sum: { $ifNull: ['$monto', 0] } } } }
-            ]);
+                const [gastosAgg] = await Gasto.aggregate([
+                    { $match: { empresa } },
+                    { $group: { _id: null, totalGastosOperativos: { $sum: { $ifNull: ['$monto', 0] } } } }
+                ]);
 
-            const totalGastosOperativos = gastosAgg?.totalGastosOperativos || 0;
-            const ingresos = summaryData?.ingresosNetos || 0;
-            const prendasVendidas = summaryData?.prendasVendidas || 0;
-            const inversion = (summaryData?.totalInversion || 0) + (summaryData?.totalGastosEnvio || 0);
-            const beneficioNeto = ingresos - inversion - totalGastosOperativos;
-            const roi = (inversion + totalGastosOperativos) > 0 ? (beneficioNeto / (inversion + totalGastosOperativos)) * 100 : 0;
+                const totalGastosOperativos = gastosAgg?.totalGastosOperativos || 0;
+                const ingresos = summaryData?.ingresosNetos || 0;
+                const prendasVendidas = summaryData?.prendasVendidas || 0;
+                const inversion = (summaryData?.totalInversion || 0) + (summaryData?.totalGastosEnvio || 0);
+                const beneficioNeto = ingresos - inversion - totalGastosOperativos;
+                const roi = (inversion + totalGastosOperativos) > 0 ? (beneficioNeto / (inversion + totalGastosOperativos)) * 100 : 0;
 
-            resumen = { ingresos, beneficio: beneficioNeto, inversion: inversion + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };
+                resumen = { ingresos, beneficio: beneficioNeto, inversion: inversion + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };
+                setKpiResumenCache(empresa, resumen);
+            }
 
             const usuariosEquipo = await UsuarioAutorizado.find({ empresa }).select('email').lean();
             const emailsEquipo = usuariosEquipo.map(u => String(u.email || '').toLowerCase().trim()).filter(Boolean);
@@ -1499,6 +1535,7 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
 
         const nuevaVenta = new VentaRopa({ ...datosVenta, empresa, tienda: tiendaDoc ? tiendaDoc._id : null });
         await nuevaVenta.save(); 
+        invalidateKpiResumenCache(empresa);
         await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`);
         return res.json({ status: "success", venta: nuevaVenta });
     } catch (error) { 
@@ -1532,6 +1569,7 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
         );
         if (!ventaActualizada) return res.status(404).json({ error: 'Producto no encontrado en tu empresa.' });
 
+        invalidateKpiResumenCache(empresa);
         await registrarLog(req.session.email, `Modificó datos de la prenda ID: ${id} (${ventaActualizada.prenda})`);
         return res.json({ status: "success", venta: ventaActualizada });
     } catch (error) {
@@ -1560,6 +1598,7 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
 
         const ventaActualizada = await VentaRopa.findOneAndUpdate({ _id: id, empresa }, updateData, { new: true });
         if (!ventaActualizada) return res.status(404).json({ error: 'Producto no encontrado en tu empresa.' });
+        invalidateKpiResumenCache(empresa);
         await registrarLog(req.session.email, `Transición de estado: [${ventaActualizada.prenda}] -> ${estado.toUpperCase()}`);
         return res.json({ status: "success", venta: ventaActualizada });
     } catch (error) {
@@ -1588,6 +1627,7 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
                 estado: nombreStock
             });
             await venta.save();
+            invalidateKpiResumenCache(empresa);
             return res.json({ operacion: "Creado", venta });
         } else {
             const nuevoEstado = venta.estado === nombreVenta ? nombreStock : nombreVenta;
@@ -1601,6 +1641,7 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
                 venta.fechaVenta = '';
             }
             await venta.save();
+            invalidateKpiResumenCache(empresa);
             return res.json({ operacion: nuevoEstado, venta });
         }
     } catch (error) {
@@ -1614,6 +1655,7 @@ app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
         const { id } = req.params;
         const ventaEliminada = await VentaRopa.findOneAndDelete({ _id: id, empresa });
         if (ventaEliminada) {
+            invalidateKpiResumenCache(empresa);
             await registrarLog(req.session.email, `Eliminó permanentemente la prenda: ${ventaEliminada.prenda}`);
         }
         return res.sendStatus(200);
@@ -1870,6 +1912,7 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
             await nuevaVenta.save();
             registrosCreados.push(nuevaVenta.prenda);
         }
+        invalidateKpiResumenCache(empresa);
         notificarCambio(); // Notificar cambio para refrescar el panel principal
 
         await registrarLog(req.session.email, `Importó ${registrosCreados.length} productos desde Vinted: ${registrosCreados.join(', ')}`);
@@ -1905,6 +1948,7 @@ app.post('/api/ventas/bulk', exigeAdmin, async (req, res) => {
         }));
 
         const insertados = await VentaRopa.insertMany(productosProcesados);
+        invalidateKpiResumenCache(empresa);
         await registrarLog(req.session.email, `Restauración masiva: Insertados ${insertados.length} productos.`);
         res.json({ success: true, count: insertados.length });
     } catch (error) {
@@ -1960,6 +2004,7 @@ app.post('/api/scraper/aplicar', exigeAdmin, async (req, res) => {
             await VentaRopa.findOneAndUpdate({ _id: cambio.idMongo, empresa }, { precioVenta: cambio.valorNuevo, prenda: cambio.prenda, fechaModificacion: new Date().toISOString().slice(0, 10) });
             await registrarLog(req.session.email, `Sincronización artículo: ${cambio.prenda} -> ${cambio.valorNuevo}€`);
         }
+        invalidateKpiResumenCache(empresa);
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Error al actualizar precios.' });

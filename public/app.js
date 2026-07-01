@@ -85,8 +85,45 @@ function volverALanding() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+function scrollToLandingSection(sectionId) {
+    const el = document.getElementById(sectionId);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function iniciarCountdownTrial() {
+    const el = document.getElementById('trial-countdown');
+    if (!el) return;
+
+    // Ventana comercial rolling de 72h desde la primera visita local.
+    const key = 'seychelles_trial_deadline';
+    const now = Date.now();
+    let deadline = parseInt(localStorage.getItem(key), 10);
+    if (!Number.isFinite(deadline) || deadline <= now) {
+        deadline = now + (72 * 60 * 60 * 1000);
+        localStorage.setItem(key, String(deadline));
+    }
+
+    const tick = () => {
+        const diff = Math.max(0, deadline - Date.now());
+        const d = Math.floor(diff / (24 * 60 * 60 * 1000));
+        const h = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+        const m = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
+        const s = Math.floor((diff % (60 * 1000)) / 1000);
+        el.textContent = `${String(d).padStart(2, '0')}d ${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+
+        if (diff <= 0) {
+            deadline = Date.now() + (72 * 60 * 60 * 1000);
+            localStorage.setItem(key, String(deadline));
+        }
+    };
+
+    tick();
+    setInterval(tick, 1000);
+}
+
 window.abrirAccesoDesdeLanding = abrirAccesoDesdeLanding;
 window.volverALanding = volverALanding;
+window.scrollToLandingSection = scrollToLandingSection;
 
 function setParticlesEnabled(enabled) {
     try {
@@ -4575,6 +4612,7 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         configurarForzadoHorizontal();
+        iniciarCountdownTrial();
         mostrarLandingPublica();
         const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' }); 
         const data = await res.json();

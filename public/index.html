@@ -161,8 +161,8 @@
                     <p class="text-sm md:text-base text-slate-200/80 leading-relaxed max-w-xl">Inventario en tiempo real, analitica financiera, CRM, facturacion, mensajeria interna, scraper de catalogos y trazabilidad por empresa en una sola experiencia elegante y rapida.</p>
                     <div class="mt-7 flex flex-wrap gap-3">
                         <button onclick="abrirAccesoDesdeLanding('login')" class="px-6 py-3 rounded-2xl bg-white text-slate-950 text-xs font-black uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-transform">Entrar al Core</button>
-                        <button onclick="document.getElementById('landing-demo').scrollIntoView({behavior:'smooth'})" class="px-6 py-3 rounded-2xl bg-transparent border border-white/25 text-white text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-colors">Ver Demo Visual</button>
-                        <button onclick="document.getElementById('landing-integraciones').scrollIntoView({behavior:'smooth'})" class="px-6 py-3 rounded-2xl bg-transparent border border-cyan-400/35 text-cyan-200 text-xs font-bold uppercase tracking-widest hover:bg-cyan-500/10 transition-colors">Integraciones</button>
+                        <button onclick="scrollToLandingSection('landing-demo')" class="px-6 py-3 rounded-2xl bg-transparent border border-white/25 text-white text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-colors">Ver Demo Visual</button>
+                        <button onclick="scrollToLandingSection('landing-integraciones')" class="px-6 py-3 rounded-2xl bg-transparent border border-cyan-400/35 text-cyan-200 text-xs font-bold uppercase tracking-widest hover:bg-cyan-500/10 transition-colors">Integraciones</button>
                     </div>
                     <div class="mt-8 grid grid-cols-3 gap-3 max-w-xl">
                         <div class="feature-tile rounded-2xl p-3">
@@ -311,6 +311,89 @@
                     <div class="mt-6 flex flex-wrap gap-3">
                         <button onclick="abrirAccesoDesdeLanding('registro')" class="px-6 py-3 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase tracking-widest">Crear mi negocio</button>
                         <button onclick="abrirAccesoDesdeLanding('login')" class="px-6 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/25 text-white text-xs font-bold uppercase tracking-widest">Ya tengo cuenta</button>
+                        <button onclick="scrollToLandingSection('landing-precios')" class="px-6 py-3 rounded-2xl bg-transparent border border-amber-300/40 text-amber-200 text-xs font-bold uppercase tracking-widest">Ver planes</button>
+                    </div>
+                </div>
+            </section>
+
+            <section id="landing-precios" class="mt-12 md:mt-16">
+                <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-5">
+                    <div>
+                        <p class="text-[10px] uppercase tracking-[0.28em] text-slate-300/70">Planes</p>
+                        <h3 class="landing-title text-2xl md:text-3xl text-white font-bold">Precios transparentes para crecer</h3>
+                    </div>
+                    <button onclick="abrirAccesoDesdeLanding('registro')" class="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase tracking-widest">Empieza gratis</button>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <article class="feature-tile rounded-3xl p-6">
+                        <p class="text-[10px] uppercase tracking-widest text-cyan-300">Starter</p>
+                        <p class="text-3xl font-black text-white mt-2">29€<span class="text-sm opacity-60">/mes</span></p>
+                        <ul class="mt-4 space-y-2 text-xs text-slate-300/85">
+                            <li>✓ 1 negocio</li>
+                            <li>✓ Inventario + Kanban</li>
+                            <li>✓ Facturación básica</li>
+                            <li>✓ Soporte por email</li>
+                        </ul>
+                        <button onclick="abrirAccesoDesdeLanding('registro')" class="w-full mt-5 bg-white/10 hover:bg-white/20 border border-white/25 text-white font-bold py-2.5 rounded-xl text-[11px] uppercase">Elegir Starter</button>
+                    </article>
+                    <article class="glass-panel rounded-3xl p-6 border-cyan-400/40">
+                        <p class="text-[10px] uppercase tracking-widest text-cyan-200">Pro · recomendado</p>
+                        <p class="text-3xl font-black text-white mt-2">79€<span class="text-sm opacity-60">/mes</span></p>
+                        <ul class="mt-4 space-y-2 text-xs text-slate-200/90">
+                            <li>✓ Hasta 5 negocios</li>
+                            <li>✓ CRM + Analítica avanzada</li>
+                            <li>✓ Scraper + automatizaciones</li>
+                            <li>✓ Chat interno + logs 3D</li>
+                        </ul>
+                        <button onclick="abrirAccesoDesdeLanding('registro')" class="w-full mt-5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black py-2.5 rounded-xl text-[11px] uppercase">Elegir Pro</button>
+                    </article>
+                    <article class="feature-tile rounded-3xl p-6">
+                        <p class="text-[10px] uppercase tracking-widest text-amber-300">Enterprise</p>
+                        <p class="text-3xl font-black text-white mt-2">Custom</p>
+                        <ul class="mt-4 space-y-2 text-xs text-slate-300/85">
+                            <li>✓ Multi-sede ilimitado</li>
+                            <li>✓ SLA y soporte prioritario</li>
+                            <li>✓ Integraciones a medida</li>
+                            <li>✓ Onboarding dedicado</li>
+                        </ul>
+                        <button onclick="abrirAccesoDesdeLanding('login')" class="w-full mt-5 bg-white/10 hover:bg-white/20 border border-white/25 text-white font-bold py-2.5 rounded-xl text-[11px] uppercase">Contactar ventas</button>
+                    </article>
+                </div>
+            </section>
+
+            <section id="landing-comparativa" class="mt-12 md:mt-16">
+                <div class="feature-tile rounded-3xl p-5 md:p-7 overflow-x-auto">
+                    <p class="text-[10px] uppercase tracking-[0.28em] text-slate-300/70 mb-2">Comparativa</p>
+                    <h3 class="landing-title text-2xl text-white font-bold mb-4">Seychelles Core vs método manual</h3>
+                    <table class="w-full min-w-[720px] text-left text-xs">
+                        <thead>
+                            <tr class="border-b border-white/15 text-slate-300">
+                                <th class="py-2 pr-3">Criterio</th>
+                                <th class="py-2 pr-3">Manual (Excel + apps sueltas)</th>
+                                <th class="py-2">Seychelles Core</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-slate-200/90">
+                            <tr class="border-b border-white/10"><td class="py-2 pr-3">Control de stock</td><td class="py-2 pr-3">Lento y propenso a errores</td><td class="py-2">En tiempo real por estados</td></tr>
+                            <tr class="border-b border-white/10"><td class="py-2 pr-3">Rentabilidad</td><td class="py-2 pr-3">Cálculos manuales dispersos</td><td class="py-2">KPI automáticos con ROI</td></tr>
+                            <tr class="border-b border-white/10"><td class="py-2 pr-3">Escalabilidad</td><td class="py-2 pr-3">Difícil coordinar equipos</td><td class="py-2">Multiempresa aislada</td></tr>
+                            <tr class="border-b border-white/10"><td class="py-2 pr-3">Auditoría</td><td class="py-2 pr-3">Sin trazabilidad real</td><td class="py-2">Logs y mapa de conexiones</td></tr>
+                            <tr><td class="py-2 pr-3">Velocidad operativa</td><td class="py-2 pr-3">Baja</td><td class="py-2">Alta y centralizada</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="landing-trial" class="mt-12 md:mt-16 mb-8">
+                <div class="glass-panel rounded-3xl p-6 md:p-8 flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+                    <div>
+                        <p class="text-[10px] uppercase tracking-[0.28em] text-cyan-200/80 mb-2">Oferta de lanzamiento</p>
+                        <h3 class="landing-title text-2xl md:text-3xl text-white font-bold">Prueba gratuita por tiempo limitado</h3>
+                        <p class="text-sm text-slate-200/85 mt-2">Activa ahora tu negocio y desbloquea onboarding premium sin coste inicial.</p>
+                    </div>
+                    <div class="flex flex-col items-start md:items-end gap-3">
+                        <div id="trial-countdown" class="text-2xl font-black text-amber-300 tracking-wider">00d 00h 00m 00s</div>
+                        <button onclick="abrirAccesoDesdeLanding('registro')" class="px-6 py-3 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase tracking-widest">Activar prueba gratis</button>
                     </div>
                 </div>
             </section>

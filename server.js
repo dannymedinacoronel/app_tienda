@@ -1487,7 +1487,7 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
             }
         }
 
-        const ventaActualizada = await VentaRopa.findByIdAndUpdate(
+        const ventaActualizada = await VentaRopa.findOneAndUpdate(
             { _id: id, empresa }, 
             { ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null, fechaModificacion: new Date().toISOString().slice(0, 10) }, 
             { new: true }
@@ -1617,6 +1617,7 @@ server.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto
 
 app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
     try {
+        const empresa = empresaActual(req);
         const { url } = req.body;
         if (!url) return res.status(400).json({ error: 'URL de Vinted requerida.' });
 
@@ -1643,7 +1644,8 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
             {
                 ref: 'main', // o la rama que estés usando
                 inputs: {
-                    vinted_url: url
+                    vinted_url: url,
+                    empresa: empresa
                 }
             },
             {
@@ -1889,13 +1891,15 @@ app.post('/api/scraper/webhook-github', async (req, res) => {
 
     try {
         const { productos, urlOrigen } = req.body;
+        const empresa = normalizarEmpresa(req.body?.empresa || EMPRESA_DEFAULT);
         console.log(`[GITHUB-WEBHOOK] Recibidos ${productos.length} productos de ${urlOrigen}`);
         
         // Notificar a los administradores conectados vía Socket.io
         if (global.io) {
-            global.io.emit('scraper_update', { 
+            global.io.to(`empresa:${empresa}`).emit('scraper_update', {
                 mensaje: `GitHub ha terminado de escanear ${productos.length} productos.`,
                 productos: productos,
+                empresa,
                 urlOrigen: urlOrigen,
                 timestamp: new Date()
             });

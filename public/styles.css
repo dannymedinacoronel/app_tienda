@@ -142,11 +142,28 @@ body {
     z-index: 1;
 }
 
-.dragging {
-    opacity: 0.3;
-    transform: scale(0.95);
+.card-img-mini {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 12px;
 }
-.drag-over {
-    background-color: rgba(79, 70, 229, 0.2) !important; /* indigo-600/20 */
-    border-style: dashed !important;
+
+/* Kanban card sizing fix */
+.kanban-card {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.kanban-card h4 {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+/* Scraper specific image constraints */
+#scraper-results-body img, 
+#scraper-grid-nuevos img {
+  max-width: 60px;
+  max-height: 60px;
+  object-fit: cover;
 }

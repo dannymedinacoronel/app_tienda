@@ -2847,8 +2847,6 @@ window.__handleCredentialResponseImpl = async function(response) {
     } else { sendLogin(); }
 };
 
-window.handleCredentialResponse = window.__handleCredentialResponseImpl;
-
 if (window.__pendingGoogleCredential) {
     const pendingGoogleCredential = window.__pendingGoogleCredential;
     window.__pendingGoogleCredential = null;

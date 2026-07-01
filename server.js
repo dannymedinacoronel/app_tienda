@@ -1170,22 +1170,60 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         const $ = cheerio.load(response.data);
         const productosExtraidos = [];
 
-        $('div[data-testid^="grid-item"], div[data-testid="item-card"], .new-item-box__container, .feed-grid__item, .web_ui__ItemBox__component, .item-card, .grid__item').each((i, el) => {
-            const titulo = $(el).find('[data-testid$="--title"], [data-testid$="--description"], .new-item-box__description h2, .new-item-box__title, .web_ui__ItemBox__title, .truncated, h4, [itemprop="name"]').text().trim();
-            const precioTexto = $(el).find('[data-testid$="--price-text"], [data-testid$="--price"], .new-item-box__description h4, .new-item-box__price, .web_ui__ItemBox__price, .price, h3, [itemprop="price"]').text().trim();
-            const imgTag = $(el).find('img');
-            const imagen = imgTag.attr('src') || imgTag.attr('data-src') || (imgTag.attr('srcset') ? imgTag.attr('srcset').split(' ')[0] : '');
-
-            if (titulo && precioTexto) {
-                // Sanitización robusta de precios para evitar NaN (Coincide con numeroSeguro de app.js)
-                let cleanPrice = precioTexto.replace(/\s+/g, '').replace(',', '.').replace(/[^\d.-]/g, '');
-                const precioNumerico = parseFloat(cleanPrice) || 0;
-                
-                if (!isNaN(parseFloat(cleanPrice))) productosExtraidos.push({ titulo, precio: cleanPrice, imagen });
+        // MÉTODO 1: Búsqueda en JSON embebido (Más robusto contra cambios de CSS y bloqueos de renderizado)
+        try {
+            const scripts = $('script').toArray();
+            for (const script of scripts) {
+                const content = $(script).html();
+                if (content && (content.includes('INITIAL_STATE') || content.includes('items'))) {
+                    // Intentar extraer JSON de estados internos de React/Next
+                    const jsonMatch = content.match(/window\.__INITIAL_STATE__\s*=\s*({.*?});/s) || 
+                                    content.match(/window\.__NUXT__\s*=\s*({.*?});/s) ||
+                                    content.match(/\{"items":\[.*?\]\}/s);
+                    
+                    if (jsonMatch) {
+                        try {
+                            const data = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+                            // Navegar por la estructura típica de Vinted (puede variar)
+                            const items = data?.items || data?.catalog?.items || data?.itemsOrRecommendations?.items || [];
+                            items.forEach(it => {
+                                if (it.title && it.price) {
+                                    productosExtraidos.push({
+                                        titulo: it.title,
+                                        precio: String(it.price?.amount || it.price || '0'),
+                                        imagen: it.photo?.url || it.image_url || ''
+                                    });
+                                }
+                            });
+                        } catch (e) {}
+                    }
+                }
             }
-        });
+        } catch (e) {
+            console.error("Error al parsear JSON embebido:", e.message);
+        }
 
-        if (productosExtraidos.length === 0) return res.status(400).json({ error: 'No se encontraron productos. Es posible que Vinted haya bloqueado la solicitud.' });
+        // MÉTODO 2: Selectores CSS (Como respaldo)
+        if (productosExtraidos.length === 0) {
+            $('div[data-testid^="grid-item"], div[data-testid="item-card"], .item-card, .grid__item, .feed-grid__item, .web_ui__ItemBox__component, .new-item-box__container').each((i, el) => {
+                const titulo = $(el).find('[data-testid$="--title"], [data-testid$="--description"], .new-item-box__title, .web_ui__ItemBox__title, .truncated, h4, [itemprop="name"]').text().trim();
+                const precioTexto = $(el).find('[data-testid$="--price-text"], [data-testid$="--price"], .new-item-box__price, .web_ui__ItemBox__price, .price, h3, [itemprop="price"]').text().trim();
+                const imgTag = $(el).find('img');
+                const imagen = imgTag.attr('src') || imgTag.attr('data-src') || (imgTag.attr('srcset') ? imgTag.attr('srcset').split(' ')[0] : '');
+
+                if (titulo && precioTexto) {
+                    let cleanPrice = precioTexto.replace(/\s+/g, '').replace(',', '.').replace(/[^\d.-]/g, '');
+                    if (!isNaN(parseFloat(cleanPrice))) {
+                        productosExtraidos.push({ titulo, precio: cleanPrice, imagen });
+                    }
+                }
+            });
+        }
+
+        if (productosExtraidos.length === 0) {
+            console.log("[SCRAPER] No se encontraron productos en el HTML. Longitud del body:", response.data.length);
+            return res.status(400).json({ error: 'No se encontraron productos. Vinted está bloqueando la conexión desde Render (IP de Data Center). Prueba a usar una URL de perfil más específica o intenta más tarde.' });
+        }
 
         const resultados = { discrepancias: [], nuevos: [], identicos: [] };
         const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();

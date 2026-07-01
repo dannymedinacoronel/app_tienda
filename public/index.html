@@ -444,7 +444,6 @@
                             <select id="user-admin-rol" class="input-bg border w-full rounded-xl px-4 py-3 text-xs focus:outline-none dropdown-bg">
                                 <option value="Admin">👑 Administrador (Control Total)</option>
                                 <option value="Editor" selected>📝 Editor (Gestión de Tienda)</option>
-                                <option value="Lector">👀 Lector (Solo Ver Cifras)</option>
                             </select>
                             <button onclick="agregarUsuarioAutorizado()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-xl text-[10px] tracking-widest uppercase transition-all shadow-lg">Otorgar Acceso</button>
                         </div>
@@ -741,9 +740,17 @@
                     <!-- Mapa de Conexiones -->
                     <div class="mt-6 lg:col-span-4">
                         <div class="card-bg border rounded-3xl p-6 flex flex-col shadow-xl h-[500px]">
-                            <h3 class="text-xs font-black text-purple-400 uppercase tracking-widest flex items-center gap-2 mb-4">
-                                <span class="bg-purple-500/20 p-2.5 rounded-2xl shadow-inner text-lg">🌍</span> Mapa Global de Conexiones
-                            </h3>
+                            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                                <h3 class="text-xs font-black text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                                    <span class="bg-purple-500/20 p-2.5 rounded-2xl shadow-inner text-lg">🌍</span> Mapa Global de Conexiones
+                                </h3>
+                                <div class="flex items-center gap-2">
+                                    <select id="logs-map-user-filter" onchange="recargarMapaLogin3D()" class="input-bg border rounded-xl px-3 py-2 text-[10px] focus:outline-none dropdown-bg">
+                                        <option value="">Todos los usuarios del equipo</option>
+                                    </select>
+                                    <button onclick="recargarMapaLogin3D()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-3 py-2 rounded-xl text-[10px] uppercase tracking-widest">Recargar</button>
+                                </div>
+                            </div>
                             <div id="globe-container" class="flex-1 w-full h-full relative -mt-4 -ml-4">
                                 <div id="globe-loader" class="absolute inset-0 flex items-center justify-center flex-col gap-2 text-purple-300 font-mono text-xs">
                                     <div class="w-8 h-8 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div>

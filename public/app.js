@@ -63,6 +63,10 @@ socket.on('mensaje_interno_nuevo', (data) => {
             renderBadgeChatInterno();
         }
 
+        if (data.deEmail !== USUARIO_EMAIL_ACTUAL) {
+            reproducirSonidoMensaje('receive');
+        }
+
         if ((document.getElementById('sec-usuarios') && !document.getElementById('sec-usuarios').classList.contains('hidden')) || popupAbierto) {
             refrescarUsuariosChat();
             if (CHAT_USUARIO_ACTIVO && (CHAT_USUARIO_ACTIVO.email === data.deEmail || CHAT_USUARIO_ACTIVO.email === data.paraEmail)) {
@@ -293,6 +297,10 @@ let LISTA_TAREAS = [];
 let LISTA_FAQS = [];
 let LISTA_ESTADOS_KANBAN = [];
 let GLOBO_INSTANCE = null;
+let GLOBO_RENDERER = null;
+let GLOBO_CONTROLS = null;
+let GLOBO_COMPOSER = null;
+let GLOBO_ANIM_FRAME = null;
 let FOTOS_FORMULARIO_TEMP = [];
 let resultadosScraperActual = null;
 
@@ -1953,7 +1961,18 @@ async function refrescarUsuariosAdmin() {
                         </div>
                     </div>
                 </td>
-                <td class="py-4 px-2 text-[10px]"><span class="bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded font-bold uppercase tracking-widest border border-indigo-500/20">${u.rol || 'Admin'}</span></td>
+                <td class="py-4 px-2 text-[10px]">
+                    ${u.rol === 'Lector' ?
+                        `<span class="bg-slate-500/20 text-slate-300 px-2 py-1 rounded font-bold uppercase tracking-widest border border-slate-500/20">Lector (bloqueado)</span>` :
+                        `<div class="flex items-center gap-2 justify-start">
+                            <select id="rol-${u._id}" class="input-bg border rounded-lg px-2 py-1 text-[10px] dropdown-bg">
+                                <option value="Admin" ${u.rol === 'Admin' ? 'selected' : ''}>Admin</option>
+                                <option value="Editor" ${u.rol === 'Editor' ? 'selected' : ''}>Editor</option>
+                            </select>
+                            <button onclick="actualizarRolUsuarioAdmin('${u._id}', '${u.rol || 'Editor'}')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-2 py-1 rounded-lg text-[9px] uppercase">Guardar</button>
+                        </div>`
+                    }
+                </td>
                 <td class="py-4 px-2">
                     <span class="text-[10px] font-mono ${u.ultimaConexion ? 'text-emerald-400' : 'opacity-30'}">
                         ${u.ultimaConexion ? new Date(u.ultimaConexion).toLocaleString('es-ES', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : 'Nunca'}
@@ -1966,6 +1985,30 @@ async function refrescarUsuariosAdmin() {
             </tr>
         `).join('');
     } catch(e) { console.error("Error cargando usuarios:", e); }
+}
+
+async function actualizarRolUsuarioAdmin(id, rolActual) {
+    const select = document.getElementById(`rol-${id}`);
+    if (!select) return;
+    const nuevoRol = select.value;
+    if (!['Admin', 'Editor'].includes(nuevoRol)) return alert('Rol inválido.');
+    if (nuevoRol === rolActual) return;
+
+    try {
+        const res = await fetch(`/api/usuarios-admin/${id}/rol`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ rol: nuevoRol })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo actualizar el rol.');
+        cantarPorVoz('Permiso actualizado');
+        refrescarUsuariosAdmin();
+    } catch (e) {
+        alert(`Error actualizando rol: ${e.message}`);
+        refrescarUsuariosAdmin();
+    }
 }
 
 function construirAvatarUsuario(usuario) {
@@ -2142,6 +2185,7 @@ async function enviarMensajeInterno(origen = 'panel') {
 
         if (input) input.value = '';
         if (inputAlternativo) inputAlternativo.value = '';
+        reproducirSonidoMensaje('send');
         await cargarConversacionInterna(CHAT_USUARIO_ACTIVO.email);
     } catch (e) {
         alert(`Error enviando mensaje: ${e.message}`);
@@ -2563,14 +2607,37 @@ function verDetalleStockDia(dia) {
 
 async function renderizarMapaDeLogins() {
     const container = document.getElementById('globe-container');
-    if (!container || GLOBO_INSTANCE) return;
+    if (!container || (GLOBO_INSTANCE && !window.__forzarRecargaMapaLogin)) return;
+
+    if (GLOBO_ANIM_FRAME) {
+        cancelAnimationFrame(GLOBO_ANIM_FRAME);
+        GLOBO_ANIM_FRAME = null;
+    }
+    if (GLOBO_RENDERER) {
+        try { GLOBO_RENDERER.dispose(); } catch (_) {}
+    }
+    container.innerHTML = '';
+    GLOBO_INSTANCE = null;
+    GLOBO_RENDERER = null;
+    GLOBO_CONTROLS = null;
+    GLOBO_COMPOSER = null;
+    window.__forzarRecargaMapaLogin = false;
+
+    const loaderHtml = `
+        <div id="globe-loader" class="absolute inset-0 flex items-center justify-center flex-col gap-2 text-purple-300 font-mono text-xs">
+            <div class="w-8 h-8 border-4 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+            <span>Cargando datos geoespaciales...</span>
+        </div>`;
+    container.insertAdjacentHTML('beforeend', loaderHtml);
 
     const loader = document.getElementById('globe-loader');
     if(loader) loader.classList.remove('hidden');
 
     try {
+        const filtroUsuario = document.getElementById('logs-map-user-filter')?.value || '';
+        const query = filtroUsuario ? `?usuario=${encodeURIComponent(filtroUsuario)}` : '';
         const [locationsRes, countriesRes] = await Promise.all([
-            fetch('/api/logs/locations', { credentials: 'include' }),
+            fetch(`/api/logs/locations${query}`, { credentials: 'include' }),
             fetch('/ne_110m_admin_0_countries.geojson')
         ]);
 
@@ -2579,7 +2646,15 @@ async function renderizarMapaDeLogins() {
         const countriesData = await countriesRes.json();
 
         const locations = locationsData.locations || [];
+        const usuariosDisponibles = locationsData.usuariosDisponibles || [];
         if(loader) loader.classList.add('hidden');
+
+        const selectorUsuarios = document.getElementById('logs-map-user-filter');
+        if (selectorUsuarios) {
+            const seleccionado = selectorUsuarios.value || '';
+            selectorUsuarios.innerHTML = `<option value="">Todos los usuarios del equipo</option>` + usuariosDisponibles.map(u => `<option value="${u}">${u}</option>`).join('');
+            selectorUsuarios.value = usuariosDisponibles.includes(seleccionado) ? seleccionado : '';
+        }
 
         if (locations.length === 0) {
             container.innerHTML = `<div class="flex items-center justify-center h-full text-sm opacity-40 italic">No hay datos de conexión para mostrar.</div>`;
@@ -2599,12 +2674,16 @@ async function renderizarMapaDeLogins() {
             .polygonSideColor(() => 'rgba(168, 85, 247, 0.05)')
             .polygonStrokeColor(() => '#6b21a8')
             .pointsData(locations).pointLat('lat').pointLng('lon')
-            .pointColor(() => '#f0abfc').pointAltitude(0.02).pointRadius(d => 0.15 + d.count * 0.08)
-            .pointLabel(d => `<div class="card-bg border border-slate-700 p-2 rounded-lg text-xs"><b>${d.ciudad}, ${d.pais}</b><br>Eventos Registrados: ${d.count}</div>`)
+            .pointColor(() => '#67e8f9').pointAltitude(0.02).pointRadius(d => 0.15 + d.count * 0.08)
+            .pointLabel(d => {
+                const ipsTxt = (d.ips || []).slice(0, 3).map(ip => `${ip.ip} (${ip.count})`).join('<br>');
+                return `<div class="bg-slate-900/95 border border-cyan-500/40 p-2 rounded-lg text-xs text-cyan-100"><b>${d.ciudad}, ${d.pais}</b><br>Eventos: ${d.count}<br>${ipsTxt || 'Sin IP'}</div>`;
+            })
             .onPointClick(d => {
                 const modal = document.getElementById('modal-mapa-detalle'), titulo = document.getElementById('detalle-mapa-titulo'), lista = document.getElementById('detalle-mapa-lista');
                 if (!modal || !titulo || !lista) return;
                 titulo.innerText = `Actividad en ${d.ciudad}`;
+                const ipResumen = (d.ips || []).slice(0, 5).map(x => `${x.ip} (${x.count})`).join(' · ');
                 lista.innerHTML = (d.eventos && d.eventos.length > 0) ? d.eventos.map(ev => {
                     const isLogout = ev.accion.includes('Cerró');
                     const color = isLogout ? 'text-rose-400' : 'text-emerald-400';
@@ -2617,12 +2696,16 @@ async function renderizarMapaDeLogins() {
                                     <span class="text-[9px] opacity-50 font-mono">${dateStr}</span>
                                 </div>
                                 <span class="text-white/80 font-mono text-[10px] mt-0.5">👤 ${ev.usuario}</span>
+                                <span class="text-cyan-300/80 font-mono text-[10px]">🌐 IP: ${ev.ip || 'N/A'}</span>
                             </div>`;
                 }).join('') : '<div class="opacity-50 italic">Sin actividad reciente.</div>';
+                if (ipResumen) {
+                    lista.innerHTML = `<div class="mb-3 p-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-[10px] font-mono text-cyan-200">Top IPs zona: ${ipResumen}</div>` + lista.innerHTML;
+                }
                 modal.classList.remove('hidden');
             })
             .ringsData(locations).ringLat('lat').ringLng('lon')
-            .ringColor(() => (t) => `rgba(233, 138, 255, ${1-t})`)
+            .ringColor(() => (t) => `rgba(34, 211, 238, ${1-t})`)
             .ringMaxRadius(d => 3 + d.count * 0.5).ringPropagationSpeed(d => 2 + d.count * 0.2).ringRepeatPeriod(1000);
         scene.add(globe);
 
@@ -2671,10 +2754,13 @@ async function renderizarMapaDeLogins() {
         (function animate() {
             controls.update();
             composer.render();
-            requestAnimationFrame(animate);
+            GLOBO_ANIM_FRAME = requestAnimationFrame(animate);
         })();
 
         GLOBO_INSTANCE = globe;
+        GLOBO_RENDERER = renderer;
+        GLOBO_CONTROLS = controls;
+        GLOBO_COMPOSER = composer;
         
         if (locationsData.lastLogin) {
             setTimeout(() => {
@@ -2687,6 +2773,12 @@ async function renderizarMapaDeLogins() {
         container.innerHTML = `<div class="flex items-center justify-center h-full text-sm text-rose-400">Error al cargar el mapa: ${error.message}</div>`;
     }
 }
+
+function recargarMapaLogin3D() {
+    window.__forzarRecargaMapaLogin = true;
+    renderizarMapaDeLogins();
+}
+window.recargarMapaLogin3D = recargarMapaLogin3D;
 
 async function navegarCalendario(delta) {
     CALENDARIO_MES += delta;
@@ -3183,6 +3275,34 @@ function tocarSonidoCajaRegistradora() {
         playCoin(2000, 8000, ctx.currentTime);
         playCoin(3000, 9000, ctx.currentTime + 0.1);
     } catch(e) {}
+}
+
+function reproducirSonidoMensaje(tipo = 'send') {
+    if (SOUND_MUTED_GLOBAL) return;
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+
+        if (tipo === 'receive') {
+            osc.frequency.setValueAtTime(780, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(1040, ctx.currentTime + 0.12);
+        } else {
+            osc.frequency.setValueAtTime(920, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(680, ctx.currentTime + 0.1);
+        }
+
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.11, ctx.currentTime + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.16);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.17);
+    } catch (_) {}
 }
 
 function lanzarConfetiVenta() {

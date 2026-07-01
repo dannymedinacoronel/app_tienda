@@ -573,13 +573,51 @@ app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
     try {
         const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
         const emailLimpio = req.body.email ? req.body.email.toLowerCase().trim() : "";
-        const rolAsignado = req.body.rol || "Editor";
+        const rolAsignado = String(req.body.rol || "Editor").trim();
+        const rolesPermitidos = ['Admin', 'Editor'];
         if (!emailLimpio) return res.status(400).json({ error: 'Email requerido.' });
+        if (!rolesPermitidos.includes(rolAsignado)) return res.status(400).json({ error: 'Rol inválido. Solo Admin o Editor.' });
         const nuevo = new UsuarioAutorizado({ email: emailLimpio, rol: rolAsignado, empresa });
         await nuevo.save();
         await registrarLog(req.session.email, `Autorizó cuenta: ${emailLimpio} [Rol: ${rolAsignado}] [Empresa: ${empresa}]`);
         res.json(nuevo);
     } catch (e) { res.status(400).json({ error: 'El usuario ya está autorizado en la lista.' }); }
+});
+
+app.put('/api/usuarios-admin/:id/rol', exigeAdmin, async (req, res) => {
+    try {
+        if ((req.session?.rol || 'Editor') !== 'Admin') {
+            return res.status(403).json({ error: 'Solo un Admin puede modificar permisos.' });
+        }
+
+        const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
+        const nuevoRol = String(req.body?.rol || '').trim();
+        const rolesPermitidos = ['Admin', 'Editor'];
+        if (!rolesPermitidos.includes(nuevoRol)) {
+            return res.status(400).json({ error: 'Solo se permite Admin o Editor.' });
+        }
+
+        const usuario = await UsuarioAutorizado.findById(req.params.id);
+        if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado.' });
+        if (normalizarEmpresa(usuario.empresa) !== empresa) {
+            return res.status(403).json({ error: 'No puedes modificar usuarios de otra empresa.' });
+        }
+        if ((usuario.rol || 'Editor') === 'Lector') {
+            return res.status(403).json({ error: 'Los usuarios Lectores no son editables desde este panel.' });
+        }
+        if (usuario.email === req.session.email && nuevoRol !== 'Admin') {
+            return res.status(400).json({ error: 'No puedes quitarte permisos de Admin a ti mismo.' });
+        }
+
+        const rolAnterior = usuario.rol || 'Editor';
+        usuario.rol = nuevoRol;
+        await usuario.save();
+        await registrarLog(req.session.email, `Cambió permisos de ${usuario.email}: ${rolAnterior} -> ${nuevoRol}`);
+
+        res.json({ success: true, usuario });
+    } catch (e) {
+        res.status(500).json({ error: 'Error al actualizar permisos.' });
+    }
 });
 
 app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
@@ -1019,20 +1057,40 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
 
 app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
     try {
+        const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
+        const usuariosEquipo = await UsuarioAutorizado.find({ empresa }).select('email').lean();
+        const emailsEquipo = usuariosEquipo.map(u => String(u.email || '').toLowerCase().trim()).filter(Boolean);
+        if (emailsEquipo.length === 0) return res.json({ locations: [], lastLogin: null, usuariosDisponibles: [], topIps: [] });
+
+        const usuarioFiltro = String(req.query?.usuario || '').toLowerCase().trim();
+        if (usuarioFiltro && !emailsEquipo.includes(usuarioFiltro)) {
+            return res.status(403).json({ error: 'No puedes consultar logs de usuarios fuera de tu equipo.' });
+        }
+
+        const filtroBase = {
+            lat: { $ne: null },
+            lon: { $ne: null },
+            accion: { $in: [/Inició sesión/i, /Cerró sesión/i] },
+            usuario: usuarioFiltro || { $in: emailsEquipo }
+        };
+
         // Recuperamos logs de conexiones Y desconexiones con coordenadas
-        const activityLogs = await LogAuditoria.find({
-            lat: { $ne: null }, lon: { $ne: null },
-            accion: { $in: [ /Inició sesión/i, /Cerró sesión/i ] }
-        }).lean();
+        const activityLogs = await LogAuditoria.find(filtroBase)
+            .sort({ fechaHora: -1 })
+            .limit(2500)
+            .lean();
 
         // Adicionalmente, buscar el último log de conexión para centrar el mapa
         const lastLoginLog = await LogAuditoria.findOne({
             accion: /Inició sesión/i,
-            lat: { $ne: null }, lon: { $ne: null }
+            lat: { $ne: null },
+            lon: { $ne: null },
+            usuario: usuarioFiltro || { $in: emailsEquipo }
         }).sort({ fechaHora: -1 }).lean();
 
         // Agrupar los datos para obtener localizaciones únicas y sus eventos
         const locations = {};
+        const contadorIps = {};
         activityLogs.forEach(log => {
             const key = `${log.lat.toFixed(4)},${log.lon.toFixed(4)}`; // Agrupar por coordenadas cercanas
             if (!locations[key]) {
@@ -1042,18 +1100,37 @@ app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
                     ciudad: log.ciudad || 'Desconocida',
                     pais: log.pais || 'Desconocido',
                     count: 0,
+                    ips: {},
                     eventos: []
                 };
             }
             locations[key].count++;
+            if (log.ip) {
+                locations[key].ips[log.ip] = (locations[key].ips[log.ip] || 0) + 1;
+                contadorIps[log.ip] = (contadorIps[log.ip] || 0) + 1;
+            }
             locations[key].eventos.push({
-                usuario: log.usuario, accion: log.accion, fecha: log.fechaHora
+                usuario: log.usuario,
+                accion: log.accion,
+                fecha: log.fechaHora,
+                ip: log.ip || 'N/A'
             });
         });
 
+        const topIps = Object.entries(contadorIps)
+            .map(([ip, count]) => ({ ip, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 10);
+
         res.json({
-            locations: Object.values(locations),
-            lastLogin: lastLoginLog 
+            locations: Object.values(locations).map(loc => ({
+                ...loc,
+                ips: Object.entries(loc.ips).map(([ip, count]) => ({ ip, count })).sort((a, b) => b.count - a.count)
+            })),
+            lastLogin: lastLoginLog,
+            usuariosDisponibles: emailsEquipo,
+            topIps,
+            filtroUsuario: usuarioFiltro || ''
         });
 
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar datos del mapa.' }); }

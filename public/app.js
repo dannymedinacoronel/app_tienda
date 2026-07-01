@@ -52,17 +52,6 @@ socket.on('connect_error', (error) => {
     console.error('[SOCKET] Error de conexión:', error);
 });
 
-socket.on('mensaje_interno_nuevo', (data) => {
-    if (!USUARIO_EMAIL_ACTUAL) return;
-    if (!data) return;
-    if (data.empresa && EMPRESA_CHAT_ACTUAL && data.empresa !== EMPRESA_CHAT_ACTUAL) return;
-    if (data.paraEmail === USUARIO_EMAIL_ACTUAL || data.deEmail === USUARIO_EMAIL_ACTUAL) {
-        const popupAbierto = !document.getElementById('internal-chat-window')?.classList.contains('hidden');
-        if (!popupAbierto && data.deEmail !== USUARIO_EMAIL_ACTUAL) {
-            CHAT_NO_LEIDOS += 1;
-            renderBadgeChatInterno();
-        }
-
 function mostrarLandingPublica() {
     const landing = document.getElementById('landing-page');
     const login = document.getElementById('login-box');
@@ -89,7 +78,15 @@ function abrirAccesoDesdeLanding(modo = 'login') {
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+function volverALanding() {
+    toggleRegistroNegocioModal(false);
+    mostrarLandingPublica();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 window.abrirAccesoDesdeLanding = abrirAccesoDesdeLanding;
+window.volverALanding = volverALanding;
 
 function setParticlesEnabled(enabled) {
     try {
@@ -118,6 +115,17 @@ function setParticlesEnabled(enabled) {
         }
     } catch (_) {}
 }
+
+socket.on('mensaje_interno_nuevo', (data) => {
+    if (!USUARIO_EMAIL_ACTUAL) return;
+    if (!data) return;
+    if (data.empresa && EMPRESA_CHAT_ACTUAL && data.empresa !== EMPRESA_CHAT_ACTUAL) return;
+    if (data.paraEmail === USUARIO_EMAIL_ACTUAL || data.deEmail === USUARIO_EMAIL_ACTUAL) {
+        const popupAbierto = !document.getElementById('internal-chat-window')?.classList.contains('hidden');
+        if (!popupAbierto && data.deEmail !== USUARIO_EMAIL_ACTUAL) {
+            CHAT_NO_LEIDOS += 1;
+            renderBadgeChatInterno();
+        }
 
         if (data.deEmail !== USUARIO_EMAIL_ACTUAL) {
             reproducirSonidoMensaje('receive');

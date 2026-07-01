@@ -6,6 +6,19 @@
     <meta name="screen-orientation" content="landscape">
     <meta name="x5-orientation" content="landscape">
     <title>Core Financiero - Seychelles Shop🌺</title>
+    <meta name="description" content="Seychelles Core: plataforma SaaS para tiendas de moda con inventario, ventas, CRM, facturacion, analitica y control multiempresa en tiempo real.">
+    <meta name="keywords" content="software tienda ropa, inventario moda, crm retail, facturacion moda, saas multitienda, gestion vinted">
+    <meta name="author" content="Seychelles Core">
+    <meta name="robots" content="index,follow,max-image-preview:large">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Seychelles Core | Control Premium para Tiendas de Moda">
+    <meta property="og:description" content="Impulsa ventas y operaciones con una experiencia profesional: inventario, analitica, chat, CRM y facturacion en una sola plataforma.">
+    <meta property="og:image" content="https://images.unsplash.com/photo-1556742393-d75f468bfcb0?auto=format&fit=crop&w=1600&q=80">
+    <meta property="og:locale" content="es_ES">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Seychelles Core | Plataforma Comercial para Moda">
+    <meta name="twitter:description" content="Gestiona tu negocio de moda con una experiencia visual premium y rendimiento profesional.">
+    <meta name="twitter:image" content="https://images.unsplash.com/photo-1556742393-d75f468bfcb0?auto=format&fit=crop&w=1600&q=80">
 
     <link rel="icon" type="image/png" href="logo.png">
     <link rel="shortcut icon" type="image/png" href="logo.png">
@@ -76,7 +89,34 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
             backdrop-filter: blur(8px);
         }
+        .quote-card {
+            background: linear-gradient(180deg, rgba(17, 24, 39, 0.8), rgba(15, 23, 42, 0.5));
+            border: 1px solid rgba(148, 163, 184, 0.25);
+        }
+        .faq-row {
+            background: rgba(2, 6, 23, 0.45);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
     </style>
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            "name": "Seychelles Core",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web",
+            "description": "Plataforma SaaS para tiendas de moda con inventario, analitica, CRM, facturacion y control multiempresa.",
+            "offers": {
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "EUR"
+            },
+            "publisher": {
+                "@type": "Organization",
+                "name": "Seychelles Core"
+            }
+        }
+    </script>
     
     
 </head>
@@ -171,6 +211,63 @@
                     <h3 class="landing-title text-xl text-white font-bold mb-2">Presentacion Lista para Promocionar</h3>
                     <p class="text-xs text-slate-300/80">Diseño visual moderno, narrativa comercial clara y llamadas a accion para captar y convertir negocios.</p>
                 </article>
+            </section>
+
+            <section class="mt-12 md:mt-16">
+                <div class="flex items-end justify-between gap-3 mb-4">
+                    <div>
+                        <p class="text-[10px] uppercase tracking-[0.28em] text-slate-300/70">Casos Reales</p>
+                        <h2 class="landing-title text-2xl md:text-3xl text-white font-bold">Tiendas que ya venden con mas control</h2>
+                    </div>
+                    <button onclick="abrirAccesoDesdeLanding('login')" class="hidden md:inline-flex px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[11px] font-bold uppercase tracking-widest">Probar ahora</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <article class="quote-card rounded-2xl p-5">
+                        <p class="text-[11px] text-slate-200/90 leading-relaxed">"Pasamos de hojas sueltas a una operativa profesional. En dos semanas redujimos errores de stock y subimos conversion en Vinted y tienda fisica."</p>
+                        <p class="mt-3 text-[10px] uppercase tracking-widest text-cyan-300">Atelier Norte · Bilbao</p>
+                    </article>
+                    <article class="quote-card rounded-2xl p-5">
+                        <p class="text-[11px] text-slate-200/90 leading-relaxed">"El panel financiero nos ayuda a decidir mas rapido que comprar y que liquidar. La sensacion es de software premium de verdad."</p>
+                        <p class="mt-3 text-[10px] uppercase tracking-widest text-emerald-300">Vintage House · Valencia</p>
+                    </article>
+                    <article class="quote-card rounded-2xl p-5">
+                        <p class="text-[11px] text-slate-200/90 leading-relaxed">"La separacion por empresa nos dio seguridad para crecer. Cada equipo trabaja en su espacio sin mezclar datos."</p>
+                        <p class="mt-3 text-[10px] uppercase tracking-widest text-amber-300">Maison Archive · Madrid</p>
+                    </article>
+                </div>
+            </section>
+
+            <section class="mt-12 md:mt-16 grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div class="feature-tile rounded-3xl p-5 md:p-7">
+                    <p class="text-[10px] uppercase tracking-[0.28em] text-slate-300/70 mb-2">Preguntas Frecuentes</p>
+                    <h3 class="landing-title text-2xl text-white font-bold mb-5">FAQ comercial</h3>
+                    <div class="space-y-3">
+                        <details class="faq-row rounded-xl p-3" open>
+                            <summary class="cursor-pointer text-sm font-bold text-cyan-200">Que incluye la plataforma?</summary>
+                            <p class="mt-2 text-xs text-slate-300/85">Inventario, Kanban de estados, ventas, facturacion PDF, CRM, analitica, logs geograficos, chat interno y scraper de catalogos.</p>
+                        </details>
+                        <details class="faq-row rounded-xl p-3">
+                            <summary class="cursor-pointer text-sm font-bold text-cyan-200">Puedo usarlo con varios negocios?</summary>
+                            <p class="mt-2 text-xs text-slate-300/85">Si. Cada negocio se registra con su propio espacio independiente y aislamiento de datos por empresa.</p>
+                        </details>
+                        <details class="faq-row rounded-xl p-3">
+                            <summary class="cursor-pointer text-sm font-bold text-cyan-200">Necesito instalar algo?</summary>
+                            <p class="mt-2 text-xs text-slate-300/85">No. Es una aplicacion web lista para usar en escritorio y tablet, con acceso seguro por Google.</p>
+                        </details>
+                    </div>
+                </div>
+
+                <div class="glass-panel rounded-3xl p-5 md:p-7 flex flex-col justify-between">
+                    <div>
+                        <p class="text-[10px] uppercase tracking-[0.28em] text-slate-300/70 mb-2">Listo para convertir</p>
+                        <h3 class="landing-title text-2xl md:text-3xl text-white font-bold mb-2">Empieza hoy con una experiencia profesional</h3>
+                        <p class="text-sm text-slate-200/80 leading-relaxed">Crea tu negocio, entra con tu equipo y controla ventas, inventario y rentabilidad desde un solo panel premium.</p>
+                    </div>
+                    <div class="mt-6 flex flex-wrap gap-3">
+                        <button onclick="abrirAccesoDesdeLanding('registro')" class="px-6 py-3 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase tracking-widest">Crear mi negocio</button>
+                        <button onclick="abrirAccesoDesdeLanding('login')" class="px-6 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/25 text-white text-xs font-bold uppercase tracking-widest">Ya tengo cuenta</button>
+                    </div>
+                </div>
             </section>
         </div>
     </section>

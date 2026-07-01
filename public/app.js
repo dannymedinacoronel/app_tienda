@@ -11,6 +11,7 @@ let USUARIO_ROL_ACTUAL = '';
 let CHAT_USUARIOS = [];
 let CHAT_USUARIO_ACTIVO = null;
 let CHAT_REFRESH_INTERVAL = null;
+let CHAT_NO_LEIDOS = 0;
 let INSTANCIA_CHARTS = null;
 let INSTANCIA_TARTA = null;
 let INSTANCIA_BARRAS = null;
@@ -54,7 +55,13 @@ socket.on('mensaje_interno_nuevo', (data) => {
     if (!USUARIO_EMAIL_ACTUAL) return;
     if (!data) return;
     if (data.paraEmail === USUARIO_EMAIL_ACTUAL || data.deEmail === USUARIO_EMAIL_ACTUAL) {
-        if (document.getElementById('sec-usuarios') && !document.getElementById('sec-usuarios').classList.contains('hidden')) {
+        const popupAbierto = !document.getElementById('internal-chat-window')?.classList.contains('hidden');
+        if (!popupAbierto && data.deEmail !== USUARIO_EMAIL_ACTUAL) {
+            CHAT_NO_LEIDOS += 1;
+            renderBadgeChatInterno();
+        }
+
+        if ((document.getElementById('sec-usuarios') && !document.getElementById('sec-usuarios').classList.contains('hidden')) || popupAbierto) {
             refrescarUsuariosChat();
             if (CHAT_USUARIO_ACTIVO && (CHAT_USUARIO_ACTIVO.email === data.deEmail || CHAT_USUARIO_ACTIVO.email === data.paraEmail)) {
                 cargarConversacionInterna(CHAT_USUARIO_ACTIVO.email);
@@ -119,6 +126,37 @@ function actualizarCargaScraper(percent, message, status) {
     if (msgEl && message) msgEl.innerText = message;
     if (statusEl && status) statusEl.innerText = status;
 }
+
+function renderBadgeChatInterno() {
+    const badge = document.getElementById('internal-chat-badge');
+    if (!badge) return;
+    if (CHAT_NO_LEIDOS > 0) {
+        badge.classList.remove('hidden');
+        badge.innerText = CHAT_NO_LEIDOS > 99 ? '99+' : String(CHAT_NO_LEIDOS);
+    } else {
+        badge.classList.add('hidden');
+        badge.innerText = '0';
+    }
+}
+
+function toggleChatInternoPopup() {
+    const chat = document.getElementById('internal-chat-window');
+    if (!chat) return;
+    chat.classList.toggle('hidden');
+
+    const abierto = !chat.classList.contains('hidden');
+    if (abierto) {
+        CHAT_NO_LEIDOS = 0;
+        renderBadgeChatInterno();
+        refrescarUsuariosChat();
+        if (CHAT_USUARIO_ACTIVO?.email) {
+            cargarConversacionInterna(CHAT_USUARIO_ACTIVO.email);
+        }
+        const input = document.getElementById('chat-popup-input');
+        if (input) input.focus();
+    }
+}
+window.toggleChatInternoPopup = toggleChatInternoPopup;
 
 function iniciarAnimacionCargaScraper(modo = 'vinted') {
     detenerAnimacionCargaScraper(true);
@@ -1949,15 +1987,20 @@ async function refrescarUsuariosChat() {
         if (!res.ok) throw new Error(data.error || 'No se pudo cargar lista de chat.');
 
         CHAT_USUARIOS = data.usuarios || [];
-        const cont = document.getElementById('lista-chat-usuarios');
-        if (!cont) return;
+        const containers = [
+            document.getElementById('lista-chat-usuarios'),
+            document.getElementById('chat-popup-usuarios')
+        ].filter(Boolean);
+        if (containers.length === 0) return;
 
         if (CHAT_USUARIOS.length === 0) {
-            cont.innerHTML = '<p class="text-[10px] opacity-50">No hay otros usuarios autorizados.</p>';
+            containers.forEach((cont) => {
+                cont.innerHTML = '<p class="text-[10px] opacity-50">No hay otros usuarios autorizados.</p>';
+            });
             return;
         }
 
-        cont.innerHTML = CHAT_USUARIOS.map(u => {
+        const html = CHAT_USUARIOS.map(u => {
             const activo = CHAT_USUARIO_ACTIVO && CHAT_USUARIO_ACTIVO.email === u.email;
             const nombre = u.nombreVisible || u.email.split('@')[0];
             return `
@@ -1971,6 +2014,7 @@ async function refrescarUsuariosChat() {
                     </div>
                 </button>`;
         }).join('');
+        containers.forEach((cont) => { cont.innerHTML = html; });
     } catch (e) {
         console.error('Error chat usuarios:', e.message);
     }
@@ -1979,9 +2023,14 @@ async function refrescarUsuariosChat() {
 function seleccionarUsuarioChat(email) {
     CHAT_USUARIO_ACTIVO = CHAT_USUARIOS.find(u => u.email === email) || null;
     const header = document.getElementById('chat-header-usuario');
+    const headerPopup = document.getElementById('chat-popup-header-usuario');
+    const nombreCabecera = CHAT_USUARIO_ACTIVO
+        ? `Chat con ${CHAT_USUARIO_ACTIVO.nombreVisible || CHAT_USUARIO_ACTIVO.email.split('@')[0]}`
+        : 'Selecciona un usuario';
     if (header && CHAT_USUARIO_ACTIVO) {
-        header.innerText = `Chat con ${CHAT_USUARIO_ACTIVO.nombreVisible || CHAT_USUARIO_ACTIVO.email.split('@')[0]}`;
+        header.innerText = nombreCabecera;
     }
+    if (headerPopup) headerPopup.innerText = nombreCabecera;
     refrescarUsuariosChat();
     cargarConversacionInterna(email);
 }
@@ -1992,16 +2041,21 @@ async function cargarConversacionInterna(email) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'No se pudo cargar la conversación.');
 
-        const cont = document.getElementById('chat-conversacion');
-        if (!cont) return;
+        const containers = [
+            document.getElementById('chat-conversacion'),
+            document.getElementById('chat-popup-conversacion')
+        ].filter(Boolean);
+        if (containers.length === 0) return;
         const mensajes = data.mensajes || [];
 
         if (mensajes.length === 0) {
-            cont.innerHTML = '<p class="text-[10px] opacity-45">Aún no hay mensajes en esta conversación.</p>';
+            containers.forEach((cont) => {
+                cont.innerHTML = '<p class="text-[10px] opacity-45">Aún no hay mensajes en esta conversación.</p>';
+            });
             return;
         }
 
-        cont.innerHTML = mensajes.map(m => {
+        const html = mensajes.map(m => {
             const mio = m.deEmail === USUARIO_EMAIL_ACTUAL;
             const fecha = new Date(m.creadoEn).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
             return `
@@ -2013,14 +2067,23 @@ async function cargarConversacionInterna(email) {
                 </div>`;
         }).join('');
 
-        cont.scrollTop = cont.scrollHeight;
+        containers.forEach((cont) => {
+            cont.innerHTML = html;
+            cont.scrollTop = cont.scrollHeight;
+        });
     } catch (e) {
         console.error('Error conversación:', e.message);
     }
 }
 
-async function enviarMensajeInterno() {
-    const input = document.getElementById('chat-input-mensaje');
+async function enviarMensajeInterno(origen = 'panel') {
+    const input = origen === 'popup'
+        ? document.getElementById('chat-popup-input')
+        : document.getElementById('chat-input-mensaje');
+    const inputAlternativo = origen === 'popup'
+        ? document.getElementById('chat-input-mensaje')
+        : document.getElementById('chat-popup-input');
+
     const texto = (input?.value || '').trim();
     if (!texto) return;
     if (!CHAT_USUARIO_ACTIVO) return alert('Selecciona un usuario para enviar mensaje.');
@@ -2035,7 +2098,8 @@ async function enviarMensajeInterno() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'No se pudo enviar el mensaje.');
 
-        input.value = '';
+        if (input) input.value = '';
+        if (inputAlternativo) inputAlternativo.value = '';
         await cargarConversacionInterna(CHAT_USUARIO_ACTIVO.email);
     } catch (e) {
         alert(`Error enviando mensaje: ${e.message}`);
@@ -4133,6 +4197,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('login-box').classList.add('hidden'); 
             document.getElementById('panel-control').classList.remove('hidden'); 
             document.getElementById('ticker-bar').classList.remove('hidden'); 
+            document.getElementById('internal-chat-btn')?.classList.remove('hidden');
             document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario.split('@')[0]} [${data.rol}]`; 
 
             const cards3D = document.querySelectorAll('.kpi-3d-card');
@@ -4155,6 +4220,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             await refrescarCategoriasCloud();
             await reloadCoreData(true); 
             await cargarNotasBoard();
+            await refrescarUsuariosChat();
+            iniciarAutoRefreshChat();
             actualizarVistaFotosFormulario();
         }
     } catch(e){ console.error("Error en la inicialización:", e); }

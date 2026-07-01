@@ -1074,6 +1074,38 @@
         <span class="text-2xl drop-shadow-md">✨</span>
     </div>
 
+    <div id="internal-chat-btn" onclick="toggleChatInternoPopup()" class="hidden fixed bottom-6 right-24 w-14 h-14 bg-gradient-to-r from-cyan-600 to-blue-700 rounded-full shadow-[0_0_20px_rgba(14,165,233,0.45)] flex items-center justify-center cursor-pointer hover:scale-110 transition-transform z-[900] active:scale-95 border-2 border-white/20">
+        <span class="text-2xl drop-shadow-md">💬</span>
+        <span id="internal-chat-badge" class="hidden absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center border border-white/20">0</span>
+    </div>
+
+    <div id="internal-chat-window" class="hidden fixed bottom-24 right-24 w-[360px] h-[520px] max-h-[72vh] card-bg border rounded-3xl shadow-2xl z-[910] flex flex-col overflow-hidden transition-all duration-300">
+        <div class="bg-gradient-to-r from-cyan-600/20 to-blue-600/20 border-b border-white/10 p-4 flex justify-between items-center shadow-md">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-cyan-600/30 border border-cyan-400/40 flex items-center justify-center text-lg shadow-inner">💬</div>
+                <div>
+                    <h3 class="text-xs font-black uppercase tracking-widest text-cyan-300">Chat Interno</h3>
+                    <p id="chat-popup-header-estado" class="text-[9px] opacity-60 font-mono">Mensajería entre usuarios</p>
+                </div>
+            </div>
+            <button onclick="toggleChatInternoPopup()" class="text-white/50 hover:text-white transition-colors text-lg px-2">✕</button>
+        </div>
+        <div class="flex-1 min-h-0 grid grid-cols-[120px_1fr] gap-2 p-3">
+            <div class="border border-white/10 rounded-xl p-2 bg-black/20 overflow-hidden flex flex-col">
+                <h4 class="text-[9px] font-bold uppercase tracking-widest text-cyan-300 mb-2">Usuarios</h4>
+                <div id="chat-popup-usuarios" class="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1"></div>
+            </div>
+            <div class="border border-white/10 rounded-xl p-2 bg-black/20 flex flex-col min-h-0">
+                <h4 id="chat-popup-header-usuario" class="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-2">Selecciona un usuario</h4>
+                <div id="chat-popup-conversacion" class="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 mb-2"></div>
+                <div class="flex gap-2">
+                    <input type="text" id="chat-popup-input" placeholder="Escribe un mensaje..." class="input-bg border flex-1 rounded-xl px-3 py-2 text-xs focus:outline-none" onkeydown="if(event.key==='Enter'){event.preventDefault(); enviarMensajeInterno('popup');}">
+                    <button onclick="enviarMensajeInterno('popup')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-2 rounded-xl text-xs">Enviar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="ai-chat-window" class="hidden fixed bottom-24 right-6 w-[340px] h-[500px] max-h-[70vh] card-bg border rounded-3xl shadow-2xl z-[900] flex flex-col overflow-hidden transition-all duration-300">
 
     <!-- Tailwind Safelist hack para que cargue los colores generados por JS -->

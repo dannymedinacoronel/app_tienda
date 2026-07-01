@@ -63,6 +63,34 @@ socket.on('mensaje_interno_nuevo', (data) => {
             renderBadgeChatInterno();
         }
 
+function mostrarLandingPublica() {
+    const landing = document.getElementById('landing-page');
+    const login = document.getElementById('login-box');
+    const panel = document.getElementById('panel-control');
+    const ticker = document.getElementById('ticker-bar');
+    const chatBtn = document.getElementById('internal-chat-btn');
+
+    if (landing) landing.classList.remove('hidden');
+    if (login) login.classList.add('hidden');
+    if (panel) panel.classList.add('hidden');
+    if (ticker) ticker.classList.add('hidden');
+    if (chatBtn) chatBtn.classList.add('hidden');
+}
+
+function abrirAccesoDesdeLanding(modo = 'login') {
+    const landing = document.getElementById('landing-page');
+    const login = document.getElementById('login-box');
+    if (landing) landing.classList.add('hidden');
+    if (login) login.classList.remove('hidden');
+
+    if (modo === 'registro') {
+        toggleRegistroNegocioModal(true);
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.abrirAccesoDesdeLanding = abrirAccesoDesdeLanding;
+
         if (data.deEmail !== USUARIO_EMAIL_ACTUAL) {
             reproducirSonidoMensaje('receive');
         }
@@ -4508,6 +4536,7 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         configurarForzadoHorizontal();
+        mostrarLandingPublica();
         const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' }); 
         const data = await res.json();
         
@@ -4519,6 +4548,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 socket.emit('join_empresa', EMPRESA_CHAT_ACTUAL);
             }
             setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
+            document.getElementById('landing-page')?.classList.add('hidden');
             document.getElementById('login-box').classList.add('hidden'); 
             document.getElementById('panel-control').classList.remove('hidden'); 
             document.getElementById('ticker-bar').classList.remove('hidden'); 

@@ -2725,10 +2725,42 @@ async function renderizarMapaDeLogins() {
             return;
         }
         
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
         renderer.setSize(container.offsetWidth, container.offsetHeight);
         container.appendChild(renderer.domElement);
         const scene = new THREE.Scene();
+
+        const abrirDetallePuntoMapa = (d) => {
+            if (!d) return;
+            const modal = document.getElementById('modal-mapa-detalle');
+            const titulo = document.getElementById('detalle-mapa-titulo');
+            const lista = document.getElementById('detalle-mapa-lista');
+            if (!modal || !titulo || !lista) return;
+
+            titulo.innerText = `Actividad en ${d.ciudad || 'Ubicación desconocida'}`;
+            const ipResumen = (d.ips || []).slice(0, 5).map(x => `${x.ip} (${x.count})`).join(' · ');
+            lista.innerHTML = (d.eventos && d.eventos.length > 0) ? d.eventos.map(ev => {
+                const isLogout = String(ev.accion || '').includes('Cerró');
+                const color = isLogout ? 'text-rose-400' : 'text-emerald-400';
+                const icon = isLogout ? '🚪' : '🔑';
+                const dateObj = new Date(ev.fecha);
+                const dateStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString();
+                return `<div class="p-3 bg-black/20 border border-white/5 rounded-xl flex flex-col gap-1.5 shadow-sm">
+                            <div class="flex justify-between items-center border-b border-white/5 pb-1">
+                                <span class="${color} font-black text-[10px] uppercase">${icon} ${ev.accion}</span>
+                                <span class="text-[9px] opacity-50 font-mono">${dateStr}</span>
+                            </div>
+                            <span class="text-white/80 font-mono text-[10px] mt-0.5">👤 ${ev.usuario}</span>
+                            <span class="text-cyan-300/80 font-mono text-[10px]">🌐 IP: ${ev.ip || 'N/A'}</span>
+                        </div>`;
+            }).join('') : '<div class="opacity-50 italic">Sin actividad reciente.</div>';
+
+            if (ipResumen) {
+                lista.innerHTML = `<div class="mb-3 p-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-[10px] font-mono text-cyan-200">Top IPs zona: ${ipResumen}</div>` + lista.innerHTML;
+            }
+            modal.classList.remove('hidden');
+        };
 
         const globe = new ThreeGlobe({ waitForGlobeReady: true, animateIn: true })
             .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')
@@ -2739,31 +2771,6 @@ async function renderizarMapaDeLogins() {
             .polygonStrokeColor(() => '#6b21a8')
             .pointsData(locations).pointLat('lat').pointLng('lon')
             .pointColor(() => '#67e8f9').pointAltitude(0.02).pointRadius(d => 0.15 + d.count * 0.08)
-            .onPointClick(d => {
-                const modal = document.getElementById('modal-mapa-detalle'), titulo = document.getElementById('detalle-mapa-titulo'), lista = document.getElementById('detalle-mapa-lista');
-                if (!modal || !titulo || !lista) return;
-                titulo.innerText = `Actividad en ${d.ciudad}`;
-                const ipResumen = (d.ips || []).slice(0, 5).map(x => `${x.ip} (${x.count})`).join(' · ');
-                lista.innerHTML = (d.eventos && d.eventos.length > 0) ? d.eventos.map(ev => {
-                    const isLogout = ev.accion.includes('Cerró');
-                    const color = isLogout ? 'text-rose-400' : 'text-emerald-400';
-                    const icon = isLogout ? '🚪' : '🔑';
-                    const dateObj = new Date(ev.fecha);
-                    const dateStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString();
-                    return `<div class="p-3 bg-black/20 border border-white/5 rounded-xl flex flex-col gap-1.5 shadow-sm">
-                                <div class="flex justify-between items-center border-b border-white/5 pb-1">
-                                    <span class="${color} font-black text-[10px] uppercase">${icon} ${ev.accion}</span>
-                                    <span class="text-[9px] opacity-50 font-mono">${dateStr}</span>
-                                </div>
-                                <span class="text-white/80 font-mono text-[10px] mt-0.5">👤 ${ev.usuario}</span>
-                                <span class="text-cyan-300/80 font-mono text-[10px]">🌐 IP: ${ev.ip || 'N/A'}</span>
-                            </div>`;
-                }).join('') : '<div class="opacity-50 italic">Sin actividad reciente.</div>';
-                if (ipResumen) {
-                    lista.innerHTML = `<div class="mb-3 p-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 text-[10px] font-mono text-cyan-200">Top IPs zona: ${ipResumen}</div>` + lista.innerHTML;
-                }
-                modal.classList.remove('hidden');
-            })
             .ringsData(locations).ringLat('lat').ringLng('lon')
             .ringColor(() => (t) => `rgba(34, 211, 238, ${1-t})`)
             .ringMaxRadius(d => 3 + d.count * 0.5).ringPropagationSpeed(d => 2 + d.count * 0.2).ringRepeatPeriod(1000);
@@ -2788,7 +2795,7 @@ async function renderizarMapaDeLogins() {
 
         const starGeometry = new THREE.BufferGeometry();
         const starVertices = [];
-        for (let i = 0; i < 10000; i++) {
+        for (let i = 0; i < 2500; i++) {
             const x = THREE.MathUtils.randFloatSpread(2000);
             const y = THREE.MathUtils.randFloatSpread(2000);
             const z = THREE.MathUtils.randFloatSpread(2000);
@@ -2808,19 +2815,45 @@ async function renderizarMapaDeLogins() {
         let isDragging = false;
         let lastX = 0;
         let lastY = 0;
+        let dragDistance = 0;
         let zoom = 240;
+
+        const raycaster = new THREE.Raycaster();
+        raycaster.params.Points = raycaster.params.Points || {};
+        raycaster.params.Points.threshold = 1.2;
+        const mouse = new THREE.Vector2();
 
         renderer.domElement.addEventListener('pointerdown', (ev) => {
             isDragging = true;
             lastX = ev.clientX;
             lastY = ev.clientY;
+            dragDistance = 0;
         });
-        renderer.domElement.addEventListener('pointerup', () => { isDragging = false; });
+        renderer.domElement.addEventListener('pointerup', (ev) => {
+            isDragging = false;
+
+            // Click sin arrastre: resolver punto manualmente (compatibilidad con versiones sin onPointClick).
+            if (dragDistance > 5) return;
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const hits = raycaster.intersectObjects(scene.children, true);
+            const hitConData = hits.find(h => {
+                const d = h?.object?.__data;
+                return d && Number.isFinite(d.lat) && Number.isFinite(d.lon);
+            });
+            if (hitConData?.object?.__data) {
+                abrirDetallePuntoMapa(hitConData.object.__data);
+            }
+        });
         renderer.domElement.addEventListener('pointerleave', () => { isDragging = false; });
         renderer.domElement.addEventListener('pointermove', (ev) => {
             if (!isDragging) return;
             const dx = ev.clientX - lastX;
             const dy = ev.clientY - lastY;
+            dragDistance += Math.abs(dx) + Math.abs(dy);
             globe.rotation.y += dx * 0.004;
             globe.rotation.x += dy * 0.002;
             globe.rotation.x = Math.max(-0.6, Math.min(0.6, globe.rotation.x));
@@ -3993,7 +4026,6 @@ function renderKanban(isFullRefresh = false) {
     BASE_DATOS.filter(x => { const eConfig = LISTA_ESTADOS_KANBAN.find(e => e.nombre === x.estado); return eConfig && eConfig.rolFinanciero === 'Stock'; }).forEach(x => { totalStockPorPrenda[x.prenda] = (totalStockPorPrenda[x.prenda] || 0) + 1; });
 
     LISTA_ESTADOS_KANBAN.forEach(est => {
-        let vCount = 0;
         const colDom = document.getElementById(`col-dinamica-${est._id}`);
         if(!colDom) return;
 
@@ -4023,6 +4055,7 @@ function renderKanban(isFullRefresh = false) {
         });
 
         const itemsToRender = isFullRefresh ? filtrados : filtrados.filter(v => !document.getElementById(v._id));
+        const fragment = document.createDocumentFragment();
 
         itemsToRender.forEach(v => {
             const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
@@ -4030,6 +4063,8 @@ function renderKanban(isFullRefresh = false) {
             const esStockCritico = est.rolFinanciero === 'Stock' && totalStockPorPrenda[v.prenda] < 2;
             const claseAlertaStock = esStockCritico ? 'alerta-stock-critico border-amber-500/70 bg-amber-500/5' : '';
             card.className = `kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none ${claseAlertaStock} border-${est.color}-500/30`;
+            card.style.contentVisibility = 'auto';
+            card.style.containIntrinsicSize = '150px';
 
             const esScraping = (v.sku && v.sku.startsWith('VNT-')) || (v.comentariosProducto && v.comentariosProducto.includes('Importado'));
             const badgeScraping = esScraping ? `<div class="absolute -top-1.5 -right-1.5 bg-blue-600 rounded-full w-4 h-4 flex items-center justify-center text-[8px] shadow-lg border border-blue-300" title="Alojado en MongoDB (Vía Web/Scraping)">🌐</div>` : '';
@@ -4078,9 +4113,12 @@ function renderKanban(isFullRefresh = false) {
                     <button onclick="deleteItem('${v._id}'); event.stopPropagation();" class="opacity-30 hover:opacity-100 text-xs px-0.5" title="Borrar">✕</button>
                 </div>`;
 
-            colDom.appendChild(card);
-            vCount += (v.cantidad || 1);
+            fragment.appendChild(card);
         });
+
+        if (fragment.childNodes.length > 0) {
+            colDom.appendChild(fragment);
+        }
         
         const badgeDom = document.getElementById(`badge-kanban-${est._id}`);
         if(badgeDom) badgeDom.innerText = filtrados.length;

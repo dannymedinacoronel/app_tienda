@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { OAuth2Client } = require('google-auth-library'); 
 const session = require('express-session'); 
-const MongoStore = require('connect-mongo'); // Cambiado de MongoStoreModule a MongoStore
+const MongoStore = require('connect-mongo').default; // Corregido para manejar el export por defecto
 const mongoose = require('mongoose');
 const path = require('path');
 const axios = require('axios');

@@ -1096,13 +1096,24 @@
                 <button onclick="iniciarScraping()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95">Analizar</button>
                 <button onclick="guardarUrlScraping()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-3 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95" title="Guardar Favorito">💾</button>
             </div>
+            <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                <input type="text" id="scraper-url-alias" placeholder="Alias opcional (ej: Vinted Danny)" class="input-bg border rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-indigo-500">
+                <span class="text-[10px] opacity-60 px-2 py-2.5">Se guarda alias + URL para reutilizar rápido.</span>
+            </div>
 
             <div class="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl mt-2">
                 <p class="text-[10px] text-amber-500 font-bold uppercase mb-1">💡 RECOMENDACIÓN ANTI-BLOQUEO:</p>
                 <p class="text-[10px] opacity-80 leading-tight">Vinted bloquea a Render. Para un escaneo 100% fiable, usa el <b>Manual Scraper</b> en tu <a href="https://github.com/dannymedinacoronel/app_tienda/actions" target="_blank" class="underline text-blue-400">GitHub Actions</a>.</p>
             </div>
 
-            <div id="scraper-saved-urls" class="hidden flex flex-col gap-1.5 max-h-32 overflow-y-auto pr-1"></div>
+            <div class="bg-white/5 border border-white/10 rounded-2xl p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <p class="text-[10px] font-bold uppercase tracking-widest opacity-70">Favoritos de Scraper</p>
+                    <span class="text-[9px] opacity-50">Alias + URL visible</span>
+                </div>
+                <div id="scraper-saved-urls" class="hidden flex flex-col gap-1.5 max-h-36 overflow-y-auto pr-1"></div>
+                <p id="scraper-saved-urls-empty" class="text-[10px] opacity-45">Aun no tienes favoritos guardados.</p>
+            </div>
 
             <div class="mt-2 text-center">
                 <span class="text-[10px] opacity-40 uppercase font-bold">— O —</span>
@@ -1118,6 +1129,20 @@
         <div id="scraper-step-2" class="hidden flex flex-col gap-3">
             <div class="bg-blue-600/10 border border-blue-500/20 rounded-2xl p-4 mb-2">
                 <p id="scraper-summary-text" class="text-xs font-semibold text-blue-300 leading-relaxed"></p>
+                <div class="grid grid-cols-3 gap-2 mt-3">
+                    <div class="bg-amber-500/10 border border-amber-500/20 rounded-xl px-2 py-1.5 text-center">
+                        <p class="text-[9px] uppercase opacity-70">Cambios</p>
+                        <p id="scraper-metric-disc" class="text-sm font-black text-amber-400">0</p>
+                    </div>
+                    <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2 py-1.5 text-center">
+                        <p class="text-[9px] uppercase opacity-70">Nuevos</p>
+                        <p id="scraper-metric-nuevos" class="text-sm font-black text-emerald-400">0</p>
+                    </div>
+                    <div class="bg-slate-500/10 border border-slate-500/20 rounded-xl px-2 py-1.5 text-center">
+                        <p class="text-[9px] uppercase opacity-70">Sin cambios</p>
+                        <p id="scraper-metric-identicos" class="text-sm font-black text-slate-300">0</p>
+                    </div>
+                </div>
                 <p class="text-[10px] opacity-70 mt-2 font-mono text-emerald-300">💡 Tip: Ahora puedes modificar el Título y Precio de los artículos detectados directamente en los recuadros antes de darle a importar.</p>
             </div>
             
@@ -1172,9 +1197,22 @@
             </div>
         </div>
         
-        <div id="scraper-loader" class="hidden py-10 flex flex-col items-center justify-center gap-3">
-            <div class="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <span class="text-xs font-mono opacity-70">Extrayendo y comparando datos de la web...</span>
+        <div id="scraper-loader" class="hidden py-8 px-2 flex flex-col items-center justify-center gap-4">
+            <div class="w-full max-w-xl bg-white/5 border border-white/10 rounded-2xl p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 id="scraper-loader-title" class="text-sm font-black uppercase tracking-wide text-blue-300">Analizando Vinted...</h3>
+                    <span id="scraper-loader-percent" class="text-xs font-mono text-blue-300">0%</span>
+                </div>
+                <div class="w-full h-2.5 bg-black/40 rounded-full overflow-hidden border border-white/10">
+                    <div id="scraper-loader-bar" class="h-full rounded-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500 transition-all duration-500" style="width:0%"></div>
+                </div>
+                <p id="scraper-loader-status" class="text-[11px] mt-2 text-white/85">Iniciando proceso...</p>
+                <p id="scraper-loader-message" class="text-[10px] mt-1 opacity-65">Preparando conexión con GitHub Actions y extrayendo productos...</p>
+            </div>
+            <div class="flex items-center gap-2 text-[10px] opacity-55">
+                <span class="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                <span>No cierres este modal, los resultados aparecerán automáticamente.</span>
+            </div>
         </div>
     </div>
 </div>

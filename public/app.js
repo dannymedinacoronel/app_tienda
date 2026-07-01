@@ -19,6 +19,18 @@ let CONFIG_ORDEN_COLUMNAS = { 'No Vendido': 'reciente', 'Vendido': 'reciente', '
 let CONFIG_FILTRO_COLUMNAS = { 'No Vendido': '', 'Vendido': '', 'Devuelto': '', 'Reservado': '' };
 let CALENDARIO_MES = new Date().getMonth() + 1;
 let CALENDARIO_ANIO = new Date().getFullYear();
+let SCRAPER_PROGRESS_INTERVAL = null;
+let SCRAPER_PROGRESS_VALUE = 0;
+let SCRAPER_PROGRESS_MSG_INDEX = 0;
+
+const SCRAPER_PROGRESS_MESSAGES = [
+    'Conectando con GitHub Actions...',
+    'Iniciando worker remoto anti-bloqueo...',
+    'Cargando contenido de Vinted...',
+    'Detectando productos y precios...',
+    'Comparando con inventario en MongoDB...',
+    'Preparando panel de resultados...'
+];
 
 // --- INICIALIZACIÓN DE SOCKET.IO ---
 const socket = io({
@@ -35,6 +47,7 @@ socket.on('connect_error', (error) => {
 
 socket.on('scraper_update', async (data) => {
     console.log('[SOCKET] Datos recibidos de GitHub:', data);
+    actualizarCargaScraper(96, 'Recibiendo resultados del worker remoto...', 'Procesando resultados');
 
     const productos = Array.isArray(data?.productos) ? data.productos : [];
 
@@ -53,6 +66,9 @@ socket.on('scraper_update', async (data) => {
         resultadosScraperActual = comparativa;
         renderizarResultadosScraping(resultadosScraperActual);
 
+        actualizarCargaScraper(100, 'Resultados listos para revisar e importar.', 'Completado');
+        detenerAnimacionCargaScraper();
+
         mostrarNotificacionScraping({
             mensaje: `Escaneo finalizado. Productos detectados: ${productos.length}.`,
             success: true
@@ -64,11 +80,86 @@ socket.on('scraper_update', async (data) => {
         document.getElementById('scraper-step-2').classList.remove('hidden');
     } catch (e) {
         console.error('Error procesando comparativa de GitHub:', e);
+        detenerAnimacionCargaScraper();
         document.getElementById('scraper-loader').classList.add('hidden');
         document.getElementById('scraper-step-1').classList.remove('hidden');
         alert('No se pudieron procesar los resultados del scraper remoto. Revisa logs de Render/GitHub.');
     }
 });
+
+function actualizarCargaScraper(percent, message, status) {
+    const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
+    SCRAPER_PROGRESS_VALUE = clamped;
+
+    const bar = document.getElementById('scraper-loader-bar');
+    const percentEl = document.getElementById('scraper-loader-percent');
+    const msgEl = document.getElementById('scraper-loader-message');
+    const statusEl = document.getElementById('scraper-loader-status');
+
+    if (bar) bar.style.width = `${clamped}%`;
+    if (percentEl) percentEl.innerText = `${Math.round(clamped)}%`;
+    if (msgEl && message) msgEl.innerText = message;
+    if (statusEl && status) statusEl.innerText = status;
+}
+
+function iniciarAnimacionCargaScraper(modo = 'vinted') {
+    detenerAnimacionCargaScraper(true);
+    SCRAPER_PROGRESS_MSG_INDEX = 0;
+    const titleEl = document.getElementById('scraper-loader-title');
+    if (titleEl) {
+        titleEl.innerText = modo === 'archivo' ? 'Procesando Archivo...' : 'Analizando Vinted...';
+    }
+
+    actualizarCargaScraper(
+        4,
+        modo === 'archivo' ? 'Leyendo archivo y limpiando datos...' : 'Preparando conexión segura con el scraper remoto...',
+        'Inicializando'
+    );
+
+    SCRAPER_PROGRESS_INTERVAL = setInterval(() => {
+        const next = SCRAPER_PROGRESS_VALUE + (SCRAPER_PROGRESS_VALUE < 40 ? 8 : SCRAPER_PROGRESS_VALUE < 75 ? 5 : 2);
+        const capped = Math.min(92, next);
+        const msg = SCRAPER_PROGRESS_MESSAGES[SCRAPER_PROGRESS_MSG_INDEX % SCRAPER_PROGRESS_MESSAGES.length];
+        SCRAPER_PROGRESS_MSG_INDEX += 1;
+        actualizarCargaScraper(capped, msg, 'En progreso');
+
+        if (capped >= 92) {
+            clearInterval(SCRAPER_PROGRESS_INTERVAL);
+            SCRAPER_PROGRESS_INTERVAL = null;
+        }
+    }, 1600);
+}
+
+function detenerAnimacionCargaScraper(silent = false) {
+    if (SCRAPER_PROGRESS_INTERVAL) {
+        clearInterval(SCRAPER_PROGRESS_INTERVAL);
+        SCRAPER_PROGRESS_INTERVAL = null;
+    }
+    if (!silent) {
+        actualizarCargaScraper(100, 'Proceso finalizado.', 'Completado');
+    }
+}
+
+function getSavedScraperUrls() {
+    const raw = JSON.parse(localStorage.getItem('seychelles-scraper-urls') || '[]');
+    if (!Array.isArray(raw)) return [];
+    return raw
+        .map((item) => {
+            if (typeof item === 'string') {
+                return { alias: '', url: item, createdAt: Date.now() };
+            }
+            return {
+                alias: String(item?.alias || '').trim(),
+                url: String(item?.url || '').trim(),
+                createdAt: Number(item?.createdAt) || Date.now()
+            };
+        })
+        .filter((it) => it.url);
+}
+
+function setSavedScraperUrls(items) {
+    localStorage.setItem('seychelles-scraper-urls', JSON.stringify(items.slice(0, 8)));
+}
 
 function mostrarNotificacionScraping(data) {
     // Si ya existe un toast de scraping, lo quitamos
@@ -169,8 +260,10 @@ async function iniciarScraping() {
 
     document.getElementById('scraper-step-1').classList.add('hidden');
     document.getElementById('scraper-loader').classList.remove('hidden');
+    iniciarAnimacionCargaScraper('vinted');
 
     try {
+        actualizarCargaScraper(14, 'Enviando solicitud al backend...', 'Lanzando análisis');
         const response = await fetch(`${BACKEND_URL}/api/scraper/analizar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -186,19 +279,15 @@ async function iniciarScraping() {
             // MOSTRAR LOADING EN EL SCRAPER
             document.getElementById('scraper-step-1').classList.add('hidden');
             document.getElementById('scraper-loader').classList.remove('hidden');
-            
-            // Texto dinámico para que el usuario sepa que está esperando a GitHub
-            const loaderTitle = document.querySelector('#scraper-loader h3');
-            if (loaderTitle) loaderTitle.innerText = "GitHub Actions está analizando Vinted...";
-            
-            const loaderText = document.querySelector('#scraper-loader p');
-            if (loaderText) loaderText.innerText = "Esto tardará unos 2 minutos. No cierres el modal, los resultados aparecerán aquí automáticamente.";
+
+            actualizarCargaScraper(25, 'GitHub Actions ya está trabajando. Te aviso aquí en cuanto termine.', 'Esperando worker remoto');
 
             return;
         }
 
         resultadosScraperActual = data;
         renderizarResultadosScraping(resultadosScraperActual);
+        detenerAnimacionCargaScraper();
 
         document.getElementById('scraper-loader').classList.add('hidden');
         document.getElementById('scraper-step-2').classList.remove('hidden');
@@ -210,6 +299,7 @@ async function iniciarScraping() {
             badge.classList.remove('hidden');
         }
     } catch (error) {
+        detenerAnimacionCargaScraper(true);
         alert("❌ " + error.message);
         document.getElementById('scraper-loader').classList.add('hidden');
         document.getElementById('scraper-step-1').classList.remove('hidden');
@@ -222,6 +312,7 @@ async function procesarArchivoManual(event) {
 
     document.getElementById('scraper-step-1').classList.add('hidden');
     document.getElementById('scraper-loader').classList.remove('hidden');
+    iniciarAnimacionCargaScraper('archivo');
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -307,6 +398,8 @@ async function procesarArchivoManual(event) {
             resultadosScraperActual = await response.json();
             renderizarResultadosScraping(resultadosScraperActual);
 
+            detenerAnimacionCargaScraper();
+
             document.getElementById('scraper-loader').classList.add('hidden');
             document.getElementById('scraper-step-2').classList.remove('hidden');
             
@@ -317,6 +410,7 @@ async function procesarArchivoManual(event) {
                 badge.classList.remove('hidden');
             }
         } catch (error) {
+            detenerAnimacionCargaScraper(true);
             alert("❌ Error al leer el archivo: " + error.message);
             procesarScraperVinted();
         }
@@ -348,6 +442,13 @@ function renderizarResultadosScraping(data) {
     const discCount = data.discrepancias?.length || 0;
     const nuevoCount = data.nuevos?.length || 0;
     const identCount = data.identicos?.length || 0;
+
+    const mDisc = document.getElementById('scraper-metric-disc');
+    const mNuevos = document.getElementById('scraper-metric-nuevos');
+    const mIdent = document.getElementById('scraper-metric-identicos');
+    if (mDisc) mDisc.innerText = String(discCount);
+    if (mNuevos) mNuevos.innerText = String(nuevoCount);
+    if (mIdent) mIdent.innerText = String(identCount);
 
     summaryText.innerHTML = `Análisis completado. He comparado Vinted con tu inventario de MongoDB:<br>
         • <span class="text-amber-400 font-bold">${discCount} cambios de precio</span>: Se han detectado modificaciones en Vinted que no tienes en el sistema.<br>
@@ -562,41 +663,76 @@ async function deleteItemFromScraper(id) {
 
 function guardarUrlScraping() {
     const url = document.getElementById('scraper-url').value.trim();
+    const alias = (document.getElementById('scraper-url-alias')?.value || '').trim();
     if(!url) return;
-    let saved = JSON.parse(localStorage.getItem('seychelles-scraper-urls') || '[]');
-    if(!saved.includes(url)) {
-        saved.unshift(url);
-        if(saved.length > 5) saved.pop();
-        localStorage.setItem('seychelles-scraper-urls', JSON.stringify(saved));
-        renderSavedUrls();
-        cantarPorVoz("URL guardada.");
+
+    const saved = getSavedScraperUrls();
+    const idx = saved.findIndex(item => item.url === url);
+
+    const payload = {
+        url,
+        alias,
+        createdAt: Date.now()
+    };
+
+    if (idx >= 0) {
+        const existente = saved[idx];
+        saved.splice(idx, 1);
+        saved.unshift({ ...existente, ...payload, alias: alias || existente.alias || '' });
+    } else {
+        saved.unshift(payload);
     }
+
+    setSavedScraperUrls(saved);
+    renderSavedUrls();
+    if (document.getElementById('scraper-url-alias')) document.getElementById('scraper-url-alias').value = '';
+    cantarPorVoz("Favorito guardado.");
+}
+
+function cargarFavoritoScraper(idx) {
+    const saved = getSavedScraperUrls();
+    const item = saved[idx];
+    if (!item) return;
+    document.getElementById('scraper-url').value = item.url;
+    const aliasInput = document.getElementById('scraper-url-alias');
+    if (aliasInput) aliasInput.value = item.alias || '';
 }
 
 function renderSavedUrls() {
     const container = document.getElementById('scraper-saved-urls');
+    const empty = document.getElementById('scraper-saved-urls-empty');
     if(!container) return;
-    const saved = JSON.parse(localStorage.getItem('seychelles-scraper-urls') || '[]');
+    const saved = getSavedScraperUrls();
     if(saved.length === 0) {
         container.classList.add('hidden');
+        if (empty) empty.classList.remove('hidden');
         return;
     }
     container.classList.remove('hidden');
-    let html = '<p class="text-[9px] font-bold uppercase opacity-40 mb-1">Favoritos:</p>';
-    saved.forEach((url, idx) => {
+    if (empty) empty.classList.add('hidden');
+
+    let html = '';
+    saved.forEach((item, idx) => {
+        const aliasSafe = item.alias || `Favorito ${idx + 1}`;
         html += `
-            <div class="flex items-center justify-between gap-2 p-2 bg-black/20 rounded-xl group hover:bg-black/40 transition-colors">
-                <span class="text-[10px] truncate flex-1 cursor-pointer hover:text-blue-400 font-mono" onclick="document.getElementById('scraper-url').value='${url}'">${url}</span>
-                <button onclick="eliminarUrlGuardada(${idx})" class="text-rose-500 text-[10px] font-bold px-1 hover:scale-125 transition-transform">✕</button>
+            <div class="flex items-center justify-between gap-2 p-2 bg-black/20 rounded-xl group hover:bg-black/40 transition-colors border border-white/5">
+                <div class="min-w-0 flex-1 cursor-pointer" onclick="cargarFavoritoScraper(${idx})">
+                    <p class="text-[10px] font-bold uppercase tracking-wide text-indigo-300 truncate">${aliasSafe}</p>
+                    <p class="text-[9px] truncate opacity-70 font-mono">${item.url}</p>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button onclick="cargarFavoritoScraper(${idx})" class="text-[9px] px-2 py-1 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/40 transition-colors">Usar</button>
+                    <button onclick="eliminarUrlGuardada(${idx})" class="text-rose-500 text-[10px] font-bold px-2 py-1 rounded-lg hover:bg-rose-500/20 transition-colors">✕</button>
+                </div>
             </div>`;
     });
     container.innerHTML = html;
 }
 
 function eliminarUrlGuardada(idx) {
-    let saved = JSON.parse(localStorage.getItem('seychelles-scraper-urls') || '[]');
+    let saved = getSavedScraperUrls();
     saved.splice(idx, 1);
-    localStorage.setItem('seychelles-scraper-urls', JSON.stringify(saved));
+    setSavedScraperUrls(saved);
     renderSavedUrls();
 }
 

@@ -22,7 +22,6 @@ jobs:
 
       - name: Validate secrets
         run: |
-          if [ -z "${{ secrets.MONGO_URI }}" ]; then echo "❌ MONGO_URI is missing"; exit 1; fi
           if [ -z "${{ secrets.MY_WEB_URL }}" ]; then echo "❌ MY_WEB_URL is missing"; exit 1; fi
           if [ -z "${{ secrets.SCRAPER_TOKEN }}" ]; then echo "❌ SCRAPER_TOKEN is missing"; exit 1; fi
 
@@ -31,7 +30,6 @@ jobs:
 
       - name: Execute Manual Scrape
         env:
-          MONGO_URI: ${{ secrets.MONGO_URI }}
           MY_WEB_URL: ${{ secrets.MY_WEB_URL }}
           SCRAPER_TOKEN: ${{ secrets.SCRAPER_TOKEN }}
         run: node scripts/manual-scrape.js "${{ github.event.inputs.vinted_url }}"

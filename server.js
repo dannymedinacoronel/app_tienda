@@ -1250,9 +1250,25 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
 
                 if (coincidencia) {
                     if (Math.abs(coincidencia.precioVenta - precioWeb) > 0.01 || coincidencia.prenda !== titulo) {
-                        resultados.discrepancias.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, prendaNueva: titulo, valorAntiguo: coincidencia.precioVenta, valorNuevo: precioWeb, imagen });
+                        resultados.discrepancias.push({
+                            idMongo: coincidencia._id,
+                            prenda: coincidencia.prenda,
+                            prendaNueva: titulo,
+                            valorAntiguo: coincidencia.precioVenta,
+                            valorNuevo: precioWeb,
+                            imagen,
+                            fechaRegistro: coincidencia.fecha || '',
+                            fechaVenta: coincidencia.fechaVenta || ''
+                        });
                     } else {
-                        resultados.identicos.push({ idMongo: coincidencia._id, prenda: coincidencia.prenda, precio: coincidencia.precioVenta, imagen });
+                        resultados.identicos.push({
+                            idMongo: coincidencia._id,
+                            prenda: coincidencia.prenda,
+                            precio: coincidencia.precioVenta,
+                            imagen,
+                            fechaRegistro: coincidencia.fecha || '',
+                            fechaVenta: coincidencia.fechaVenta || ''
+                        });
                     }
                 } else {
                     resultados.nuevos.push({ prenda: titulo, precioVenta: precioWeb, imagen, galeria, canalVenta: 'Vinted', estado: 'No Vendido' });

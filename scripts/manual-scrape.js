@@ -1,19 +1,6 @@
-const mongoose = require('mongoose');
 const axios = require('axios');
 const cheerio = require('cheerio');
 require('dotenv').config();
-
-// Definición mínima de modelos para que el script funcione independientemente
-const VentaRopaSchema = new mongoose.Schema({
-    prenda: String,
-    precioVenta: Number,
-    canalVenta: String,
-    estado: String,
-    imagen: String,
-    fechaCarga: { type: Date, default: Date.now }
-}, { collection: 'VentaRopa' });
-
-const VentaRopa = mongoose.models.VentaRopa || mongoose.model('VentaRopa', VentaRopaSchema);
 
 function construirWebhookTargets(webUrl) {
     if (!webUrl || typeof webUrl !== 'string') return [];
@@ -42,6 +29,56 @@ function construirWebhookTargets(webUrl) {
     }
 
     return [...new Set(targets)];
+}
+
+function extraerObjetoAsignado(scriptContent, nombreVariable) {
+    const token = `${nombreVariable}=`;
+    const idxAsignacion = scriptContent.indexOf(token);
+    if (idxAsignacion === -1) return null;
+
+    const startIdx = scriptContent.indexOf('{', idxAsignacion + token.length);
+    if (startIdx === -1) return null;
+
+    let depth = 0;
+    let inString = false;
+    let stringChar = '';
+    let escaped = false;
+
+    for (let i = startIdx; i < scriptContent.length; i++) {
+        const ch = scriptContent[i];
+
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (ch === '\\') {
+                escaped = true;
+                continue;
+            }
+            if (ch === stringChar) {
+                inString = false;
+                stringChar = '';
+            }
+            continue;
+        }
+
+        if (ch === '"' || ch === "'") {
+            inString = true;
+            stringChar = ch;
+            continue;
+        }
+
+        if (ch === '{') depth++;
+        if (ch === '}') {
+            depth--;
+            if (depth === 0) {
+                return scriptContent.slice(startIdx, i + 1);
+            }
+        }
+    }
+
+    return null;
 }
 
 function normalizarPrecio(valor) {
@@ -156,19 +193,9 @@ async function run() {
         process.exit(1);
     }
 
-    const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
     const secretToken = process.env.SCRAPER_TOKEN;
 
-    if (!mongoUri) {
-        console.error("❌ Error: MONGO_URI no definida en el entorno.");
-        process.exit(1);
-    }
-
     try {
-        console.log(`[CONEXIÓN] Conectando a MongoDB...`);
-        await mongoose.connect(mongoUri);
-        console.log(`[CONEXIÓN] Conectado correctamente.`);
-
         let htmlContent = '';
         console.log(`[SCRAPER] Intento directo para Vinted: ${url}`);
         const response = await axios.get(url, {
@@ -190,12 +217,13 @@ async function run() {
         for (const script of scripts) {
             const content = $(script).html();
             if (content && (content.includes('INITIAL_STATE') || content.includes('items'))) {
-                const jsonMatch = content.match(/window\.__INITIAL_STATE__\s*=\s*({.*?});/s) || 
-                                content.match(/window\.__NUXT__\s*=\s*({.*?});/s) ||
-                                content.match(/\{"items":\[.*?\]\}/s);
-                if (jsonMatch) {
+                const initialStateRaw = extraerObjetoAsignado(content, 'window.__INITIAL_STATE__');
+                const nuxtRaw = extraerObjetoAsignado(content, 'window.__NUXT__');
+                const jsonRaw = initialStateRaw || nuxtRaw;
+
+                if (jsonRaw) {
                     try {
-                        const data = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+                        const data = JSON.parse(jsonRaw);
                         const items = data?.items || data?.catalog?.items || data?.itemsOrRecommendations?.items || [];
                         items.forEach(it => {
                             if (it.title && it.price) {
@@ -207,7 +235,9 @@ async function run() {
                             }
                         });
                         if (productosExtraidos.length > 0) break; 
-                    } catch (e) {}
+                    } catch (e) {
+                        // Seguimos iterando scripts; algunas asignaciones no son JSON puro.
+                    }
                 }
             }
         }
@@ -235,39 +265,6 @@ async function run() {
         }
 
         console.log(`[INFO] Se encontraron ${productosExtraidos.length} productos en la web.`);
-
-        let nuevos = 0;
-        let actualizados = 0;
-
-        // Procesar en lotes o más rápido
-        const bulkOperations = productosExtraidos.map(async (item) => {
-            const coincidencia = await VentaRopa.findOne({ 
-                prenda: item.titulo,
-                canalVenta: 'Vinted'
-            });
-
-            if (coincidencia) {
-                if (Math.abs(coincidencia.precioVenta - item.precio) > 0.1) {
-                    coincidencia.precioVenta = item.precio;
-                    await coincidencia.save();
-                    actualizados++;
-                }
-            } else {
-                await VentaRopa.create({
-                    prenda: item.titulo,
-                    precioVenta: item.precio,
-                    canalVenta: 'Vinted',
-                    estado: 'Disponible',
-                    imagen: item.imagen,
-                    fechaCarga: new Date()
-                });
-                nuevos++;
-            }
-        });
-
-        await Promise.all(bulkOperations);
-
-        console.log(`[RESUMEN] Proceso finalizado. Nuevos: ${nuevos}, Actualizados: ${actualizados}`);
 
         // --- ENVIAR A LA WEB ---
         const webUrl = process.env.MY_WEB_URL;

@@ -369,6 +369,7 @@ function renderizarResultadosScraping(data) {
                     <td class="py-2 px-2">
                         <input type="text" id="disc-item-title-${i}" value="${tituloMostrado}" class="bg-transparent border-b border-white/10 text-[11px] font-bold uppercase w-full focus:outline-none focus:border-amber-400 px-1 py-0.5 text-white" placeholder="Título...">
                         <div class="text-[8px] opacity-40 mt-0.5 lowercase">En Mongo: ${d.prenda}</div>
+                        <div class="text-[8px] opacity-40 mt-0.5 lowercase">Alta: ${d.fechaRegistro || 's/f'}${d.fechaVenta ? ` · Vendido: ${d.fechaVenta}` : ''}</div>
                     </td>
                     <td class="py-2 text-rose-400/50 line-through text-[11px] font-mono text-right">${d.valorAntiguo}€</td>
                     <td class="py-2 text-emerald-400 font-black text-right">
@@ -437,6 +438,7 @@ function renderizarResultadosScraping(data) {
                     <div class="min-w-0 flex-1">
                         <p class="text-[9px] font-bold uppercase truncate">${n.prenda}</p>
                         <p class="text-[9px] opacity-50 font-mono">${n.precio}€</p>
+                        <p class="text-[8px] opacity-40 font-mono">Alta: ${n.fechaRegistro || 's/f'}${n.fechaVenta ? ` · Vendido: ${n.fechaVenta}` : ''}</p>
                     </div>
                     <div class="flex gap-1">
                         <button onclick="cerrarModalScraper(); editItem('${n.idMongo}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>

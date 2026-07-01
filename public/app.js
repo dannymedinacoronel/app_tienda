@@ -423,6 +423,36 @@ function toggleSelectAllNewItems(checked) {
     checkboxes.forEach(cb => cb.checked = checked);
 }
 
+function toggleSelectAllMissingItems(checked) {
+    const checkboxes = document.querySelectorAll('.check-miss-scraper');
+    checkboxes.forEach(cb => cb.checked = checked);
+}
+
+function obtenerNombreEstadoVenta() {
+    const estVenta = (LISTA_ESTADOS_KANBAN || []).find(e => e.rolFinanciero === 'Venta');
+    return estVenta?.nombre || 'Vendido';
+}
+
+function marcarDesaparecidosComoVendidos() {
+    if (!resultadosScraperActual?.desaparecidos?.length) return;
+
+    const ids = Array.from(document.querySelectorAll('.check-miss-scraper:checked'))
+        .map(cb => parseInt(cb.value, 10))
+        .filter(i => Number.isInteger(i))
+        .map(i => resultadosScraperActual.desaparecidos[i]?.idMongo)
+        .filter(Boolean);
+
+    if (ids.length === 0) {
+        alert('Selecciona al menos un artículo no visible para marcar como vendido.');
+        return;
+    }
+
+    abrirModalPostVenta(ids, obtenerNombreEstadoVenta(), {
+        comentarioSugerido: 'Marcado desde Scraper: el artículo ya no aparece en Vinted.',
+        canalSugerido: 'Vinted'
+    });
+}
+
 function renderizarResultadosScraping(data) {
     const tbody = document.getElementById('scraper-results-body');
     const gridNuevos = document.getElementById('scraper-grid-nuevos');
@@ -430,6 +460,7 @@ function renderizarResultadosScraping(data) {
     const contDisc = document.getElementById('container-discrepancias');
     const contNuev = document.getElementById('container-nuevos');
     const contExist = document.getElementById('container-existentes');
+    const contDesap = document.getElementById('container-desaparecidos');
     const noRes = document.getElementById('scraper-no-results');
     const summaryText = document.getElementById('scraper-summary-text');
 
@@ -438,10 +469,13 @@ function renderizarResultadosScraping(data) {
     tbody.innerHTML = '';
     gridNuevos.innerHTML = '';
     gridExistentes.innerHTML = '';
+    const gridDesap = document.getElementById('scraper-grid-desaparecidos');
+    if (gridDesap) gridDesap.innerHTML = '';
 
     const discCount = data.discrepancias?.length || 0;
     const nuevoCount = data.nuevos?.length || 0;
     const identCount = data.identicos?.length || 0;
+    const missCount = data.desaparecidos?.length || 0;
 
     const mDisc = document.getElementById('scraper-metric-disc');
     const mNuevos = document.getElementById('scraper-metric-nuevos');
@@ -453,12 +487,16 @@ function renderizarResultadosScraping(data) {
     summaryText.innerHTML = `Análisis completado. He comparado Vinted con tu inventario de MongoDB:<br>
         • <span class="text-amber-400 font-bold">${discCount} cambios de precio</span>: Se han detectado modificaciones en Vinted que no tienes en el sistema.<br>
         • <span class="text-emerald-400 font-bold">${nuevoCount} productos nuevos</span>: Artículos en la web que no están registrados en Mongo.<br>
-        • <span class="text-slate-400 font-bold">${identCount} artículos sin cambios</span>: Productos que ya están perfectamente sincronizados.`;
+        • <span class="text-slate-400 font-bold">${identCount} artículos sin cambios</span>: Productos que ya están perfectamente sincronizados.<br>
+        • <span class="text-rose-400 font-bold">${missCount} no visibles en Vinted</span>: Posibles vendidos o retirados de tu perfil.`;
 
     if (discCount > 0) contDisc.classList.remove('hidden'); else contDisc.classList.add('hidden');
     if (nuevoCount > 0) contNuev.classList.remove('hidden'); else contNuev.classList.add('hidden');
     if (identCount > 0) contExist.classList.remove('hidden'); else contExist.classList.add('hidden');
-    if (discCount === 0 && nuevoCount === 0 && identCount === 0) noRes.classList.remove('hidden'); else noRes.classList.add('hidden');
+    if (contDesap) {
+        if (missCount > 0) contDesap.classList.remove('hidden'); else contDesap.classList.add('hidden');
+    }
+    if (discCount === 0 && nuevoCount === 0 && identCount === 0 && missCount === 0) noRes.classList.remove('hidden'); else noRes.classList.add('hidden');
 
     if (discCount > 0) {
         data.discrepancias.forEach((d, i) => {
@@ -545,6 +583,22 @@ function renderizarResultadosScraping(data) {
                         <button onclick="cerrarModalScraper(); editItem('${n.idMongo}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
                         <button onclick="deleteItemFromScraper('${n.idMongo}')" class="text-[10px] bg-rose-500/10 hover:bg-rose-600 text-rose-500 hover:text-white px-2 py-1 rounded-lg transition-all">🗑️</button>
                     </div>
+                </div>`;
+        });
+    }
+
+    if (missCount > 0 && gridDesap) {
+        data.desaparecidos.forEach((n, i) => {
+            gridDesap.innerHTML += `
+                <div class="flex items-center gap-3 p-2 bg-rose-500/5 border border-rose-500/20 rounded-xl">
+                    <input type="checkbox" class="check-miss-scraper w-4 h-4 rounded text-rose-500 bg-black/40 border-white/20 cursor-pointer" value="${i}" checked>
+                    <img src="${n.imagen || ''}" class="w-8 h-8 rounded object-cover" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 60 60\'%3E%3Crect width=\'60\' height=\'60\' fill=\'%23111827\'/%3E%3Cpath d=\'M15 40l10-12 8 9 6-7 11 10\' fill=\'none\' stroke=\'%239ca3af\' stroke-width=\'3\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3Ccircle cx=\'22\' cy=\'22\' r=\'4\' fill=\'%239ca3af\'/%3E%3C/svg%3E'">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[9px] font-bold uppercase truncate">${n.prenda}</p>
+                        <p class="text-[8px] opacity-60 font-mono">${n.precio || 0}€ · Alta: ${n.fechaRegistro || 's/f'}</p>
+                        ${n.comentariosProducto ? `<p class="text-[8px] opacity-45 truncate">${n.comentariosProducto}</p>` : ''}
+                    </div>
+                    <button onclick="cerrarModalScraper(); editItem('${n.idMongo}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
                 </div>`;
         });
     }
@@ -3003,11 +3057,19 @@ function filtrarProductosMenu(valorQuery) {
 async function ejecutarAccionDesplegable(id, nuevoEstado) {
     const dbb = document.getElementById('dropdown-buscador'); if(dbb) dbb.classList.add('hidden');
     const ip = document.getElementById('input-pistola'); if(ip) ip.value = '';
+
+    const eConfig = LISTA_ESTADOS_KANBAN.find(est => est.nombre === nuevoEstado);
+    if (eConfig && eConfig.rolFinanciero === 'Venta') {
+        abrirModalPostVenta([id], nuevoEstado, {
+            comentarioSugerido: 'Venta registrada desde acción rápida.',
+            canalSugerido: 'Vinted'
+        });
+        return;
+    }
+
     try {
         const r = await fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: nuevoEstado }) });
         if(r.ok) { 
-            const eConfig = LISTA_ESTADOS_KANBAN.find(est => est.nombre === nuevoEstado);
-            if (eConfig && eConfig.rolFinanciero === 'Venta') { tocarSonidoCajaRegistradora(); lanzarConfetiVenta(); cantarPorVoz("Vendido"); }
             procesarMultiplicadorCombo(); await forceRefreshDataManual(); 
         }
     } catch (err) {}
@@ -3680,7 +3742,7 @@ function setPostVentaRating(estrellasSeleccionadas) {
     }
 }
 
-function abrirModalPostVenta(itemIds, nuevoEstado) {
+function abrirModalPostVenta(itemIds, nuevoEstado, opciones = {}) {
     if (!itemIds || itemIds.length === 0) return;
 
     document.getElementById('post-venta-item-ids').value = JSON.stringify(itemIds);
@@ -3699,20 +3761,20 @@ function abrirModalPostVenta(itemIds, nuevoEstado) {
         envioContainerEl.classList.remove('hidden');
         document.getElementById('post-venta-precio').value = item.precioVenta || 0;
         document.getElementById('post-venta-envio').value = item.gastosEnvio || 0;
-        document.getElementById('post-venta-canal').value = item.canalVenta || 'Vinted';
-        document.getElementById('post-venta-comentarios').value = item.comentariosProducto || '';
+        document.getElementById('post-venta-canal').value = opciones.canalSugerido || item.canalVenta || 'Vinted';
+        document.getElementById('post-venta-comentarios').value = opciones.comentarioSugerido || item.comentariosProducto || '';
         setPostVentaRating(item.rating || 0);
     } else {
         tituloEl.innerHTML = `Registrando venta de <span class="font-black text-emerald-300">${itemIds.length}</span> artículos en lote.`;
         precioContainerEl.classList.add('hidden');
         envioContainerEl.classList.add('hidden');
         document.getElementById('post-venta-precio').value = 0;
-        document.getElementById('post-venta-canal').value = 'Vinted';
-        document.getElementById('post-venta-comentarios').value = 'Venta en lote.';
+        document.getElementById('post-venta-canal').value = opciones.canalSugerido || 'Vinted';
+        document.getElementById('post-venta-comentarios').value = opciones.comentarioSugerido || 'Venta en lote.';
         setPostVentaRating(0);
     }
 
-    document.getElementById('post-venta-fecha').value = new Date().toISOString().split('T')[0];
+    document.getElementById('post-venta-fecha').value = opciones.fechaSugerida || new Date().toISOString().split('T')[0];
     document.getElementById('modal-post-venta').classList.remove('hidden');
 }
 

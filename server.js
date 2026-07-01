@@ -1016,6 +1016,17 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
         
         const tiendaDoc = await Tienda.findOne({ nombre: proveedor });
 
+        if (datosVenta.estado) {
+            const estadoCfg = await EstadoKanban.findOne({ nombre: datosVenta.estado }).lean();
+            const esVenta = estadoCfg && estadoCfg.rolFinanciero === 'Venta';
+            if (esVenta && !datosVenta.fechaVenta) {
+                datosVenta.fechaVenta = new Date().toISOString().split('T')[0];
+            }
+            if (!esVenta && datosVenta.fechaVenta) {
+                datosVenta.fechaVenta = '';
+            }
+        }
+
         const nuevaVenta = new VentaRopa({ ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null });
         await nuevaVenta.save(); 
         await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`);
@@ -1031,6 +1042,17 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
         const { proveedor, ...datosVenta } = req.body;
 
         const tiendaDoc = await Tienda.findOne({ nombre: proveedor });
+
+        if (datosVenta.estado) {
+            const estadoCfg = await EstadoKanban.findOne({ nombre: datosVenta.estado }).lean();
+            const esVenta = estadoCfg && estadoCfg.rolFinanciero === 'Venta';
+            if (esVenta && !datosVenta.fechaVenta) {
+                datosVenta.fechaVenta = new Date().toISOString().split('T')[0];
+            }
+            if (!esVenta && datosVenta.fechaVenta) {
+                datosVenta.fechaVenta = '';
+            }
+        }
 
         const ventaActualizada = await VentaRopa.findByIdAndUpdate(
             id, 
@@ -1048,13 +1070,16 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
 app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const { estado } = req.body;
+        const { estado, fechaVenta, comentariosProducto } = req.body;
 
         const estadoConfig = await EstadoKanban.findOne({ nombre: estado });
         const updateData = { estado };
         
         if (estadoConfig && estadoConfig.rolFinanciero === 'Venta') {
-            updateData.fechaVenta = new Date().toISOString().split('T')[0];
+            updateData.fechaVenta = fechaVenta || new Date().toISOString().split('T')[0];
+            if (typeof comentariosProducto === 'string') {
+                updateData.comentariosProducto = comentariosProducto.trim();
+            }
         } else {
             updateData.fechaVenta = '';
         }
@@ -1092,6 +1117,9 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
             venta.estado = nuevoEstado;
             if (nuevoEstado === nombreVenta) {
                 venta.fechaVenta = new Date().toISOString().split('T')[0];
+                if (!venta.comentariosProducto) {
+                    venta.comentariosProducto = 'Venta registrada por escáner.';
+                }
             } else {
                 venta.fechaVenta = '';
             }
@@ -1230,10 +1258,17 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Datos no válidos.' });
         }
 
-        const resultados = { discrepancias: [], nuevos: [], identicos: [] };
+        const resultados = { discrepancias: [], nuevos: [], identicos: [], desaparecidos: [] };
         const productosBD = await VentaRopa.find({ canalVenta: 'Vinted' }).lean();
 
         const cleanStr = str => str.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+        const hayCoincidenciaFlexible = (a, b) => {
+            if (!a || !b) return false;
+            if (a === b) return true;
+            return (a.length > 4 && b.includes(a)) || (b.length > 4 && a.includes(b));
+        };
+
+        const titulosWebNormalizados = [];
 
         productosExtraidos.forEach(item => {
             const titulo = item.titulo || '';
@@ -1243,9 +1278,10 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
 
             if (titulo && !isNaN(precioWeb)) {
                 const cleanItemTitle = cleanStr(titulo);
+                titulosWebNormalizados.push(cleanItemTitle);
                 const coincidencia = productosBD.find(p => {
                     const cleanP = cleanStr(p.prenda);
-                    return cleanP === cleanItemTitle || (cleanP.length > 4 && cleanItemTitle.includes(cleanP)) || (cleanItemTitle.length > 4 && cleanP.includes(cleanItemTitle));
+                    return hayCoincidenciaFlexible(cleanP, cleanItemTitle);
                 });
 
                 if (coincidencia) {
@@ -1273,6 +1309,24 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
                 } else {
                     resultados.nuevos.push({ prenda: titulo, precioVenta: precioWeb, imagen, galeria, canalVenta: 'Vinted', estado: 'No Vendido' });
                 }
+            }
+        });
+
+        // Detectar artículos de Vinted en MongoDB que no aparecen en el scraping actual.
+        const activosMongo = productosBD.filter(p => !p.fechaVenta);
+        activosMongo.forEach(p => {
+            const cleanP = cleanStr(p.prenda || '');
+            if (!cleanP) return;
+            const existeEnWeb = titulosWebNormalizados.some(t => hayCoincidenciaFlexible(cleanP, t));
+            if (!existeEnWeb) {
+                resultados.desaparecidos.push({
+                    idMongo: p._id,
+                    prenda: p.prenda,
+                    precio: p.precioVenta,
+                    imagen: p.imagen || '',
+                    fechaRegistro: p.fecha || '',
+                    comentariosProducto: p.comentariosProducto || ''
+                });
             }
         });
 

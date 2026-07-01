@@ -1345,13 +1345,23 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
         const { productos } = req.body; // Array de productos seleccionados en el frontend
         if (!productos || !Array.isArray(productos)) return res.status(400).json({ error: 'Datos de productos no válidos.' });
 
-        let tiendaVinted = await Tienda.findOne({ nombre: 'Vinted' });
-        if (!tiendaVinted) {
-            tiendaVinted = new Tienda({ nombre: 'Vinted' });
-            await tiendaVinted.save();
-        }
+        const tiendasCache = new Map();
+        const obtenerTiendaPorNombre = async (nombre) => {
+            const limpio = (nombre || '').trim();
+            if (!limpio) return null;
+            if (tiendasCache.has(limpio)) return tiendasCache.get(limpio);
+
+            let tiendaDoc = await Tienda.findOne({ nombre: limpio });
+            if (!tiendaDoc) {
+                tiendaDoc = new Tienda({ nombre: limpio });
+                await tiendaDoc.save();
+            }
+            tiendasCache.set(limpio, tiendaDoc);
+            return tiendaDoc;
+        };
 
         const registrosCreados = [];
+        const resumenTiendas = {};
         for (const prod of productos) {
             // OPTIMIZACIÓN: No convertir a Base64, guardar URL directamente.
             const galeriaUrls = [];
@@ -1361,14 +1371,18 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
                 }
             }
 
+            const nombreTienda = (prod.proveedor || '').trim() || 'Vinted';
+            const tiendaSeleccionada = await obtenerTiendaPorNombre(nombreTienda);
+            resumenTiendas[nombreTienda] = (resumenTiendas[nombreTienda] || 0) + 1;
+
             const nuevaVenta = new VentaRopa({
                 ...prod,
                 // Guardar URL directamente en lugar de Base64
                 imagen: prod.imagen,
                 galeria: galeriaUrls,
-                tienda: tiendaVinted._id,
+                tienda: tiendaSeleccionada ? tiendaSeleccionada._id : null,
                 sku: `VNT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-                comentariosProducto: `Importado automáticamente desde Vinted el ${new Date().toLocaleDateString()}`
+                comentariosProducto: `${prod.comentariosProducto || ''}${prod.comentariosProducto ? ' · ' : ''}Importado por Scraper el ${new Date().toLocaleDateString()} (${nombreTienda})`
             });
             await nuevaVenta.save();
             registrosCreados.push(nuevaVenta.prenda);
@@ -1376,7 +1390,7 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
         notificarCambio(); // Notificar cambio para refrescar el panel principal
 
         await registrarLog(req.session.email, `Importó ${registrosCreados.length} productos desde Vinted: ${registrosCreados.join(', ')}`);
-        res.json({ success: true, count: registrosCreados.length });
+        res.json({ success: true, count: registrosCreados.length, tiendas: resumenTiendas });
     } catch (error) {
         console.error('Error en importación:', error);
         res.status(500).json({ error: 'Fallo al guardar los nuevos productos.' });

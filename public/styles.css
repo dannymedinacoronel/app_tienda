@@ -89,7 +89,15 @@ body {
 /* --- Estilos y Animaciones Personalizadas --- */
 
 /* Ticker inferior */
-.ticker-content { animation: ticker-scroll 80s linear infinite; }
+.ticker-content {
+  display: inline-flex;
+  align-items: center;
+  min-width: max-content;
+  white-space: nowrap;
+  line-height: 1;
+  will-change: transform;
+  animation: ticker-scroll 120s linear infinite;
+}
 @keyframes ticker-scroll {
     0% { transform: translateX(0); }
     100% { transform: translateX(-50%); }

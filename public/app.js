@@ -484,11 +484,17 @@ function renderizarResultadosScraping(data) {
     if (mNuevos) mNuevos.innerText = String(nuevoCount);
     if (mIdent) mIdent.innerText = String(identCount);
 
+    const tiendasDisponibles = (LISTA_TIENDAS_GLOBAL || []).map(t => t.nombre);
+    const tiendasUnicas = [...new Set(tiendasDisponibles)];
+    const tieneVinted = tiendasUnicas.some(n => n.toLowerCase() === 'vinted');
+    const defaultImportStore = tieneVinted ? 'Vinted' : (tiendasUnicas[0] || 'Sin asignar');
+
     summaryText.innerHTML = `Análisis completado. He comparado Vinted con tu inventario de MongoDB:<br>
         • <span class="text-amber-400 font-bold">${discCount} cambios de precio</span>: Se han detectado modificaciones en Vinted que no tienes en el sistema.<br>
         • <span class="text-emerald-400 font-bold">${nuevoCount} productos nuevos</span>: Artículos en la web que no están registrados en Mongo.<br>
         • <span class="text-slate-400 font-bold">${identCount} artículos sin cambios</span>: Productos que ya están perfectamente sincronizados.<br>
-        • <span class="text-rose-400 font-bold">${missCount} no visibles en Vinted</span>: Posibles vendidos o retirados de tu perfil.`;
+        • <span class="text-rose-400 font-bold">${missCount} no visibles en Vinted</span>: Posibles vendidos o retirados de tu perfil.<br>
+        • <span class="text-indigo-300 font-bold">Tienda de importación por defecto:</span> ${defaultImportStore}`;
 
     if (discCount > 0) contDisc.classList.remove('hidden'); else contDisc.classList.add('hidden');
     if (nuevoCount > 0) contNuev.classList.remove('hidden'); else contNuev.classList.add('hidden');
@@ -520,6 +526,7 @@ function renderizarResultadosScraping(data) {
 
     if (nuevoCount > 0) {
         let catOptions = LISTA_CATEGORIAS_GLOBAL.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
+        const tiendaOptions = ['<option value="">🏬 Sin asignar</option>', ...tiendasUnicas.map(t => `<option value="${t}" ${t === defaultImportStore ? 'selected' : ''}>🏬 ${t}</option>`)].join('');
         data.nuevos.forEach((n, i) => {
                 const badgeGaleriaInfo = n.galeria && n.galeria.length > 0 ? `<div class="absolute bottom-1 right-1 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${n.galeria.length}</div>` : '';
             gridNuevos.innerHTML += `
@@ -549,6 +556,11 @@ function renderizarResultadosScraping(data) {
                         <select id="new-item-talla-${i}" class="bg-black/40 border border-white/10 text-[10px] rounded px-1 py-1 focus:outline-none focus:border-emerald-400 text-white">
                             <option value="Única">Talla: Única</option>
                             <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-1 gap-2 mt-1">
+                        <select id="new-item-store-${i}" class="bg-indigo-500/10 border border-indigo-500/20 text-[10px] rounded px-2 py-1 focus:outline-none focus:border-indigo-400 text-indigo-100 font-bold">
+                            ${tiendaOptions}
                         </select>
                     </div>
                     <div class="grid grid-cols-3 gap-2 mt-1">
@@ -661,12 +673,13 @@ async function importarNuevosScraping() {
         const costEditado = numeroSeguro(document.getElementById(`new-item-cost-${idx}`)?.value, 0);
         const qtyEditada = parseInt(document.getElementById(`new-item-qty-${idx}`)?.value) || 1;
         const canalEditado = document.getElementById(`new-item-canal-${idx}`)?.value || 'Vinted';
+        const tiendaEditada = document.getElementById(`new-item-store-${idx}`)?.value || '';
         const galeriaOriginal = itemOriginal.galeria || [];
 
         return { 
             ...itemOriginal, prenda: tituloEditado, precioVenta: precioEditado, 
             categoria: catEditada, talla: tallaEditada, precioCompra: costEditado, 
-            cantidad: qtyEditada, canalVenta: canalEditado, galeria: galeriaOriginal
+            cantidad: qtyEditada, canalVenta: canalEditado, galeria: galeriaOriginal, proveedor: tiendaEditada
         };
     });
     if (selected.length === 0) return alert('Selecciona productos para importar.');
@@ -684,7 +697,10 @@ async function importarNuevosScraping() {
         if (!response.ok) throw new Error('Fallo al importar.');
 
         const res = await response.json();
-        alert(`✅ Se han importado ${res.count} productos exitosamente con sus fotografías a la base de datos.\n\nYa puedes verificarlos en tu inventario.`);
+        const resumenTiendas = res.tiendas
+            ? Object.entries(res.tiendas).map(([nombre, total]) => `• ${nombre}: ${total}`).join('\n')
+            : '';
+        alert(`✅ Se han importado ${res.count} productos exitosamente con sus fotografías a la base de datos.\n\nDistribución por tienda:\n${resumenTiendas || '• Sin detalle'}\n\nYa puedes verificarlos en tu inventario usando el filtro de tienda.`);
         cantarPorVoz("Importación completada.");
 
         await forceRefreshDataManual();
@@ -1291,6 +1307,7 @@ function establecerValoresPorDefecto() {
 async function refrescarYListarTiendasCloud() {
     const selectForm = document.getElementById('proveedor');
     const selectFiltro = document.getElementById('an-filtro-tienda');
+    const selectFiltroPrincipal = document.getElementById('filtro-tienda');
     const selectMasivo = document.getElementById('tienda-masiva');
     try {
         const res = await fetch(`${BACKEND_URL}/api/tiendas`, { credentials: 'include' });
@@ -1300,6 +1317,7 @@ async function refrescarYListarTiendasCloud() {
         
         selectForm.innerHTML = '<option value="">Sin asignar</option>';
         selectFiltro.innerHTML = '<option value="TODOS">🏬 Todas las tiendas</option>';
+        if (selectFiltroPrincipal) selectFiltroPrincipal.innerHTML = '<option value="TODOS">🏬 Tienda</option>';
         if(selectMasivo) selectMasivo.innerHTML = '<option value="">🏬 Tienda...</option>';
 
         LISTA_TIENDAS_GLOBAL.forEach(t => {
@@ -1310,6 +1328,12 @@ async function refrescarYListarTiendasCloud() {
             const opt2 = document.createElement('option');
             opt2.value = t.nombre; opt2.textContent = t.nombre;
             selectFiltro.appendChild(opt2);
+
+            if (selectFiltroPrincipal) {
+                const optP = document.createElement('option');
+                optP.value = t.nombre; optP.textContent = `🏬 ${t.nombre}`;
+                selectFiltroPrincipal.appendChild(optP);
+            }
 
             if(selectMasivo) {
                 const opt3 = document.createElement('option');
@@ -2732,6 +2756,8 @@ function limpiarFiltrosAvanzados() {
     document.getElementById('filtro-categoria').value = 'TODOS';
     document.getElementById('filtro-talla').value = 'TODOS';
     document.getElementById('filtro-canal').value = 'TODOS';
+    const fTienda = document.getElementById('filtro-tienda');
+    if (fTienda) fTienda.value = 'TODOS';
     aplicarFiltrosFrontLineal();
 }
 
@@ -3428,13 +3454,15 @@ function renderKanban(isFullRefresh = false) {
         const filtroGlobalCat = document.getElementById('filtro-categoria').value;
         const filtroGlobalTalla = document.getElementById('filtro-talla').value;
         const filtroGlobalCanal = document.getElementById('filtro-canal').value;
+        const filtroGlobalTienda = document.getElementById('filtro-tienda')?.value || 'TODOS';
 
         let filtrados = BASE_DATOS.filter(v => 
             v.estado === est.nombre &&
             (!query || v.prenda.toLowerCase().includes(query) || (v.sku && v.sku.toLowerCase().includes(query))) &&
             (filtroGlobalCat === 'TODOS' || v.categoria === filtroGlobalCat) &&
             (filtroGlobalTalla === 'TODOS' || v.talla === filtroGlobalTalla) &&
-            (filtroGlobalCanal === 'TODOS' || v.canalVenta === filtroGlobalCanal)
+            (filtroGlobalCanal === 'TODOS' || v.canalVenta === filtroGlobalCanal) &&
+            (filtroGlobalTienda === 'TODOS' || (v.proveedor || 'Sin asignar') === filtroGlobalTienda)
         );
         
         filtrados.sort((a, b) => {
@@ -3525,19 +3553,19 @@ function updateTickerWallStreet() {
     tareasActivas.forEach(t => {
         const icon = t.estado === 'En Proceso' ? '⚙️' : '📌';
         const colorTexto = t.prioridad === 'Alta' ? 'text-rose-400' : (t.estado === 'En Proceso' ? 'text-blue-400' : 'text-amber-400');
-        txt += `<span onclick="navegarASeccion('sec-tareas'); setTimeout(() => editarTarea('${t._id}'), 100)" class="text-white font-mono uppercase cursor-pointer hover:bg-white/10 transition-colors mx-4 border border-white/20 bg-black/40 px-3 py-1 rounded-full inline-flex items-center gap-1.5"><span class="${colorTexto} font-black">${icon} TAREA ${t.estado.toUpperCase()}:</span> ${t.titulo}</span>`;
+        txt += `<span onclick="navegarASeccion('sec-tareas'); setTimeout(() => editarTarea('${t._id}'), 100)" class="text-white font-mono uppercase cursor-pointer hover:bg-white/10 transition-colors mx-3 border border-white/20 bg-black/40 px-2 py-0.5 rounded-full inline-flex items-center gap-1 text-[9px] leading-none"><span class="${colorTexto} font-black">${icon} TAREA ${t.estado.toUpperCase()}:</span> ${t.titulo}</span>`;
     });
 
     const nombresEstadosReserva = LISTA_ESTADOS_KANBAN.filter(e => e.nombre.toLowerCase().includes('reserva') || e.icono.includes('🤝')).map(e => e.nombre);
     const reservas = BASE_DATOS.filter(v => nombresEstadosReserva.includes(v.estado) || v.estado === 'Reservado');
     reservas.forEach(v => {
-        txt += `<span onclick="navegarASeccion('sec-inventario'); setTimeout(() => editItem('${v._id}'), 100)" class="text-white font-mono uppercase cursor-pointer hover:bg-indigo-500/20 transition-colors mx-4 border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 rounded-full inline-flex items-center gap-1.5"><span class="text-indigo-400 font-black">🤝 RESERVA:</span> ${v.prenda} [${v.talla}]</span>`;
+        txt += `<span onclick="navegarASeccion('sec-inventario'); setTimeout(() => editItem('${v._id}'), 100)" class="text-white font-mono uppercase cursor-pointer hover:bg-indigo-500/20 transition-colors mx-3 border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1 text-[9px] leading-none"><span class="text-indigo-400 font-black">🤝 RESERVA:</span> ${v.prenda} [${v.talla}]</span>`;
     });
 
     const nombresEstadosVenta = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
     BASE_DATOS.slice(0, 10).forEach(v => { 
         const symbol = nombresEstadosVenta.includes(v.estado) ? '<span class="text-emerald-400">▲</span>' : '<span class="text-amber-400">●</span>'; 
-        txt += `<span class="text-white font-mono uppercase mx-4 inline-flex items-center gap-1">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400 ml-1">${parseFloat(v.precioVenta || 0).toFixed(2)}€</b></span>`; 
+        txt += `<span class="text-white font-mono uppercase mx-3 inline-flex items-center gap-1 text-[9px] leading-none">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400 ml-1">${parseFloat(v.precioVenta || 0).toFixed(2)}€</b></span>`; 
     });
     
     ticker.innerHTML = txt + txt;

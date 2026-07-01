@@ -160,6 +160,9 @@
                         <option value="TODOS">🌐 Canal</option>
                         <option value="Tienda Física">Tienda</option><option value="Vinted">Vinted</option><option value="Wallapop">Wallapop</option><option value="Web">Web</option>
                     </select>
+                    <select id="filtro-tienda" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2 py-1 focus:outline-none">
+                        <option value="TODOS">🏬 Tienda</option>
+                    </select>
                 </div>
 
                 <!-- DERECHA: NAV (50%) -->
@@ -1020,8 +1023,8 @@
             </div>
         </div>
 
-        <footer id="ticker-bar" class="hidden fixed bottom-0 left-0 w-full bg-black h-10 flex items-center z-50 text-[10px] font-mono border-t border-white/5 shadow-2xl transition-colors duration-300">
-            <div id="ticker-header-badge" class="bg-rose-600 text-white px-4 h-full flex items-center font-black tracking-wider select-none">WALL•ST•SEYCHELLES🌺</div>
+        <footer id="ticker-bar" class="hidden fixed bottom-0 left-0 w-full bg-black/95 h-8 flex items-center z-50 text-[9px] font-mono border-t border-white/10 shadow-2xl transition-colors duration-300 overflow-hidden">
+            <div id="ticker-header-badge" class="bg-rose-600 text-white px-3 h-full flex items-center font-black tracking-wide text-[9px] select-none whitespace-nowrap">WALL•ST•SEYCHELLES</div>
             <div class="flex-1 overflow-hidden flex">
                 <div class="ticker-content flex items-center gap-12" id="ticker-content"></div>
             </div>

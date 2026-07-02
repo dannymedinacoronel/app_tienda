@@ -2302,7 +2302,7 @@ app.post('/api/monopolio/urls', exigeAdmin, async (req, res) => {
 
         const nuevaUrl = new MonopolioUrl({ empresa, url, alias });
         await nuevaUrl.save();
-        await registrarLog(req.session.email, `Añadió URL a Monopolio: ${alias || url}`);
+        await registrarLog(req.session.email, `Añadió URL a Monopolio: ${alias || url || 'sin alias'}`);
         res.status(201).json(nuevaUrl);
     } catch (e) {
         if (e.code === 11000) {

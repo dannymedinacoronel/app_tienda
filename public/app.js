@@ -13,6 +13,11 @@ let CHAT_USUARIOS = [];
 let CHAT_USUARIO_ACTIVO = null;
 let CHAT_REFRESH_INTERVAL = null;
 let CHAT_NO_LEIDOS = 0;
+let FORCE_REFRESH_PROMISE = null;
+let LAST_FORCE_REFRESH_AT = 0;
+let CITAS_REFRESH_TIMER = null;
+let CITAS_REFRESH_IN_FLIGHT = false;
+let LAST_CITAS_REFRESH_AT = 0;
 let INSTANCIA_CHARTS = null;
 let INSTANCIA_TARTA = null;
 let INSTANCIA_BARRAS = null;
@@ -218,12 +223,14 @@ window.scrollToLandingSection = scrollToLandingSection;
 
 function setParticlesEnabled(enabled) {
     try {
+        const isLowPower = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || '') || ((navigator.deviceMemory || 8) <= 4);
         const hasParticles = Array.isArray(window.pJSDom) && window.pJSDom.length > 0;
         if (enabled) {
+            if (isLowPower) return;
             if (!hasParticles && typeof window.particlesJS === 'function') {
                 particlesJS("particles-js", {
                     "particles": {
-                        "number": { "value": 35, "density": { "enable": true, "value_area": 800 } },
+                        "number": { "value": 26, "density": { "enable": true, "value_area": 900 } },
                         "color": { "value": ["#22d3ee", "#60a5fa", "#fbbf24"] },
                         "shape": { "type": ["circle"] },
                         "opacity": { "value": 0.45, "random": true },
@@ -274,7 +281,8 @@ socket.on('cita_nueva', (data) => {
     if (data.empresa && EMPRESA_CHAT_ACTUAL && data.empresa !== EMPRESA_CHAT_ACTUAL) return;
     actualizarBadgeCitasNav();
     if (!document.getElementById('sec-citas')?.classList.contains('hidden')) {
-        refrescarCitas();
+        clearTimeout(CITAS_REFRESH_TIMER);
+        CITAS_REFRESH_TIMER = setTimeout(() => { refrescarCitas(); }, 400);
     }
 });
 
@@ -284,7 +292,8 @@ socket.on('cita_actualizada', (data) => {
     if (data.empresa && EMPRESA_CHAT_ACTUAL && data.empresa !== EMPRESA_CHAT_ACTUAL) return;
     actualizarBadgeCitasNav();
     if (!document.getElementById('sec-citas')?.classList.contains('hidden')) {
-        refrescarCitas();
+        clearTimeout(CITAS_REFRESH_TIMER);
+        CITAS_REFRESH_TIMER = setTimeout(() => { refrescarCitas(); }, 400);
     }
 });
 
@@ -2083,7 +2092,13 @@ async function refrescarTareas() {
 }
 
 async function refrescarCitas() {
+    const now = Date.now();
+    if (CITAS_REFRESH_IN_FLIGHT) return;
+    if ((now - LAST_CITAS_REFRESH_AT) < 1200) return;
+
     try {
+        CITAS_REFRESH_IN_FLIGHT = true;
+        LAST_CITAS_REFRESH_AT = now;
         const res = await fetch('/api/citas', { credentials: 'include' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'No se pudieron cargar citas.');
@@ -2092,6 +2107,8 @@ async function refrescarCitas() {
         actualizarBadgeCitasNav(data.pendientes);
     } catch (e) {
         console.error('Error al cargar citas:', e.message);
+    } finally {
+        CITAS_REFRESH_IN_FLIGHT = false;
     }
 }
 
@@ -3619,13 +3636,22 @@ function toggleMuteVolumenGlobal() {
 }
 
 async function forceRefreshDataManual() { 
+    const now = Date.now();
+    if (FORCE_REFRESH_PROMISE) return FORCE_REFRESH_PROMISE;
+    if ((now - LAST_FORCE_REFRESH_AT) < 900) return;
+
     const icono = document.getElementById('icon-refresh');
     if (icono) {
         icono.classList.remove('animate-spin-once');
         void icono.offsetWidth;
         icono.classList.add('animate-spin-once');
     }
-    cantarPorVoz("Sincronizando."); await reloadCoreData(true); 
+    LAST_FORCE_REFRESH_AT = now;
+    cantarPorVoz("Sincronizando.");
+    FORCE_REFRESH_PROMISE = reloadCoreData(true).finally(() => {
+        FORCE_REFRESH_PROMISE = null;
+    });
+    await FORCE_REFRESH_PROMISE;
 }
 
 function calcularMargenComercialAlVuelo() {
@@ -4134,7 +4160,8 @@ async function reloadCoreData(isInitialLoad = false) {
     }
 
     try {
-        const res = await fetch(`${BACKEND_URL}/api/ventas?page=1`, { credentials: 'include' });
+        const logsVisible = !document.getElementById('sec-auditoria')?.classList.contains('hidden');
+        const res = await fetch(`${BACKEND_URL}/api/ventas?page=1&includeLogs=${logsVisible ? '1' : '0'}`, { credentials: 'include' });
         if (!res.ok) throw new Error('Fallo de red al cargar datos.');
         const data = await res.json();
         
@@ -4161,7 +4188,7 @@ async function reloadCoreData(isInitialLoad = false) {
         }
         
         const contenedorLogs = document.getElementById('contenedor-logs-auditoria');
-        if (contenedorLogs && data.logs && data.logs.length > 0) {
+        if (logsVisible && contenedorLogs && data.logs && data.logs.length > 0) {
             let htmlLogs = ''; data.logs.forEach(l => { const horaFormateada = new Date(l.fechaHora).toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'}); htmlLogs += `<div class="border-b border-white/5 pb-1"><span class="text-indigo-400">[${horaFormateada}]</span> <b>${l.usuario.split('@')[0]}:</b> ${l.accion}</div>`; });
             contenedorLogs.innerHTML = htmlLogs;
         }
@@ -4930,4 +4957,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(err => {}); }); }
 
-setParticlesEnabled(true);
+if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(() => setParticlesEnabled(true), { timeout: 1500 });
+} else {
+    setTimeout(() => setParticlesEnabled(true), 900);
+}

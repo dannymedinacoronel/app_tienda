@@ -27,6 +27,7 @@ console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
 
 // Es vital para que las sesiones funcionen en plataformas como Render/Heroku
 app.set('trust proxy', 1);
+app.disable('x-powered-by');
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -52,6 +53,8 @@ function normalizarEmpresa(empresa) {
 
 const KPI_CACHE_TTL_MS = Math.max(10000, Math.min(parseInt(process.env.KPI_CACHE_TTL_MS, 10) || 15000, 20000));
 const kpiResumenCache = new Map();
+const LOGS_CACHE_TTL_MS = Math.max(5000, Math.min(parseInt(process.env.LOGS_CACHE_TTL_MS, 10) || 8000, 15000));
+const logsResumenCache = new Map();
 
 function getKpiResumenCache(empresa) {
     const key = normalizarEmpresa(empresa);
@@ -72,6 +75,22 @@ function setKpiResumenCache(empresa, value) {
 function invalidateKpiResumenCache(empresa) {
     const key = normalizarEmpresa(empresa);
     kpiResumenCache.delete(key);
+}
+
+function getLogsResumenCache(empresa) {
+    const key = normalizarEmpresa(empresa);
+    const hit = logsResumenCache.get(key);
+    if (!hit) return null;
+    if ((Date.now() - hit.ts) > LOGS_CACHE_TTL_MS) {
+        logsResumenCache.delete(key);
+        return null;
+    }
+    return hit.value;
+}
+
+function setLogsResumenCache(empresa, value) {
+    const key = normalizarEmpresa(empresa);
+    logsResumenCache.set(key, { ts: Date.now(), value });
 }
 
 // --- Modelos de MongoDB ---
@@ -389,7 +408,11 @@ app.use(session({
     }
 }));
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+    etag: true,
+    lastModified: true,
+    maxAge: isProd ? '7d' : 0
+}));
 function empresaActual(req) {
     return normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
 }
@@ -1584,6 +1607,7 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
         const limit = parseInt(req.query.limit) || 40; // Lotes de 40 productos
         const skip = (page - 1) * limit;
         const lightweight = String(req.query.lightweight || '').toLowerCase() === '1' || page > 1;
+        const includeLogs = String(req.query.includeLogs || '').toLowerCase() === '1';
 
         let nombresEstadosVenta = [];
         if (!lightweight) {
@@ -1683,15 +1707,23 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
                 setKpiResumenCache(empresa, resumen);
             }
 
-            const usuariosEquipo = await UsuarioAutorizado.find({ empresa }).select('email').lean();
-            const emailsEquipo = usuariosEquipo.map(u => String(u.email || '').toLowerCase().trim()).filter(Boolean);
-            logs = emailsEquipo.length
-                ? await LogAuditoria.find({ empresa, usuario: { $in: emailsEquipo } })
-                    .select('fechaHora usuario accion')
-                    .sort({ _id: -1 })
-                    .limit(25)
-                    .lean()
-                : [];
+            if (includeLogs) {
+                const cachedLogs = getLogsResumenCache(empresa);
+                if (cachedLogs) {
+                    logs = cachedLogs;
+                } else {
+                    const usuariosEquipo = await UsuarioAutorizado.find({ empresa }).select('email').lean();
+                    const emailsEquipo = usuariosEquipo.map(u => String(u.email || '').toLowerCase().trim()).filter(Boolean);
+                    logs = emailsEquipo.length
+                        ? await LogAuditoria.find({ empresa, usuario: { $in: emailsEquipo } })
+                            .select('fechaHora usuario accion')
+                            .sort({ _id: -1 })
+                            .limit(25)
+                            .lean()
+                        : [];
+                    setLogsResumenCache(empresa, logs);
+                }
+            }
         }
 
         return res.json({

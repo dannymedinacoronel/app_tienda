@@ -2073,9 +2073,13 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
             if (titulo && !isNaN(precioWeb)) {
                 const cleanItemTitle = cleanStr(titulo);
                 titulosWebNormalizados.push(cleanItemTitle);
+                
+                // MODIFICACIÓN: Ahora la coincidencia requiere que el título y el proveedor (tienda) sean similares.
                 const coincidencia = productosBD.find(p => {
                     const cleanP = cleanStr(p.prenda);
-                    return hayCoincidenciaFlexible(cleanP, cleanItemTitle);
+                    const mismoTitulo = hayCoincidenciaFlexible(cleanP, cleanItemTitle);
+                    const mismoProveedor = (p.proveedor || 'Vinted').toLowerCase() === (item.proveedor || 'Vinted').toLowerCase();
+                    return mismoTitulo && mismoProveedor;
                 });
 
                 if (coincidencia) {

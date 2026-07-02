@@ -143,6 +143,7 @@ function normalizarPrecio(valor) {
 function mapearProductoVinted(item) {
     if (!item) return null;
 
+    const descripcion = item.description || '';
     const titulo = item.title || item.name || item.item_title || '';
     const precio = normalizarPrecio(
         item?.price?.amount ??
@@ -159,9 +160,14 @@ function mapearProductoVinted(item) {
         item?.photos?.[0]?.full_size_url ||
         item?.image_url ||
         '';
+    
+    const marca = item.brand_title || '';
+    const talla = item.size_title || '';
+    const condicion = item.status || '';
+    const favoritos = item.favourite_count || 0;
 
     if (!titulo || !Number.isFinite(precio)) return null;
-    return { titulo, precio, imagen };
+    return { titulo, precio, imagen, descripcion, marca, talla, condicion, favoritos };
 }
 
 function deduplicarProductos(lista) {
@@ -371,7 +377,12 @@ async function run() {
                                 productosExtraidos.push({
                                     titulo: it.title,
                                     precio: parseFloat(it.price?.amount || it.price || '0'),
-                                    imagen: it.photo?.url || it.image_url || ''
+                                    imagen: it.photo?.url || it.image_url || '',
+                                    descripcion: it.description || '',
+                                    marca: it.brand_title || '',
+                                    talla: it.size_title || '',
+                                    condicion: it.status || '',
+                                    favoritos: it.favourite_count || 0
                                 });
                             }
                         });
@@ -469,9 +480,4 @@ async function run() {
         process.exit(0);
 
     } catch (error) {
-        console.error("❌ Error durante el scraping:", error.message);
-        process.exit(1);
-    }
-}
-
-run();
+        console.error("❌ Error durante el scraping:", e

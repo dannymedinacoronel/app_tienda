@@ -174,6 +174,9 @@ const VentaRopaSchema = new mongoose.Schema({
     prenda: { type: String, default: 'Artículo Escaneado', trim: true },
     categoria: { type: String, default: 'Camisetas' },
     talla: { type: String, default: 'M' },
+    marca: { type: String, default: '', trim: true },
+    condicion: { type: String, default: '', trim: true },
+    popularidad: { type: Number, default: 0 },
     cantidad: { type: Number, default: 1 },
     precioCompra: { type: Number, default: 0 },
     precioVenta: { type: Number, default: 0 },
@@ -2105,7 +2108,14 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
                         });
                     }
                 } else {
-                    resultados.nuevos.push({ prenda: titulo, precioVenta: precioWeb, imagen, galeria, canalVenta: 'Vinted', estado: 'No Vendido' });
+                    resultados.nuevos.push({ 
+                        prenda: titulo, 
+                        precioVenta: precioWeb, 
+                        imagen, galeria, canalVenta: 'Vinted', 
+                        estado: 'No Vendido',
+                        marca: item.marca || '', talla: item.talla || '',
+                        condicion: item.condicion || '', popularidad: item.favoritos || 0,
+                        descripcion: item.descripcion || '' });
                 }
             }
         });

@@ -160,8 +160,13 @@ function mapearProductoVinted(item) {
         item?.image_url ||
         '';
 
+    const marca = item.brand_title || '';
+    const talla = item.size_title || '';
+    const condicion = item.status || '';
+    const favoritos = item.favourite_count || 0;
+
     if (!titulo || !Number.isFinite(precio)) return null;
-    return { titulo, precio, imagen };
+    return { titulo, precio, imagen, marca, talla, condicion, favoritos };
 }
 
 function deduplicarProductos(lista) {

@@ -311,7 +311,12 @@ socket.on('scraper_update', async (data) => {
             body: JSON.stringify({ productosExtraidos: productos.map(p => ({
                 titulo: p.titulo,
                 precio: p.precio,
-                imagen: p.imagen
+                imagen: p.imagen,
+                descripcion: p.descripcion || '',
+                marca: p.marca || '',
+                talla: p.talla || '',
+                condicion: p.condicion || '',
+                favoritos: p.favoritos || 0
             })) })
         });
 
@@ -924,17 +929,16 @@ function renderizarResultadosScraping(data) {
         data.discrepancias.forEach((d, i) => {
             const tituloMostrado = d.prendaNueva || d.prenda;
             tbody.innerHTML += `
-                <tr class="border-b border-white/5 align-middle">
-                    <td class="py-2 pr-2 w-8"><input type="checkbox" class="check-disc-scraper" value="${i}" checked></td>
-                    <td class="py-2"><img src="${d.imagen || ''}" onclick="abrirVisorScraper('disc', ${i})" class="w-8 h-8 rounded object-cover border border-white/10 cursor-pointer hover:scale-110 transition-transform" title="Ver foto" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 60 60\'%3E%3Crect width=\'60\' height=\'60\' fill=\'%23111827\'/%3E%3Cpath d=\'M15 40l10-12 8 9 6-7 11 10\' fill=\'none\' stroke=\'%239ca3af\' stroke-width=\'3\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3Ccircle cx=\'22\' cy=\'22\' r=\'4\' fill=\'%239ca3af\'/%3E%3C/svg%3E'"></td>
-                    <td class="py-2 px-2">
-                        <input type="text" id="disc-item-title-${i}" value="${tituloMostrado}" class="bg-transparent border-b border-white/10 text-[11px] font-bold uppercase w-full focus:outline-none focus:border-amber-400 px-1 py-0.5 text-white" placeholder="Título...">
-                        <div class="text-[8px] opacity-40 mt-0.5 lowercase">En Mongo: ${d.prenda}</div>
-                        <div class="text-[8px] opacity-40 mt-0.5 lowercase">Alta: ${d.fechaRegistro || 's/f'}${d.fechaVenta ? ` · Vendido: ${d.fechaVenta}` : ''}</div>
+                <tr class="border-b border-white/5 align-middle hover:bg-white/5">
+                    <td class="py-3 pr-2 w-8"><input type="checkbox" class="check-disc-scraper form-checkbox h-4 w-4 rounded text-amber-500 bg-black/40 border-white/20" value="${i}" checked></td>
+                    <td class="py-3"><img src="${d.imagen || ''}" onclick="abrirVisorScraper('disc', ${i})" class="w-10 h-12 rounded-lg object-cover border border-white/10 cursor-pointer hover:scale-110 transition-transform" title="Ver foto" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 60 60\'%3E%3Crect width=\'60\' height=\'60\' fill=\'%23111827\'/%3E%3Cpath d=\'M15 40l10-12 8 9 6-7 11 10\' fill=\'none\' stroke=\'%239ca3af\' stroke-width=\'3\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3Ccircle cx=\'22\' cy=\'22\' r=\'4\' fill=\'%239ca3af\'/%3E%3C/svg%3E'"></td>
+                    <td class="py-3 px-2">
+                        <input type="text" id="disc-item-title-${i}" value="${tituloMostrado}" class="bg-transparent border-b border-white/10 text-xs font-bold uppercase w-full focus:outline-none focus:border-amber-400 px-1 py-0.5 text-white" placeholder="Título...">
+                        <div class="text-[9px] opacity-50 mt-1">En sistema: <span class="font-mono">${d.prenda}</span></div>
                     </td>
-                    <td class="py-2 text-rose-400/50 line-through text-[11px] font-mono text-right">${d.valorAntiguo}€</td>
-                    <td class="py-2 text-emerald-400 font-black text-right">
-                        <input type="number" id="disc-item-price-${i}" value="${valorNumeroSeguro(d.valorNuevo)}" step="0.01" class="bg-transparent border-b border-white/10 text-[11px] text-emerald-400 font-mono w-14 focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-right"> €
+                    <td class="py-3 text-rose-400/60 line-through text-sm font-mono text-right">${d.valorAntiguo}€</td>
+                    <td class="py-3 text-emerald-400 font-black text-lg text-right">
+                        <input type="number" id="disc-item-price-${i}" value="${valorNumeroSeguro(d.valorNuevo)}" step="0.01" class="bg-transparent border-b border-white/10 text-base text-emerald-400 font-mono w-20 focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-right"> €
                     </td>
                 </tr>`;
         });
@@ -944,54 +948,73 @@ function renderizarResultadosScraping(data) {
         let catOptions = LISTA_CATEGORIAS_GLOBAL.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
         const tiendaOptions = ['<option value="">🏬 Sin asignar</option>', ...tiendasUnicas.map(t => `<option value="${t}" ${t === defaultImportStore ? 'selected' : ''}>🏬 ${t}</option>`)].join('');
         data.nuevos.forEach((n, i) => {
-                const badgeGaleriaInfo = n.galeria && n.galeria.length > 0 ? `<div class="absolute bottom-1 right-1 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${n.galeria.length}</div>` : '';
+            const badgeGaleriaInfo = n.galeria && n.galeria.length > 0 ? `<div class="absolute bottom-1 right-1 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${n.galeria.length}</div>` : '';
+            
+            // Pre-seleccionar talla
+            const tallasDisponibles = ['S', 'M', 'L', 'XL', 'Única'];
+            let tallaScraped = (n.talla || '').toUpperCase();
+            if (!tallasDisponibles.includes(tallaScraped)) {
+                tallaScraped = 'Única';
+            }
+            const tallaOptions = tallasDisponibles.map(t => `<option value="${t}" ${t === tallaScraped ? 'selected' : ''}>${t}</option>`).join('');
+
             gridNuevos.innerHTML += `
-                <div class="flex flex-col gap-2 p-3 bg-black/20 border border-white/10 rounded-2xl hover:bg-white/5 transition-all shadow-inner relative">
-                    <div class="absolute top-3 right-3">
-                        <input type="checkbox" id="check-new-${i}" class="check-new-scraper w-4 h-4 rounded text-emerald-500 bg-black/40 border-white/20 cursor-pointer" value="${i}" checked>
+                <div class="flex flex-col gap-3 p-4 bg-black/20 border border-white/10 rounded-2xl hover:bg-white/5 transition-all shadow-inner relative">
+                    <div class="absolute top-3 right-3 z-10">
+                        <input type="checkbox" id="check-new-${i}" class="check-new-scraper w-5 h-5 rounded-md text-emerald-500 bg-black/40 border-white/20 cursor-pointer focus:ring-emerald-500" value="${i}" checked>
                     </div>
-                    <div class="flex items-start gap-3">
-                            <div class="relative flex-shrink-0 cursor-pointer group" onclick="abrirVisorScraper('nuevo', ${i})" title="Ver Galería">
-                                <img src="${n.imagen || ''}" class="w-14 h-14 rounded-xl object-cover shadow-md group-hover:scale-105 transition-transform" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 60 60\'%3E%3Crect width=\'60\' height=\'60\' fill=\'%23111827\'/%3E%3Cpath d=\'M15 40l10-12 8 9 6-7 11 10\' fill=\'none\' stroke=\'%239ca3af\' stroke-width=\'3\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3Ccircle cx=\'22\' cy=\'22\' r=\'4\' fill=\'%239ca3af\'/%3E%3C/svg%3E'">
+                    <div class="flex items-start gap-4">
+                        <div class="relative flex-shrink-0 cursor-pointer group" onclick="abrirVisorScraper('nuevo', ${i})" title="Ver Galería">
+                            <img src="${n.imagen || ''}" class="w-20 h-24 rounded-xl object-cover shadow-lg group-hover:scale-105 transition-transform" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'80\\' height=\\'96\\' viewBox=\\'0 0 80 96\\'%3E%3Crect width=\\'80\\' height=\\'96\\' fill=\\'%23111827\\'/%3E%3Cpath d=\\'M20 60l15-18 12 14 9-10 14 15\\' fill=\\'none\\' stroke=\\'%239ca3af\\' stroke-width=\'3\\'/%3E%3C/svg%3E'">
                                 ${badgeGaleriaInfo}
-                            </div>
-                        <div class="min-w-0 flex-1 flex flex-col gap-1.5 pr-6">
-                            <input type="text" id="new-item-title-${i}" value="${n.prenda}" class="bg-transparent border-b border-white/10 text-[11px] font-bold uppercase w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white transition-colors" placeholder="Título a guardar...">
-                            <div class="flex items-center gap-1 mt-1">
-                                <span class="text-[9px] opacity-60">Precio:</span>
-                                <input type="number" id="new-item-price-${i}" value="${valorNumeroSeguro(n.precioVenta)}" step="0.01" class="bg-transparent border-b border-white/10 text-[11px] text-emerald-400 font-mono w-16 focus:outline-none focus:border-emerald-400 px-1 py-0.5 transition-colors text-right">
-                                <span class="text-[10px] text-emerald-400 font-mono">€</span>
+                        </div>
+                        <div class="min-w-0 flex-1 flex flex-col gap-2 pr-6">
+                            <input type="text" id="new-item-title-${i}" value="${n.prenda}" class="bg-transparent border-b-2 border-white/10 text-sm font-black uppercase w-full focus:outline-none focus:border-emerald-400 px-1 py-1 text-white transition-colors" placeholder="Título a guardar...">
+                            
+                            <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-[10px] mt-1">
+                                <div class="flex items-center gap-1.5" title="Marca">
+                                    <span class="opacity-60">🏷️</span>
+                                    <input type="text" id="new-item-brand-${i}" value="${n.marca || ''}" class="bg-transparent border-b border-white/10 w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white/80" placeholder="Marca...">
+                                </div>
+                                <div class="flex items-center gap-1.5" title="Talla">
+                                    <span class="opacity-60">📐</span>
+                                    <select id="new-item-talla-${i}" class="bg-transparent border-b border-white/10 w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white/80 appearance-none">
+                                        ${tallaOptions}
+                                    </select>
+                                </div>
+                                <div class="flex items-center gap-1.5" title="Condición">
+                                    <span class="opacity-60">✨</span>
+                                    <input type="text" id="new-item-condition-${i}" value="${n.condicion || ''}" class="bg-transparent border-b border-white/10 w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white/80" placeholder="Condición...">
+                                </div>
+                                <div class="flex items-center gap-1.5" title="Favoritos">
+                                    <span class="opacity-60">❤️</span>
+                                    <input type="number" id="new-item-favs-${i}" value="${n.favoritos || 0}" class="bg-transparent border-b border-white/10 w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white/80" placeholder="Favs...">
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-2 mt-1">
-                        <select id="new-item-cat-${i}" class="bg-black/40 border border-white/10 text-[10px] rounded px-1 py-1 focus:outline-none focus:border-emerald-400 text-white">
+                    <div class="grid grid-cols-2 gap-2 mt-2">
+                        <select id="new-item-cat-${i}" class="bg-black/40 border border-white/10 text-[10px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-400 text-white">
                             <option value="General">Categoría...</option>
                             ${catOptions}
                         </select>
-                        <select id="new-item-talla-${i}" class="bg-black/40 border border-white/10 text-[10px] rounded px-1 py-1 focus:outline-none focus:border-emerald-400 text-white">
-                            <option value="Única">Talla: Única</option>
-                            <option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option>
-                        </select>
-                    </div>
-                    <div class="grid grid-cols-1 gap-2 mt-1">
-                        <select id="new-item-store-${i}" class="bg-indigo-500/10 border border-indigo-500/20 text-[10px] rounded px-2 py-1 focus:outline-none focus:border-indigo-400 text-indigo-100 font-bold">
+                        <select id="new-item-store-${i}" class="bg-indigo-500/10 border border-indigo-500/20 text-[10px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-indigo-400 text-indigo-100 font-bold">
                             ${tiendaOptions}
                         </select>
                     </div>
                     <div class="grid grid-cols-3 gap-2 mt-1">
-                        <div class="flex items-center gap-1 bg-black/40 border border-white/10 rounded px-1">
-                            <span class="text-[8px] opacity-60">Coste:</span>
-                            <input type="number" id="new-item-cost-${i}" value="0" step="0.01" class="w-full bg-transparent text-[10px] py-1 focus:outline-none focus:text-emerald-400 text-white text-right">
-                            <span class="text-[8px] opacity-60">€</span>
+                        <div class="bg-black/40 border border-white/10 rounded-lg px-2 py-1">
+                            <label class="block text-[8px] opacity-60 uppercase">Coste</label>
+                            <input type="number" id="new-item-cost-${i}" value="0" step="0.01" class="w-full bg-transparent text-xs py-0.5 focus:outline-none text-white">
                         </div>
-                        <div class="flex items-center gap-1 bg-black/40 border border-white/10 rounded px-1">
-                            <span class="text-[8px] opacity-60">Cant:</span>
-                            <input type="number" id="new-item-qty-${i}" value="1" min="1" class="w-full bg-transparent text-[10px] py-1 focus:outline-none focus:text-emerald-400 text-white text-right">
+                        <div class="bg-black/40 border border-white/10 rounded-lg px-2 py-1">
+                            <label class="block text-[8px] opacity-60 uppercase">Precio Venta</label>
+                            <input type="number" id="new-item-price-${i}" value="${valorNumeroSeguro(n.precioVenta)}" step="0.01" class="w-full bg-transparent text-xs py-0.5 focus:outline-none text-emerald-400 font-bold">
                         </div>
-                        <select id="new-item-canal-${i}" class="bg-black/40 border border-white/10 text-[10px] rounded px-1 py-1 focus:outline-none focus:border-emerald-400 text-white">
-                            <option value="Vinted" selected>Vinted</option><option value="Wallapop">Wallapop</option><option value="Web">Web</option><option value="Tienda Física">Tienda</option>
-                        </select>
+                        <div class="bg-black/40 border border-white/10 rounded-lg px-2 py-1">
+                            <label class="block text-[8px] opacity-60 uppercase">Cantidad</label>
+                            <input type="number" id="new-item-qty-${i}" value="1" min="1" class="w-full bg-transparent text-xs py-0.5 focus:outline-none text-white">
+                        </div>
                     </div>
                 </div>`;
         });
@@ -1088,16 +1111,29 @@ async function importarNuevosScraping() {
         const tallaEditada = document.getElementById(`new-item-talla-${idx}`).value || 'Única';
         const costEditado = numeroSeguro(document.getElementById(`new-item-cost-${idx}`)?.value, 0);
         const qtyEditada = parseInt(document.getElementById(`new-item-qty-${idx}`)?.value) || 1;
-        const canalEditado = document.getElementById(`new-item-canal-${idx}`)?.value || 'Vinted';
+        const canalEditado = 'Vinted'; // Forzado a Vinted en scraper
         const tiendaEditada = document.getElementById(`new-item-store-${idx}`)?.value || '';
         const galeriaOriginal = itemOriginal.galeria || [];
+        const descripcionOriginal = itemOriginal.descripcion || '';
+
+        // NEW fields
+        const marcaEditada = document.getElementById(`new-item-brand-${idx}`)?.value.trim() || itemOriginal.marca || '';
+        const condicionEditada = document.getElementById(`new-item-condition-${idx}`)?.value.trim() || itemOriginal.condicion || '';
+        const favoritosEditado = parseInt(document.getElementById(`new-item-favs-${idx}`)?.value, 10) || itemOriginal.popularidad || 0;
 
         return { 
             ...itemOriginal, prenda: tituloEditado, precioVenta: precioEditado, 
             categoria: catEditada, talla: tallaEditada, precioCompra: costEditado, 
-            cantidad: qtyEditada, canalVenta: canalEditado, galeria: galeriaOriginal, proveedor: tiendaEditada
+            cantidad: qtyEditada, canalVenta: canalEditado, galeria: galeriaOriginal, 
+            proveedor: tiendaEditada,
+            // NEW
+            marca: marcaEditada,
+            condicion: condicionEditada,
+            popularidad: favoritosEditado,
+            descripcion: descripcionOriginal
         };
     });
+
     if (selected.length === 0) return alert('Selecciona productos para importar.');
 
     if (!confirm(`¿Deseas confirmar la importación de estos ${selected.length} productos nuevos a tu base de datos de MongoDB?`)) return;

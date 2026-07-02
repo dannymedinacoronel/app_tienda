@@ -759,6 +759,42 @@ app.post('/api/public/citas', async (req, res) => {
             actualizadoEn: new Date()
         });
 
+        // Sincronizar con el CRM (Clientes)
+        try {
+            const nombreCompleto = `${nombre} ${apellidos}`.trim();
+            let cliente = null;
+
+            // 1. Buscar por email si está disponible
+            if (email) {
+                cliente = await Cliente.findOne({ email, empresa });
+            }
+
+            // 2. Si no se encuentra por email, buscar por teléfono
+            if (!cliente && telefono) {
+                cliente = await Cliente.findOne({ telefono, empresa });
+            }
+
+            const fechaCita = new Date(`${fechaDia}T${hora}:00`);
+            const notaReserva = `Cita creada: ${servicio || 'General'} con ${asesor.nombreVisible || asesor.email.split('@')[0]}.`;
+
+            if (cliente) {
+                // 3. Si el cliente existe, actualizarlo
+                cliente.nombre = nombreCompleto;
+                if (email) cliente.email = email;
+                if (telefono) cliente.telefono = telefono;
+                cliente.reservas.push({ fecha: fechaCita, nota: notaReserva });
+                await cliente.save();
+                console.log(`[CRM] Cliente existente actualizado para la cita: ${cliente.nombre}`);
+            } else {
+                // 4. Si el cliente no existe, crearlo
+                await Cliente.create({ empresa, nombre: nombreCompleto, email, telefono, reservas: [{ fecha: fechaCita, nota: notaReserva }] });
+                console.log(`[CRM] Nuevo cliente creado para la cita: ${nombreCompleto}`);
+            }
+        } catch (crmError) {
+            console.error(`[CRM] Fallo al sincronizar cita en el CRM para ${email || telefono}:`, crmError);
+            // No fallar la petición principal, solo registrar el error.
+        }
+
         if (global.io) {
             global.io.to(`empresa:${empresa}`).emit('cita_nueva', {
                 empresa,

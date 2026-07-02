@@ -325,12 +325,15 @@ async function extraerProductosConPlaywright(urlObjetivo) {
 }
 
 async function run() {
-    const url = process.argv[2];
+    const url = process.argv[2]; // URL de Vinted
+    const empresa = process.argv[3] || 'seychelles'; // Identificador de la empresa
+
     if (!url) {
         console.error("❌ Error: Debes proporcionar una URL de Vinted como argumento.");
         process.exit(1);
     }
-
+    
+    console.log(`[SCRAPER] Iniciando para URL: ${url} | Empresa: ${empresa}`);
     const secretToken = process.env.SCRAPER_TOKEN;
 
     try {
@@ -439,7 +442,8 @@ async function run() {
                     console.log(`[WEBHOOK] Enviando resultados a: ${target}`);
                     await axios.post(target, {
                         productos: productosExtraidos,
-                        urlOrigen: url
+                        urlOrigen: url,
+                        empresa: empresa
                     }, {
                         headers: { 'x-github-token': secretToken },
                         timeout: 15000

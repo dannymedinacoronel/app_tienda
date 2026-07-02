@@ -7,6 +7,10 @@ on:
         description: 'URL del perfil o búsqueda de Vinted'
         required: true
         default: 'https://www.vinted.es/member/123456-usuario'
+      empresa:
+        description: 'Identificador de la empresa para el webhook'
+        required: false
+        default: 'seychelles'
 
 jobs:
   scrape:
@@ -37,4 +41,4 @@ jobs:
         env:
           MY_WEB_URL: ${{ secrets.MY_WEB_URL }}
           SCRAPER_TOKEN: ${{ secrets.SCRAPER_TOKEN }}
-        run: node scripts/manual-scrape.js "${{ github.event.inputs.vinted_url }}"
+        run: node scripts/manual-scrape.js "${{ github.event.inputs.vinted_url }}" "${{ github.event.inputs.empresa }}"

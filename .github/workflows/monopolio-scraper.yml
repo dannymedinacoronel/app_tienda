@@ -1,0 +1,31 @@
+name: Vinted Monopolio Scraper
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'URL a scrapear'
+        required: true
+      empresa:
+        description: 'Identificador de la empresa para el webhook'
+        required: false
+        default: 'seychelles'
+      alias:
+        description: 'Alias de la URL'
+        required: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Execute Scrape
+        env:
+          MY_WEB_URL: ${{ secrets.MY_WEB_URL }}
+          SCRAPER_TOKEN: ${{ secrets.SCRAPER_TOKEN }}
+        run: node scripts/monopolio-scrape.js "${{ github.event.inputs.target_url }}" "${{ github.event.inputs.empresa }}" "${{ github.event.inputs.alias }}"

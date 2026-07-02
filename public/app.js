@@ -32,6 +32,7 @@ let CONFIG_FILTRO_COLUMNAS = { 'No Vendido': '', 'Vendido': '', 'Devuelto': '', 
 let CALENDARIO_MES = new Date().getMonth() + 1;
 let CALENDARIO_ANIO = new Date().getFullYear();
 let SCRAPER_PROGRESS_INTERVAL = null;
+let MONOPOLIO_URLS = [];
 let SCRAPER_PROGRESS_VALUE = 0;
 let SCRAPER_PROGRESS_MSG_INDEX = 0;
 
@@ -337,6 +338,49 @@ socket.on('scraper_update', async (data) => {
         document.getElementById('scraper-step-1').classList.remove('hidden');
         alert('No se pudieron procesar los resultados del scraper remoto. Revisa logs de Render/GitHub.');
     }
+});
+
+socket.on('monopolio_update', (data) => {
+    console.log('[SOCKET] Datos de Monopolio recibidos:', data);
+    const container = document.getElementById('resultados-monopolio-scraping');
+    if (!container) return;
+
+    // Limpiar mensaje inicial si es el primer resultado
+    if (container.querySelector('p.italic')) {
+        container.innerHTML = '';
+    }
+
+    const alias = data.alias || data.urlOrigen;
+    const productos = data.productos || [];
+
+    let existingContainer = document.getElementById(`monopolio-res-${btoa(data.urlOrigen)}`);
+    if (existingContainer) {
+        existingContainer.remove();
+    }
+
+    const resultBlock = document.createElement('div');
+    resultBlock.id = `monopolio-res-${btoa(data.urlOrigen)}`;
+    resultBlock.className = 'p-4 bg-black/20 border border-purple-500/20 rounded-2xl';
+    
+    let productosHtml = '<p class="text-xs opacity-60">No se encontraron productos.</p>';
+    if (productos.length > 0) {
+        productosHtml = productos.slice(0, 20).map(p => `
+            <div class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5">
+                <img src="${p.imagen}" class="w-8 h-8 rounded object-cover" onerror="this.style.display='none'">
+                <p class="text-xs flex-1 truncate">${p.titulo}</p>
+                <p class="text-xs font-bold text-emerald-400">${p.precio}€</p>
+            </div>
+        `).join('');
+    }
+
+    resultBlock.innerHTML = `
+        <h5 class="font-bold text-purple-300 text-sm mb-2">${alias}</h5>
+        <p class="text-[10px] opacity-60 mb-3">${productos.length} productos encontrados.</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${productosHtml}</div>
+    `;
+
+    container.prepend(resultBlock);
+    cantarPorVoz(`Scraping de ${alias} finalizado.`);
 });
 
 function actualizarCargaScraper(percent, message, status) {
@@ -1181,6 +1225,7 @@ function eliminarUrlGuardada(idx) {
 // --- FUNCIONES DEBOUNCED GLOBALES ---
 window.debouncedCambiarFiltroColumna = debounce(cambiarFiltroColumna, 300);
 window.debouncedFiltrarProductosMenu = debounce(filtrarProductosMenu, 250);
+window.filtrarMonopolioUrls = debounce(filtrarMonopolioUrls, 250);
 window.debouncedFiltrarCRM = debounce(filtrarCRM, 300);
 
 // --- LÓGICA DE LA APLICACIÓN PRINCIPAL ---
@@ -1188,6 +1233,121 @@ let ITEM_FOTOS_ACTUAL = null;
 let IDX_FOTO_ACTUAL = -1; 
 
 function abrirVisorFotos(id) {
+
+// --- LÓGICA DE MONOPOLIO ---
+
+async function renderMonopolioUrls() {
+    try {
+        const res = await fetch('/api/monopolio/urls', { credentials: 'include' });
+        MONOPOLIO_URLS = await res.json();
+        filtrarMonopolioUrls();
+    } catch (e) {
+        console.error("Error cargando URLs de monopolio", e);
+    }
+}
+
+function filtrarMonopolioUrls(query = '') {
+    const q = query.toLowerCase();
+    const container = document.getElementById('lista-monopolio-urls');
+    if (!container) return;
+
+    const filtradas = MONOPOLIO_URLS.filter(u => 
+        (u.alias && u.alias.toLowerCase().includes(q)) ||
+        (u.url && u.url.toLowerCase().includes(q))
+    );
+
+    if (filtradas.length === 0) {
+        container.innerHTML = '<p class="text-xs opacity-50 italic">No hay webs guardadas.</p>';
+        return;
+    }
+
+    container.innerHTML = filtradas.map(u => `
+        <div class="p-3 bg-black/20 border border-white/10 rounded-xl flex items-center justify-between gap-3">
+            <div class="flex-1 min-w-0">
+                <p class="font-bold text-sm truncate text-purple-300">${u.alias || 'Sin Alias'}</p>
+                <p class="text-xs opacity-60 truncate font-mono">${u.url}</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="editarMonopolioUrl('${u._id}')" class="bg-blue-600/20 text-blue-300 px-3 py-1 rounded-lg text-xs font-bold">Editar</button>
+                <button onclick="borrarMonopolioUrl('${u._id}')" class="bg-rose-600/20 text-rose-400 px-3 py-1 rounded-lg text-xs font-bold">Borrar</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function limpiarFormMonopolio() {
+    document.getElementById('form-monopolio-url').reset();
+    document.getElementById('monopolio-url-id').value = '';
+    document.getElementById('monopolio-form-title').innerText = 'Añadir Web para Análisis';
+    document.getElementById('btn-submit-monopolio').innerText = 'Guardar Web';
+    document.getElementById('btn-cancel-monopolio').classList.add('hidden');
+}
+
+function editarMonopolioUrl(id) {
+    const urlItem = MONOPOLIO_URLS.find(u => u._id === id);
+    if (!urlItem) return;
+
+    document.getElementById('monopolio-url-id').value = urlItem._id;
+    document.getElementById('monopolio-url-alias').value = urlItem.alias || '';
+    document.getElementById('monopolio-url-input').value = urlItem.url || '';
+
+    document.getElementById('monopolio-form-title').innerText = 'Editar Web';
+    document.getElementById('btn-submit-monopolio').innerText = 'Actualizar Web';
+    document.getElementById('btn-cancel-monopolio').classList.remove('hidden');
+    document.getElementById('monopolio-url-alias').focus();
+}
+
+async function guardarMonopolioUrl(event) {
+    event.preventDefault();
+    const id = document.getElementById('monopolio-url-id').value;
+    const url = document.getElementById('monopolio-url-input').value;
+    const alias = document.getElementById('monopolio-url-alias').value;
+
+    const method = id ? 'PUT' : 'POST';
+    const endpoint = id ? `/api/monopolio/urls/${id}` : '/api/monopolio/urls';
+
+    try {
+        const res = await fetch(endpoint, { method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ url, alias }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al guardar');
+        cantarPorVoz('Web guardada');
+        limpiarFormMonopolio();
+        await renderMonopolioUrls();
+    } catch (e) {
+        alert(`Error: ${e.message}`);
+    }
+}
+
+async function borrarMonopolioUrl(id) {
+    if (!confirm('¿Seguro que quieres eliminar esta web de la lista?')) return;
+    try {
+        const res = await fetch(`/api/monopolio/urls/${id}`, { method: 'DELETE', credentials: 'include' });
+        if (!res.ok && res.status !== 204) throw new Error('No se pudo borrar');
+        cantarPorVoz('Web eliminada');
+        await renderMonopolioUrls();
+    } catch (e) {
+        alert(`Error: ${e.message}`);
+    }
+}
+
+async function iniciarScrapingMonopolio() {
+    if (!confirm(`Esto iniciará un proceso de scraping para TODAS las webs guardadas. Puede tardar varios minutos y consumir recursos. ¿Continuar?`)) return;
+    
+    const resultadosContainer = document.getElementById('resultados-monopolio-scraping');
+    resultadosContainer.innerHTML = `<div class="text-center py-4"><div class="w-8 h-8 border-4 border-purple-400 border-t-transparent rounded-full animate-spin mx-auto"></div><p class="mt-2 text-xs text-purple-300">Lanzando tareas de scraping en GitHub Actions...</p></div>`;
+
+    try {
+        const res = await fetch('/api/monopolio/scrape-all', { method: 'POST', credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al iniciar el scraping');
+        
+        resultadosContainer.querySelector('p').innerText = data.message + ' Esperando resultados...';
+        cantarPorVoz('Scraping masivo iniciado');
+    } catch (e) {
+        resultadosContainer.innerHTML = `<p class="text-xs text-rose-400">Error: ${e.message}</p>`;
+    }
+}
+
     const item = BASE_DATOS.find(v => v._id === id);
     if (!item) return;
     ITEM_FOTOS_ACTUAL = item;
@@ -1821,6 +1981,9 @@ window.navegarASeccion = function(idSeccion) {
     }
     if (idSeccion === 'sec-ajustes') {
         setTimeout(() => { renderListaAjustesKanban(); }, 50);
+    }
+    if (idSeccion === 'sec-monopolio') {
+        setTimeout(() => { renderMonopolioUrls(); }, 50);
     }
 }
 

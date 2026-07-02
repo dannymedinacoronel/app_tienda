@@ -586,6 +586,7 @@
                 <nav class="lg:w-1/2 flex flex-wrap gap-1.5 p-1.5 card-bg rounded-2xl text-[9px] w-full border border-white/5">
                     <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all nav-btn-active text-white">📦 Panel</button>
                     <button onclick="navegarASeccion('sec-tareas')" id="tab-sec-tareas" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">✅ Tareas</button>
+                    <button onclick="navegarASeccion('sec-monopolio')" id="tab-sec-monopolio" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📈 Monopolio</button>
                     <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📊 Analítica</button>
                     <button onclick="navegarASeccion('sec-notas')" id="tab-sec-notas" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📝 Notas</button>
                     <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">👥 CRM</button>
@@ -1322,6 +1323,40 @@
                     </form>
                     
                     <div class="lg:col-span-2 space-y-3" id="lista-estados-kanban-config"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN TENDENCIAS Y MONOPOLIO -->
+        <div id="sec-monopolio" class="seccion-app hidden flex flex-col gap-6 mb-8">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xs font-black text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                    <span class="bg-purple-500/20 p-2 rounded-xl">📈</span> Tendencias y Monopolio
+                </h3>
+                <button onclick="iniciarScrapingMonopolio()" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-xl text-xs uppercase shadow-md">Scrapear Todas las Webs</button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="card-bg border p-6 rounded-3xl shadow-xl h-fit">
+                    <h4 id="monopolio-form-title" class="text-sm font-black uppercase tracking-wide text-indigo-400 mb-4">Añadir Web para Análisis</h4>
+                    <form id="form-monopolio-url" class="space-y-3" onsubmit="guardarMonopolioUrl(event)">
+                        <input type="hidden" id="monopolio-url-id">
+                        <input type="text" id="monopolio-url-alias" placeholder="Alias (ej: Competidor A)" class="input-bg border w-full rounded-xl px-3 py-2 text-xs">
+                        <input type="url" id="monopolio-url-input" placeholder="https://www.vinted.es/member/..." required class="input-bg border w-full rounded-xl px-3 py-2 text-xs">
+                        <button type="submit" id="btn-submit-monopolio" class="w-full bg-indigo-600 text-white font-bold py-2 rounded-xl text-xs uppercase">Guardar Web</button>
+                        <button type="button" id="btn-cancel-monopolio" onclick="limpiarFormMonopolio()" class="hidden w-full text-center text-[10px] uppercase opacity-50 py-1 hover:underline">Cancelar</button>
+                    </form>
+                </div>
+                <div class="lg:col-span-2 card-bg border p-6 rounded-3xl shadow-xl">
+                     <input type="text" oninput="filtrarMonopolioUrls(this.value)" placeholder="Buscar por alias o URL..." class="input-bg border w-full rounded-xl px-3 py-2 text-xs mb-4">
+                     <div id="lista-monopolio-urls" class="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-1"></div>
+                </div>
+            </div>
+
+            <div class="card-bg border p-6 rounded-3xl shadow-xl mt-4">
+                <h4 class="text-sm font-black uppercase tracking-wide text-purple-400 mb-4">Resultados del Scraping</h4>
+                <div id="resultados-monopolio-scraping" class="space-y-4 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
+                    <p class="text-xs opacity-50 italic">Los resultados del scraping de las webs guardadas aparecerán aquí en tiempo real.</p>
                 </div>
             </div>
         </div>

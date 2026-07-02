@@ -270,6 +270,16 @@ MensajeInternoSchema.index({ empresa: 1, deEmail: 1, paraEmail: 1, creadoEn: -1 
 MensajeInternoSchema.index({ empresa: 1, paraEmail: 1, leido: 1, creadoEn: -1 });
 const MensajeInterno = mongoose.models.MensajeInterno || mongoose.model('MensajeInterno', MensajeInternoSchema);
 
+const MonopolioUrlSchema = new mongoose.Schema({
+    empresa: { type: String, required: true, trim: true, lowercase: true, index: true },
+    url: { type: String, required: true, trim: true },
+    alias: { type: String, trim: true },
+    lastScraped: { type: Date },
+    createdAt: { type: Date, default: Date.now }
+});
+MonopolioUrlSchema.index({ empresa: 1, url: 1 }, { unique: true });
+const MonopolioUrl = mongoose.models.MonopolioUrl || mongoose.model('MonopolioUrl', MonopolioUrlSchema);
+
 const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
 
 io.on('connection', (socket) => {
@@ -306,7 +316,8 @@ mongoose.connect(MONGO_URI_FINAL)
             Tarea.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
             Faq.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
             LogAuditoria.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
-            MensajeInterno.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } })
+            MensajeInterno.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } }),
+            MonopolioUrl.updateMany({ $or: [{ empresa: { $exists: false } }, { empresa: '' }, { empresa: null }] }, { $set: { empresa: EMPRESA_DEFAULT } })
         ]);
 
         const negocioBase = await Negocio.findOne({ slug: EMPRESA_DEFAULT }).lean();
@@ -2268,5 +2279,119 @@ app.post('/api/scraper/aplicar', exigeAdmin, async (req, res) => {
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Error al actualizar precios.' });
+    }
+});
+
+// --- RUTAS DE TENDENCIAS Y MONOPOLIO ---
+
+app.get('/api/monopolio/urls', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const urls = await MonopolioUrl.find({ empresa }).sort({ alias: 1, createdAt: -1 }).lean();
+        res.json(urls);
+    } catch (e) {
+        res.status(500).json({ error: 'Error al cargar las URLs de monopolio.' });
+    }
+});
+
+app.post('/api/monopolio/urls', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const { url, alias } = req.body;
+        if (!url) return res.status(400).json({ error: 'La URL es obligatoria.' });
+
+        const nuevaUrl = new MonopolioUrl({ empresa, url, alias });
+        await nuevaUrl.save();
+        await registrarLog(req.session.email, `Añadió URL a Monopolio: ${alias || url}`);
+        res.status(201).json(nuevaUrl);
+    } catch (e) {
+        if (e.code === 11000) {
+            return res.status(409).json({ error: 'Esa URL ya está guardada.' });
+        }
+        res.status(500).json({ error: 'No se pudo guardar la URL.' });
+    }
+});
+
+app.put('/api/monopolio/urls/:id', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const { id } = req.params;
+        const { url, alias } = req.body;
+        if (!url) return res.status(400).json({ error: 'La URL es obligatoria.' });
+
+        const actualizada = await MonopolioUrl.findOneAndUpdate(
+            { _id: id, empresa },
+            { url, alias },
+            { new: true }
+        );
+        if (!actualizada) return res.status(404).json({ error: 'URL no encontrada.' });
+        await registrarLog(req.session.email, `Modificó URL de Monopolio: ${alias || url}`);
+        res.json(actualizada);
+    } catch (e) {
+        res.status(500).json({ error: 'No se pudo actualizar la URL.' });
+    }
+});
+
+app.delete('/api/monopolio/urls/:id', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const { id } = req.params;
+        const borrada = await MonopolioUrl.findOneAndDelete({ _id: id, empresa });
+        if (!borrada) return res.status(404).json({ error: 'URL no encontrada.' });
+        await registrarLog(req.session.email, `Eliminó URL de Monopolio: ${borrada.alias || borrada.url}`);
+        res.sendStatus(204);
+    } catch (e) {
+        res.status(500).json({ error: 'No se pudo eliminar la URL.' });
+    }
+});
+
+// Endpoint para disparar el scraping de todas las URLs guardadas
+app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const urls = await MonopolioUrl.find({ empresa }).lean();
+        if (urls.length === 0) {
+            return res.status(400).json({ error: 'No hay URLs guardadas para scrapear.' });
+        }
+
+        const GITHUB_PAT = process.env.GITHUB_PAT;
+        const REPO_OWNER = process.env.GITHUB_OWNER || 'dannymedinacoronel';
+        const REPO_NAME = process.env.GITHUB_REPO || 'app_tienda';
+
+        if (!GITHUB_PAT || !REPO_OWNER || !REPO_NAME) {
+            return res.status(500).json({ error: 'Falta configuración de GitHub (PAT, OWNER, REPO) en el servidor.' });
+        }
+
+        for (const item of urls) {
+            await axios.post(
+                `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/monopolio-scraper.yml/dispatches`,
+                { ref: 'main', inputs: { target_url: item.url, empresa: empresa, alias: item.alias || item.url } },
+                { headers: { 'Authorization': `token ${GITHUB_PAT}`, 'Accept': 'application/vnd.github.v3+json' } }
+            );
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        res.json({ success: true, message: `Se han lanzado ${urls.length} tareas de scraping en GitHub Actions.` });
+
+    } catch (error) {
+        console.error('[MONOPOLIO-API] Error al lanzar workflows:', error.response?.data || error.message);
+        res.status(500).json({ error: 'No se pudieron iniciar las tareas de scraping remoto.' });
+    }
+});
+
+// Webhook para recibir datos del scraper de monopolio
+app.post('/api/monopolio/webhook-github', async (req, res) => {
+    const token = req.headers['x-github-token'];
+    const GITHUB_SECRET = process.env.SCRAPER_TOKEN;
+
+    if (!GITHUB_SECRET || token !== GITHUB_SECRET) return res.status(401).json({ error: 'No autorizado' });
+
+    try {
+        const { productos, urlOrigen, empresa, alias } = req.body;
+        console.log(`[MONOPOLIO-WEBHOOK] Recibidos ${productos.length} productos de ${alias || urlOrigen}`);
+        if (global.io) { global.io.to(`empresa:${empresa}`).emit('monopolio_update', { mensaje: `Scraping finalizado para ${alias || urlOrigen}.`, productos, urlOrigen, alias, empresa, timestamp: new Date() }); }
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Error procesando webhook de monopolio' });
     }
 });

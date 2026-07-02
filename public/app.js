@@ -90,6 +90,97 @@ function scrollToLandingSection(sectionId) {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+async function cargarNegociosCitasLanding() {
+    const negocioSelect = document.getElementById('cita-negocio');
+    const asesorSelect = document.getElementById('cita-asesor');
+    if (!negocioSelect || !asesorSelect) return;
+
+    try {
+        const res = await fetch('/api/public/citas/negocios');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudieron cargar negocios.');
+        CITA_NEGOCIOS_CACHE = data.negocios || [];
+
+        negocioSelect.innerHTML = '<option value="">Selecciona negocio</option>' +
+            CITA_NEGOCIOS_CACHE.map(n => `<option value="${n.slug}">${n.nombre}</option>`).join('');
+        asesorSelect.innerHTML = '<option value="">Selecciona persona que te atenderá</option>';
+    } catch (e) {
+        negocioSelect.innerHTML = '<option value="">No disponible</option>';
+    }
+}
+
+async function cargarAsesoresCitaLanding() {
+    const negocioSelect = document.getElementById('cita-negocio');
+    const asesorSelect = document.getElementById('cita-asesor');
+    if (!negocioSelect || !asesorSelect) return;
+
+    const empresa = (negocioSelect.value || '').trim();
+    if (!empresa) {
+        asesorSelect.innerHTML = '<option value="">Selecciona persona que te atenderá</option>';
+        return;
+    }
+
+    try {
+        asesorSelect.innerHTML = '<option value="">Cargando equipo...</option>';
+        const res = await fetch(`/api/public/citas/disponibilidad?empresa=${encodeURIComponent(empresa)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo cargar el equipo.');
+        const asesores = data.asesores || [];
+        asesorSelect.innerHTML = '<option value="">Selecciona persona que te atenderá</option>' +
+            asesores.map(a => `<option value="${a.email}">${a.nombre} · ${a.rol}</option>`).join('');
+    } catch (e) {
+        asesorSelect.innerHTML = '<option value="">No disponible</option>';
+    }
+}
+
+async function registrarCitaLanding(event) {
+    event.preventDefault();
+    const btn = document.getElementById('cita-btn-submit');
+    const txtOriginal = btn ? btn.innerText : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Enviando solicitud...';
+    }
+
+    const payload = {
+        empresa: document.getElementById('cita-negocio')?.value || '',
+        asesorEmail: document.getElementById('cita-asesor')?.value || '',
+        nombre: document.getElementById('cita-nombre')?.value.trim() || '',
+        apellidos: document.getElementById('cita-apellidos')?.value.trim() || '',
+        telefono: document.getElementById('cita-telefono')?.value.trim() || '',
+        email: document.getElementById('cita-email')?.value.trim() || '',
+        fechaDia: document.getElementById('cita-fecha')?.value || '',
+        hora: document.getElementById('cita-hora')?.value || '',
+        servicio: document.getElementById('cita-servicio')?.value.trim() || '',
+        notasCliente: document.getElementById('cita-notas')?.value.trim() || ''
+    };
+
+    try {
+        const res = await fetch('/api/public/citas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo registrar la cita.');
+
+        alert('Cita registrada correctamente. Te contactaremos para confirmar.');
+        const form = document.getElementById('form-cita-landing');
+        if (form) form.reset();
+        const asesorSelect = document.getElementById('cita-asesor');
+        if (asesorSelect) asesorSelect.innerHTML = '<option value="">Selecciona persona que te atenderá</option>';
+    } catch (e) {
+        alert(`Error al registrar la cita: ${e.message}`);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = txtOriginal;
+        }
+    }
+}
+
+window.registrarCitaLanding = registrarCitaLanding;
+
 function iniciarCountdownTrial() {
     const el = document.getElementById('trial-countdown');
     if (!el) return;
@@ -174,6 +265,26 @@ socket.on('mensaje_interno_nuevo', (data) => {
                 cargarConversacionInterna(CHAT_USUARIO_ACTIVO.email);
             }
         }
+    }
+});
+
+socket.on('cita_nueva', (data) => {
+    if (!USUARIO_EMAIL_ACTUAL) return;
+    if (!data) return;
+    if (data.empresa && EMPRESA_CHAT_ACTUAL && data.empresa !== EMPRESA_CHAT_ACTUAL) return;
+    actualizarBadgeCitasNav();
+    if (!document.getElementById('sec-citas')?.classList.contains('hidden')) {
+        refrescarCitas();
+    }
+});
+
+socket.on('cita_actualizada', (data) => {
+    if (!USUARIO_EMAIL_ACTUAL) return;
+    if (!data) return;
+    if (data.empresa && EMPRESA_CHAT_ACTUAL && data.empresa !== EMPRESA_CHAT_ACTUAL) return;
+    actualizarBadgeCitasNav();
+    if (!document.getElementById('sec-citas')?.classList.contains('hidden')) {
+        refrescarCitas();
     }
 });
 
@@ -396,6 +507,8 @@ let LOGS_MES_ACTUAL = {};
 let NOTAS_LOCALES = [];
 let LISTA_TAREAS = [];
 let LISTA_FAQS = [];
+let LISTA_CITAS = [];
+let CITA_NEGOCIOS_CACHE = [];
 let LISTA_ESTADOS_KANBAN = [];
 let GLOBO_INSTANCE = null;
 let GLOBO_RENDERER = null;
@@ -1678,6 +1791,9 @@ window.navegarASeccion = function(idSeccion) {
     if (idSeccion === 'sec-crm') {
         setTimeout(() => { refrescarClientesCRM(); }, 50);
     }
+    if (idSeccion === 'sec-citas') {
+        setTimeout(() => { refrescarCitas(); }, 50);
+    }
     if (idSeccion === 'sec-usuarios') {
         setTimeout(() => {
             refrescarUsuariosAdmin();
@@ -1964,6 +2080,143 @@ async function refrescarTareas() {
         renderKanbanTareas();
         updateTickerWallStreet();
     } catch (e) { console.error("Error al cargar tareas:", e); }
+}
+
+async function refrescarCitas() {
+    try {
+        const res = await fetch('/api/citas', { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudieron cargar citas.');
+        LISTA_CITAS = Array.isArray(data.citas) ? data.citas : [];
+        renderKanbanCitas();
+        actualizarBadgeCitasNav(data.pendientes);
+    } catch (e) {
+        console.error('Error al cargar citas:', e.message);
+    }
+}
+
+function estadoCitaAColumna(estado) {
+    if (estado === 'Pendiente') return 'col-citas-pendiente';
+    if (estado === 'Confirmada') return 'col-citas-confirmada';
+    if (estado === 'En curso') return 'col-citas-en-curso';
+    if (estado === 'Completada') return 'col-citas-completada';
+    return 'col-citas-cancelada';
+}
+
+function renderKanbanCitas() {
+    const columnas = [
+        document.getElementById('col-citas-pendiente'),
+        document.getElementById('col-citas-confirmada'),
+        document.getElementById('col-citas-en-curso'),
+        document.getElementById('col-citas-completada'),
+        document.getElementById('col-citas-cancelada')
+    ];
+    if (columnas.some(c => !c)) return;
+    columnas.forEach(c => { c.innerHTML = ''; });
+
+    const hoy = new Date().toISOString().slice(0, 10);
+    let kpiHoy = 0;
+    let kpiPendientes = 0;
+
+    LISTA_CITAS.forEach(cita => {
+        if (cita.fechaDia === hoy) kpiHoy += 1;
+        if (cita.estado === 'Pendiente') kpiPendientes += 1;
+
+        const card = document.createElement('div');
+        card.className = 'card-bg border border-white/10 rounded-2xl p-3 cursor-grab active:cursor-grabbing hover:border-cyan-500/50 transition-all';
+        card.setAttribute('draggable', 'true');
+        card.setAttribute('ondragstart', `window.handleDragStartCita(event, '${cita._id}')`);
+        card.setAttribute('ondragend', `this.classList.remove('opacity-40')`);
+
+        const nombreCompleto = `${cita.nombre || ''} ${cita.apellidos || ''}`.trim();
+        const asesor = cita.asesorNombre || (cita.asesorEmail || '').split('@')[0] || 'Sin asignar';
+        const estadoClass = cita.estado === 'Pendiente' ? 'text-rose-300 bg-rose-500/10 border-rose-500/30' :
+            cita.estado === 'Confirmada' ? 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30' :
+            cita.estado === 'En curso' ? 'text-amber-300 bg-amber-500/10 border-amber-500/30' :
+            cita.estado === 'Completada' ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30' :
+            'text-slate-300 bg-slate-600/10 border-slate-500/30';
+
+        card.innerHTML = `
+            <div class="flex items-start justify-between gap-2 mb-2">
+                <p class="text-[10px] font-black uppercase tracking-widest text-cyan-200 truncate">${nombreCompleto || 'Cliente sin nombre'}</p>
+                <span class="text-[8px] px-1.5 py-0.5 rounded border ${estadoClass}">${cita.estado}</span>
+            </div>
+            <p class="text-[10px] opacity-80">📞 ${cita.telefono || 'Sin teléfono'}</p>
+            <p class="text-[10px] opacity-80">👤 ${asesor}</p>
+            <p class="text-[10px] opacity-80">🗓️ ${cita.fechaDia} · ${cita.hora}</p>
+            ${cita.servicio ? `<p class="text-[10px] opacity-75 mt-1">🧾 ${cita.servicio}</p>` : ''}
+            ${cita.notasCliente ? `<p class="text-[9px] italic opacity-60 mt-2 line-clamp-3">${cita.notasCliente}</p>` : ''}
+        `;
+
+        const col = document.getElementById(estadoCitaAColumna(cita.estado));
+        if (col) col.appendChild(card);
+    });
+
+    const elPend = document.getElementById('citas-kpi-pendientes');
+    const elHoy = document.getElementById('citas-kpi-hoy');
+    if (elPend) elPend.innerText = kpiPendientes;
+    if (elHoy) elHoy.innerText = kpiHoy;
+}
+
+window.handleDragStartCita = function(e, id) {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/cita-id', id);
+    e.dataTransfer.setData('text/drag-kind', 'cita-kanban');
+    setTimeout(() => { e.target.classList.add('opacity-40'); }, 0);
+};
+
+window.handleDropCita = async function(e, nuevoEstado) {
+    e.preventDefault();
+    window.clearDrop(e);
+    const dragKind = e.dataTransfer.getData('text/drag-kind');
+    if (dragKind !== 'cita-kanban') return;
+    const id = e.dataTransfer.getData('text/cita-id');
+    if (!id) return;
+
+    const idx = LISTA_CITAS.findIndex(c => c._id === id);
+    if (idx === -1) return;
+
+    const estadoAnterior = LISTA_CITAS[idx].estado;
+    if (estadoAnterior === nuevoEstado) return;
+
+    LISTA_CITAS[idx].estado = nuevoEstado;
+    renderKanbanCitas();
+
+    try {
+        const res = await fetch(`/api/citas/${id}/estado`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ estado: nuevoEstado })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo mover la cita.');
+        actualizarBadgeCitasNav();
+    } catch (err) {
+        LISTA_CITAS[idx].estado = estadoAnterior;
+        renderKanbanCitas();
+        alert(err.message || 'Error al mover cita.');
+    }
+};
+
+async function actualizarBadgeCitasNav(pendientesDirecto = null) {
+    const badge = document.getElementById('badge-citas-nav');
+    if (!badge || !USUARIO_EMAIL_ACTUAL) return;
+    try {
+        let pendientes = pendientesDirecto;
+        if (pendientes === null || pendientes === undefined) {
+            const res = await fetch('/api/citas/resumen', { credentials: 'include' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'No se pudo leer el resumen de citas.');
+            pendientes = data.pendientes || 0;
+        }
+        if (pendientes > 0) {
+            badge.innerText = pendientes > 99 ? '99+' : String(pendientes);
+            badge.classList.remove('hidden');
+        } else {
+            badge.classList.add('hidden');
+        }
+    } catch (_) {}
 }
 
 function renderKanbanTareas() {
@@ -2868,14 +3121,17 @@ async function renderizarMapaDeLogins() {
             .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
             .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
             .polygonsData(countriesData.features)
-            .polygonCapColor(() => 'rgba(148, 163, 184, 0.18)')
-            .polygonSideColor(() => 'rgba(15, 23, 42, 0.18)')
-            .polygonStrokeColor(() => 'rgba(226, 232, 240, 0.32)')
+            .polygonCapColor(() => 'rgba(59, 130, 246, 0.18)')
+            .polygonSideColor(() => 'rgba(15, 23, 42, 0.28)')
+            .polygonStrokeColor(() => 'rgba(56, 189, 248, 0.4)')
             .pointsData(locations).pointLat('lat').pointLng('lon')
-            .pointColor(() => '#f59e0b').pointAltitude(0.03).pointRadius(d => 0.12 + d.count * 0.07)
+            .pointColor(d => (d.count >= 5 ? '#ef4444' : d.count >= 3 ? '#f59e0b' : '#22c55e')).pointAltitude(0.045).pointRadius(d => 0.15 + d.count * 0.09)
             .ringsData(locations).ringLat('lat').ringLng('lon')
-            .ringColor(() => (t) => `rgba(14, 165, 233, ${1-t})`)
-            .ringMaxRadius(d => 3 + d.count * 0.5).ringPropagationSpeed(d => 2 + d.count * 0.2).ringRepeatPeriod(1000);
+            .ringColor((d) => (t) => {
+                const base = d.count >= 5 ? '239,68,68' : d.count >= 3 ? '245,158,11' : '34,197,94';
+                return `rgba(${base}, ${1 - t})`;
+            })
+            .ringMaxRadius(d => 4 + d.count * 0.7).ringPropagationSpeed(d => 2.4 + d.count * 0.25).ringRepeatPeriod(920);
 
         if (typeof globe.pointLabel === 'function') {
             globe.pointLabel(d => {
@@ -2889,7 +3145,7 @@ async function renderizarMapaDeLogins() {
             new THREE.SphereGeometry(globe.getGlobeRadius() * 1.1, 75, 75),
             new THREE.ShaderMaterial({
                 vertexShader: `varying vec3 vNormal; void main() { vNormal = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-                fragmentShader: `varying vec3 vNormal; void main() { float intensity = pow(0.62 - dot(vNormal, vec3(0, 0, 1.0)), 2.0); gl_FragColor = vec4(0.22, 0.57, 0.95, 1.0) * intensity; }`,
+                fragmentShader: `varying vec3 vNormal; void main() { float intensity = pow(0.58 - dot(vNormal, vec3(0, 0, 1.0)), 2.0); gl_FragColor = vec4(0.13, 0.74, 0.95, 1.0) * intensity; }`,
                 blending: THREE.AdditiveBlending, side: THREE.BackSide
             })
         );
@@ -2904,11 +3160,18 @@ async function renderizarMapaDeLogins() {
             starVertices.push(x, y, z);
         }
         starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
-        const stars = new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: 0xaaaaaa, size: 0.7 }));
+        const stars = new THREE.Points(starGeometry, new THREE.PointsMaterial({ color: 0xcbd5e1, size: 0.9 }));
         scene.add(stars);
 
-        scene.add(new THREE.AmbientLight(0xcccccc, 1));
-        scene.add(new THREE.DirectionalLight(0xffffff, 0.6));
+        scene.background = new THREE.Color(0x020617);
+        scene.fog = new THREE.Fog(0x020617, 320, 760);
+        scene.add(new THREE.AmbientLight(0xaad3ff, 1.05));
+        const dirLightA = new THREE.DirectionalLight(0x9dd6ff, 0.9);
+        dirLightA.position.set(180, 120, 220);
+        scene.add(dirLightA);
+        const dirLightB = new THREE.DirectionalLight(0x5eead4, 0.45);
+        dirLightB.position.set(-140, -80, -160);
+        scene.add(dirLightB);
 
         const camera = new THREE.PerspectiveCamera(75, container.offsetWidth / container.offsetHeight, 0.1, 1000);
         camera.position.z = 240;
@@ -3251,12 +3514,15 @@ window.handleDragStart = function(e, id) {
     if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) {
         e.dataTransfer.setData("text/lote-items", JSON.stringify(ITEMS_SELECCIONADOS_MASIVOS));
     } else { e.dataTransfer.setData("text/lote-items", JSON.stringify([id])); }
+    e.dataTransfer.setData('text/drag-kind', 'kanban-producto');
     const card = document.getElementById(id);
     if(card) { setTimeout(() => { if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) { ITEMS_SELECCIONADOS_MASIVOS.forEach(xId => { const cNode = document.getElementById(xId); if(cNode) cNode.classList.add('dragging'); }); } else { card.classList.add('dragging'); } }, 0); }
 };
 
 window.handleDropColumn = async function(e, newState) {
     e.preventDefault(); window.clearDrop(e);
+    const dragKind = e.dataTransfer.getData('text/drag-kind');
+    if (dragKind && dragKind !== 'kanban-producto') return;
     const loteRaw = e.dataTransfer.getData("text/lote-items"); if (!loteRaw) return;
     const listaIds = JSON.parse(loteRaw);
     
@@ -4613,6 +4879,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         configurarForzadoHorizontal();
         iniciarCountdownTrial();
+        await cargarNegociosCitasLanding();
+        document.getElementById('cita-negocio')?.addEventListener('change', cargarAsesoresCitaLanding);
         mostrarLandingPublica();
         const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' }); 
         const data = await res.json();
@@ -4652,6 +4920,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             await refrescarYListarTiendasCloud();
             await refrescarCategoriasCloud();
             await reloadCoreData(true); 
+            await refrescarCitas();
+            await actualizarBadgeCitasNav();
             await cargarNotasBoard();
             actualizarVistaFotosFormulario();
         }

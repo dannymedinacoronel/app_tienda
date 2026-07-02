@@ -107,6 +107,26 @@ const ClienteSchema = new mongoose.Schema({
 });
 const Cliente = mongoose.models.Cliente || mongoose.model('Cliente', ClienteSchema);
 
+const CitaSchema = new mongoose.Schema({
+    empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true, index: true },
+    nombre: { type: String, required: true, trim: true },
+    apellidos: { type: String, default: '', trim: true },
+    telefono: { type: String, required: true, trim: true },
+    email: { type: String, default: '', trim: true, lowercase: true },
+    servicio: { type: String, default: '', trim: true },
+    fechaDia: { type: String, required: true, trim: true },
+    hora: { type: String, required: true, trim: true },
+    asesorEmail: { type: String, required: true, trim: true, lowercase: true },
+    asesorNombre: { type: String, default: '', trim: true },
+    estado: { type: String, enum: ['Pendiente', 'Confirmada', 'En curso', 'Completada', 'Cancelada'], default: 'Pendiente' },
+    notasCliente: { type: String, default: '', trim: true, maxlength: 2000 },
+    notasInternas: { type: String, default: '', trim: true, maxlength: 2000 },
+    creadoEn: { type: Date, default: Date.now },
+    actualizadoEn: { type: Date, default: Date.now }
+});
+CitaSchema.index({ empresa: 1, fechaDia: 1, hora: 1, asesorEmail: 1, estado: 1 });
+const Cita = mongoose.models.Cita || mongoose.model('Cita', CitaSchema);
+
 const GastoSchema = new mongoose.Schema({
     fecha: { type: String, default: () => new Date().toISOString().split('T')[0] },
     empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
@@ -629,6 +649,109 @@ app.post('/api/public/registrar-negocio', async (req, res) => {
     }
 });
 
+app.get('/api/public/citas/negocios', async (req, res) => {
+    try {
+        const negocios = await Negocio.find({}).select('nombre slug').sort({ nombre: 1 }).lean();
+        res.json({ negocios });
+    } catch (e) {
+        res.status(500).json({ error: 'No se pudieron cargar los negocios.' });
+    }
+});
+
+app.get('/api/public/citas/disponibilidad', async (req, res) => {
+    try {
+        const empresa = normalizarEmpresa(String(req.query?.empresa || ''));
+        if (!empresa) return res.status(400).json({ error: 'Empresa requerida.' });
+
+        const negocio = await Negocio.findOne({ slug: empresa }).select('nombre slug').lean();
+        if (!negocio) return res.status(404).json({ error: 'Negocio no encontrado.' });
+
+        const personal = await UsuarioAutorizado.find({ empresa, rol: { $in: ['Admin', 'Editor'] } })
+            .select('email nombreVisible rol')
+            .sort({ rol: 1, email: 1 })
+            .lean();
+
+        const asesores = personal.map(u => ({
+            email: u.email,
+            nombre: u.nombreVisible || u.email.split('@')[0],
+            rol: u.rol || 'Editor'
+        }));
+
+        res.json({ negocio, asesores });
+    } catch (e) {
+        res.status(500).json({ error: 'No se pudo cargar la disponibilidad.' });
+    }
+});
+
+app.post('/api/public/citas', async (req, res) => {
+    try {
+        const empresa = normalizarEmpresa(String(req.body?.empresa || ''));
+        const nombre = String(req.body?.nombre || '').trim();
+        const apellidos = String(req.body?.apellidos || '').trim();
+        const telefono = String(req.body?.telefono || '').trim();
+        const email = String(req.body?.email || '').trim().toLowerCase();
+        const servicio = String(req.body?.servicio || '').trim();
+        const fechaDia = String(req.body?.fechaDia || '').trim();
+        const hora = String(req.body?.hora || '').trim();
+        const asesorEmail = String(req.body?.asesorEmail || '').trim().toLowerCase();
+        const notasCliente = String(req.body?.notasCliente || '').trim();
+
+        if (!empresa) return res.status(400).json({ error: 'Empresa requerida.' });
+        if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio.' });
+        if (!telefono) return res.status(400).json({ error: 'El teléfono es obligatorio.' });
+        if (!fechaDia || !/^\d{4}-\d{2}-\d{2}$/.test(fechaDia)) return res.status(400).json({ error: 'Fecha inválida.' });
+        if (!hora || !/^\d{2}:\d{2}$/.test(hora)) return res.status(400).json({ error: 'Hora inválida.' });
+        if (!asesorEmail) return res.status(400).json({ error: 'Selecciona la persona que atenderá la cita.' });
+
+        const negocio = await Negocio.findOne({ slug: empresa }).lean();
+        if (!negocio) return res.status(404).json({ error: 'Negocio no encontrado.' });
+
+        const asesor = await UsuarioAutorizado.findOne({ email: asesorEmail, empresa }).select('email nombreVisible').lean();
+        if (!asesor) return res.status(400).json({ error: 'La persona seleccionada no pertenece al negocio.' });
+
+        const existeBloque = await Cita.findOne({
+            empresa,
+            fechaDia,
+            hora,
+            asesorEmail,
+            estado: { $in: ['Pendiente', 'Confirmada', 'En curso'] }
+        }).lean();
+        if (existeBloque) {
+            return res.status(409).json({ error: 'Ese horario ya está ocupado. Elige otra hora.' });
+        }
+
+        const nueva = await Cita.create({
+            empresa,
+            nombre,
+            apellidos,
+            telefono,
+            email,
+            servicio,
+            fechaDia,
+            hora,
+            asesorEmail,
+            asesorNombre: asesor.nombreVisible || asesor.email.split('@')[0],
+            notasCliente,
+            estado: 'Pendiente',
+            actualizadoEn: new Date()
+        });
+
+        if (global.io) {
+            global.io.to(`empresa:${empresa}`).emit('cita_nueva', {
+                empresa,
+                citaId: String(nueva._id),
+                estado: nueva.estado,
+                fechaDia: nueva.fechaDia,
+                hora: nueva.hora
+            });
+        }
+
+        res.json({ success: true, cita: nueva });
+    } catch (e) {
+        res.status(500).json({ error: 'No se pudo registrar la cita.' });
+    }
+});
+
 app.get('/api/auth/verificar', (req, res) => {
     if (req.session && req.session.esAdmin) {
         return res.json({
@@ -934,6 +1057,75 @@ app.delete('/api/tareas/:id', exigeAdmin, async (req, res) => {
         if(tarea) await registrarLog(req.session.email, `Eliminó la tarea: ${tarea.titulo}`);
         res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
+});
+
+// --- Rutas de Citas ---
+app.get('/api/citas', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const citas = await Cita.find({ empresa }).sort({ fechaDia: 1, hora: 1, creadoEn: -1 }).lean();
+        const pendientes = citas.filter(c => c.estado === 'Pendiente').length;
+        res.json({ citas, pendientes });
+    } catch (e) {
+        res.status(500).json({ error: 'No se pudieron recuperar las citas.' });
+    }
+});
+
+app.get('/api/citas/resumen', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const pendientes = await Cita.countDocuments({ empresa, estado: 'Pendiente' });
+        res.json({ pendientes });
+    } catch (e) {
+        res.status(500).json({ error: 'No se pudo obtener el resumen de citas.' });
+    }
+});
+
+app.put('/api/citas/:id/estado', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const estado = String(req.body?.estado || '').trim();
+        const estadosPermitidos = ['Pendiente', 'Confirmada', 'En curso', 'Completada', 'Cancelada'];
+        if (!estadosPermitidos.includes(estado)) return res.status(400).json({ error: 'Estado inválido.' });
+
+        const cita = await Cita.findOneAndUpdate(
+            { _id: req.params.id, empresa },
+            { estado, actualizadoEn: new Date() },
+            { new: true }
+        ).lean();
+
+        if (!cita) return res.status(404).json({ error: 'Cita no encontrada.' });
+
+        await registrarLog(req.session.email, `Movió cita de ${cita.nombre} ${cita.apellidos || ''} a ${estado}`);
+
+        if (global.io) {
+            global.io.to(`empresa:${empresa}`).emit('cita_actualizada', {
+                empresa,
+                citaId: String(cita._id),
+                estado: cita.estado
+            });
+        }
+
+        res.json({ success: true, cita });
+    } catch (e) {
+        res.status(500).json({ error: 'No se pudo actualizar el estado de la cita.' });
+    }
+});
+
+app.put('/api/citas/:id/notas', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const notasInternas = String(req.body?.notasInternas || '').trim().slice(0, 2000);
+        const cita = await Cita.findOneAndUpdate(
+            { _id: req.params.id, empresa },
+            { notasInternas, actualizadoEn: new Date() },
+            { new: true }
+        ).lean();
+        if (!cita) return res.status(404).json({ error: 'Cita no encontrada.' });
+        res.json({ success: true, cita });
+    } catch (e) {
+        res.status(500).json({ error: 'No se pudo guardar la nota interna.' });
+    }
 });
 
 // --- Rutas de FAQs Dinámicas ---

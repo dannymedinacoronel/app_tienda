@@ -163,6 +163,7 @@
                         <button onclick="abrirAccesoDesdeLanding('login')" class="px-6 py-3 rounded-2xl bg-white text-slate-950 text-xs font-black uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-transform">Entrar al Core</button>
                         <button onclick="scrollToLandingSection('landing-demo')" class="px-6 py-3 rounded-2xl bg-transparent border border-white/25 text-white text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-colors">Ver Demo Visual</button>
                         <button onclick="scrollToLandingSection('landing-integraciones')" class="px-6 py-3 rounded-2xl bg-transparent border border-cyan-400/35 text-cyan-200 text-xs font-bold uppercase tracking-widest hover:bg-cyan-500/10 transition-colors">Integraciones</button>
+                        <button onclick="scrollToLandingSection('landing-citas')" class="px-6 py-3 rounded-2xl bg-transparent border border-emerald-400/35 text-emerald-200 text-xs font-bold uppercase tracking-widest hover:bg-emerald-500/10 transition-colors">Reservar cita</button>
                     </div>
                     <div class="mt-8 grid grid-cols-3 gap-3 max-w-xl">
                         <div class="feature-tile rounded-2xl p-3">
@@ -397,6 +398,53 @@
                     </div>
                 </div>
             </section>
+
+            <section id="landing-citas" class="mt-12 md:mt-16 mb-8">
+                <div class="feature-tile rounded-3xl p-6 md:p-8">
+                    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3 mb-5">
+                        <div>
+                            <p class="text-[10px] uppercase tracking-[0.28em] text-slate-300/70">Agenda Comercial</p>
+                            <h3 class="landing-title text-2xl md:text-3xl text-white font-bold">Reserva una cita con nuestro equipo</h3>
+                            <p class="text-xs text-slate-300/80 mt-2">Elige negocio, persona, día y hora. Te contactamos para confirmar la sesión.</p>
+                        </div>
+                        <span class="text-[10px] uppercase tracking-widest text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-xl">Confirmación prioritaria</span>
+                    </div>
+
+                    <form id="form-cita-landing" class="grid grid-cols-1 md:grid-cols-2 gap-3" onsubmit="registrarCitaLanding(event)">
+                        <select id="cita-negocio" required class="input-bg border rounded-xl px-3 py-2.5 text-xs focus:outline-none">
+                            <option value="">Selecciona negocio</option>
+                        </select>
+                        <select id="cita-asesor" required class="input-bg border rounded-xl px-3 py-2.5 text-xs focus:outline-none">
+                            <option value="">Selecciona persona que te atenderá</option>
+                        </select>
+                        <input id="cita-nombre" type="text" required placeholder="Nombre" class="input-bg border rounded-xl px-3 py-2.5 text-xs focus:outline-none">
+                        <input id="cita-apellidos" type="text" required placeholder="Apellidos" class="input-bg border rounded-xl px-3 py-2.5 text-xs focus:outline-none">
+                        <input id="cita-telefono" type="tel" required placeholder="Teléfono" class="input-bg border rounded-xl px-3 py-2.5 text-xs focus:outline-none">
+                        <input id="cita-email" type="email" placeholder="Email (opcional)" class="input-bg border rounded-xl px-3 py-2.5 text-xs focus:outline-none">
+                        <input id="cita-fecha" type="date" required class="input-bg border rounded-xl px-3 py-2.5 text-xs focus:outline-none">
+                        <select id="cita-hora" required class="input-bg border rounded-xl px-3 py-2.5 text-xs focus:outline-none">
+                            <option value="">Selecciona hora</option>
+                            <option value="10:00">10:00</option>
+                            <option value="10:30">10:30</option>
+                            <option value="11:00">11:00</option>
+                            <option value="11:30">11:30</option>
+                            <option value="12:00">12:00</option>
+                            <option value="12:30">12:30</option>
+                            <option value="13:00">13:00</option>
+                            <option value="16:00">16:00</option>
+                            <option value="16:30">16:30</option>
+                            <option value="17:00">17:00</option>
+                            <option value="17:30">17:30</option>
+                            <option value="18:00">18:00</option>
+                            <option value="18:30">18:30</option>
+                            <option value="19:00">19:00</option>
+                        </select>
+                        <input id="cita-servicio" type="text" placeholder="Servicio que necesitas" class="input-bg border rounded-xl px-3 py-2.5 text-xs focus:outline-none md:col-span-2">
+                        <textarea id="cita-notas" rows="3" placeholder="Cuéntanos brevemente qué quieres revisar" class="input-bg border rounded-xl px-3 py-2.5 text-xs focus:outline-none resize-none md:col-span-2"></textarea>
+                        <button id="cita-btn-submit" type="submit" class="md:col-span-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-xl text-[10px] uppercase tracking-widest">Solicitar cita</button>
+                    </form>
+                </div>
+            </section>
         </div>
     </section>
 
@@ -541,12 +589,52 @@
                     <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📊 Analítica</button>
                     <button onclick="navegarASeccion('sec-notas')" id="tab-sec-notas" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📝 Notas</button>
                     <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">👥 CRM</button>
+                    <button onclick="navegarASeccion('sec-citas')" id="tab-sec-citas" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📅 Citas <span id="badge-citas-nav" class="hidden ml-1 bg-rose-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">0</span></button>
                     <button onclick="navegarASeccion('sec-usuarios')" id="tab-sec-usuarios" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">🔑 Acceso</button>
                     <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📋 Fact.</button>
                     <button onclick="navegarASeccion('sec-faqs')" id="tab-sec-faqs" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">❓ FAQs</button>
                     <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📜 Logs</button>
                     <button onclick="navegarASeccion('sec-ajustes')" id="tab-sec-ajustes" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100 text-amber-500">⚙️ Ajustes</button>
                 </nav>
+            </div>
+
+            <div id="sec-citas" class="seccion-app hidden grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col gap-3">
+                    <h3 class="text-xs font-black text-cyan-300 uppercase tracking-widest">Resumen de Agenda</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-3">
+                            <p class="text-[9px] uppercase opacity-70">Pendientes</p>
+                            <p id="citas-kpi-pendientes" class="text-2xl font-black text-rose-300">0</p>
+                        </div>
+                        <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3">
+                            <p class="text-[9px] uppercase opacity-70">Hoy</p>
+                            <p id="citas-kpi-hoy" class="text-2xl font-black text-emerald-300">0</p>
+                        </div>
+                    </div>
+                    <p class="text-[10px] opacity-60">Arrastra las tarjetas entre columnas para gestionar el flujo de atención.</p>
+                </div>
+                <div class="lg:col-span-2 grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[420px]">
+                        <h3 class="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-3">Pendiente</h3>
+                        <div id="col-citas-pendiente" class="flex-1 space-y-3 overflow-y-auto pr-1" ondragover="allowDrop(event)" ondrop="handleDropCita(event, 'Pendiente')" ondragleave="clearDrop(event)"></div>
+                    </div>
+                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[420px]">
+                        <h3 class="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-3">Confirmada</h3>
+                        <div id="col-citas-confirmada" class="flex-1 space-y-3 overflow-y-auto pr-1" ondragover="allowDrop(event)" ondrop="handleDropCita(event, 'Confirmada')" ondragleave="clearDrop(event)"></div>
+                    </div>
+                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[420px]">
+                        <h3 class="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-3">En curso</h3>
+                        <div id="col-citas-en-curso" class="flex-1 space-y-3 overflow-y-auto pr-1" ondragover="allowDrop(event)" ondrop="handleDropCita(event, 'En curso')" ondragleave="clearDrop(event)"></div>
+                    </div>
+                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[420px]">
+                        <h3 class="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3">Completada</h3>
+                        <div id="col-citas-completada" class="flex-1 space-y-3 overflow-y-auto pr-1" ondragover="allowDrop(event)" ondrop="handleDropCita(event, 'Completada')" ondragleave="clearDrop(event)"></div>
+                    </div>
+                    <div class="card-bg border rounded-3xl p-4 flex flex-col min-h-[420px]">
+                        <h3 class="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-3">Cancelada</h3>
+                        <div id="col-citas-cancelada" class="flex-1 space-y-3 overflow-y-auto pr-1" ondragover="allowDrop(event)" ondrop="handleDropCita(event, 'Cancelada')" ondragleave="clearDrop(event)"></div>
+                    </div>
+                </div>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-8 perspective-1000" id="kpi-container-grid">

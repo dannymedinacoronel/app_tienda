@@ -1275,7 +1275,7 @@ function filtrarMonopolioUrls(query = '') {
     `).join('');
 }
 
-function limpiarFormMonopolio() {
+window.limpiarFormMonopolio = function() {
     document.getElementById('form-monopolio-url').reset();
     document.getElementById('monopolio-url-id').value = '';
     document.getElementById('monopolio-form-title').innerText = 'Añadir Web para Análisis';
@@ -1283,7 +1283,7 @@ function limpiarFormMonopolio() {
     document.getElementById('btn-cancel-monopolio').classList.add('hidden');
 }
 
-function editarMonopolioUrl(id) {
+window.editarMonopolioUrl = function(id) {
     const urlItem = MONOPOLIO_URLS.find(u => u._id === id);
     if (!urlItem) return;
 
@@ -1297,12 +1297,12 @@ function editarMonopolioUrl(id) {
     document.getElementById('monopolio-url-alias').focus();
 }
 
-async function guardarMonopolioUrl(event) {
+window.guardarMonopolioUrl = async function(event) {
     event.preventDefault();
     const id = document.getElementById('monopolio-url-id').value;
-    const url = document.getElementById('monopolio-url-input').value;
-    const alias = document.getElementById('monopolio-url-alias').value;
-
+    const url = (document.getElementById('monopolio-url-input')?.value || '').trim();
+    const alias = (document.getElementById('monopolio-url-alias')?.value || '').trim();
+    if (!url) return alert('La URL es obligatoria.');
     const method = id ? 'PUT' : 'POST';
     const endpoint = id ? `/api/monopolio/urls/${id}` : '/api/monopolio/urls';
 
@@ -1318,7 +1318,7 @@ async function guardarMonopolioUrl(event) {
     }
 }
 
-async function borrarMonopolioUrl(id) {
+window.borrarMonopolioUrl = async function(id) {
     if (!confirm('¿Seguro que quieres eliminar esta web de la lista?')) return;
     try {
         const res = await fetch(`/api/monopolio/urls/${id}`, { method: 'DELETE', credentials: 'include' });
@@ -1330,7 +1330,7 @@ async function borrarMonopolioUrl(id) {
     }
 }
 
-async function iniciarScrapingMonopolio() {
+window.iniciarScrapingMonopolio = async function() {
     if (!confirm(`Esto iniciará un proceso de scraping para TODAS las webs guardadas. Puede tardar varios minutos y consumir recursos. ¿Continuar?`)) return;
     
     const resultadosContainer = document.getElementById('resultados-monopolio-scraping');
@@ -5123,5 +5123,4 @@ if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navi
 if ('requestIdleCallback' in window) {
     window.requestIdleCallback(() => setParticlesEnabled(true), { timeout: 1500 });
 } else {
-    setTimeout(() => setParticlesEnabled(true), 900);
-}
+    setTimeou

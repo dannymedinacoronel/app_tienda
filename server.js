@@ -2257,13 +2257,27 @@ app.post('/api/scraper/webhook-github', async (req, res) => {
     }
 
     try {
-        const { productos, urlOrigen } = req.body;
-        const empresa = normalizarEmpresa(req.body?.empresa || EMPRESA_DEFAULT);
+        const { productos, urlOrigen, empresa: empresaBody, error: errorMsg } = req.body;
+        const empresa = normalizarEmpresa(empresaBody || EMPRESA_DEFAULT);
+
+        if (errorMsg) {
+            console.error(`[GITHUB-WEBHOOK-ERROR] Recibido error de scraper: ${errorMsg}`);
+            if (global.io) {
+                global.io.to(`empresa:${empresa}`).emit('scraper_update', {
+                    error: errorMsg,
+                    empresa,
+                    urlOrigen: urlOrigen,
+                    timestamp: new Date()
+                });
+            }
+            return res.json({ success: true, status: 'error_received' });
+        }
+
         console.log(`[GITHUB-WEBHOOK] Recibidos ${productos.length} productos de ${urlOrigen}`);
         
         // Notificar a los administradores conectados vía Socket.io
         if (global.io) {
-            global.io.to(`empresa:${empresa}`).emit('scraper_update', {
+            global.io.to(`empresa:${empresa}`).emit('scraper_update', { // Notificar al room correcto
                 mensaje: `GitHub ha terminado de escanear ${productos.length} productos.`,
                 productos: productos,
                 empresa,
@@ -2401,9 +2415,26 @@ app.post('/api/monopolio/webhook-github', async (req, res) => {
     if (!GITHUB_SECRET || token !== GITHUB_SECRET) return res.status(401).json({ error: 'No autorizado' });
 
     try {
-        const { productos, urlOrigen, empresa, alias } = req.body;
+        const { productos, urlOrigen, empresa, alias, error: errorMsg } = req.body;
+
+        if (errorMsg) {
+            console.error(`[MONOPOLIO-WEBHOOK-ERROR] Recibido error de scraper: ${errorMsg}`);
+            if (global.io) {
+                global.io.to(`empresa:${empresa}`).emit('monopolio_update', {
+                    error: errorMsg,
+                    empresa,
+                    urlOrigen,
+                    alias,
+                    timestamp: new Date()
+                });
+            }
+            return res.json({ success: true, status: 'error_received' });
+        }
+
         console.log(`[MONOPOLIO-WEBHOOK] Recibidos ${productos.length} productos de ${alias || urlOrigen}`);
-        if (global.io) { global.io.to(`empresa:${empresa}`).emit('monopolio_update', { mensaje: `Scraping finalizado para ${alias || urlOrigen}.`, productos, urlOrigen, alias, empresa, timestamp: new Date() }); }
+        if (global.io) {
+            global.io.to(`empresa:${empresa}`).emit('monopolio_update', { mensaje: `Scraping finalizado para ${alias || urlOrigen}.`, productos, urlOrigen, alias, empresa, timestamp: new Date() });
+        }
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Error procesando webhook de monopolio' });

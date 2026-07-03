@@ -300,6 +300,18 @@ socket.on('cita_actualizada', (data) => {
 
 socket.on('scraper_update', async (data) => {
     console.log('[SOCKET] Datos recibidos de GitHub:', data);
+
+    if (data.error) {
+        console.error('[SCRAPER-ERROR]', data.error);
+        detenerAnimacionCargaScraper(true); // silent = true
+        alert(`❌ El scraper remoto ha fallado:\n\n${data.error}`);
+        // Resetear la UI del scraper
+        document.getElementById('scraper-loader').classList.add('hidden');
+        document.getElementById('scraper-step-1').classList.remove('hidden');
+        document.getElementById('scraper-step-2').classList.add('hidden');
+        return;
+    }
+
     actualizarCargaScraper(96, 'Recibiendo resultados del worker remoto...', 'Procesando resultados');
 
     const productos = Array.isArray(data?.productos) ? data.productos : [];
@@ -350,12 +362,29 @@ socket.on('monopolio_update', (data) => {
     const container = document.getElementById('resultados-monopolio-scraping');
     if (!container) return;
 
+    const alias = data.alias || data.urlOrigen;
+
+    if (data.error) {
+        console.error(`[MONOPOLIO-ERROR] ${alias}:`, data.error);
+        let existingContainer = document.getElementById(`monopolio-res-${btoa(data.urlOrigen)}`);
+        if (existingContainer) existingContainer.remove();
+        
+        const errorBlock = document.createElement('div');
+        errorBlock.id = `monopolio-res-${btoa(data.urlOrigen)}`;
+        errorBlock.className = 'p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl';
+        errorBlock.innerHTML = `
+            <h5 class="font-bold text-rose-300 text-sm mb-2">${alias}</h5>
+            <p class="text-xs text-rose-200">Scraping fallido: ${data.error}</p>
+        `;
+        container.prepend(errorBlock);
+        cantarPorVoz(`Scraping de ${alias} ha fallado.`);
+        return;
+    }
+
     // Limpiar mensaje inicial si es el primer resultado
     if (container.querySelector('p.italic')) {
         container.innerHTML = '';
     }
-
-    const alias = data.alias || data.urlOrigen;
     const productos = data.productos || [];
 
     let existingContainer = document.getElementById(`monopolio-res-${btoa(data.urlOrigen)}`);
@@ -370,10 +399,20 @@ socket.on('monopolio_update', (data) => {
     let productosHtml = '<p class="text-xs opacity-60">No se encontraron productos.</p>';
     if (productos.length > 0) {
         productosHtml = productos.slice(0, 20).map(p => `
-            <div class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5">
-                <img src="${p.imagen}" class="w-8 h-8 rounded object-cover" onerror="this.style.display='none'">
-                <p class="text-xs flex-1 truncate">${p.titulo}</p>
-                <p class="text-xs font-bold text-emerald-400">${p.precio}€</p>
+            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 border border-transparent hover:border-white/10">
+                <img src="${p.imagen}" class="w-10 h-12 rounded-md object-cover" onerror="this.style.display='none'">
+                <div class="flex-1 min-w-0">
+                    <p class="text-xs flex-1 truncate font-bold">${p.titulo}</p>
+                    <div class="text-[10px] opacity-70 flex items-center gap-3 mt-1">
+                        ${p.marca ? `<span>🏷️ ${p.marca}</span>` : ''}
+                        ${p.talla ? `<span>📐 ${p.talla}</span>` : ''}
+                        ${p.condicion ? `<span>✨ ${p.condicion}</span>` : ''}
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm font-bold text-emerald-400">${p.precio}€</p>
+                    ${p.favoritos > 0 ? `<p class="text-[10px] text-rose-400 mt-1">❤️ ${p.favoritos}</p>` : ''}
+                </div>
             </div>
         `).join('');
     }
@@ -381,7 +420,7 @@ socket.on('monopolio_update', (data) => {
     resultBlock.innerHTML = `
         <h5 class="font-bold text-purple-300 text-sm mb-2">${alias}</h5>
         <p class="text-[10px] opacity-60 mb-3">${productos.length} productos encontrados.</p>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${productosHtml}</div>
+        <div class="space-y-2">${productosHtml}</div>
     `;
 
     container.prepend(resultBlock);

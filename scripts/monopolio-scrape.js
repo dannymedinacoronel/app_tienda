@@ -341,6 +341,7 @@ async function run() {
     
     console.log(`[MONOPOLIO SCRAPER] Iniciando para URL: ${url} | Empresa: ${empresa}`);
     const secretToken = process.env.SCRAPER_TOKEN;
+    const webUrl = process.env.MY_WEB_URL;
 
     try {
         let productosExtraidos = [];
@@ -367,7 +368,6 @@ async function run() {
         console.log(`[INFO] Se encontraron ${productosUnicos.length} productos en la web.`);
 
         // --- ENVIAR A LA WEB ---
-        const webUrl = process.env.MY_WEB_URL;
 
         if (webUrl && secretToken) {
             const webhookTargets = construirWebhookTargets(webUrl);
@@ -407,8 +407,31 @@ async function run() {
         process.exit(0);
 
     } catch (error) {
-        console.error("❌ Error durante el scraping de monopolio:", error.message);
-        process.exit(1);
+        const errorMessage = error.message || 'Error desconocido en el script de monopolio.';
+        console.error("❌ Error durante el scraping de monopolio:", errorMessage);
+
+        if (webUrl && secretToken) {
+            const webhookTargets = construirWebhookTargets(webUrl);
+            for (const target of webhookTargets) {
+                try {
+                    console.log(`[WEBHOOK] Enviando error a: ${target}`);
+                    await axios.post(target, {
+                        error: `El scraper de monopolio falló: ${errorMessage}`,
+                        urlOrigen: url,
+                        empresa: empresa,
+                        alias: alias
+                    }, {
+                        headers: { 'x-github-token': secretToken },
+                        timeout: 10000
+                    });
+                    console.log('[WEBHOOK] Notificación de error enviada.');
+                    break;
+                } catch (whError) {
+                    console.error(`[WEBHOOK] Fallo al enviar notificación de error a ${target}:`, whError.message);
+                }
+            }
+        }
+        process.exit(1); // Salir con código de error
     }
 }
 

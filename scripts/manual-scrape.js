@@ -333,7 +333,7 @@ async function extraerProductosConPlaywright(urlObjetivo) {
 async function run() {
     const url = process.argv[2]; // URL de Vinted
     const empresa = process.argv[3] || 'seychelles'; // Identificador de la empresa
-
+    const webUrl = process.env.MY_WEB_URL;
     if (!url) {
         console.error("❌ Error: Debes proporcionar una URL de Vinted como argumento.");
         process.exit(1);
@@ -341,6 +341,7 @@ async function run() {
     
     console.log(`[SCRAPER] Iniciando para URL: ${url} | Empresa: ${empresa}`);
     const secretToken = process.env.SCRAPER_TOKEN;
+    
 
     try {
         let htmlContent = '';
@@ -441,7 +442,6 @@ async function run() {
         console.log(`[INFO] Se encontraron ${productosExtraidos.length} productos en la web.`);
 
         // --- ENVIAR A LA WEB ---
-        const webUrl = process.env.MY_WEB_URL;
 
         if (webUrl && secretToken) {
             const webhookTargets = construirWebhookTargets(webUrl);

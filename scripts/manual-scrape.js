@@ -480,4 +480,31 @@ async function run() {
         process.exit(0);
 
     } catch (error) {
-        console.error("❌ Error durante el scraping:", e
+        const errorMessage = error.message || 'Error desconocido en el script de scraping.';
+        console.error("❌ Error durante el scraping:", errorMessage);
+
+        // Notificar al frontend sobre el fallo
+        if (webUrl && secretToken) {
+            const webhookTargets = construirWebhookTargets(webUrl);
+            for (const target of webhookTargets) {
+                try {
+                    console.log(`[WEBHOOK] Enviando error a: ${target}`);
+                    await axios.post(target, {
+                        error: `El scraper falló: ${errorMessage}`,
+                        urlOrigen: url,
+                        empresa: empresa
+                    }, {
+                        headers: { 'x-github-token': secretToken },
+                        timeout: 10000
+                    });
+                    console.log('[WEBHOOK] Notificación de error enviada.');
+                    break; // Salir en cuanto se envíe uno
+                } catch (whError) {
+                    console.error(`[WEBHOOK] Fallo al enviar notificación de error a ${target}:`, whError.message);
+                }
+            }
+        }
+        process.exit(1); // Salir con código de error
+    }
+}
+

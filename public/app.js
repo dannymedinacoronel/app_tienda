@@ -1412,11 +1412,15 @@ window.editarMonopolioUrl = function(id) {
 }
 
 window.guardarMonopolioUrl = async function(event) {
-    event.preventDefault();
+    if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+    }
     const id = document.getElementById('monopolio-url-id').value;
     const url = (document.getElementById('monopolio-url-input')?.value || '').trim();
     const alias = (document.getElementById('monopolio-url-alias')?.value || '').trim();
     if (!url) return alert('La URL es obligatoria.');
+    const esUrlValida = /^https?:\/\//i.test(url);
+    if (!esUrlValida) return alert('La URL debe empezar por http:// o https://');
     const method = id ? 'PUT' : 'POST';
     const endpoint = id ? `/api/monopolio/urls/${id}` : '/api/monopolio/urls';
 
@@ -5576,6 +5580,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             await actualizarBadgeCitasNav();
             await cargarNotasBoard();
             actualizarVistaFotosFormulario();
+
+            const monopolioUrlInput = document.getElementById('monopolio-url-input');
+            if (monopolioUrlInput) {
+                monopolioUrlInput.addEventListener('keydown', (ev) => {
+                    if (ev.key === 'Enter') {
+                        ev.preventDefault();
+                        guardarMonopolioUrl(ev);
+                    }
+                });
+            }
         }
     } catch(e){ console.error("Error en la inicialización:", e); }
 });

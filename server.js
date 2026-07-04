@@ -2648,16 +2648,41 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
             return res.status(500).json({ error: 'Falta configuración de GitHub (PAT, OWNER, REPO) en el servidor.' });
         }
 
+        let lanzadas = 0;
+        const errores = [];
+
         for (const item of urls) {
-            await axios.post(
-                `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/monopolio-scraper.yml/dispatches`,
-                { ref: 'main', inputs: { target_url: item.url, empresa: empresa, alias: item.alias || item.url } },
-                { headers: { 'Authorization': `token ${GITHUB_PAT}`, 'Accept': 'application/vnd.github.v3+json' } }
-            );
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            try {
+                await axios.post(
+                    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/monopolio-scraper.yml/dispatches`,
+                    { ref: 'main', inputs: { target_url: item.url, empresa: empresa, alias: item.alias || item.url } },
+                    { headers: { 'Authorization': `token ${GITHUB_PAT}`, 'Accept': 'application/vnd.github.v3+json' } }
+                );
+                lanzadas += 1;
+            } catch (errItem) {
+                errores.push({
+                    url: item.url,
+                    alias: item.alias || item.url,
+                    detalle: errItem?.response?.data?.message || errItem.message || 'error desconocido'
+                });
+            }
+            await new Promise(resolve => setTimeout(resolve, 800));
         }
 
-        res.json({ success: true, message: `Se han lanzado ${urls.length} tareas de scraping en GitHub Actions.` });
+        if (lanzadas === 0) {
+            return res.status(500).json({
+                error: 'No se pudo lanzar ninguna tarea de scraping en GitHub Actions.',
+                detalles: errores
+            });
+        }
+
+        res.json({
+            success: true,
+            lanzadas,
+            fallidas: errores.length,
+            detallesFallos: errores,
+            message: `Se han lanzado ${lanzadas}/${urls.length} tareas de scraping en GitHub Actions.`
+        });
 
     } catch (error) {
         console.error('[MONOPOLIO-API] Error al lanzar workflows:', error.response?.data || error.message);
@@ -2674,13 +2699,14 @@ app.post('/api/monopolio/webhook-github', async (req, res) => {
 
     try {
         const { productos, grupos, esModoSeguidos, urlOrigen, empresa, alias, error: errorMsg } = req.body;
+        const empresaNormalizada = normalizarEmpresa(empresa || EMPRESA_DEFAULT);
 
         if (errorMsg) {
             console.error(`[MONOPOLIO-WEBHOOK-ERROR] Recibido error de scraper: ${errorMsg}`);
             if (global.io) {
-                global.io.to(`empresa:${empresa}`).emit('monopolio_update', {
+                global.io.to(`empresa:${empresaNormalizada}`).emit('monopolio_update', {
                     error: errorMsg,
-                    empresa,
+                    empresa: empresaNormalizada,
                     urlOrigen,
                     alias,
                     timestamp: new Date()
@@ -2691,14 +2717,14 @@ app.post('/api/monopolio/webhook-github', async (req, res) => {
 
         console.log(`[MONOPOLIO-WEBHOOK] Recibidos ${(productos || []).length} productos de ${alias || urlOrigen}`);
         if (global.io) {
-            global.io.to(`empresa:${empresa}`).emit('monopolio_update', {
+            global.io.to(`empresa:${empresaNormalizada}`).emit('monopolio_update', {
                 mensaje: `Scraping finalizado para ${alias || urlOrigen}.`,
                 productos: productos || [],
                 grupos: Array.isArray(grupos) ? grupos : [],
                 esModoSeguidos: Boolean(esModoSeguidos),
                 urlOrigen,
                 alias,
-                empresa,
+                empresa: empresaNormalizada,
                 timestamp: new Date()
             });
         }

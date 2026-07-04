@@ -399,20 +399,10 @@ socket.on('monopolio_update', (data) => {
     let productosHtml = '<p class="text-xs opacity-60">No se encontraron productos.</p>';
     if (productos.length > 0) {
         productosHtml = productos.slice(0, 20).map(p => `
-            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 border border-transparent hover:border-white/10">
-                <img src="${p.imagen}" class="w-10 h-12 rounded-md object-cover" onerror="this.style.display='none'">
-                <div class="flex-1 min-w-0">
-                    <p class="text-xs flex-1 truncate font-bold">${p.titulo}</p>
-                    <div class="text-[10px] opacity-70 flex items-center gap-3 mt-1">
-                        ${p.marca ? `<span>🏷️ ${p.marca}</span>` : ''}
-                        ${p.talla ? `<span>📐 ${p.talla}</span>` : ''}
-                        ${p.condicion ? `<span>✨ ${p.condicion}</span>` : ''}
-                    </div>
-                </div>
-                <div class="text-right">
-                    <p class="text-sm font-bold text-emerald-400">${p.precio}€</p>
-                    ${p.favoritos > 0 ? `<p class="text-[10px] text-rose-400 mt-1">❤️ ${p.favoritos}</p>` : ''}
-                </div>
+            <div class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5">
+                <img src="${p.imagen}" class="w-8 h-8 rounded object-cover" onerror="this.style.display='none'">
+                <p class="text-xs flex-1 truncate">${p.titulo}</p>
+                <p class="text-xs font-bold text-emerald-400">${p.precio}€</p>
             </div>
         `).join('');
     }
@@ -420,7 +410,7 @@ socket.on('monopolio_update', (data) => {
     resultBlock.innerHTML = `
         <h5 class="font-bold text-purple-300 text-sm mb-2">${alias}</h5>
         <p class="text-[10px] opacity-60 mb-3">${productos.length} productos encontrados.</p>
-        <div class="space-y-2">${productosHtml}</div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${productosHtml}</div>
     `;
 
     container.prepend(resultBlock);

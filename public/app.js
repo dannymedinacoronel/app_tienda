@@ -2210,7 +2210,7 @@ window.aplicarDecisionesHigieneUI = async function() {
 }
 
 window.escanearHigieneDB = async function(forzar = true) {
-    const sec = document.getElementById('sec-higiene');
+    const sec = document.getElementById('sec-higiene') || document.getElementById('sec-ajustes');
     if (!sec || sec.classList.contains('hidden')) return;
 
     if (!forzar && HIGIENE_REPORTE_CACHE) {
@@ -3379,6 +3379,10 @@ window.navegarASeccion = function(idSeccion) {
         sec.classList.remove('seccion-active');
     });
     const seccionDestino = document.getElementById(idSeccion);
+    if (!seccionDestino) {
+        console.warn(`[UI] Sección no encontrada: ${idSeccion}`);
+        return;
+    }
     seccionDestino.classList.remove('hidden');
     requestAnimationFrame(() => {
         seccionDestino.classList.add('seccion-active');
@@ -3434,10 +3438,10 @@ window.navegarASeccion = function(idSeccion) {
         setTimeout(() => { refrescarFaqs(); }, 50);
     }
     if (idSeccion === 'sec-ajustes') {
-        setTimeout(() => { renderListaAjustesKanban(); }, 50);
-    }
-    if (idSeccion === 'sec-higiene') {
-        setTimeout(() => { escanearHigieneDB(false); }, 50);
+        setTimeout(() => {
+            renderListaAjustesKanban();
+            escanearHigieneDB(false);
+        }, 50);
     }
     if (idSeccion === 'sec-monopolio') {
         setTimeout(() => { renderMonopolioUrls(); }, 50);
@@ -3446,35 +3450,24 @@ window.navegarASeccion = function(idSeccion) {
     aplicarMascaraVisualizadorEnUI();
 }
 
-function aplicarConfiguracionVisualRuntime(cfg) {
+function aplicarRestriccionesRolUI() {
     const nav = document.getElementById('main-nav-secciones');
-    if (!cfg || !nav) return;
+    if (!nav) return;
 
     const bloqueadasPorRol = (() => {
         const rol = String(USUARIO_ROL_ACTUAL || 'Editor');
         if (rol === 'Editor') {
-            return ['sec-analitica', 'sec-auditoria', 'sec-gestion', 'sec-ajustes', 'sec-usuarios', 'sec-higiene'];
+            return ['sec-analitica', 'sec-auditoria', 'sec-gestion', 'sec-ajustes', 'sec-usuarios'];
         }
         if (rol === 'Visualizador') {
-            return ['sec-analitica', 'sec-auditoria', 'sec-monopolio', 'sec-tareas', 'sec-notas', 'sec-crm', 'sec-citas', 'sec-usuarios', 'sec-gestion', 'sec-ajustes', 'sec-faqs', 'sec-higiene'];
+            return ['sec-analitica', 'sec-auditoria', 'sec-monopolio', 'sec-tareas', 'sec-notas', 'sec-crm', 'sec-citas', 'sec-usuarios', 'sec-gestion', 'sec-ajustes', 'sec-faqs'];
         }
         return [];
     })();
 
-    const hidden = new Set([...(cfg.hiddenSections || []), ...(cfg.blockedSections || []), ...bloqueadasPorRol]);
-
-    // El acceso de Admin a ajustes/god no debe perderse por configuración global.
-    if (String(USUARIO_ROL_ACTUAL || '').toLowerCase() === 'admin') {
-        hidden.delete('sec-ajustes');
-    }
+    const hidden = new Set([...bloqueadasPorRol]);
 
     SECCIONES_INHABILITADAS = hidden;
-
-    const orden = Array.isArray(cfg.sectionOrder) ? cfg.sectionOrder : [];
-    orden.forEach((secId) => {
-        const tab = document.getElementById(`tab-${secId}`);
-        if (tab) nav.appendChild(tab);
-    });
 
     document.querySelectorAll('.seccion-app').forEach((sec) => {
         const secId = sec.id;
@@ -3482,73 +3475,11 @@ function aplicarConfiguracionVisualRuntime(cfg) {
         const blocked = hidden.has(secId);
         if (tab) tab.classList.toggle('hidden', blocked);
         if (blocked) sec.classList.add('hidden');
-
-        const etiqueta = cfg.tabLabels && cfg.tabLabels[secId];
-        if (tab && etiqueta) {
-            const badge = tab.querySelector('span');
-            if (badge) {
-                const badgeHtml = badge.outerHTML;
-                tab.innerHTML = `${escapeHtmlSafe(etiqueta)} ${badgeHtml}`;
-            } else {
-                tab.textContent = etiqueta;
-            }
-        }
     });
-
-    const theme = cfg.theme && typeof cfg.theme === 'object' ? cfg.theme : {};
-    if (theme.navBackground) nav.style.backgroundColor = theme.navBackground;
-    if (theme.textPrimary) document.body.style.color = theme.textPrimary;
-
-    document.querySelectorAll('.card-bg').forEach((el) => {
-        if (theme.cardBackground) el.style.backgroundColor = theme.cardBackground;
-        if (theme.textPrimary) el.style.color = theme.textPrimary;
-    });
-
-    const styleId = 'god-custom-css-runtime';
-    let styleNode = document.getElementById(styleId);
-    if (!styleNode) {
-        styleNode = document.createElement('style');
-        styleNode.id = styleId;
-        document.head.appendChild(styleNode);
-    }
-    styleNode.textContent = String(cfg.customCss || '');
 
     const activa = document.querySelector('.seccion-app:not(.hidden)');
     if (!activa || hidden.has(activa.id)) {
-        const primeraVisible = (cfg.sectionOrder || []).find(secId => !hidden.has(secId));
-        if (primeraVisible) {
-            navegarASeccion(primeraVisible);
-        }
-    }
-}
-
-function asegurarAccesoGodParaAdmin(rol) {
-    const esAdmin = String(rol || '').toLowerCase() === 'admin';
-    const btnPanel = document.getElementById('btn-open-god-panel');
-    if (btnPanel) {
-        btnPanel.classList.toggle('hidden', !esAdmin);
-    }
-
-    const idFloat = 'btn-open-god-panel-float';
-    const actual = document.getElementById(idFloat);
-    if (!esAdmin) {
-        if (actual) actual.remove();
-        return;
-    }
-
-    if (!actual) {
-        const a = document.createElement('a');
-        a.id = idFloat;
-        a.href = '/admin-god';
-        a.target = '_blank';
-        a.className = 'fixed bottom-20 right-4 z-[9998] bg-rose-600 hover:bg-rose-700 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase tracking-widest shadow-2xl border border-rose-300/30';
-        a.textContent = 'Panel Dios';
-        document.body.appendChild(a);
-    }
-
-    const panelGanancias = document.getElementById('admin-gains-dashboard');
-    if (panelGanancias) {
-        panelGanancias.classList.toggle('hidden', !esAdmin);
+        navegarASeccion('sec-inventario');
     }
 }
 
@@ -3755,17 +3686,6 @@ function actualizarDashboardGananciasAdmin() {
 
 window.onCambiarPresetGananciasAdmin = onCambiarPresetGananciasAdmin;
 window.actualizarDashboardGananciasAdmin = actualizarDashboardGananciasAdmin;
-
-async function cargarConfiguracionVisualRuntime() {
-    try {
-        const res = await fetch('/api/ui/runtime-config', { credentials: 'include' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'No se pudo cargar config visual.');
-        aplicarConfiguracionVisualRuntime(data);
-    } catch (e) {
-        console.warn('Config visual runtime no disponible:', e.message);
-    }
-}
 
 function navegarCalendarioStock(delta) {
     CAL_STOCK_MES += delta;
@@ -6688,15 +6608,16 @@ async function reloadCoreData(isInitialLoad = false) {
         if (!res.ok) throw new Error('Fallo de red al cargar datos.');
         const data = await res.json();
         
-        BASE_DATOS = data.ventas || [];
+        BASE_DATOS = Array.isArray(data.ventas) ? data.ventas : [];
         CURRENT_PAGE = data.currentPage || 1;
         TOTAL_PAGES = data.totalPages || 1;
+        const resumen = (data && typeof data.resumen === 'object' && data.resumen) ? data.resumen : {};
 
-        document.getElementById('kpi-ingresos').innerText = `${(data.resumen.ingresos || 0).toFixed(2)} €`;
-        document.getElementById('kpi-beneficio').innerText = `${(data.resumen.beneficio || 0).toFixed(2)} €`;
-        document.getElementById('kpi-inversion').innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
-        document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
-        document.getElementById('kpi-roi').innerText = `${(data.resumen.roi || 0).toFixed(1)}%`;
+        document.getElementById('kpi-ingresos').innerText = `${(Number(resumen.ingresos || 0)).toFixed(2)} €`;
+        document.getElementById('kpi-beneficio').innerText = `${(Number(resumen.beneficio || 0)).toFixed(2)} €`;
+        document.getElementById('kpi-inversion').innerText = `${(Number(resumen.inversion || 0)).toFixed(2)} €`;
+        document.getElementById('kpi-prendas').innerText = Number(resumen.prendasVendidas || 0);
+        document.getElementById('kpi-roi').innerText = `${(Number(resumen.roi || 0)).toFixed(1)}%`;
         aplicarMascaraVisualizadorEnUI();
 
         renderKanban(true);
@@ -7546,7 +7467,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario.split('@')[0]} [${data.rol}]`; 
             aplicarMascaraVisualizadorEnUI();
 
-            asegurarAccesoGodParaAdmin(data.rol || 'Editor');
+            aplicarRestriccionesRolUI();
 
             const yearEl = document.getElementById('admin-profit-year');
             if (yearEl && !yearEl.value) {
@@ -7569,16 +7490,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 card.addEventListener('mouseleave', () => { card.style.transform = `perspective(1000px) rotateX(0) rotateY(0) scale3d(1, 1, 1)`; });
             });
 
-            await refrescarEstadosKanban();
-            await refrescarYListarTiendasCloud();
-            await refrescarCategoriasCloud();
-            await cargarConfiguracionVisualRuntime();
-            asegurarAccesoGodParaAdmin(data.rol || 'Editor');
-            await reloadCoreData(true); 
-            renderSavedUrls();
-            await refrescarCitas();
-            await actualizarBadgeCitasNav();
-            await cargarNotasBoard();
+            const ejecutarPasoInit = async (label, fn) => {
+                try {
+                    await fn();
+                } catch (stepErr) {
+                    console.warn(`[INIT] Paso fallido (${label}):`, stepErr?.message || stepErr);
+                }
+            };
+
+            await ejecutarPasoInit('refrescarEstadosKanban', async () => refrescarEstadosKanban());
+            await ejecutarPasoInit('refrescarYListarTiendasCloud', async () => refrescarYListarTiendasCloud());
+            await ejecutarPasoInit('refrescarCategoriasCloud', async () => refrescarCategoriasCloud());
+            aplicarRestriccionesRolUI();
+            await ejecutarPasoInit('reloadCoreData', async () => reloadCoreData(true));
+            await ejecutarPasoInit('renderSavedUrls', async () => renderSavedUrls());
+            await ejecutarPasoInit('refrescarCitas', async () => refrescarCitas());
+            await ejecutarPasoInit('actualizarBadgeCitasNav', async () => actualizarBadgeCitasNav());
+            await ejecutarPasoInit('cargarNotasBoard', async () => cargarNotasBoard());
             actualizarVistaFotosFormulario();
 
             const monopolioUrlInput = document.getElementById('monopolio-url-input');

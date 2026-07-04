@@ -7,26 +7,26 @@
 /* --- Definición de Temas con Variables CSS --- */
 .theme-dark {
   --color-bg: #0f172a;
-  --color-text: #e2e8f0;
+  --color-text: #dbe5f3;
   --color-border: rgba(255, 255, 255, 0.1);
-  --color-card-bg: rgba(15, 23, 42, 0.75);
-  --color-input-bg: rgba(30, 41, 59, 0.6);
-  --color-dropdown-bg: rgba(23, 31, 48, 0.9);
-  --ui-grad-1: rgba(20, 184, 166, 0.2);
-  --ui-grad-2: rgba(34, 211, 238, 0.14);
-  --ui-grad-base: #050914;
-  --ui-grad-mid: #08101d;
-  --ui-grad-end: #0b1526;
-  --ui-card-top: rgba(15, 23, 42, 0.8);
-  --ui-card-bottom: rgba(7, 12, 24, 0.78);
-  --ui-input-top: rgba(12, 20, 36, 0.78);
-  --ui-input-focus: rgba(8, 16, 30, 0.92);
-  --ui-accent-a: #0d9488;
-  --ui-accent-b: #06b6d4;
-  --ui-nav-idle-a: rgba(22, 31, 50, 0.7);
-  --ui-nav-idle-b: rgba(14, 22, 38, 0.62);
-  --ui-nav-hover-a: rgba(20, 34, 56, 0.82);
-  --ui-nav-hover-b: rgba(12, 24, 41, 0.7);
+  --color-card-bg: rgba(15, 23, 42, 0.82);
+  --color-input-bg: rgba(27, 39, 60, 0.72);
+  --color-dropdown-bg: rgba(16, 25, 40, 0.95);
+  --ui-grad-1: rgba(37, 99, 235, 0.13);
+  --ui-grad-2: rgba(14, 116, 144, 0.1);
+  --ui-grad-base: #0a1020;
+  --ui-grad-mid: #0d1628;
+  --ui-grad-end: #111e34;
+  --ui-card-top: rgba(20, 31, 51, 0.9);
+  --ui-card-bottom: rgba(13, 21, 38, 0.86);
+  --ui-input-top: rgba(18, 30, 48, 0.88);
+  --ui-input-focus: rgba(16, 28, 45, 0.96);
+  --ui-accent-a: #2563eb;
+  --ui-accent-b: #0ea5e9;
+  --ui-nav-idle-a: rgba(26, 39, 62, 0.82);
+  --ui-nav-idle-b: rgba(17, 28, 46, 0.78);
+  --ui-nav-hover-a: rgba(33, 48, 74, 0.9);
+  --ui-nav-hover-b: rgba(21, 34, 54, 0.84);
 }
 .theme-light {
   --color-bg: #f1f5f9;
@@ -329,21 +329,21 @@ body.drag-active .kanban-card:not(.dragging) {
 
 /* --- Visual refresh V2 (sin tocar logica) --- */
 :root {
-  --core-accent: #14b8a6;
-  --core-accent-2: #22d3ee;
+  --core-accent: #2563eb;
+  --core-accent-2: #0ea5e9;
   --core-warn: #f59e0b;
   --core-danger: #f43f5e;
-  --core-surface: rgba(9, 16, 30, 0.7);
-  --core-surface-strong: rgba(6, 12, 24, 0.9);
+  --core-surface: rgba(14, 23, 39, 0.78);
+  --core-surface-strong: rgba(10, 17, 30, 0.94);
   --core-border-soft: rgba(148, 163, 184, 0.22);
-  --core-shadow: 0 18px 40px rgba(2, 8, 20, 0.45);
+  --core-shadow: 0 14px 28px rgba(2, 8, 20, 0.35);
 }
 
 body#main-body {
   font-family: 'Manrope', sans-serif;
   background:
-    radial-gradient(1200px 700px at 0% -12%, var(--ui-grad-1), transparent 62%),
-    radial-gradient(1100px 620px at 100% 0%, var(--ui-grad-2), transparent 58%),
+    radial-gradient(900px 540px at -8% -10%, var(--ui-grad-1), transparent 64%),
+    radial-gradient(940px 520px at 100% -6%, var(--ui-grad-2), transparent 62%),
     linear-gradient(180deg, var(--ui-grad-base) 0%, var(--ui-grad-mid) 45%, var(--ui-grad-end) 100%);
   color: var(--color-text);
 }
@@ -354,7 +354,7 @@ body#main-body::before {
   inset: 0;
   pointer-events: none;
   z-index: -1;
-  opacity: 0.32;
+  opacity: 0.18;
   background-image: linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
   background-size: 30px 30px;
 }
@@ -372,8 +372,8 @@ body#main-body #wrapper-core {
   background: linear-gradient(180deg, var(--ui-card-top), var(--ui-card-bottom));
   border-color: var(--core-border-soft);
   box-shadow: var(--core-shadow);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .input-bg {
@@ -401,8 +401,8 @@ body#main-body #wrapper-core {
 
 .nav-btn-active {
   background: linear-gradient(90deg, var(--ui-accent-a), var(--ui-accent-b));
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22), 0 10px 22px rgba(6, 182, 212, 0.35);
-  color: #ecfeff !important;
+  box-shadow: 0 0 0 1px rgba(191, 219, 254, 0.34), 0 8px 16px rgba(37, 99, 235, 0.3);
+  color: #eff6ff !important;
   opacity: 1 !important;
 }
 
@@ -411,7 +411,7 @@ button {
 }
 
 button:hover {
-  filter: saturate(1.08);
+  filter: saturate(1.03);
 }
 
 button:active {
@@ -453,19 +453,19 @@ table {
 }
 
 th {
-  background: rgba(8, 16, 30, 0.92);
-  color: #a5f3fc;
+  background: rgba(11, 24, 44, 0.94);
+  color: #cbdaf6;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 11px;
 }
 
 td {
-  background: rgba(10, 18, 34, 0.42);
+  background: rgba(13, 22, 40, 0.5);
 }
 
 tr:hover td {
-  background: rgba(15, 28, 48, 0.7);
+  background: rgba(21, 34, 56, 0.74);
 }
 
 @media (max-width: 900px) {
@@ -497,8 +497,8 @@ tr:hover td {
 
 #panel-control h1 {
   letter-spacing: -0.035em;
-  background-image: linear-gradient(100deg, color-mix(in srgb, var(--ui-accent-b) 88%, white 8%), color-mix(in srgb, var(--ui-accent-a) 75%, #f8fafc 12%));
-  text-shadow: 0 10px 24px color-mix(in srgb, var(--ui-accent-b) 38%, transparent);
+  background-image: linear-gradient(100deg, color-mix(in srgb, var(--ui-accent-a) 78%, #f8fafc 14%), color-mix(in srgb, var(--ui-accent-b) 62%, #f1f5f9 18%));
+  text-shadow: 0 6px 16px color-mix(in srgb, var(--ui-accent-a) 20%, transparent);
 }
 
 #panel-control #user-display {
@@ -517,9 +517,9 @@ tr:hover td {
   background: linear-gradient(180deg, color-mix(in srgb, var(--ui-card-top) 70%, transparent), color-mix(in srgb, var(--ui-card-bottom) 60%, transparent));
   padding: 0.45rem;
   gap: 0.35rem;
-  backdrop-filter: blur(18px) saturate(135%);
-  -webkit-backdrop-filter: blur(18px) saturate(135%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 14px 28px rgba(2, 8, 20, 0.24);
+  backdrop-filter: blur(14px) saturate(115%);
+  -webkit-backdrop-filter: blur(14px) saturate(115%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 20px rgba(2, 8, 20, 0.2);
 }
 
 #main-nav-secciones button {
@@ -557,7 +557,7 @@ tr:hover td {
 #main-nav-secciones button:not(.nav-btn-active):hover {
   opacity: 1 !important;
   transform: translateY(-1px);
-  border-color: rgba(45, 212, 191, 0.44);
+  border-color: rgba(56, 189, 248, 0.34);
   background: linear-gradient(180deg, var(--ui-nav-hover-a), var(--ui-nav-hover-b));
 }
 
@@ -585,8 +585,8 @@ tr:hover td {
 .toolbar-btn-primary {
   background: linear-gradient(105deg, var(--ui-accent-a), var(--ui-accent-b));
   border-color: color-mix(in srgb, var(--ui-accent-b) 70%, white 8%);
-  color: #f8fafc;
-  box-shadow: 0 12px 24px color-mix(in srgb, var(--ui-accent-b) 42%, transparent);
+  color: #eff6ff;
+  box-shadow: 0 10px 20px color-mix(in srgb, var(--ui-accent-a) 36%, transparent);
 }
 
 .toolbar-btn-primary:hover {
@@ -659,8 +659,8 @@ tr:hover td {
 
 #kpi-container-grid .kpi-3d-card {
   min-height: 116px;
-  box-shadow: 0 14px 26px rgba(2, 8, 20, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 12px 22px rgba(2, 8, 20, 0.34);
+  border: 1px solid rgba(191, 219, 254, 0.16);
 }
 
 #kpi-container-grid .kpi-3d-card:nth-child(1) { animation: kpi-reveal 0.42s ease both; }
@@ -732,8 +732,8 @@ tr:hover td {
 }
 
 .seccion-app .card-bg:hover {
-  border-color: rgba(56, 189, 248, 0.32);
-  box-shadow: 0 18px 34px rgba(2, 8, 20, 0.46);
+  border-color: rgba(96, 165, 250, 0.28);
+  box-shadow: 0 14px 28px rgba(2, 8, 20, 0.4);
 }
 
 .seccion-app h2,

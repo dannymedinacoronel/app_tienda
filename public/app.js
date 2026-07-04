@@ -49,6 +49,7 @@ let MONOPOLIO_PROGRESS_VALUE = 0;
 let MONOPOLIO_PROGRESS_ACTIVE = false;
 let MONOPOLIO_PROGRESS_MSG_INDEX = 0;
 let MONOPOLIO_PROGRESS_SEEN = new Set();
+let MONOPOLIO_DIAGNOSTICO = [];
 let CHAT_SEARCH_QUERY = '';
 let SECCIONES_INHABILITADAS = new Set();
 let SCRAPER_PROGRESS_VALUE = 0;
@@ -84,6 +85,81 @@ function escapeHtmlSafe(value) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
 }
+
+function resetDiagnosticoMonopolio() {
+    MONOPOLIO_DIAGNOSTICO = [];
+    renderDiagnosticoMonopolio();
+}
+
+function upsertDiagnosticoMonopolio(data) {
+    const key = String(data?.urlOrigen || data?.alias || '').trim();
+    if (!key) return;
+
+    const grupos = Array.isArray(data?.grupos) ? data.grupos : [];
+    const productosPlano = Array.isArray(data?.productos) ? data.productos : [];
+    const productosDesdeGrupos = grupos.flatMap((g) => Array.isArray(g?.productos) ? g.productos : []);
+    const productosTotales = productosPlano.length > 0 ? productosPlano.length : productosDesdeGrupos.length;
+    const cuentasConProductos = grupos.filter((g) => Number(g?.total || (g?.productos || []).length || 0) > 0).length;
+
+    const item = {
+        key,
+        alias: String(data?.alias || data?.urlOrigen || 'URL').trim(),
+        url: String(data?.urlOrigen || '').trim(),
+        modo: data?.esModoSeguidos ? 'seguidos' : 'perfil',
+        origen: String(data?.origen || 'github').trim(),
+        grupos: grupos.length,
+        cuentasConProductos,
+        productos: productosTotales,
+        error: String(data?.error || '').trim(),
+        ts: data?.timestamp ? new Date(data.timestamp) : new Date()
+    };
+
+    const idx = MONOPOLIO_DIAGNOSTICO.findIndex((x) => x.key === key);
+    if (idx >= 0) MONOPOLIO_DIAGNOSTICO[idx] = item;
+    else MONOPOLIO_DIAGNOSTICO.unshift(item);
+
+    MONOPOLIO_DIAGNOSTICO = MONOPOLIO_DIAGNOSTICO.slice(0, 80);
+    renderDiagnosticoMonopolio();
+}
+
+function renderDiagnosticoMonopolio() {
+    const panel = document.getElementById('monopolio-diagnostic-panel');
+    if (!panel) return;
+
+    if (!MONOPOLIO_DIAGNOSTICO.length) {
+        panel.innerHTML = '<p class="text-xs opacity-50 italic">Aún no hay eventos de diagnóstico.</p>';
+        return;
+    }
+
+    panel.innerHTML = MONOPOLIO_DIAGNOSTICO.map((d, i) => {
+        const estado = d.error
+            ? '<span class="text-rose-300">Error</span>'
+            : d.productos > 0
+                ? '<span class="text-emerald-300">OK</span>'
+                : '<span class="text-amber-300">Sin productos</span>';
+
+        const fechaTxt = d.ts && !isNaN(d.ts.getTime())
+            ? d.ts.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            : '-';
+
+        return `
+            <div class="rounded-xl border ${d.error ? 'border-rose-500/30 bg-rose-500/10' : 'border-cyan-500/20 bg-black/20'} p-2.5">
+                <div class="flex items-center justify-between gap-2 mb-1">
+                    <p class="text-[10px] font-black uppercase tracking-widest truncate">${i + 1}. ${escapeHtmlSafe(d.alias)}</p>
+                    <p class="text-[9px] opacity-70 font-mono">${fechaTxt}</p>
+                </div>
+                <p class="text-[9px] opacity-65 font-mono truncate mb-1">${escapeHtmlSafe(d.url || '-')}</p>
+                <p class="text-[10px]">Estado: ${estado} · Modo: <span class="text-cyan-200">${escapeHtmlSafe(d.modo)}</span> · Origen: <span class="text-purple-200">${escapeHtmlSafe(d.origen)}</span></p>
+                <p class="text-[10px] opacity-80">Grupos: ${d.grupos} · Cuentas con producto: ${d.cuentasConProductos} · Productos: ${d.productos}</p>
+                ${d.error ? `<p class="text-[10px] text-rose-200 mt-1 break-words">${escapeHtmlSafe(d.error)}</p>` : ''}
+            </div>
+        `;
+    }).join('');
+}
+
+window.limpiarDiagnosticoMonopolio = function() {
+    resetDiagnosticoMonopolio();
+};
 
 function esRolVisualizador() {
     return String(USUARIO_ROL_ACTUAL || '').toLowerCase() === 'visualizador';
@@ -394,6 +470,7 @@ socket.on('monopolio_update', (data) => {
     if (!container) return;
 
     registrarResultadoMonopolio(data);
+    upsertDiagnosticoMonopolio(data);
 
     const alias = data.alias || data.urlOrigen;
 
@@ -419,9 +496,10 @@ socket.on('monopolio_update', (data) => {
     if (container.querySelector('p.italic')) {
         container.innerHTML = '';
     }
-    const productos = data.productos || [];
+    const productosPlano = Array.isArray(data.productos) ? data.productos : [];
     const grupos = Array.isArray(data.grupos) ? data.grupos : [];
     const esModoSeguidos = Boolean(data.esModoSeguidos);
+    const productos = productosPlano.length > 0 ? productosPlano : grupos.flatMap((g) => Array.isArray(g?.productos) ? g.productos : []);
 
     let existingContainer = document.getElementById(`monopolio-res-${btoa(data.urlOrigen)}`);
     if (existingContainer) {
@@ -467,7 +545,7 @@ socket.on('monopolio_update', (data) => {
 
     resultBlock.innerHTML = `
         <h5 class="font-bold text-purple-300 text-sm mb-2">${alias}</h5>
-        <p class="text-[10px] opacity-60 mb-3">${productos.length} productos encontrados${grupos.length ? ` · ${grupos.length} cuentas analizadas` : ''}.</p>
+        <p class="text-[10px] opacity-60 mb-3">${productos.length} productos encontrados${grupos.length ? ` · ${grupos.length} cuentas analizadas` : ''}${(grupos.length > 0 && productosPlano.length === 0) ? ' · consolidado desde grupos' : ''}.</p>
         ${analyticsHtml}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${productosHtml}</div>
     `;
@@ -834,9 +912,12 @@ function getSavedScraperUrls() {
             if (typeof item === 'string') {
                 return { alias: '', url: item, createdAt: Date.now() };
             }
+
+            const urlRaw = item?.url || item?.link || item?.href || item?.targetUrl || '';
+            const aliasRaw = item?.alias || item?.name || item?.titulo || '';
             return {
-                alias: String(item?.alias || '').trim(),
-                url: String(item?.url || '').trim(),
+                alias: String(aliasRaw || '').trim(),
+                url: String(urlRaw || '').trim(),
                 createdAt: Number(item?.createdAt) || Date.now()
             };
         })
@@ -1941,6 +2022,7 @@ window.iniciarScrapingMonopolio = async function() {
     
     const resultadosContainer = document.getElementById('resultados-monopolio-scraping');
     resultadosContainer.innerHTML = '';
+    resetDiagnosticoMonopolio();
     iniciarAnimacionCargaMonopolio(0, 'Lanzando tareas de scraping en GitHub Actions...');
 
     try {
@@ -1987,6 +2069,7 @@ window.iniciarScrapingMonopolioSeleccionadas = async function() {
     if (!resultadosContainer) return;
 
     resultadosContainer.innerHTML = '';
+    resetDiagnosticoMonopolio();
     iniciarAnimacionCargaMonopolio(0, 'Lanzando análisis seleccionado (sin guardar)...');
 
     try {

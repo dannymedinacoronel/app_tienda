@@ -1493,6 +1493,14 @@
             </div>
 
             <div class="card-bg border p-6 rounded-3xl shadow-xl mt-4">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                    <h4 class="text-sm font-black uppercase tracking-wide text-cyan-300">Diagnóstico Monopolio en vivo</h4>
+                    <button onclick="limpiarDiagnosticoMonopolio()" class="text-[10px] px-2 py-1 rounded-lg border border-white/15 text-white/80 hover:bg-white/10">Limpiar diagnóstico</button>
+                </div>
+                <div id="monopolio-diagnostic-panel" class="space-y-2 max-h-[280px] overflow-y-auto custom-scrollbar pr-2 mb-4">
+                    <p class="text-xs opacity-50 italic">Aún no hay eventos de diagnóstico.</p>
+                </div>
+
                 <h4 class="text-sm font-black uppercase tracking-wide text-purple-400 mb-4">Resultados del Scraping</h4>
                 <div id="resultados-monopolio-scraping" class="space-y-4 max-h-[600px] overflow-y-auto custom-scrollbar pr-2">
                     <p class="text-xs opacity-50 italic">Los resultados del scraping de las webs guardadas aparecerán aquí en tiempo real.</p>

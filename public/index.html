@@ -1204,6 +1204,20 @@
                         <button id="btn-higiene-apply" onclick="ejecutarAccionHigieneDB()" class="toolbar-btn toolbar-btn-primary px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wide">Ejecutar acción</button>
                     </div>
 
+                    <div class="card-bg border rounded-2xl p-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-emerald-300">Decisión por objeto (interactivo)</p>
+                            <div class="flex gap-2">
+                                <button onclick="prepararDecisionesHigieneDesdeUI()" class="toolbar-btn px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide">Preparar</button>
+                                <button onclick="aplicarDecisionesHigieneUI()" class="toolbar-btn toolbar-btn-primary px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wide">Aplicar decisiones</button>
+                            </div>
+                        </div>
+                        <p class="text-[10px] opacity-70 mb-2">Para cada proveedor/categoría huérfana puedes elegir: ignorar, crear, renombrar, anidar, limpiar referencia o eliminar artículos.</p>
+                        <div id="higiene-decisiones-panel" class="max-h-72 overflow-auto custom-scrollbar pr-1">
+                            <p class="text-[10px] opacity-45 italic">Escanea y pulsa "Preparar" para editar decisiones por objeto.</p>
+                        </div>
+                    </div>
+
                     <div id="higiene-action-result" class="card-bg border rounded-2xl p-3 text-[10px] opacity-85 max-h-48 overflow-auto custom-scrollbar">
                         <p class="opacity-45 italic">Aquí verás la salida de dry-run o ejecución real.</p>
                     </div>

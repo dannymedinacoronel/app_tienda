@@ -620,6 +620,10 @@ async function generarReporteHigiene(empresa, sampleLimit = 25) {
     return {
         empresa,
         generadoEn: new Date(),
+        catalogos: {
+            tiendas: (tiendasRaw || []).map((x) => String(x || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b, 'es')),
+            categorias: (categoriasRaw || []).map((x) => String(x || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b, 'es'))
+        },
         resumen: {
             estadosInvalidos: estadosInvalidosCount,
             incompletos: incompletosCount,
@@ -3305,6 +3309,194 @@ app.post('/api/higiene/apply', exigeAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Acción requerida.' });
         }
 
+        if (action === 'aplicar-decisiones-objetos') {
+            const decisionesRaw = Array.isArray(req.body?.decisions) ? req.body.decisions : [];
+            const decisiones = decisionesRaw.slice(0, 300);
+
+            if (!decisiones.length) {
+                return res.status(400).json({ error: 'Debes enviar al menos una decisión por objeto.' });
+            }
+
+            const [tiendasRaw, categoriasRaw] = await Promise.all([
+                Tienda.distinct('nombre', { empresa }),
+                Categoria.distinct('nombre', { empresa })
+            ]);
+
+            const tiendasSet = new Set((tiendasRaw || []).map(normalizarClaveTexto).filter(Boolean));
+            const categoriasSet = new Set((categoriasRaw || []).map(normalizarClaveTexto).filter(Boolean));
+
+            const ahoraIso = new Date().toISOString().slice(0, 10);
+            const resultados = [];
+            let cambiosVentas = 0;
+            let eliminadosVentas = 0;
+            let creadosObjetos = 0;
+
+            for (const decision of decisiones) {
+                const tipo = String(decision?.tipo || '').trim();
+                const origen = String(decision?.origen || '').trim();
+                const accion = String(decision?.accion || '').trim();
+                const destino = String(decision?.destino || '').trim();
+
+                const isProveedor = tipo === 'proveedor-huerfano';
+                const isCategoria = tipo === 'categoria-huerfana';
+                if (!isProveedor && !isCategoria) {
+                    resultados.push({ ok: false, tipo, origen, accion, error: 'Tipo no soportado.' });
+                    continue;
+                }
+
+                if (!origen) {
+                    resultados.push({ ok: false, tipo, origen, accion, error: 'Origen vacío.' });
+                    continue;
+                }
+
+                if (!['ignorar', 'crear', 'renombrar', 'anidar', 'limpiar-referencia', 'eliminar-articulos'].includes(accion)) {
+                    resultados.push({ ok: false, tipo, origen, accion, error: 'Acción no soportada.' });
+                    continue;
+                }
+
+                const campo = isProveedor ? 'proveedor' : 'categoria';
+                const origenRegex = new RegExp(`^\\s*${escapeRegexSafe(origen)}\\s*$`, 'i');
+                const queryBase = {
+                    empresa,
+                    [campo]: { $regex: origenRegex }
+                };
+
+                try {
+                    if (accion === 'ignorar') {
+                        const total = await VentaRopa.countDocuments(queryBase);
+                        resultados.push({ ok: true, tipo, origen, accion, total, skipped: true });
+                        continue;
+                    }
+
+                    if (accion === 'crear') {
+                        const nombre = origen.slice(0, 120);
+                        const nombreNorm = normalizarClaveTexto(nombre);
+                        if (!nombreNorm) {
+                            resultados.push({ ok: false, tipo, origen, accion, error: 'Nombre inválido para crear.' });
+                            continue;
+                        }
+
+                        const yaExiste = isProveedor
+                            ? tiendasSet.has(nombreNorm)
+                            : categoriasSet.has(nombreNorm);
+
+                        if (dryRun) {
+                            resultados.push({ ok: true, tipo, origen, accion, nombre, exists: yaExiste, wouldCreate: !yaExiste });
+                            continue;
+                        }
+
+                        if (!yaExiste) {
+                            if (isProveedor) {
+                                await Tienda.create({ nombre, empresa, fechaCreacion: new Date() });
+                                tiendasSet.add(nombreNorm);
+                            } else {
+                                await Categoria.create({ nombre, empresa });
+                                categoriasSet.add(nombreNorm);
+                            }
+                            creadosObjetos += 1;
+                        }
+
+                        resultados.push({ ok: true, tipo, origen, accion, nombre, created: !yaExiste, exists: yaExiste });
+                        continue;
+                    }
+
+                    if (accion === 'renombrar' || accion === 'anidar') {
+                        const destinoFinal = destino.slice(0, 120);
+                        const destinoNorm = normalizarClaveTexto(destinoFinal);
+                        if (!destinoNorm) {
+                            resultados.push({ ok: false, tipo, origen, accion, error: 'Debes indicar destino para renombrar/anidar.' });
+                            continue;
+                        }
+
+                        if (accion === 'anidar') {
+                            const existeDestino = isProveedor ? tiendasSet.has(destinoNorm) : categoriasSet.has(destinoNorm);
+                            if (!existeDestino) {
+                                resultados.push({ ok: false, tipo, origen, accion, destino: destinoFinal, error: 'El destino de anidación no existe en catálogo.' });
+                                continue;
+                            }
+                        }
+
+                        if (dryRun) {
+                            const total = await VentaRopa.countDocuments(queryBase);
+                            resultados.push({ ok: true, tipo, origen, accion, destino: destinoFinal, matched: total, wouldModify: total });
+                            continue;
+                        }
+
+                        const upd = await VentaRopa.updateMany(queryBase, {
+                            $set: {
+                                [campo]: destinoFinal,
+                                fechaModificacion: ahoraIso
+                            }
+                        });
+                        cambiosVentas += Number(upd.modifiedCount || 0);
+                        resultados.push({ ok: true, tipo, origen, accion, destino: destinoFinal, matched: upd.matchedCount, modified: upd.modifiedCount });
+                        continue;
+                    }
+
+                    if (accion === 'limpiar-referencia') {
+                        if (dryRun) {
+                            const total = await VentaRopa.countDocuments(queryBase);
+                            resultados.push({ ok: true, tipo, origen, accion, matched: total, wouldModify: total, valueAfter: '' });
+                            continue;
+                        }
+
+                        const upd = await VentaRopa.updateMany(queryBase, {
+                            $set: {
+                                [campo]: '',
+                                fechaModificacion: ahoraIso
+                            }
+                        });
+                        cambiosVentas += Number(upd.modifiedCount || 0);
+                        resultados.push({ ok: true, tipo, origen, accion, matched: upd.matchedCount, modified: upd.modifiedCount });
+                        continue;
+                    }
+
+                    if (accion === 'eliminar-articulos') {
+                        if (dryRun) {
+                            const total = await VentaRopa.countDocuments(queryBase);
+                            resultados.push({ ok: true, tipo, origen, accion, matched: total, wouldDelete: total, dangerous: true });
+                            continue;
+                        }
+
+                        const del = await VentaRopa.deleteMany(queryBase);
+                        eliminadosVentas += Number(del.deletedCount || 0);
+                        resultados.push({ ok: true, tipo, origen, accion, deleted: del.deletedCount, dangerous: true });
+                        continue;
+                    }
+
+                    resultados.push({ ok: false, tipo, origen, accion, error: 'Acción no controlada.' });
+                } catch (eItem) {
+                    resultados.push({ ok: false, tipo, origen, accion, error: eItem.message || 'Error inesperado en decisión.' });
+                }
+            }
+
+            const okCount = resultados.filter((r) => r.ok).length;
+            const errorCount = resultados.length - okCount;
+
+            if (!dryRun && (cambiosVentas > 0 || eliminadosVentas > 0 || creadosObjetos > 0)) {
+                invalidateKpiResumenCache(empresa);
+                await registrarLog(
+                    req.session.email,
+                    `[HIGIENE] Decisiones por objeto: ${okCount}/${resultados.length} ok · cambios=${cambiosVentas} · eliminados=${eliminadosVentas} · creados=${creadosObjetos}`
+                );
+            }
+
+            return res.json({
+                dryRun,
+                action,
+                empresa,
+                resumen: {
+                    totalDecisiones: resultados.length,
+                    exitosas: okCount,
+                    errores: errorCount,
+                    cambiosVentas,
+                    eliminadosVentas,
+                    creadosObjetos
+                },
+                resultados
+            });
+        }
+
         if (action === 'corregir-estados-invalidos') {
             const estados = await EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean();
             const estadosValidos = (estados || []).map((e) => String(e.nombre || '').trim()).filter(Boolean);
@@ -3395,7 +3587,7 @@ app.post('/api/higiene/apply', exigeAdmin, async (req, res) => {
 
         return res.status(400).json({
             error: 'Acción no soportada.',
-            allowed: ['corregir-estados-invalidos', 'crear-tiendas-faltantes', 'crear-categorias-faltantes']
+            allowed: ['corregir-estados-invalidos', 'crear-tiendas-faltantes', 'crear-categorias-faltantes', 'aplicar-decisiones-objetos']
         });
     } catch (e) {
         console.error('[HIGIENE] Error en apply:', e.message);

@@ -54,6 +54,7 @@ let MONOPOLIO_PROGRESS_MSG_INDEX = 0;
 let MONOPOLIO_PROGRESS_SEEN = new Set();
 let MONOPOLIO_DIAGNOSTICO = [];
 let HIGIENE_REPORTE_CACHE = null;
+let HIGIENE_DECISIONES_UI = [];
 let CHAT_SEARCH_QUERY = '';
 let SECCIONES_INHABILITADAS = new Set();
 let SCRAPER_PROGRESS_VALUE = 0;
@@ -2016,6 +2017,198 @@ function pintarReporteHigiene(reporte) {
     `;
 }
 
+function opcionesDestinoHigiene(tipo) {
+    const cat = HIGIENE_REPORTE_CACHE?.catalogos || {};
+    const lista = tipo === 'categoria-huerfana'
+        ? (Array.isArray(cat.categorias) ? cat.categorias : [])
+        : (Array.isArray(cat.tiendas) ? cat.tiendas : []);
+    return lista;
+}
+
+function prepararDecisionesHigiene() {
+    const detalles = HIGIENE_REPORTE_CACHE?.detalles || {};
+    const prov = Array.isArray(detalles.proveedoresHuerfanos) ? detalles.proveedoresHuerfanos : [];
+    const cat = Array.isArray(detalles.categoriasHuerfanas) ? detalles.categoriasHuerfanas : [];
+    const now = Date.now();
+
+    const filas = [];
+    prov.forEach((it, idx) => {
+        const origen = String(it?.proveedor || '').trim();
+        if (!origen) return;
+        filas.push({
+            id: `prov-${now}-${idx}`,
+            tipo: 'proveedor-huerfano',
+            origen,
+            cantidad: Number(it?.cantidad || 0),
+            accion: 'crear',
+            destino: ''
+        });
+    });
+
+    cat.forEach((it, idx) => {
+        const origen = String(it?.categoria || '').trim();
+        if (!origen) return;
+        filas.push({
+            id: `cat-${now}-${idx}`,
+            tipo: 'categoria-huerfana',
+            origen,
+            cantidad: Number(it?.cantidad || 0),
+            accion: 'crear',
+            destino: ''
+        });
+    });
+
+    HIGIENE_DECISIONES_UI = filas;
+}
+
+function renderPanelDecisionesHigiene() {
+    const panel = document.getElementById('higiene-decisiones-panel');
+    if (!panel) return;
+
+    if (!Array.isArray(HIGIENE_DECISIONES_UI) || HIGIENE_DECISIONES_UI.length === 0) {
+        panel.innerHTML = '<p class="text-[10px] opacity-45 italic">No hay objetos huérfanos para decidir.</p>';
+        return;
+    }
+
+    const filasHtml = HIGIENE_DECISIONES_UI.map((item, idx) => {
+        const opcionesDestino = opcionesDestinoHigiene(item.tipo);
+        const destinoSelectHtml = opcionesDestino.map((x) => {
+            const selected = String(x) === String(item.destino || '') ? 'selected' : '';
+            return `<option value="${escapeHtmlSafe(x)}" ${selected}>${escapeHtmlSafe(x)}</option>`;
+        }).join('');
+
+        const destinoInputVisible = item.accion === 'renombrar';
+        const destinoSelectVisible = item.accion === 'anidar';
+
+        return `
+            <div class="rounded-xl border border-white/10 bg-black/20 p-2.5 mb-2">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <p class="text-[10px] font-black uppercase tracking-wider ${item.tipo === 'categoria-huerfana' ? 'text-indigo-300' : 'text-cyan-300'}">${item.tipo === 'categoria-huerfana' ? 'Categoría huérfana' : 'Proveedor huérfano'}</p>
+                    <p class="text-[10px] opacity-70">${item.cantidad} refs</p>
+                </div>
+                <p class="text-[11px] font-mono mb-2">${escapeHtmlSafe(item.origen)}</p>
+
+                <div class="grid grid-cols-1 lg:grid-cols-[210px_1fr] gap-2 items-center">
+                    <select class="input-bg border rounded-lg px-2 py-1.5 text-[10px] dropdown-bg" onchange="actualizarAccionDecisionHigiene(${idx}, this.value)">
+                        <option value="ignorar" ${item.accion === 'ignorar' ? 'selected' : ''}>Ignorar (no tocar)</option>
+                        <option value="crear" ${item.accion === 'crear' ? 'selected' : ''}>Crear en catálogo</option>
+                        <option value="renombrar" ${item.accion === 'renombrar' ? 'selected' : ''}>Renombrar a...</option>
+                        <option value="anidar" ${item.accion === 'anidar' ? 'selected' : ''}>Anidar en existente...</option>
+                        <option value="limpiar-referencia" ${item.accion === 'limpiar-referencia' ? 'selected' : ''}>Limpiar referencia</option>
+                        <option value="eliminar-articulos" ${item.accion === 'eliminar-articulos' ? 'selected' : ''}>Eliminar artículos</option>
+                    </select>
+                    <div class="flex gap-2">
+                        <input
+                            type="text"
+                            value="${escapeHtmlSafe(item.destino || '')}"
+                            oninput="actualizarDestinoDecisionHigiene(${idx}, this.value)"
+                            placeholder="Nombre destino (para renombrar)"
+                            class="input-bg border rounded-lg px-2 py-1.5 text-[10px] flex-1 ${destinoInputVisible ? '' : 'hidden'}"
+                            id="higiene-destino-input-${idx}">
+                        <select
+                            class="input-bg border rounded-lg px-2 py-1.5 text-[10px] dropdown-bg flex-1 ${destinoSelectVisible ? '' : 'hidden'}"
+                            onchange="actualizarDestinoDecisionHigiene(${idx}, this.value)"
+                            id="higiene-destino-select-${idx}">
+                            <option value="">Selecciona destino existente</option>
+                            ${destinoSelectHtml}
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    panel.innerHTML = filasHtml;
+}
+
+window.actualizarAccionDecisionHigiene = function(idx, accion) {
+    if (!HIGIENE_DECISIONES_UI[idx]) return;
+    HIGIENE_DECISIONES_UI[idx].accion = String(accion || '').trim();
+    if (!['renombrar', 'anidar'].includes(HIGIENE_DECISIONES_UI[idx].accion)) {
+        HIGIENE_DECISIONES_UI[idx].destino = '';
+    }
+    renderPanelDecisionesHigiene();
+}
+
+window.actualizarDestinoDecisionHigiene = function(idx, destino) {
+    if (!HIGIENE_DECISIONES_UI[idx]) return;
+    HIGIENE_DECISIONES_UI[idx].destino = String(destino || '').trim();
+}
+
+window.prepararDecisionesHigieneDesdeUI = function() {
+    if (!HIGIENE_REPORTE_CACHE) {
+        setEstadoHigiene('Primero ejecuta un escaneo para preparar decisiones.', 'warn');
+        return;
+    }
+    prepararDecisionesHigiene();
+    renderPanelDecisionesHigiene();
+    setEstadoHigiene(`Decisiones preparadas: ${HIGIENE_DECISIONES_UI.length} objetos.`, 'ok');
+}
+
+window.aplicarDecisionesHigieneUI = async function() {
+    if (!Array.isArray(HIGIENE_DECISIONES_UI) || HIGIENE_DECISIONES_UI.length === 0) {
+        setEstadoHigiene('No hay decisiones preparadas. Pulsa Preparar.', 'warn');
+        return;
+    }
+
+    const dryRun = document.getElementById('higiene-dry-run')?.checked !== false;
+    const payloadDecisions = HIGIENE_DECISIONES_UI.map((x) => ({
+        tipo: x.tipo,
+        origen: x.origen,
+        accion: x.accion,
+        destino: x.destino
+    }));
+
+    const invalidas = payloadDecisions.filter((d) => ['renombrar', 'anidar'].includes(d.accion) && !String(d.destino || '').trim());
+    if (invalidas.length > 0) {
+        setEstadoHigiene('Hay decisiones con destino vacío (renombrar/anidar).', 'error');
+        return;
+    }
+
+    const usaEliminar = payloadDecisions.some((d) => d.accion === 'eliminar-articulos');
+    if (usaEliminar && !confirm('Incluiste "Eliminar artículos" en al menos una decisión. Esta acción es destructiva. ¿Continuar?')) {
+        return;
+    }
+
+    if (!dryRun && !confirm('Vas a aplicar decisiones reales por objeto. ¿Confirmas ejecutar cambios?')) return;
+
+    const btnApply = document.getElementById('btn-higiene-apply');
+    if (btnApply) btnApply.disabled = true;
+    setEstadoHigiene(dryRun ? 'Simulando decisiones por objeto...' : 'Aplicando decisiones por objeto...', 'warn');
+
+    try {
+        const res = await fetch('/api/higiene/apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                action: 'aplicar-decisiones-objetos',
+                dryRun,
+                decisions: payloadDecisions
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+        const resultBox = document.getElementById('higiene-action-result');
+        if (resultBox) {
+            resultBox.innerHTML = `<pre class="text-[10px] whitespace-pre-wrap break-words">${escapeHtmlSafe(JSON.stringify(data, null, 2))}</pre>`;
+        }
+
+        setEstadoHigiene(dryRun ? 'Dry-run por objeto completado.' : 'Decisiones aplicadas correctamente.', 'ok');
+
+        if (!dryRun) {
+            HIGIENE_REPORTE_CACHE = null;
+            HIGIENE_DECISIONES_UI = [];
+            await escanearHigieneDB(true);
+        }
+    } catch (e) {
+        setEstadoHigiene(`Error aplicando decisiones: ${e.message}`, 'error');
+    } finally {
+        if (btnApply) btnApply.disabled = false;
+    }
+}
+
 window.escanearHigieneDB = async function(forzar = true) {
     const sec = document.getElementById('sec-higiene');
     if (!sec || sec.classList.contains('hidden')) return;
@@ -2036,6 +2229,8 @@ window.escanearHigieneDB = async function(forzar = true) {
 
         HIGIENE_REPORTE_CACHE = data;
         pintarReporteHigiene(data);
+        prepararDecisionesHigiene();
+        renderPanelDecisionesHigiene();
         setEstadoHigiene('Escaneo completado. Revisa hallazgos y aplica con dry-run.', 'ok');
     } catch (e) {
         setEstadoHigiene(`Error al escanear: ${e.message}`, 'error');

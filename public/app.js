@@ -2605,6 +2605,12 @@ function aplicarConfiguracionVisualRuntime(cfg) {
     })();
 
     const hidden = new Set([...(cfg.hiddenSections || []), ...(cfg.blockedSections || []), ...bloqueadasPorRol]);
+
+    // El acceso de Admin a ajustes/god no debe perderse por configuración global.
+    if (String(USUARIO_ROL_ACTUAL || '').toLowerCase() === 'admin') {
+        hidden.delete('sec-ajustes');
+    }
+
     SECCIONES_INHABILITADAS = hidden;
 
     const orden = Array.isArray(cfg.sectionOrder) ? cfg.sectionOrder : [];
@@ -2656,6 +2662,31 @@ function aplicarConfiguracionVisualRuntime(cfg) {
         if (primeraVisible) {
             navegarASeccion(primeraVisible);
         }
+    }
+}
+
+function asegurarAccesoGodParaAdmin(rol) {
+    const esAdmin = String(rol || '').toLowerCase() === 'admin';
+    const btnPanel = document.getElementById('btn-open-god-panel');
+    if (btnPanel) {
+        btnPanel.classList.toggle('hidden', !esAdmin);
+    }
+
+    const idFloat = 'btn-open-god-panel-float';
+    const actual = document.getElementById(idFloat);
+    if (!esAdmin) {
+        if (actual) actual.remove();
+        return;
+    }
+
+    if (!actual) {
+        const a = document.createElement('a');
+        a.id = idFloat;
+        a.href = '/admin-god';
+        a.target = '_blank';
+        a.className = 'fixed bottom-20 right-4 z-[9998] bg-rose-600 hover:bg-rose-700 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase tracking-widest shadow-2xl border border-rose-300/30';
+        a.textContent = 'Panel Dios';
+        document.body.appendChild(a);
     }
 }
 
@@ -6239,9 +6270,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('internal-chat-btn')?.classList.remove('hidden');
             document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario.split('@')[0]} [${data.rol}]`; 
 
-            if ((data.rol || 'Editor') === 'Admin') {
-                document.getElementById('btn-open-god-panel')?.classList.remove('hidden');
-            }
+            asegurarAccesoGodParaAdmin(data.rol || 'Editor');
 
             const cards3D = document.querySelectorAll('.kpi-3d-card');
             const handleCardMouseMove = throttle(function(e, card) {
@@ -6262,6 +6291,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             await refrescarYListarTiendasCloud();
             await refrescarCategoriasCloud();
             await cargarConfiguracionVisualRuntime();
+            asegurarAccesoGodParaAdmin(data.rol || 'Editor');
             await reloadCoreData(true); 
             await refrescarCitas();
             await actualizarBadgeCitasNav();

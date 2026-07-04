@@ -3160,6 +3160,7 @@ async function refrescarEstadosKanban() {
             <button onclick="ejecutarAccionMasivaEstado('${e.nombre}')" class="bg-${e.color || 'slate'}-600 hover:bg-${e.color || 'slate'}-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg whitespace-nowrap">${e.icono || ''} ➡️ ${e.nombre}</button>
         `).join('');
     }
+    poblarFiltroEstadosVentaAnalitica();
     renderListaAjustesKanban();
 }
 
@@ -3752,6 +3753,182 @@ function onCambiarPresetGananciasAdmin() {
     actualizarDashboardGananciasAdmin();
 }
 
+function obtenerRangoFechasPorPresetAnalitica(preset) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const mes = now.getMonth();
+
+    if (preset === 'todo') return { inicio: '', fin: '' };
+    if (preset === 'mes-actual') {
+        return {
+            inicio: formatearFechaISO(new Date(y, mes, 1)),
+            fin: formatearFechaISO(new Date(y, mes + 1, 0))
+        };
+    }
+    if (preset === 'mes-anterior') {
+        const mPrev = mes - 1;
+        return {
+            inicio: formatearFechaISO(new Date(y, mPrev, 1)),
+            fin: formatearFechaISO(new Date(y, mPrev + 1, 0))
+        };
+    }
+    if (preset === 'anio-actual') {
+        return {
+            inicio: formatearFechaISO(new Date(y, 0, 1)),
+            fin: formatearFechaISO(new Date(y, 11, 31))
+        };
+    }
+
+    const q = preset === 'quarter-actual'
+        ? (Math.floor(mes / 3) + 1)
+        : (preset === 'q1' ? 1 : preset === 'q2' ? 2 : preset === 'q3' ? 3 : preset === 'q4' ? 4 : 0);
+
+    if (q >= 1 && q <= 4) {
+        const mesInicio = (q - 1) * 3;
+        return {
+            inicio: formatearFechaISO(new Date(y, mesInicio, 1)),
+            fin: formatearFechaISO(new Date(y, mesInicio + 3, 0))
+        };
+    }
+
+    return { inicio: '', fin: '' };
+}
+
+window.onCambiarPeriodoAnalitica = function() {
+    const presetEl = document.getElementById('an-filtro-periodo');
+    const startEl = document.getElementById('an-filtro-fecha-inicio');
+    const endEl = document.getElementById('an-filtro-fecha-fin');
+    if (!presetEl || !startEl || !endEl) return;
+
+    const preset = String(presetEl.value || 'todo');
+    const custom = preset === 'personalizado';
+    const rango = obtenerRangoFechasPorPresetAnalitica(preset);
+
+    startEl.disabled = !custom;
+    endEl.disabled = !custom;
+
+    if (!custom) {
+        startEl.value = rango.inicio;
+        endEl.value = rango.fin;
+    }
+
+    actualizarTodoElBloqueGrafico();
+};
+
+function poblarFiltroEstadosVentaAnalitica() {
+    const select = document.getElementById('an-filtro-estado');
+    if (!select) return;
+
+    const valorActual = String(select.value || 'TODOS');
+    const estadosVenta = (LISTA_ESTADOS_KANBAN || []).filter((e) => e.rolFinanciero === 'Venta');
+    const options = ['<option value="TODOS">💰 Todos los estados venta</option>']
+        .concat(estadosVenta.map((e) => `<option value="${e.nombre}">${e.icono || '💰'} ${e.nombre}</option>`));
+    select.innerHTML = options.join('');
+
+    if (valorActual && Array.from(select.options).some((o) => o.value === valorActual)) {
+        select.value = valorActual;
+    }
+}
+
+function calcularMetricasContables(lista, ivaPercent = 21) {
+    const ivaRate = Math.max(0, Number(ivaPercent) || 0) / 100;
+    const out = {
+        ventasNetas: 0,
+        inversion: 0,
+        beneficio: 0,
+        roi: 0,
+        prendas: 0,
+        ivaEstimado: 0,
+        ticketMedio: 0,
+        comisiones: 0,
+        margenMedio: 0,
+        baseImponible: 0
+    };
+
+    (lista || []).forEach((v) => {
+        const qty = Number(v.cantidad || 1) || 1;
+        const pv = Number(v.precioVenta || 0) || 0;
+        const pc = Number(v.precioCompra || 0) || 0;
+        const ge = Number(v.gastosEnvio || 0) || 0;
+        const canal = String(v.canalVenta || '').toLowerCase();
+        const comision = (canal === 'vinted' || canal === 'wallapop') ? (pv * 0.05) : 0;
+
+        const netoUnit = Math.max(0, pv - comision);
+        const neto = netoUnit * qty;
+        const inv = (pc + ge) * qty;
+
+        out.ventasNetas += neto;
+        out.inversion += inv;
+        out.comisiones += comision * qty;
+        out.prendas += qty;
+    });
+
+    out.beneficio = out.ventasNetas - out.inversion;
+    out.roi = out.inversion > 0 ? (out.beneficio / out.inversion) * 100 : 0;
+    out.ticketMedio = out.prendas > 0 ? (out.ventasNetas / out.prendas) : 0;
+    out.baseImponible = ivaRate > 0 ? (out.ventasNetas / (1 + ivaRate)) : out.ventasNetas;
+    out.ivaEstimado = out.ventasNetas - out.baseImponible;
+    out.margenMedio = out.ventasNetas > 0 ? (out.beneficio / out.ventasNetas) * 100 : 0;
+
+    return out;
+}
+
+function obtenerRangoComparativo(inicio, fin, modoComparativa) {
+    if (!inicio || !fin || modoComparativa === 'ninguna') return { inicio: '', fin: '' };
+    const dIni = new Date(`${inicio}T00:00:00`);
+    const dFin = new Date(`${fin}T00:00:00`);
+    if (isNaN(dIni.getTime()) || isNaN(dFin.getTime()) || dFin < dIni) return { inicio: '', fin: '' };
+
+    if (modoComparativa === 'mismo-periodo-anio-anterior') {
+        const i = new Date(dIni); i.setFullYear(i.getFullYear() - 1);
+        const f = new Date(dFin); f.setFullYear(f.getFullYear() - 1);
+        return { inicio: formatearFechaISO(i), fin: formatearFechaISO(f) };
+    }
+
+    if (modoComparativa === 'periodo-anterior') {
+        const diffDays = Math.max(1, Math.round((dFin.getTime() - dIni.getTime()) / 86400000) + 1);
+        const f = new Date(dIni);
+        f.setDate(f.getDate() - 1);
+        const i = new Date(f);
+        i.setDate(i.getDate() - (diffDays - 1));
+        return { inicio: formatearFechaISO(i), fin: formatearFechaISO(f) };
+    }
+
+    return { inicio: '', fin: '' };
+}
+
+function actualizarResumenComparativaAnalitica() {
+    const resumenEl = document.getElementById('an-resumen-comparativa');
+    if (!resumenEl) return;
+
+    const modo = String(document.getElementById('an-filtro-comparativa')?.value || 'ninguna');
+    const inicio = String(document.getElementById('an-filtro-fecha-inicio')?.value || '').trim();
+    const fin = String(document.getElementById('an-filtro-fecha-fin')?.value || '').trim();
+    const iva = Number(document.getElementById('an-filtro-iva')?.value || 21) || 21;
+
+    const actual = calcularMetricasContables(obtenerDatosFiltradosParaAnalitica(), iva);
+    if (modo === 'ninguna' || !inicio || !fin) {
+        resumenEl.innerText = `Comparativa: sin comparar · Margen medio ${actual.margenMedio.toFixed(1)}% · IVA estimado ${actual.ivaEstimado.toFixed(2)} €`;
+        return;
+    }
+
+    const rangoComp = obtenerRangoComparativo(inicio, fin, modo);
+    if (!rangoComp.inicio || !rangoComp.fin) {
+        resumenEl.innerText = 'Comparativa: no se pudo calcular el rango comparativo.';
+        return;
+    }
+
+    const prev = calcularMetricasContables(obtenerDatosFiltradosParaAnalitica({
+        overrideStart: rangoComp.inicio,
+        overrideEnd: rangoComp.fin
+    }), iva);
+
+    const delta = prev.ventasNetas > 0 ? ((actual.ventasNetas - prev.ventasNetas) / prev.ventasNetas) * 100 : 0;
+    const signo = delta >= 0 ? '+' : '';
+    const txtModo = modo === 'periodo-anterior' ? 'vs periodo anterior' : 'vs mismo periodo año anterior';
+    resumenEl.innerText = `Comparativa ${txtModo}: ${signo}${delta.toFixed(1)}% en ventas netas · Actual ${actual.ventasNetas.toFixed(2)} € · Referencia ${prev.ventasNetas.toFixed(2)} €`;
+}
+
 window.abrirQuarterContabilidad = function(preset = 'quarter-actual') {
     const presetEl = document.getElementById('admin-profit-range-preset');
     const yearEl = document.getElementById('admin-profit-year');
@@ -3805,9 +3982,9 @@ function actualizarDashboardGananciasAdmin() {
 
     const vendidos = obtenerVentasEnRangoAdmin();
 
-    let ingresos = 0;
-    let inversion = 0;
-    let prendas = 0;
+    const ivaConfig = Number(document.getElementById('an-filtro-iva')?.value || 21) || 21;
+    const resumen = calcularMetricasContables(vendidos, ivaConfig);
+
     const beneficioPorFecha = {};
     const beneficioPorCanal = {};
 
@@ -3819,10 +3996,6 @@ function actualizarDashboardGananciasAdmin() {
         const canal = String(v.canalVenta || '').toLowerCase();
         const comision = (canal === 'vinted' || canal === 'wallapop') ? (pv * 0.05) : 0;
 
-        ingresos += (pv - comision) * qty;
-        inversion += (pc + ge) * qty;
-        prendas += qty;
-
         const neto = (pv - comision) * qty;
         const inv = (pc + ge) * qty;
         const ben = neto - inv;
@@ -3833,14 +4006,19 @@ function actualizarDashboardGananciasAdmin() {
         beneficioPorCanal[canalTag] = (beneficioPorCanal[canalTag] || 0) + ben;
     });
 
-    const beneficio = ingresos - inversion;
-    const roi = inversion > 0 ? (beneficio / inversion) * 100 : 0;
+    const ingresos = resumen.ventasNetas;
+    const inversion = resumen.inversion;
+    const beneficio = resumen.beneficio;
+    const roi = resumen.roi;
+    const prendas = resumen.prendas;
 
     const kIngresos = document.getElementById('admin-profit-kpi-ingresos');
     const kInversion = document.getElementById('admin-profit-kpi-inversion');
     const kBeneficio = document.getElementById('admin-profit-kpi-beneficio');
     const kRoi = document.getElementById('admin-profit-kpi-roi');
     const kPrendas = document.getElementById('admin-profit-kpi-prendas');
+    const kIva = document.getElementById('admin-profit-kpi-iva');
+    const kTicket = document.getElementById('admin-profit-kpi-ticket');
     const kRango = document.getElementById('admin-profit-kpi-rango');
 
     if (kIngresos) kIngresos.innerText = `${ingresos.toFixed(2)} €`;
@@ -3848,6 +4026,8 @@ function actualizarDashboardGananciasAdmin() {
     if (kBeneficio) kBeneficio.innerText = `${beneficio.toFixed(2)} €`;
     if (kRoi) kRoi.innerText = `${roi.toFixed(1)}%`;
     if (kPrendas) kPrendas.innerText = String(prendas);
+    if (kIva) kIva.innerText = `${resumen.ivaEstimado.toFixed(2)} €`;
+    if (kTicket) kTicket.innerText = `${resumen.ticketMedio.toFixed(2)} €`;
     if (kBeneficio) {
         kBeneficio.classList.toggle('kpi-positive', beneficio >= 0);
         kBeneficio.classList.toggle('kpi-negative', beneficio < 0);
@@ -3859,7 +4039,7 @@ function actualizarDashboardGananciasAdmin() {
 
     const inicio = document.getElementById('admin-profit-date-start')?.value || '-';
     const fin = document.getElementById('admin-profit-date-end')?.value || '-';
-    if (kRango) kRango.innerText = `Rango: ${inicio} -> ${fin} · Registros vendidos: ${vendidos.length}`;
+    if (kRango) kRango.innerText = `Rango: ${inicio} -> ${fin} · Registros vendidos: ${vendidos.length} · Margen medio: ${resumen.margenMedio.toFixed(1)}%`;
 
     const canvas = document.getElementById('admin-profit-chart');
     if (canvas) {
@@ -5585,23 +5765,8 @@ async function generarInformePDF() {
         const esAdmin = String(USUARIO_ROL_ACTUAL || '').toLowerCase() === 'admin';
 
         const vendidosParaResumen = esAdmin ? obtenerVentasEnRangoAdmin() : obtenerDatosFiltradosParaAnalitica();
-        let ingresosResumen = 0;
-        let inversionResumen = 0;
-        let prendasResumen = 0;
-
-        vendidosParaResumen.forEach((v) => {
-            const qty = Number(v.cantidad || 1) || 1;
-            const pv = Number(v.precioVenta || 0) || 0;
-            const pc = Number(v.precioCompra || 0) || 0;
-            const ge = Number(v.gastosEnvio || 0) || 0;
-            const canal = String(v.canalVenta || '').toLowerCase();
-            const comision = (canal === 'vinted' || canal === 'wallapop') ? (pv * 0.05) : 0;
-            ingresosResumen += (pv - comision) * qty;
-            inversionResumen += (pc + ge) * qty;
-            prendasResumen += qty;
-        });
-        const beneficioResumen = ingresosResumen - inversionResumen;
-        const roiResumen = inversionResumen > 0 ? (beneficioResumen / inversionResumen) * 100 : 0;
+        const ivaActual = Number(document.getElementById('an-filtro-iva')?.value || 21) || 21;
+        const resumen = calcularMetricasContables(vendidosParaResumen, ivaActual);
 
         const rangoAdminInicio = document.getElementById('admin-profit-date-start')?.value || '';
         const rangoAdminFin = document.getElementById('admin-profit-date-end')?.value || '';
@@ -5622,11 +5787,20 @@ async function generarInformePDF() {
         doc.text('Resumen Financiero', 10, y);
         y += 7;
         doc.setFontSize(10);
-        doc.text(`Facturación Bruta: ${ingresosResumen.toFixed(2)} €`, 10, y); y += 5;
-        doc.text(`Ganancia Neta: ${beneficioResumen.toFixed(2)} €`, 10, y); y += 5;
-        doc.text(`Inversión Total: ${inversionResumen.toFixed(2)} €`, 10, y); y += 5;
-        doc.text(`Retorno (ROI): ${roiResumen.toFixed(1)}%`, 10, y); y += 5;
-        doc.text(`Prendas Vendidas: ${prendasResumen}`, 10, y); y += 10;
+        doc.text(`Ventas Netas: ${resumen.ventasNetas.toFixed(2)} €`, 10, y); y += 5;
+        doc.text(`Ganancia Neta: ${resumen.beneficio.toFixed(2)} €`, 10, y); y += 5;
+        doc.text(`Inversion Total: ${resumen.inversion.toFixed(2)} €`, 10, y); y += 5;
+        doc.text(`Comisiones estimadas: ${resumen.comisiones.toFixed(2)} €`, 10, y); y += 5;
+        doc.text(`IVA estimado (${ivaActual}%): ${resumen.ivaEstimado.toFixed(2)} €`, 10, y); y += 5;
+        doc.text(`ROI: ${resumen.roi.toFixed(1)}% | Ticket medio: ${resumen.ticketMedio.toFixed(2)} € | Margen medio: ${resumen.margenMedio.toFixed(1)}%`, 10, y); y += 5;
+        doc.text(`Prendas vendidas: ${resumen.prendas}`, 10, y); y += 8;
+
+        const comparativaTxt = String(document.getElementById('an-resumen-comparativa')?.innerText || '').trim();
+        if (comparativaTxt) {
+            doc.setFontSize(9);
+            doc.text(`Comparativa: ${comparativaTxt}`, 10, y, { maxWidth: 185 });
+            y += 8;
+        }
 
         doc.setFontSize(14);
         doc.text('Productos Vendidos', 10, y);
@@ -5721,21 +5895,145 @@ async function generarInformePDF() {
     }
 }
 
+async function generarInformeContablePDF() {
+    const btn = Array.from(document.querySelectorAll('#sec-analitica button')).find((b) => String(b.textContent || '').includes('PDF Contable'));
+    const txtOriginal = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.innerHTML = 'Generando...';
+        btn.disabled = true;
+    }
+
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const datos = obtenerDatosFiltradosParaAnalitica();
+        const iva = Number(document.getElementById('an-filtro-iva')?.value || 21) || 21;
+        const resumen = calcularMetricasContables(datos, iva);
+
+        const inicio = String(document.getElementById('an-filtro-fecha-inicio')?.value || '').trim() || '-';
+        const fin = String(document.getElementById('an-filtro-fecha-fin')?.value || '').trim() || '-';
+
+        doc.setFontSize(19);
+        doc.text('Informe Contable Seychelles', 10, 14);
+        doc.setFontSize(10);
+        doc.text(`Generado: ${new Date().toLocaleString('es-ES')}`, 10, 20);
+        doc.text(`Periodo: ${inicio} -> ${fin}`, 10, 25);
+
+        doc.autoTable({
+            startY: 30,
+            head: [['KPI', 'Valor']],
+            body: [
+                ['Ventas netas', `${resumen.ventasNetas.toFixed(2)} EUR`],
+                ['Base imponible estimada', `${resumen.baseImponible.toFixed(2)} EUR`],
+                [`IVA estimado (${iva}%)`, `${resumen.ivaEstimado.toFixed(2)} EUR`],
+                ['Comisiones estimadas', `${resumen.comisiones.toFixed(2)} EUR`],
+                ['Inversion total', `${resumen.inversion.toFixed(2)} EUR`],
+                ['Beneficio neto', `${resumen.beneficio.toFixed(2)} EUR`],
+                ['ROI', `${resumen.roi.toFixed(1)}%`],
+                ['Margen medio', `${resumen.margenMedio.toFixed(1)}%`],
+                ['Ticket medio', `${resumen.ticketMedio.toFixed(2)} EUR`],
+                ['Prendas vendidas', `${resumen.prendas}`]
+            ],
+            theme: 'grid',
+            styles: { fontSize: 9, cellPadding: 2 },
+            headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255] }
+        });
+
+        const porCanal = {};
+        const porMes = {};
+        const topProductos = {};
+
+        datos.forEach((v) => {
+            const qty = Number(v.cantidad || 1) || 1;
+            const pv = Number(v.precioVenta || 0) || 0;
+            const canal = String(v.canalVenta || 'Sin canal');
+            const fecha = String(v.fechaVenta || '').slice(0, 7) || 'Sin fecha';
+            const keyProducto = String(v.prenda || 'Producto').trim();
+
+            porCanal[canal] = (porCanal[canal] || 0) + (pv * qty);
+            porMes[fecha] = (porMes[fecha] || 0) + (pv * qty);
+            topProductos[keyProducto] = (topProductos[keyProducto] || 0) + (pv * qty);
+        });
+
+        let y = doc.lastAutoTable.finalY + 8;
+
+        const canalesRows = Object.entries(porCanal)
+            .sort((a, b) => b[1] - a[1])
+            .map(([canal, total]) => [canal, `${Number(total).toFixed(2)} EUR`]);
+        doc.autoTable({
+            startY: y,
+            head: [['Canal', 'Ventas']],
+            body: canalesRows.length ? canalesRows : [['Sin datos', '0.00 EUR']],
+            theme: 'striped',
+            styles: { fontSize: 8.5, cellPadding: 2 },
+            headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255] }
+        });
+
+        y = doc.lastAutoTable.finalY + 6;
+        const mesRows = Object.entries(porMes)
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([mes, total]) => [mes, `${Number(total).toFixed(2)} EUR`]);
+        doc.autoTable({
+            startY: y,
+            head: [['Mes', 'Ventas']],
+            body: mesRows.length ? mesRows : [['Sin datos', '0.00 EUR']],
+            theme: 'striped',
+            styles: { fontSize: 8.5, cellPadding: 2 },
+            headStyles: { fillColor: [124, 58, 237], textColor: [255, 255, 255] }
+        });
+
+        y = doc.lastAutoTable.finalY + 6;
+        const topRows = Object.entries(topProductos)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 20)
+            .map(([prenda, total]) => [prenda, `${Number(total).toFixed(2)} EUR`]);
+        doc.autoTable({
+            startY: y,
+            head: [['Top producto', 'Ventas']],
+            body: topRows.length ? topRows : [['Sin datos', '0.00 EUR']],
+            theme: 'grid',
+            styles: { fontSize: 8, cellPadding: 1.8 },
+            headStyles: { fillColor: [245, 158, 11], textColor: [255, 255, 255] }
+        });
+
+        doc.save(`Informe_Contable_Seychelles_${new Date().toISOString().slice(0, 10)}.pdf`);
+        cantarPorVoz('Informe contable generado.');
+    } catch (e) {
+        console.error('Error generando PDF contable:', e);
+        alert(`No se pudo generar el PDF contable: ${e.message}`);
+    } finally {
+        if (btn) {
+            btn.innerHTML = txtOriginal;
+            btn.disabled = false;
+        }
+    }
+}
+window.generarInformeContablePDF = generarInformeContablePDF;
+
 function obtenerDatosFiltradosParaAnalitica() {
+    const override = arguments[0] && typeof arguments[0] === 'object' ? arguments[0] : {};
     const fTienda = document.getElementById('an-filtro-tienda').value;
     const fCanal = document.getElementById('an-filtro-canal').value;
     const fCat = document.getElementById('an-filtro-categoria').value;
     const fTalla = document.getElementById('an-filtro-talla').value;
+    const fEstado = document.getElementById('an-filtro-estado')?.value || 'TODOS';
     const fMin = parseFloat(document.getElementById('an-filtro-precio-min').value) || 0;
     const fMax = parseFloat(document.getElementById('an-filtro-precio-max').value) || Infinity;
+    const fInicio = String(override.overrideStart || document.getElementById('an-filtro-fecha-inicio')?.value || '').trim();
+    const fFin = String(override.overrideEnd || document.getElementById('an-filtro-fecha-fin')?.value || '').trim();
 
     return BASE_DATOS.filter(v => {
         const eConfig = LISTA_ESTADOS_KANBAN.find(e => e.nombre === v.estado);
         if (!eConfig || eConfig.rolFinanciero !== 'Venta') return false;
+        if (fEstado !== 'TODOS' && v.estado !== fEstado) return false;
         if (fTienda !== 'TODOS' && v.proveedor !== fTienda) return false;
         if (fCanal !== 'TODOS' && v.canalVenta !== fCanal) return false;
         if (fCat !== 'TODOS' && v.categoria !== fCat) return false;
         if (fTalla !== 'TODOS' && v.talla !== fTalla) return false;
+
+        const fechaVenta = String(v.fechaVenta || '').slice(0, 10);
+        if (fInicio && (!fechaVenta || fechaVenta < fInicio)) return false;
+        if (fFin && (!fechaVenta || fechaVenta > fFin)) return false;
         
         const precio = parseFloat(v.precioVenta || 0);
         if (precio < fMin || precio > fMax) return false;
@@ -5744,12 +6042,20 @@ function obtenerDatosFiltradosParaAnalitica() {
 }
 
 function limpiarFiltrosAnalitica() {
+    document.getElementById('an-filtro-periodo').value = 'todo';
+    document.getElementById('an-filtro-fecha-inicio').value = '';
+    document.getElementById('an-filtro-fecha-fin').value = '';
+    document.getElementById('an-filtro-fecha-inicio').disabled = true;
+    document.getElementById('an-filtro-fecha-fin').disabled = true;
+    document.getElementById('an-filtro-estado').value = 'TODOS';
     document.getElementById('an-filtro-tienda').value = 'TODOS';
     document.getElementById('an-filtro-canal').value = 'TODOS';
     document.getElementById('an-filtro-categoria').value = 'TODOS';
     document.getElementById('an-filtro-talla').value = 'TODOS';
     document.getElementById('an-filtro-precio-min').value = '';
     document.getElementById('an-filtro-precio-max').value = '';
+    document.getElementById('an-filtro-iva').value = '21';
+    document.getElementById('an-filtro-comparativa').value = 'ninguna';
     actualizarTodoElBloqueGrafico();
 }
 
@@ -6850,7 +7156,13 @@ async function reloadCoreData(isInitialLoad = false) {
 
     try {
         const logsVisible = !document.getElementById('sec-auditoria')?.classList.contains('hidden');
-        const res = await fetch(`${BACKEND_URL}/api/ventas?page=1&includeLogs=${logsVisible ? '1' : '0'}`, { credentials: 'include' });
+        const params = new URLSearchParams({
+            page: '1',
+            includeLogs: logsVisible ? '1' : '0'
+        });
+        // En el primer arranque pedimos payload ligero para acelerar el primer pintado.
+        if (isInitialLoad) params.set('lightweight', '1');
+        const res = await fetch(`${BACKEND_URL}/api/ventas?${params.toString()}`, { credentials: 'include' });
         if (!res.ok) throw new Error('Fallo de red al cargar datos.');
         const data = await res.json();
 
@@ -7029,6 +7341,7 @@ function actualizarTodoElBloqueGrafico() {
     dibujarGraficaBarrasTiendas();
     dibujarMapaCalor();
     actualizarDashboardGananciasAdmin();
+    actualizarResumenComparativaAnalitica();
 }
 
 function dibujarGrafica() {
@@ -7254,6 +7567,9 @@ function renderKanban(isFullRefresh = false) {
     const wrapper = document.getElementById('kanban-dynamic-wrapper');
     if (!wrapper) return;
 
+    const estadoConfigMap = new Map((LISTA_ESTADOS_KANBAN || []).map((e) => [e.nombre, e]));
+    const estadosOrdenados = [...(LISTA_ESTADOS_KANBAN || [])].sort((a, b) => a.orden - b.orden);
+
     const filtroGlobalCat = document.getElementById('filtro-categoria')?.value || 'TODOS';
     const filtroGlobalTalla = document.getElementById('filtro-talla')?.value || 'TODOS';
     const filtroGlobalCanal = document.getElementById('filtro-canal')?.value || 'TODOS';
@@ -7261,7 +7577,7 @@ function renderKanban(isFullRefresh = false) {
 
     if (isFullRefresh) {
         let htmlColumns = '';
-        LISTA_ESTADOS_KANBAN.sort((a, b) => a.orden - b.orden).forEach((est, index) => {
+        estadosOrdenados.forEach((est, index) => {
             const minHClass = index < 2 ? 'min-h-[520px]' : 'min-h-[350px]';
             htmlColumns += `
             <div class="card-bg border rounded-3xl p-4 flex flex-col ${minHClass} transition-all relative group border-${est.color}-500/20 shadow-lg">
@@ -7287,7 +7603,12 @@ function renderKanban(isFullRefresh = false) {
     }
 
     const totalStockPorPrenda = {};
-    BASE_DATOS.filter(x => { const eConfig = LISTA_ESTADOS_KANBAN.find(e => e.nombre === x.estado); return eConfig && eConfig.rolFinanciero === 'Stock'; }).forEach(x => { totalStockPorPrenda[x.prenda] = (totalStockPorPrenda[x.prenda] || 0) + 1; });
+    BASE_DATOS.forEach((x) => {
+        const eConfig = estadoConfigMap.get(x.estado);
+        if (eConfig && eConfig.rolFinanciero === 'Stock') {
+            totalStockPorPrenda[x.prenda] = (totalStockPorPrenda[x.prenda] || 0) + 1;
+        }
+    });
 
     const baseFiltradaGlobal = BASE_DATOS.filter((v) =>
         (filtroGlobalCat === 'TODOS' || v.categoria === filtroGlobalCat) &&
@@ -7303,7 +7624,7 @@ function renderKanban(isFullRefresh = false) {
         agrupadoPorEstado.get(estado).push(v);
     });
 
-    LISTA_ESTADOS_KANBAN.forEach(est => {
+    estadosOrdenados.forEach(est => {
         const colDom = document.getElementById(`col-dinamica-${est._id}`);
         if(!colDom) return;
 
@@ -7410,17 +7731,21 @@ function renderKanban(isFullRefresh = false) {
             colDom.appendChild(fragment);
         };
 
-        if (isFullRefresh && itemsToRender.length > 90) {
-            anexarLote(itemsToRender.slice(0, 36));
+        if (isFullRefresh && itemsToRender.length > 60) {
+            anexarLote(itemsToRender.slice(0, 18));
 
-            let idx = 36;
+            let idx = 18;
             const pintarSiguienteLote = () => {
                 if (idx >= itemsToRender.length) return;
-                const end = Math.min(idx + 54, itemsToRender.length);
+                const end = Math.min(idx + 24, itemsToRender.length);
                 anexarLote(itemsToRender.slice(idx, end));
                 idx = end;
                 if (idx < itemsToRender.length) {
-                    requestAnimationFrame(pintarSiguienteLote);
+                    if ('requestIdleCallback' in window) {
+                        window.requestIdleCallback(() => pintarSiguienteLote(), { timeout: 120 });
+                    } else {
+                        setTimeout(() => requestAnimationFrame(pintarSiguienteLote), 0);
+                    }
                 }
             };
 
@@ -7882,14 +8207,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Prioridad: mostrar productos cuanto antes.
             await ejecutarPasoInit('reloadCoreData', async () => reloadCoreData(true));
 
-            // Cargas secundarias: no bloquear el primer render del inventario.
-            await ejecutarPasoInit('refrescarYListarTiendasCloud', async () => refrescarYListarTiendasCloud());
-            await ejecutarPasoInit('refrescarCategoriasCloud', async () => refrescarCategoriasCloud());
-            await ejecutarPasoInit('renderSavedUrls', async () => renderSavedUrls());
-            await ejecutarPasoInit('refrescarCitas', async () => refrescarCitas());
-            await ejecutarPasoInit('actualizarBadgeCitasNav', async () => actualizarBadgeCitasNav());
-            await ejecutarPasoInit('cargarNotasBoard', async () => cargarNotasBoard());
-            actualizarVistaFotosFormulario();
+            // Cargas secundarias: ejecutarlas en background para no frenar la percepción de fluidez.
+            const iniciarTareasSecundarias = () => {
+                ejecutarPasoInit('refrescarYListarTiendasCloud', async () => refrescarYListarTiendasCloud());
+                ejecutarPasoInit('refrescarCategoriasCloud', async () => refrescarCategoriasCloud());
+                ejecutarPasoInit('renderSavedUrls', async () => renderSavedUrls());
+                ejecutarPasoInit('refrescarCitas', async () => refrescarCitas());
+                ejecutarPasoInit('actualizarBadgeCitasNav', async () => actualizarBadgeCitasNav());
+                ejecutarPasoInit('cargarNotasBoard', async () => cargarNotasBoard());
+                actualizarVistaFotosFormulario();
+                poblarFiltroEstadosVentaAnalitica();
+                onCambiarPeriodoAnalitica();
+            };
+            if ('requestIdleCallback' in window) {
+                window.requestIdleCallback(() => iniciarTareasSecundarias(), { timeout: 800 });
+            } else {
+                setTimeout(() => iniciarTareasSecundarias(), 120);
+            }
 
             const monopolioUrlInput = document.getElementById('monopolio-url-input');
             if (monopolioUrlInput) {

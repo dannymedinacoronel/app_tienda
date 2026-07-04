@@ -1051,7 +1051,7 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <div class="grid grid-cols-2 md:grid-cols-7 gap-3">
                         <div class="bg-black/30 border border-white/10 rounded-xl p-3">
                             <p class="text-[9px] opacity-60 uppercase">Ventas (neto)</p>
                             <p id="admin-profit-kpi-ingresos" class="text-sm font-black text-emerald-300">0.00 €</p>
@@ -1071,6 +1071,14 @@
                         <div class="bg-black/30 border border-white/10 rounded-xl p-3">
                             <p class="text-[9px] opacity-60 uppercase">Prendas vendidas</p>
                             <p id="admin-profit-kpi-prendas" class="text-sm font-black text-pink-300">0</p>
+                        </div>
+                        <div class="bg-black/30 border border-white/10 rounded-xl p-3">
+                            <p class="text-[9px] opacity-60 uppercase">IVA estimado</p>
+                            <p id="admin-profit-kpi-iva" class="text-sm font-black text-orange-300">0.00 €</p>
+                        </div>
+                        <div class="bg-black/30 border border-white/10 rounded-xl p-3">
+                            <p class="text-[9px] opacity-60 uppercase">Ticket medio</p>
+                            <p id="admin-profit-kpi-ticket" class="text-sm font-black text-lime-300">0.00 €</p>
                         </div>
                     </div>
                     <p id="admin-profit-kpi-rango" class="mt-3 text-[10px] opacity-65 font-mono">Rango: -</p>
@@ -1093,11 +1101,41 @@
                     <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                         <h3 class="text-xs font-black uppercase text-indigo-400 tracking-wider flex items-center gap-1.5">🎛️ Centro de Control Analítico</h3>
                         <div class="flex gap-2">
-                            <button onclick="generarInformePDF()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">📄 Descargar Informe PDF</button>
+                            <button onclick="generarInformePDF()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">📄 PDF Ejecutivo</button>
+                            <button onclick="generarInformeContablePDF()" class="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-md transition-all">📑 PDF Contable</button>
                             <button onclick="limpiarFiltrosAnalitica()" class="text-[10px] opacity-60 hover:opacity-100 underline font-mono">Restablecer Todo</button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 md:grid-cols-6 gap-3 text-[10px]">
+                    <div class="grid grid-cols-2 md:grid-cols-8 gap-3 text-[10px]">
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Periodo calendario</label>
+                            <select id="an-filtro-periodo" onchange="onCambiarPeriodoAnalitica()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg">
+                                <option value="todo">Todo histórico</option>
+                                <option value="mes-actual">Mes actual</option>
+                                <option value="mes-anterior">Mes anterior</option>
+                                <option value="quarter-actual">Quarter actual</option>
+                                <option value="q1">Q1</option>
+                                <option value="q2">Q2</option>
+                                <option value="q3">Q3</option>
+                                <option value="q4">Q4</option>
+                                <option value="anio-actual">Año actual</option>
+                                <option value="personalizado">Personalizado</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Inicio periodo</label>
+                            <input type="date" id="an-filtro-fecha-inicio" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Fin periodo</label>
+                            <input type="date" id="an-filtro-fecha-fin" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Estado venta</label>
+                            <select id="an-filtro-estado" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg">
+                                <option value="TODOS">💰 Todos los estados venta</option>
+                            </select>
+                        </div>
                         <div>
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Filtrar por Tienda</label>
                             <select id="an-filtro-tienda" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg"></select>
@@ -1133,7 +1171,20 @@
                             <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Precio Máx (€)</label>
                             <input type="number" id="an-filtro-precio-max" placeholder="Max" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono text-[10px]">
                         </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">IVA (%)</label>
+                            <input type="number" id="an-filtro-iva" value="21" min="0" max="100" step="0.1" oninput="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-1.5 focus:outline-none font-mono text-[10px]">
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-bold uppercase opacity-60 mb-1">Comparativa</label>
+                            <select id="an-filtro-comparativa" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border w-full rounded-xl px-2.5 py-2 focus:outline-none dropdown-bg">
+                                <option value="ninguna">Sin comparativa</option>
+                                <option value="periodo-anterior">Periodo anterior</option>
+                                <option value="mismo-periodo-anio-anterior">Mismo periodo año anterior</option>
+                            </select>
+                        </div>
                     </div>
+                    <p id="an-resumen-comparativa" class="mt-3 text-[10px] font-mono opacity-70">Comparativa: sin datos.</p>
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">

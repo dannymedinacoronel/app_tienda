@@ -2382,6 +2382,27 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
         const { productos } = req.body; // Array de productos seleccionados en el frontend
         if (!productos || !Array.isArray(productos)) return res.status(400).json({ error: 'Datos de productos no válidos.' });
 
+        const normalizarTxt = (v) => String(v || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const firmaPorProveedor = (titulo, proveedor) => `${normalizarTxt(proveedor || 'vinted')}::${normalizarTxt(titulo)}`;
+
+        const proveedoresLote = [...new Set(productos.map(p => String(p?.proveedor || 'Vinted').trim()).filter(Boolean))];
+        const existentesMismaEmpresa = await VentaRopa.find({
+            empresa,
+            canalVenta: 'Vinted',
+            proveedor: { $in: proveedoresLote }
+        }).select('prenda proveedor').lean();
+
+        const firmasExistentes = new Set(
+            existentesMismaEmpresa.map(v => firmaPorProveedor(v.prenda, v.proveedor))
+        );
+        const firmasLote = new Set();
+
         const tiendasCache = new Map();
         const obtenerTiendaPorNombre = async (nombre) => {
             const limpio = (nombre || '').trim();
@@ -2399,7 +2420,17 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
 
         const registrosCreados = [];
         const resumenTiendas = {};
+        let omitidosDuplicados = 0;
         for (const prod of productos) {
+            const nombreTienda = (prod.proveedor || '').trim() || 'Vinted';
+            const firmaActual = firmaPorProveedor(prod.prenda, nombreTienda);
+            // Regla clave: solo consideramos duplicado dentro de la misma tienda/proveedor.
+            if (firmasExistentes.has(firmaActual) || firmasLote.has(firmaActual)) {
+                omitidosDuplicados += 1;
+                continue;
+            }
+            firmasLote.add(firmaActual);
+
             // OPTIMIZACIÓN: No convertir a Base64, guardar URL directamente.
             const galeriaUrls = [];
             if (prod.galeria && Array.isArray(prod.galeria)) {
@@ -2408,7 +2439,6 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
                 }
             }
 
-            const nombreTienda = (prod.proveedor || '').trim() || 'Vinted';
             const tiendaSeleccionada = await obtenerTiendaPorNombre(nombreTienda);
             resumenTiendas[nombreTienda] = (resumenTiendas[nombreTienda] || 0) + 1;
 
@@ -2428,8 +2458,8 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
         invalidateKpiResumenCache(empresa);
         notificarCambio(); // Notificar cambio para refrescar el panel principal
 
-        await registrarLog(req.session.email, `Importó ${registrosCreados.length} productos desde Vinted: ${registrosCreados.join(', ')}`);
-        res.json({ success: true, count: registrosCreados.length, tiendas: resumenTiendas });
+        await registrarLog(req.session.email, `Importó ${registrosCreados.length} productos desde Vinted (omitidos duplicados misma tienda: ${omitidosDuplicados}): ${registrosCreados.join(', ')}`);
+        res.json({ success: true, count: registrosCreados.length, duplicadosOmitidos: omitidosDuplicados, tiendas: resumenTiendas });
     } catch (error) {
         console.error('Error en importación:', error);
         res.status(500).json({ error: 'Fallo al guardar los nuevos productos.' });
@@ -2643,7 +2673,7 @@ app.post('/api/monopolio/webhook-github', async (req, res) => {
     if (!GITHUB_SECRET || token !== GITHUB_SECRET) return res.status(401).json({ error: 'No autorizado' });
 
     try {
-        const { productos, urlOrigen, empresa, alias, error: errorMsg } = req.body;
+        const { productos, grupos, esModoSeguidos, urlOrigen, empresa, alias, error: errorMsg } = req.body;
 
         if (errorMsg) {
             console.error(`[MONOPOLIO-WEBHOOK-ERROR] Recibido error de scraper: ${errorMsg}`);
@@ -2659,9 +2689,18 @@ app.post('/api/monopolio/webhook-github', async (req, res) => {
             return res.json({ success: true, status: 'error_received' });
         }
 
-        console.log(`[MONOPOLIO-WEBHOOK] Recibidos ${productos.length} productos de ${alias || urlOrigen}`);
+        console.log(`[MONOPOLIO-WEBHOOK] Recibidos ${(productos || []).length} productos de ${alias || urlOrigen}`);
         if (global.io) {
-            global.io.to(`empresa:${empresa}`).emit('monopolio_update', { mensaje: `Scraping finalizado para ${alias || urlOrigen}.`, productos, urlOrigen, alias, empresa, timestamp: new Date() });
+            global.io.to(`empresa:${empresa}`).emit('monopolio_update', {
+                mensaje: `Scraping finalizado para ${alias || urlOrigen}.`,
+                productos: productos || [],
+                grupos: Array.isArray(grupos) ? grupos : [],
+                esModoSeguidos: Boolean(esModoSeguidos),
+                urlOrigen,
+                alias,
+                empresa,
+                timestamp: new Date()
+            });
         }
         res.json({ success: true });
     } catch (error) {

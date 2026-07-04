@@ -727,17 +727,22 @@ async function ejecutarScraper(params) {
     let productos = [];
     let grupos = null;
     let esModoSeguidos = false;
+    let resumen = null;
 
     if (mode === 'monopolio') {
         const resultadoMonopolio = await scrapeMonopolio(url, alias);
         productos = resultadoMonopolio.productos;
         grupos = resultadoMonopolio.grupos;
         esModoSeguidos = resultadoMonopolio.esModoSeguidos;
+        resumen = {
+            modo: esModoSeguidos ? 'seguidos' : 'perfil',
+            grupos: Array.isArray(grupos) ? grupos.length : 0
+        };
         console.log(`[SCRAPER:${mode}] Modo ${esModoSeguidos ? 'seguidos' : 'perfil'} | grupos=${grupos.length} | productos=${productos.length}`);
     } else {
         const resultado = await scrapeVinted(url);
         productos = resultado.productos;
-        const resumen = resultado.resumen;
+        resumen = resultado.resumen;
         console.log(`[SCRAPER:${mode}] Productos unicos: ${productos.length}`);
         console.log(`[SCRAPER:${mode}] Cobertura fuentes -> scripts:${resumen.scripts} ldjson:${resumen.ldjson} dom:${resumen.dom} api:${resumen.api} pw:${resumen.playwright}`);
 
@@ -770,7 +775,7 @@ async function ejecutarScraper(params) {
         webhookPath
     });
 
-    return { productosCount: productos.length, resumen };
+    return { productosCount: productos.length, resumen, esModoSeguidos, gruposCount: Array.isArray(grupos) ? grupos.length : 0 };
 }
 
 module.exports = {

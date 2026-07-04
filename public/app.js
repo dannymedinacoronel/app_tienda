@@ -1174,7 +1174,7 @@ async function importarNuevosScraping() {
         const costEditado = numeroSeguro(document.getElementById(`new-item-cost-${idx}`)?.value, 0);
         const qtyEditada = parseInt(document.getElementById(`new-item-qty-${idx}`)?.value) || 1;
         const canalEditado = 'Vinted'; // Forzado a Vinted en scraper
-        const tiendaEditada = document.getElementById(`new-item-store-${idx}`)?.value || '';
+        const tiendaEditada = document.getElementById(`new-item-store-${idx}`)?.value || itemOriginal.proveedor || itemOriginal.cuenta || 'Vinted';
         const galeriaOriginal = itemOriginal.galeria || [];
         const descripcionOriginal = itemOriginal.descripcion || '';
 
@@ -1214,7 +1214,10 @@ async function importarNuevosScraping() {
         const resumenTiendas = res.tiendas
             ? Object.entries(res.tiendas).map(([nombre, total]) => `• ${nombre}: ${total}`).join('\n')
             : '';
-        alert(`✅ Se han importado ${res.count} productos exitosamente con sus fotografías a la base de datos.\n\nDistribución por tienda:\n${resumenTiendas || '• Sin detalle'}\n\nYa puedes verificarlos en tu inventario usando el filtro de tienda.`);
+        const detalleDuplicados = Number(res.duplicadosOmitidos || 0) > 0
+            ? `\n\nDuplicados omitidos (misma tienda): ${res.duplicadosOmitidos}`
+            : '';
+        alert(`✅ Se han importado ${res.count} productos exitosamente con sus fotografías a la base de datos.\n\nDistribución por tienda:\n${resumenTiendas || '• Sin detalle'}${detalleDuplicados}\n\nYa puedes verificarlos en tu inventario usando el filtro de tienda.`);
         cantarPorVoz("Importación completada.");
 
         await forceRefreshDataManual();

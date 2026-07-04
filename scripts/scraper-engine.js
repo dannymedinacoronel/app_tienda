@@ -266,7 +266,8 @@ function normalizarUrlRelacionVinted(inputUrl) {
 
     const pathOnly = String(urlObj.pathname || '').replace(/\/+$/, '');
     const relMatch = pathOnly.match(/\/(following|followers|relations)\b/i);
-    const relationType = relMatch && relMatch[1] ? relMatch[1].toLowerCase() : 'following';
+    if (!relMatch || !relMatch[1]) return '';
+    const relationType = relMatch[1].toLowerCase();
 
     if (!pathOnly.toLowerCase().includes('/member/')) return '';
 
@@ -971,7 +972,11 @@ async function scrapeMonopolio(url, aliasBase = '') {
             });
         }
 
-        const productos = deduplicarProductos(grupos.flatMap((g) => g.productos || []));
+        const productosCrudos = grupos.flatMap((g) => g.productos || []);
+        let productos = deduplicarProductos(productosCrudos);
+        if (productos.length === 0 && productosCrudos.length > 0) {
+            productos = productosCrudos;
+        }
         return {
             productos,
             grupos,

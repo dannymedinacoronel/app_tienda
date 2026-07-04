@@ -2672,7 +2672,7 @@ function aplicarConfiguracionVisualRuntime(cfg) {
             return ['sec-analitica', 'sec-auditoria', 'sec-gestion', 'sec-ajustes', 'sec-usuarios'];
         }
         if (rol === 'Visualizador') {
-            return ['sec-monopolio', 'sec-tareas', 'sec-notas', 'sec-crm', 'sec-citas', 'sec-usuarios', 'sec-gestion', 'sec-ajustes', 'sec-faqs'];
+            return ['sec-analitica', 'sec-auditoria', 'sec-monopolio', 'sec-tareas', 'sec-notas', 'sec-crm', 'sec-citas', 'sec-usuarios', 'sec-gestion', 'sec-ajustes', 'sec-faqs'];
         }
         return [];
     })();

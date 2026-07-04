@@ -196,6 +196,23 @@ function normalizarUrlVinted(inputUrl) {
     return `https://${raw}`;
 }
 
+function extraerIdPerfilDesdePath(pathOnly) {
+    const cleanPath = String(pathOnly || '');
+    if (!cleanPath) return '';
+
+    // Caso canonico: /member/<id> o /member/general/<id>-alias
+    const direct = cleanPath.match(/\/member\/(?:general\/)?(\d{3,})(?:-[^/?#]+)?/i);
+    if (direct && direct[1]) return direct[1];
+
+    // Caso observado en produccion: /member/general/following/<id>
+    const relTail = cleanPath.match(/\/(following|followers|relations)\/(\d{3,})(?:-[^/?#]+)?$/i);
+    if (relTail && relTail[2]) return relTail[2];
+
+    // Fallback final: ultimo bloque numerico del path
+    const anyNumeric = cleanPath.match(/\/(\d{3,})(?:-[^/?#]+)?(?:\/)?$/i);
+    return anyNumeric && anyNumeric[1] ? anyNumeric[1] : '';
+}
+
 function normalizarUrlPerfilVinted(inputUrl) {
     const abs = normalizarUrlVinted(inputUrl);
     if (!abs) return '';
@@ -212,14 +229,14 @@ function normalizarUrlPerfilVinted(inputUrl) {
 
     // Evitar rutas de relación/listados, queremos URL de perfil.
     if (/\/(following|followers|relations)\b/i.test(pathOnly)) {
-        const idInPath = pathOnly.match(/\/(\d{3,})\b/);
+        const idInPath = extraerIdPerfilDesdePath(pathOnly);
         if (!idInPath) return '';
-        return `https://www.vinted.es/member/${idInPath[1]}`;
+        return `https://www.vinted.es/member/${idInPath}`;
     }
 
-    const idPerfil = pathOnly.match(/\/member\/(?:general\/)?(\d{3,})(?:-[^/?#]+)?/i);
-    if (idPerfil && idPerfil[1]) {
-        return `https://www.vinted.es/member/${idPerfil[1]}`;
+    const idPerfil = extraerIdPerfilDesdePath(pathOnly);
+    if (idPerfil) {
+        return `https://www.vinted.es/member/${idPerfil}`;
     }
 
     // Fallback: conservar ruta miembro limpia si no encontramos id, pero evitar query/hash.
@@ -245,10 +262,10 @@ function normalizarUrlRelacionVinted(inputUrl) {
 
     if (!pathOnly.toLowerCase().includes('/member/')) return '';
 
-    const idPerfil = pathOnly.match(/\/member\/(?:general\/)?(\d{3,})(?:-[^/?#]+)?/i);
-    if (!idPerfil || !idPerfil[1]) return '';
+    const idPerfil = extraerIdPerfilDesdePath(pathOnly);
+    if (!idPerfil) return '';
 
-    return `https://www.vinted.es/member/${idPerfil[1]}/${relationType}`;
+    return `https://www.vinted.es/member/${idPerfil}/${relationType}`;
 }
 
 function construirUrlFollowingDesdePerfil(urlPerfil) {

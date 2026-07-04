@@ -1356,10 +1356,26 @@ function abrirVisorFotos(id) {
 async function renderMonopolioUrls() {
     try {
         const res = await fetch('/api/monopolio/urls', { credentials: 'include' });
+        const ct = String(res.headers.get('content-type') || '').toLowerCase();
+        if (!res.ok) {
+            const msg = ct.includes('application/json') ? (await res.json())?.error : `HTTP ${res.status}`;
+            throw new Error(msg || 'No se pudieron cargar las URLs de Monopolio.');
+        }
+        if (!ct.includes('application/json')) {
+            throw new Error('Respuesta no JSON del servidor (posible ruta API interceptada).');
+        }
+
         MONOPOLIO_URLS = await res.json();
+        if (!Array.isArray(MONOPOLIO_URLS)) {
+            throw new Error('Formato inválido al cargar URLs de Monopolio.');
+        }
         filtrarMonopolioUrls();
     } catch (e) {
         console.error("Error cargando URLs de monopolio", e);
+        const container = document.getElementById('lista-monopolio-urls');
+        if (container) {
+            container.innerHTML = `<p class="text-xs text-rose-400">No se pudieron cargar las URLs: ${e.message}</p>`;
+        }
     }
 }
 

@@ -2237,7 +2237,10 @@ app.post('/api/logout', async (req, res) => {
     }
 });
 app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(200)); }); // Compatibilidad
-app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); });
+// Fallback SPA solo para rutas no-API; evita romper endpoints GET registrados debajo.
+app.get(/^\/(?!api(?:\/|$)).*/, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: ${PORT}`));

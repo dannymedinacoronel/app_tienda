@@ -3769,6 +3769,19 @@ window.abrirQuarterContabilidad = function(preset = 'quarter-actual') {
     }, 80);
 };
 
+window.aplicarQuarterAnalitica = function(preset = 'quarter-actual') {
+    const presetEl = document.getElementById('admin-profit-range-preset');
+    const yearEl = document.getElementById('admin-profit-year');
+    if (yearEl && !yearEl.value) {
+        yearEl.value = String(new Date().getFullYear());
+    }
+    if (presetEl) {
+        const normalizado = String(preset || 'quarter-actual').trim().toLowerCase();
+        presetEl.value = ['q1', 'q2', 'q3', 'q4', 'quarter-actual'].includes(normalizado) ? normalizado : 'quarter-actual';
+    }
+    onCambiarPresetGananciasAdmin();
+};
+
 function obtenerVentasEnRangoAdmin() {
     const startEl = document.getElementById('admin-profit-date-start');
     const endEl = document.getElementById('admin-profit-date-end');
@@ -7241,6 +7254,11 @@ function renderKanban(isFullRefresh = false) {
     const wrapper = document.getElementById('kanban-dynamic-wrapper');
     if (!wrapper) return;
 
+    const filtroGlobalCat = document.getElementById('filtro-categoria')?.value || 'TODOS';
+    const filtroGlobalTalla = document.getElementById('filtro-talla')?.value || 'TODOS';
+    const filtroGlobalCanal = document.getElementById('filtro-canal')?.value || 'TODOS';
+    const filtroGlobalTienda = document.getElementById('filtro-tienda')?.value || 'TODOS';
+
     if (isFullRefresh) {
         let htmlColumns = '';
         LISTA_ESTADOS_KANBAN.sort((a, b) => a.orden - b.orden).forEach((est, index) => {
@@ -7271,6 +7289,20 @@ function renderKanban(isFullRefresh = false) {
     const totalStockPorPrenda = {};
     BASE_DATOS.filter(x => { const eConfig = LISTA_ESTADOS_KANBAN.find(e => e.nombre === x.estado); return eConfig && eConfig.rolFinanciero === 'Stock'; }).forEach(x => { totalStockPorPrenda[x.prenda] = (totalStockPorPrenda[x.prenda] || 0) + 1; });
 
+    const baseFiltradaGlobal = BASE_DATOS.filter((v) =>
+        (filtroGlobalCat === 'TODOS' || v.categoria === filtroGlobalCat) &&
+        (filtroGlobalTalla === 'TODOS' || v.talla === filtroGlobalTalla) &&
+        (filtroGlobalCanal === 'TODOS' || v.canalVenta === filtroGlobalCanal) &&
+        (filtroGlobalTienda === 'TODOS' || (v.proveedor || 'Sin asignar') === filtroGlobalTienda)
+    );
+
+    const agrupadoPorEstado = new Map();
+    baseFiltradaGlobal.forEach((v) => {
+        const estado = String(v?.estado || '').trim();
+        if (!agrupadoPorEstado.has(estado)) agrupadoPorEstado.set(estado, []);
+        agrupadoPorEstado.get(estado).push(v);
+    });
+
     LISTA_ESTADOS_KANBAN.forEach(est => {
         const colDom = document.getElementById(`col-dinamica-${est._id}`);
         if(!colDom) return;
@@ -7278,19 +7310,10 @@ function renderKanban(isFullRefresh = false) {
         if (isFullRefresh) colDom.innerHTML = '';
 
         const criterio = CONFIG_ORDEN_COLUMNAS[est.nombre] || 'reciente';
-        const query = CONFIG_FILTRO_COLUMNAS[est.nombre] || '';
-        const filtroGlobalCat = document.getElementById('filtro-categoria').value;
-        const filtroGlobalTalla = document.getElementById('filtro-talla').value;
-        const filtroGlobalCanal = document.getElementById('filtro-canal').value;
-        const filtroGlobalTienda = document.getElementById('filtro-tienda')?.value || 'TODOS';
+        const query = String(CONFIG_FILTRO_COLUMNAS[est.nombre] || '').toLowerCase().trim();
 
-        let filtrados = BASE_DATOS.filter(v => 
-            v.estado === est.nombre &&
-            (!query || v.prenda.toLowerCase().includes(query) || (v.sku && v.sku.toLowerCase().includes(query))) &&
-            (filtroGlobalCat === 'TODOS' || v.categoria === filtroGlobalCat) &&
-            (filtroGlobalTalla === 'TODOS' || v.talla === filtroGlobalTalla) &&
-            (filtroGlobalCanal === 'TODOS' || v.canalVenta === filtroGlobalCanal) &&
-            (filtroGlobalTienda === 'TODOS' || (v.proveedor || 'Sin asignar') === filtroGlobalTienda)
+        let filtrados = (agrupadoPorEstado.get(est.nombre) || []).filter((v) =>
+            !query || String(v.prenda || '').toLowerCase().includes(query) || String(v.sku || '').toLowerCase().includes(query)
         );
         
         filtrados.sort((a, b) => {

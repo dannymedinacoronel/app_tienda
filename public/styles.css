@@ -524,6 +524,7 @@ tr:hover td {
   -webkit-backdrop-filter: blur(14px) saturate(115%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 20px rgba(2, 8, 20, 0.2);
   align-items: stretch;
+  justify-self: end;
   position: relative;
   z-index: 30;
 }
@@ -814,6 +815,29 @@ tr:hover td {
     min-height: 2.05rem;
     padding-left: 0.65rem;
     padding-right: 0.65rem;
+    scroll-snap-align: start;
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1365px) {
+  #barra-filtros-generales,
+  #main-nav-secciones {
+    min-height: 100%;
+  }
+
+  #main-nav-secciones {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 0.42rem;
+    scroll-snap-type: x proximity;
+    padding-bottom: 0.48rem;
+  }
+
+  #main-nav-secciones button {
+    flex: 0 0 auto;
+    min-width: max-content;
     scroll-snap-align: start;
   }
 }

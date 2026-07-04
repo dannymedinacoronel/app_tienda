@@ -984,16 +984,19 @@ async function scrapeMonopolio(url, aliasBase = '') {
     const grupos = [];
     const session = await crearSesionNavegador('monopolio');
     const semillaRelacion = obtenerSemillaRelacionMonopolio(urlNormalizada);
+    let totalRelacionesCapturadas = 0;
+    let totalPerfilesDetectados = 0;
 
     try {
         if (semillaRelacion) {
-            const maxDepth = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_DEPTH || '3', 10), 3));
+            const maxDepth = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_DEPTH || '4', 10), 6));
             const maxChainUrls = Math.max(8, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_URLS || '72', 10), 180));
             const maxCuentas = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_ACCOUNTS || '90', 10), 220));
             const maxBranch = Math.max(4, Math.min(parseInt(process.env.MONOPOLIO_CHAIN_BRANCH || '18', 10), 45));
 
             const cola = [{ url: semillaRelacion, depth: 0, parentProfileUrl: '', parentAlias: '' }];
             const visitadas = new Set();
+            const relacionesDescubiertas = new Set([semillaRelacion]);
             const perfilesMap = new Map();
 
             const registrarPerfil = (urlPerfil, meta = {}) => {
@@ -1085,6 +1088,7 @@ async function scrapeMonopolio(url, aliasBase = '') {
                     for (const rel of relaciones) {
                         const relNorm = normalizarUrlRelacionVinted(rel);
                         if (!relNorm || visitadas.has(relNorm)) continue;
+                        relacionesDescubiertas.add(relNorm);
                         cola.push({
                             url: relNorm,
                             depth: Number(actual.depth) + 1,
@@ -1097,6 +1101,7 @@ async function scrapeMonopolio(url, aliasBase = '') {
                         const nextRel = construirUrlFollowingDesdePerfil(cuenta.url);
                         const relNorm = normalizarUrlRelacionVinted(nextRel);
                         if (!relNorm || visitadas.has(relNorm)) continue;
+                        relacionesDescubiertas.add(relNorm);
                         cola.push({
                             url: relNorm,
                             depth: Number(actual.depth) + 1,
@@ -1106,6 +1111,9 @@ async function scrapeMonopolio(url, aliasBase = '') {
                     }
                 }
             }
+
+            totalRelacionesCapturadas = relacionesDescubiertas.size;
+            totalPerfilesDetectados = perfilesMap.size;
 
             const objetivos = Array.from(perfilesMap.values())
                 .sort((a, b) => Number(a.depth || 0) - Number(b.depth || 0))
@@ -1129,6 +1137,8 @@ async function scrapeMonopolio(url, aliasBase = '') {
             const objetivosFinales = Array.from(perfilesMap.values())
                 .sort((a, b) => Number(a.depth || 0) - Number(b.depth || 0))
                 .slice(0, maxCuentas);
+
+            totalPerfilesDetectados = objetivosFinales.length;
 
             for (const cuenta of objetivosFinales) {
                 const { productos } = await scrapeVinted(cuenta.url, { playwrightFirst: true, session });
@@ -1199,6 +1209,9 @@ async function scrapeMonopolio(url, aliasBase = '') {
                 total: enriquecidos.length,
                 productos: enriquecidos
             });
+
+            totalRelacionesCapturadas = 1;
+            totalPerfilesDetectados = 1;
         }
 
         const productosCrudos = grupos.flatMap((g) => g.productos || []);
@@ -1214,9 +1227,9 @@ async function scrapeMonopolio(url, aliasBase = '') {
             urlNormalizada,
             exploracion: {
                 semillaRelacion,
-                maxDepth: Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_DEPTH || '3', 10), 3)),
-                urlsCapturadas: grupos.length,
-                usuariosDetectados: [...new Set(grupos.map((g) => String(g?.cuenta || '').trim()).filter(Boolean))].length
+                maxDepth: Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_DEPTH || '4', 10), 6)),
+                urlsCapturadas: Number(totalRelacionesCapturadas || 0),
+                usuariosDetectados: Number(totalPerfilesDetectados || [...new Set(grupos.map((g) => String(g?.cuenta || '').trim()).filter(Boolean))].length)
             }
         };
     } finally {

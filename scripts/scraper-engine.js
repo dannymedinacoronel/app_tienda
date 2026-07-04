@@ -1011,10 +1011,10 @@ async function scrapeMonopolio(url, aliasBase = '') {
 
     try {
         if (semillaRelacion) {
-            const maxDepth = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_DEPTH || '4', 10), 6));
-            const maxChainUrls = Math.max(8, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_URLS || '72', 10), 180));
-            const maxCuentas = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_ACCOUNTS || '90', 10), 220));
-            const maxBranch = Math.max(4, Math.min(parseInt(process.env.MONOPOLIO_CHAIN_BRANCH || '18', 10), 45));
+            const maxDepth = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_DEPTH || '5', 10), 8));
+            const maxChainUrls = Math.max(8, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_URLS || '220', 10), 1200));
+            const maxCuentas = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_ACCOUNTS || '260', 10), 1800));
+            const maxBranch = Math.max(4, Math.min(parseInt(process.env.MONOPOLIO_CHAIN_BRANCH || '120', 10), 600));
 
             const cola = [{ url: semillaRelacion, depth: 0, parentProfileUrl: '', parentAlias: '' }];
             const visitadas = new Set();
@@ -1119,7 +1119,9 @@ async function scrapeMonopolio(url, aliasBase = '') {
                         });
                     }
 
-                    for (const cuenta of Array.from(dedupeCuentas.values()).slice(0, maxBranch)) {
+                    const capacidadRestante = Math.max(0, maxChainUrls - (visitadas.size + cola.length));
+                    const branchLimit = Math.min(maxBranch, capacidadRestante > 0 ? capacidadRestante : maxBranch);
+                    for (const cuenta of Array.from(dedupeCuentas.values()).slice(0, branchLimit)) {
                         const nextRel = construirUrlFollowingDesdePerfil(cuenta.url);
                         const relNorm = normalizarUrlRelacionVinted(nextRel);
                         if (!relNorm || visitadas.has(relNorm)) continue;
@@ -1163,7 +1165,7 @@ async function scrapeMonopolio(url, aliasBase = '') {
             totalPerfilesDetectados = objetivosFinales.length;
 
             for (const cuenta of objetivosFinales) {
-                const { productos } = await scrapeVinted(cuenta.url, { playwrightFirst: true, session });
+                const { productos } = await scrapeVinted(cuenta.url, { playwrightFirst: true, session, deepMode: true });
                 const aliasCuenta = sanitizarAlias(cuenta.alias, extraerAliasDesdeUrlPerfil(cuenta.url));
                 const enriquecidos = (productos || []).map((p) => enriquecerProductoMonopolio(p, {
                     cuenta: aliasCuenta,
@@ -1190,7 +1192,7 @@ async function scrapeMonopolio(url, aliasBase = '') {
             if (totalProductos === 0) {
                 const perfilOrigen = normalizarUrlPerfilVinted(urlNormalizada);
                 if (perfilOrigen) {
-                    const { productos } = await scrapeVinted(perfilOrigen, { playwrightFirst: true, session });
+                    const { productos } = await scrapeVinted(perfilOrigen, { playwrightFirst: true, session, deepMode: true });
                     const aliasCuenta = sanitizarAlias(aliasPrincipal, extraerAliasDesdeUrlPerfil(perfilOrigen));
                     grupos.push({
                         cuenta: aliasCuenta,
@@ -1211,7 +1213,7 @@ async function scrapeMonopolio(url, aliasBase = '') {
                 }
             }
         } else {
-            const { productos } = await scrapeVinted(urlNormalizada, { playwrightFirst: true, session });
+            const { productos } = await scrapeVinted(urlNormalizada, { playwrightFirst: true, session, deepMode: true });
             const aliasCuenta = sanitizarAlias(aliasPrincipal, extraerAliasDesdeUrlPerfil(urlNormalizada));
             const enriquecidos = (productos || []).map((p) => enriquecerProductoMonopolio(p, {
                 cuenta: aliasCuenta,
@@ -1249,7 +1251,7 @@ async function scrapeMonopolio(url, aliasBase = '') {
             urlNormalizada,
             exploracion: {
                 semillaRelacion,
-                maxDepth: Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_DEPTH || '4', 10), 6)),
+                maxDepth: Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_DEPTH || '5', 10), 8)),
                 urlsCapturadas: Number(totalRelacionesCapturadas || 0),
                 usuariosDetectados: Number(totalPerfilesDetectados || [...new Set(grupos.map((g) => String(g?.cuenta || '').trim()).filter(Boolean))].length)
             }
@@ -1330,8 +1332,9 @@ async function enviarWebhook(payload, options) {
 async function scrapeVinted(url, options = {}) {
     const playwrightFirst = Boolean(options.playwrightFirst || parseBoolEnv('SCRAPER_PLAYWRIGHT_FIRST', false));
     const sharedSession = options.session || null;
+    const deepMode = Boolean(options.deepMode || parseBoolEnv('SCRAPER_DEEP_MODE', false));
 
-    if (playwrightFirst) {
+    if (playwrightFirst && !deepMode) {
         const porPlaywright = await extraerConPlaywright(url, sharedSession);
         if (porPlaywright.length >= 3) {
             return {
@@ -1369,13 +1372,13 @@ async function scrapeVinted(url, options = {}) {
         playwright: 0
     };
 
-    if (productos.length < 3) {
+    if (deepMode || productos.length < 3) {
         const porApi = await extraerPorApiVinted(url);
         resumen.api = porApi.length;
         productos = deduplicarProductos([...productos, ...porApi]);
     }
 
-    if (productos.length < 3) {
+    if (deepMode || productos.length < 3) {
         const porPlaywright = await extraerConPlaywright(url, sharedSession);
         resumen.playwright = porPlaywright.length;
         productos = deduplicarProductos([...productos, ...porPlaywright]);

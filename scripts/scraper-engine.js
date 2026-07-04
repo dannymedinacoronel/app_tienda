@@ -257,6 +257,37 @@ function construirUrlFollowingDesdePerfil(urlPerfil) {
     return `${perfil}/following`;
 }
 
+function normalizarUrlItemVinted(inputUrl) {
+    const abs = normalizarUrlVinted(inputUrl);
+    if (!abs) return '';
+
+    let urlObj;
+    try {
+        urlObj = new URL(abs);
+    } catch (_) {
+        return '';
+    }
+
+    const pathOnly = String(urlObj.pathname || '').replace(/\/+$/, '');
+    if (!/\/items\//i.test(pathOnly)) return '';
+
+    urlObj.search = '';
+    urlObj.hash = '';
+    return urlObj.toString().replace(/\/+$/, '');
+}
+
+function clasificarUrlVinted(inputUrl) {
+    const raw = String(inputUrl || '').trim();
+    const item = normalizarUrlItemVinted(raw);
+    const relation = normalizarUrlRelacionVinted(raw);
+    const profile = normalizarUrlPerfilVinted(raw);
+
+    if (relation) return { tipo: 'relation', url: relation, score: 100 };
+    if (profile) return { tipo: 'profile', url: profile, score: 95 };
+    if (item) return { tipo: 'item', url: item, score: 70 };
+    return { tipo: 'other', url: normalizarUrlVinted(raw), score: 0 };
+}
+
 function parseBoolEnv(name, fallback = false) {
     const raw = String(process.env[name] || '').trim().toLowerCase();
     if (!raw) return fallback;
@@ -637,7 +668,7 @@ async function extraerCuentasDesdeSeguidores(urlObjetivo, session = null) {
 
         for (let i = 0; i < maxScrolls; i++) {
             const count = await page.evaluate(() => {
-                const anchors = Array.from(document.querySelectorAll('a[href*="/member/"]'));
+                const anchors = Array.from(document.querySelectorAll('a[href*="/member/"], a[href*="/items/"]'));
                 return anchors.length;
             });
 
@@ -653,48 +684,107 @@ async function extraerCuentasDesdeSeguidores(urlObjetivo, session = null) {
         }
 
         const perfiles = await page.evaluate(() => {
-            const out = [];
-            const rels = [];
-            const anchors = Array.from(document.querySelectorAll('a[href*="/member/"]'));
+            const enlaces = [];
+            const anchors = Array.from(document.querySelectorAll('a[href]'));
             for (const a of anchors) {
                 const href = a.getAttribute('href') || '';
+                if (!href) continue;
                 const abs = href.startsWith('http') ? href : `https://www.vinted.es${href}`;
-                if (!/\/member\//i.test(abs)) continue;
                 const clean = abs.split('?')[0].replace(/\/+$/, '');
                 const txt = (a.textContent || '').trim().replace(/\s+/g, ' ');
-                if (/\/(following|followers|relations)\b/i.test(clean)) {
-                    rels.push({ url: clean, alias: txt || '' });
-                } else {
-                    out.push({ url: clean, alias: txt || '' });
-                }
+                if (!/vinted\./i.test(clean) && !/\/(member|items)\//i.test(clean)) continue;
+                enlaces.push({ url: clean, alias: txt || '' });
             }
-            return { out, rels };
+            return { enlaces };
         });
 
         const map = new Map();
-        for (const p of perfiles?.out || []) {
-            const url = normalizarUrlPerfilVinted(String(p.url || '').trim());
-            if (!url) continue;
-            const alias = sanitizarAlias(p.alias || extraerAliasDesdeUrlPerfil(url), extraerAliasDesdeUrlPerfil(url));
-            if (!map.has(url)) map.set(url, { url, alias });
-        }
-
         const relaciones = [];
+        const items = [];
         const seenRel = new Set();
-        for (const r of perfiles?.rels || []) {
-            const relUrl = normalizarUrlRelacionVinted(String(r.url || '').trim());
-            if (!relUrl || seenRel.has(relUrl)) continue;
-            seenRel.add(relUrl);
-            relaciones.push(relUrl);
+        const seenItems = new Set();
+        const resumenClasificacion = { relation: 0, profile: 0, item: 0, other: 0 };
+
+        for (const r of perfiles?.enlaces || []) {
+            const clasificada = clasificarUrlVinted(String(r.url || '').trim());
+            resumenClasificacion[clasificada.tipo] = Number(resumenClasificacion[clasificada.tipo] || 0) + 1;
+
+            if (clasificada.tipo === 'profile') {
+                const alias = sanitizarAlias(r.alias || extraerAliasDesdeUrlPerfil(clasificada.url), extraerAliasDesdeUrlPerfil(clasificada.url));
+                if (!map.has(clasificada.url)) map.set(clasificada.url, { url: clasificada.url, alias });
+                continue;
+            }
+
+            if (clasificada.tipo === 'relation') {
+                if (seenRel.has(clasificada.url)) continue;
+                seenRel.add(clasificada.url);
+                relaciones.push(clasificada.url);
+                continue;
+            }
+
+            if (clasificada.tipo === 'item') {
+                if (seenItems.has(clasificada.url)) continue;
+                seenItems.add(clasificada.url);
+                items.push(clasificada.url);
+            }
         }
 
         return {
             cuentas: Array.from(map.values()),
-            relaciones
+            relaciones,
+            items,
+            resumenClasificacion
         };
     } catch (error) {
         console.error(`[MONOPOLIO] Fallo al extraer cuentas seguidas: ${error.message}`);
-        return { cuentas: [], relaciones: [] };
+        return { cuentas: [], relaciones: [], items: [], resumenClasificacion: { relation: 0, profile: 0, item: 0, other: 0 } };
+    } finally {
+        try { await page.close(); } catch (_) {}
+        if (ownSession) {
+            await cerrarSesionNavegador(internalSession);
+        }
+    }
+}
+
+async function extraerPerfilesDesdeItemsVinted(itemUrls, session = null) {
+    const ownSession = !session;
+    const internalSession = session || await crearSesionNavegador('item-profile');
+    if (!internalSession) return [];
+
+    const page = await internalSession.context.newPage();
+    const map = new Map();
+
+    try {
+        const limit = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_ITEM_PROBE_MAX || '4', 10), 10));
+        const objetivos = (Array.isArray(itemUrls) ? itemUrls : []).slice(0, limit);
+
+        for (const itemUrl of objetivos) {
+            try {
+                await navegarComoNavegadorReal(page, itemUrl);
+                const perfiles = await page.evaluate(() => {
+                    const links = Array.from(document.querySelectorAll('a[href*="/member/"]'));
+                    return links.map((a) => {
+                        const href = a.getAttribute('href') || '';
+                        const abs = href.startsWith('http') ? href : `https://www.vinted.es${href}`;
+                        return {
+                            url: abs.split('?')[0].replace(/\/+$/, ''),
+                            alias: String(a.textContent || '').trim().replace(/\s+/g, ' ')
+                        };
+                    });
+                });
+
+                for (const p of perfiles || []) {
+                    const urlPerfil = normalizarUrlPerfilVinted(p.url);
+                    if (!urlPerfil || map.has(urlPerfil)) continue;
+                    const alias = sanitizarAlias(p.alias || extraerAliasDesdeUrlPerfil(urlPerfil), extraerAliasDesdeUrlPerfil(urlPerfil));
+                    map.set(urlPerfil, { url: urlPerfil, alias });
+                }
+            } catch (_) {
+                // Seguimos con el siguiente item.
+            }
+        }
+
+        return Array.from(map.values());
     } finally {
         try { await page.close(); } catch (_) {}
         if (ownSession) {
@@ -737,8 +827,25 @@ async function scrapeMonopolio(url, aliasBase = '') {
                 const resultado = await extraerCuentasDesdeSeguidores(relUrl, session);
                 const cuentas = Array.isArray(resultado?.cuentas) ? resultado.cuentas : [];
                 const relaciones = Array.isArray(resultado?.relaciones) ? resultado.relaciones : [];
+                const items = Array.isArray(resultado?.items) ? resultado.items : [];
 
-                for (const cuenta of cuentas) {
+                let cuentasExpandidas = [...cuentas];
+                if (cuentasExpandidas.length < 2 && items.length > 0) {
+                    const desdeItems = await extraerPerfilesDesdeItemsVinted(items, session);
+                    cuentasExpandidas = [...cuentasExpandidas, ...desdeItems];
+                }
+
+                const dedupeCuentas = new Map();
+                for (const c of cuentasExpandidas) {
+                    const urlCuenta = normalizarUrlPerfilVinted(c.url);
+                    if (!urlCuenta || dedupeCuentas.has(urlCuenta)) continue;
+                    dedupeCuentas.set(urlCuenta, {
+                        url: urlCuenta,
+                        alias: sanitizarAlias(c.alias, extraerAliasDesdeUrlPerfil(urlCuenta))
+                    });
+                }
+
+                for (const cuenta of dedupeCuentas.values()) {
                     const urlCuenta = normalizarUrlPerfilVinted(cuenta.url);
                     if (!urlCuenta || perfilesMap.has(urlCuenta)) continue;
                     perfilesMap.set(urlCuenta, {
@@ -754,7 +861,7 @@ async function scrapeMonopolio(url, aliasBase = '') {
                         cola.push({ url: relNorm, depth: actual.depth + 1 });
                     }
 
-                    for (const cuenta of cuentas.slice(0, maxBranch)) {
+                    for (const cuenta of Array.from(dedupeCuentas.values()).slice(0, maxBranch)) {
                         const nextRel = construirUrlFollowingDesdePerfil(cuenta.url);
                         const relNorm = normalizarUrlRelacionVinted(nextRel);
                         if (!relNorm || visitadas.has(relNorm)) continue;

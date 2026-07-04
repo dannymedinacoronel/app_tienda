@@ -2593,7 +2593,18 @@ function aplicarConfiguracionVisualRuntime(cfg) {
     const nav = document.getElementById('main-nav-secciones');
     if (!cfg || !nav) return;
 
-    const hidden = new Set([...(cfg.hiddenSections || []), ...(cfg.blockedSections || [])]);
+    const bloqueadasPorRol = (() => {
+        const rol = String(USUARIO_ROL_ACTUAL || 'Editor');
+        if (rol === 'Editor') {
+            return ['sec-analitica', 'sec-auditoria', 'sec-gestion', 'sec-ajustes', 'sec-usuarios'];
+        }
+        if (rol === 'Visualizador') {
+            return ['sec-monopolio', 'sec-tareas', 'sec-notas', 'sec-crm', 'sec-citas', 'sec-usuarios', 'sec-gestion', 'sec-ajustes', 'sec-faqs'];
+        }
+        return [];
+    })();
+
+    const hidden = new Set([...(cfg.hiddenSections || []), ...(cfg.blockedSections || []), ...bloqueadasPorRol]);
     SECCIONES_INHABILITADAS = hidden;
 
     const orden = Array.isArray(cfg.sectionOrder) ? cfg.sectionOrder : [];
@@ -3237,6 +3248,8 @@ async function refrescarUsuariosAdmin() {
                             <select id="rol-${u._id}" class="input-bg border rounded-lg px-2 py-1 text-[10px] dropdown-bg">
                                 <option value="Admin" ${u.rol === 'Admin' ? 'selected' : ''}>Admin</option>
                                 <option value="Editor" ${u.rol === 'Editor' ? 'selected' : ''}>Editor</option>
+                                <option value="Visualizador" ${u.rol === 'Visualizador' ? 'selected' : ''}>Visualizador de Datos</option>
+                                <option value="Lector" ${u.rol === 'Lector' ? 'selected' : ''}>Lector</option>
                             </select>
                             <button onclick="actualizarRolUsuarioAdmin('${u._id}', '${u.rol || 'Editor'}')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-2 py-1 rounded-lg text-[9px] uppercase">Guardar</button>
                         </div>`
@@ -3260,7 +3273,7 @@ async function actualizarRolUsuarioAdmin(id, rolActual) {
     const select = document.getElementById(`rol-${id}`);
     if (!select) return;
     const nuevoRol = select.value;
-    if (!['Admin', 'Editor'].includes(nuevoRol)) return alert('Rol inválido.');
+    if (!['Admin', 'Editor', 'Visualizador', 'Lector'].includes(nuevoRol)) return alert('Rol inválido.');
     if (nuevoRol === rolActual) return;
 
     try {

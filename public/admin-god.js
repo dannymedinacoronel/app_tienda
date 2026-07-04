@@ -197,47 +197,19 @@ async function ensureAuth() {
         return false;
     }
     if ((auth.rol || 'Editor') !== 'Admin') {
-        byId('god-unlock').innerHTML = '<p class="text-sm text-rose-300 font-black uppercase">Acceso denegado: solo Admin.</p>';
+        byId('god-unlock').classList.remove('hidden');
+        byId('god-unlock-msg').innerText = 'Acceso denegado: solo Admin.';
         return false;
     }
-    if (auth.godMode) {
-        await loadGodDashboard();
-    }
+    await loadGodDashboard();
     return true;
 }
 
-async function unlockGodMode() {
-    const key = byId('god-key').value.trim();
-    if (!key) {
-        byId('god-unlock-msg').innerText = 'Introduce la clave Dios.';
-        return;
-    }
-    byId('btn-god-unlock').disabled = true;
-    try {
-        await api('/api/god/login', { method: 'POST', body: JSON.stringify({ clave: key }) });
-        byId('god-unlock-msg').innerText = '';
-        await loadGodDashboard();
-    } catch (e) {
-        byId('god-unlock-msg').innerText = e.message;
-    } finally {
-        byId('btn-god-unlock').disabled = false;
-    }
-}
-
 async function lockGodMode() {
-    await api('/api/god/logout', { method: 'POST' });
-    window.location.reload();
+    window.location.href = '/';
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    byId('btn-god-unlock').addEventListener('click', unlockGodMode);
-    byId('god-key').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            unlockGodMode();
-        }
-    });
-
     byId('btn-save-layout').addEventListener('click', saveLayoutAndTheme);
     byId('btn-save-theme').addEventListener('click', saveLayoutAndTheme);
     byId('btn-reload-users').addEventListener('click', loadGodDashboard);

@@ -303,7 +303,7 @@ const Negocio = mongoose.models.Negocio || mongoose.model('Negocio', NegocioSche
 
 const UsuarioAutorizadoSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    rol: { type: String, enum: ['Admin', 'Editor', 'Lector'], default: 'Editor' },
+    rol: { type: String, enum: ['Admin', 'Editor', 'Visualizador', 'Lector'], default: 'Editor' },
     empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
     nombreVisible: { type: String, default: '', trim: true },
     fotoPerfil: { type: String, default: '' },
@@ -566,23 +566,111 @@ function empresaActual(req) {
     return normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
 }
 
+function rolActual(req) {
+    return String(req.session?.rol || 'Editor').trim();
+}
+
+function tieneRol(req, rolesPermitidos = []) {
+    if (!req.session || !req.session.esAdmin) return false;
+    const rol = rolActual(req);
+    return Array.isArray(rolesPermitidos) && rolesPermitidos.includes(rol);
+}
+
+function exigeRol(rolesPermitidos = []) {
+    return (req, res, next) => {
+        if (tieneRol(req, rolesPermitidos)) return next();
+        return res.status(403).json({ error: 'No autorizado para este rol.' });
+    };
+}
+
 function exigeAdmin(req, res, next) {
     if (req.session && req.session.esAdmin) return next();
     return res.status(403).json({ error: 'No autorizado.' });
 }
 
+function exigeSoloAdmin(req, res, next) {
+    if (tieneRol(req, ['Admin'])) return next();
+    return res.status(403).json({ error: 'Solo un Admin puede realizar esta acción.' });
+}
+
 function exigeGodMode(req, res, next) {
-    if (!req.session || !req.session.esAdmin) {
-        return res.status(403).json({ error: 'No autorizado.' });
-    }
-    if ((req.session.rol || 'Editor') !== 'Admin') {
-        return res.status(403).json({ error: 'Solo rol Admin puede usar el panel Dios.' });
-    }
-    if (!req.session.godMode) {
-        return res.status(403).json({ error: 'Panel Dios bloqueado. Requiere clave de acceso.' });
+    if (tieneRol(req, ['Admin'])) return next();
+    return res.status(404).json({ error: 'No encontrado.' });
+}
+
+function sanitizarVentasParaRol(ventas, req) {
+    const rol = rolActual(req);
+    if (rol !== 'Editor') return ventas;
+
+    return (Array.isArray(ventas) ? ventas : []).map((v) => {
+        const safe = { ...v };
+        safe.precioCompra = 0;
+        safe.precioVenta = 0;
+        safe.gastosEnvio = 0;
+        safe.fechaVenta = '';
+        safe.facturado = false;
+        return safe;
+    });
+}
+
+function resumenSeguroPorRol(resumen, req) {
+    const rol = rolActual(req);
+    if (rol !== 'Editor') return resumen;
+    return {
+        ingresos: 0,
+        beneficio: 0,
+        inversion: 0,
+        prendasVendidas: Number(resumen?.prendasVendidas || 0),
+        roi: 0,
+        totalGastosOperativos: 0
+    };
+}
+
+function logsSegurosPorRol(logs, req) {
+    const rol = rolActual(req);
+    if (rol !== 'Editor') return logs;
+    return [];
+}
+
+function esRolSoloLectura(req) {
+    return rolActual(req) === 'Visualizador';
+}
+
+function bloquearMutacionVisualizador(req, res, next) {
+    if (esRolSoloLectura(req)) {
+        return res.status(403).json({ error: 'El rol Visualizador es de solo lectura.' });
     }
     return next();
 }
+
+app.use((req, res, next) => {
+    if (!req.path.startsWith('/api/')) return next();
+    if (!req.session || !req.session.esAdmin) return next();
+
+    const rol = rolActual(req);
+    const method = String(req.method || 'GET').toUpperCase();
+    const pathReq = String(req.path || '');
+    const esLectura = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+
+    // Visualizador: solo lectura (excepto login/logout del propio usuario).
+    if (rol === 'Visualizador') {
+        if (esLectura) return next();
+        if (method === 'POST' && (pathReq === '/api/logout' || pathReq === '/api/auth/google')) return next();
+        if (pathReq === '/api/perfil' && method === 'PUT') return next();
+        return res.status(403).json({ error: 'El rol Visualizador no puede modificar datos.' });
+    }
+
+    // Editor: solo puede añadir productos y gestionar su propio perfil/sesion.
+    if (rol === 'Editor') {
+        if (esLectura) return next();
+        if (method === 'POST' && pathReq === '/api/ventas') return next();
+        if (method === 'POST' && (pathReq === '/api/logout' || pathReq === '/api/auth/google')) return next();
+        if (pathReq === '/api/perfil' && method === 'PUT') return next();
+        return res.status(403).json({ error: 'El rol Editor solo puede añadir productos.' });
+    }
+
+    return next();
+});
 
 async function registrarLog(usuario, accion, locationData = {}) {
     try {
@@ -985,40 +1073,27 @@ app.post('/api/public/citas', async (req, res) => {
 
 app.get('/api/auth/verificar', (req, res) => {
     if (req.session && req.session.esAdmin) {
+        const rol = req.session.rol || 'Admin';
         return res.json({
             autenticado: true,
             usuario: req.session.email,
-            rol: req.session.rol || 'Admin',
+            rol,
             empresa: req.session.empresa || EMPRESA_DEFAULT,
-            godMode: Boolean(req.session.godMode)
+            godMode: rol === 'Admin'
         });
     }
     return res.json({ autenticado: false });
 });
 
-app.post('/api/god/login', exigeAdmin, (req, res) => {
-    try {
-        if ((req.session?.rol || 'Editor') !== 'Admin') {
-            return res.status(403).json({ error: 'Solo rol Admin puede desbloquear el panel Dios.' });
-        }
-
-        const clave = String(req.body?.clave || '').trim();
-        const claveDios = String(process.env.GOD_PANEL_KEY || process.env.GOD_KEY || 'SEYCHELLES-GOD-MODE').trim();
-        if (!clave || clave !== claveDios) {
-            return res.status(401).json({ error: 'Clave incorrecta.' });
-        }
-
-        req.session.godMode = true;
-        return req.session.save((err) => {
-            if (err) return res.status(500).json({ error: 'No se pudo activar el modo Dios.' });
-            return res.json({ success: true, godMode: true });
-        });
-    } catch (_) {
-        return res.status(500).json({ error: 'No se pudo desbloquear el panel Dios.' });
-    }
+app.post('/api/god/login', exigeSoloAdmin, (req, res) => {
+    req.session.godMode = true;
+    return req.session.save((err) => {
+        if (err) return res.status(500).json({ error: 'No se pudo activar el modo Dios.' });
+        return res.json({ success: true, godMode: true });
+    });
 });
 
-app.post('/api/god/logout', exigeAdmin, (req, res) => {
+app.post('/api/god/logout', exigeSoloAdmin, (req, res) => {
     req.session.godMode = false;
     return req.session.save((err) => {
         if (err) return res.status(500).json({ error: 'No se pudo cerrar modo Dios.' });
@@ -1197,7 +1272,7 @@ app.post('/api/auth/google', async (req, res) => {
 });
 
 // --- Rutas de Sistema / Mantenimiento ---
-app.get('/api/system/db-stats', exigeAdmin, async (req, res) => {
+app.get('/api/system/db-stats', exigeSoloAdmin, async (req, res) => {
     try {
         const stats = await mongoose.connection.db.command({ dbStats: 1 });
         const MAX_BYTES = 512 * 1024 * 1024; // 512MB (Límite del clúster gratuito M0 de Atlas)
@@ -1211,21 +1286,21 @@ app.get('/api/system/db-stats', exigeAdmin, async (req, res) => {
 });
 
 // --- Rutas de Gestión de Usuarios ---
-app.get('/api/usuarios-admin', exigeAdmin, async (req, res) => {
+app.get('/api/usuarios-admin', exigeSoloAdmin, async (req, res) => {
     try { 
         const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
         res.json(await UsuarioAutorizado.find({ empresa }).sort({ fechaAgregado: -1 })); 
     } catch (e) { res.status(500).send(e); }
 });
 
-app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
+app.post('/api/usuarios-admin', exigeSoloAdmin, async (req, res) => {
     try {
         const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
         const emailLimpio = req.body.email ? req.body.email.toLowerCase().trim() : "";
         const rolAsignado = String(req.body.rol || "Editor").trim();
-        const rolesPermitidos = ['Admin', 'Editor'];
+        const rolesPermitidos = ['Admin', 'Editor', 'Visualizador', 'Lector'];
         if (!emailLimpio) return res.status(400).json({ error: 'Email requerido.' });
-        if (!rolesPermitidos.includes(rolAsignado)) return res.status(400).json({ error: 'Rol inválido. Solo Admin o Editor.' });
+        if (!rolesPermitidos.includes(rolAsignado)) return res.status(400).json({ error: 'Rol inválido.' });
         const nuevo = new UsuarioAutorizado({ email: emailLimpio, rol: rolAsignado, empresa });
         await nuevo.save();
         await registrarLog(req.session.email, `Autorizó cuenta: ${emailLimpio} [Rol: ${rolAsignado}] [Empresa: ${empresa}]`);
@@ -1233,7 +1308,7 @@ app.post('/api/usuarios-admin', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(400).json({ error: 'El usuario ya está autorizado en la lista.' }); }
 });
 
-app.put('/api/usuarios-admin/:id/rol', exigeAdmin, async (req, res) => {
+app.put('/api/usuarios-admin/:id/rol', exigeSoloAdmin, async (req, res) => {
     try {
         if ((req.session?.rol || 'Editor') !== 'Admin') {
             return res.status(403).json({ error: 'Solo un Admin puede modificar permisos.' });
@@ -1241,9 +1316,9 @@ app.put('/api/usuarios-admin/:id/rol', exigeAdmin, async (req, res) => {
 
         const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
         const nuevoRol = String(req.body?.rol || '').trim();
-        const rolesPermitidos = ['Admin', 'Editor'];
+        const rolesPermitidos = ['Admin', 'Editor', 'Visualizador', 'Lector'];
         if (!rolesPermitidos.includes(nuevoRol)) {
-            return res.status(400).json({ error: 'Solo se permite Admin o Editor.' });
+            return res.status(400).json({ error: 'Rol inválido.' });
         }
 
         const usuario = await UsuarioAutorizado.findById(req.params.id);
@@ -1269,7 +1344,7 @@ app.put('/api/usuarios-admin/:id/rol', exigeAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/usuarios-admin/:id', exigeAdmin, async (req, res) => {
+app.delete('/api/usuarios-admin/:id', exigeSoloAdmin, async (req, res) => {
     try {
         const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
         const u = await UsuarioAutorizado.findById(req.params.id);
@@ -2046,7 +2121,7 @@ app.delete('/api/notas/:id', exigeAdmin, async (req, res) => {
 /**
  * Recupera logs de auditoría para el calendario (filtrado por mes/año)
  */
-app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
+app.get('/api/logs/calendario', exigeRol(['Admin', 'Visualizador']), async (req, res) => {
     try {
         const { mes, anio } = req.query; // mes: 1-12
         if (!mes || !anio) return res.status(400).json({ error: 'Mes y año requeridos.' });
@@ -2075,7 +2150,7 @@ app.get('/api/logs/calendario', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Fallo al recuperar logs.' }); }
 });
 
-app.get('/api/logs/locations', exigeAdmin, async (req, res) => {
+app.get('/api/logs/locations', exigeRol(['Admin', 'Visualizador']), async (req, res) => {
     try {
         const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
         const maxRegistros = Math.max(300, Math.min(parseInt(req.query?.limit, 10) || 1200, 2500));
@@ -2199,13 +2274,13 @@ app.delete('/api/clientes/:id', exigeAdmin, async (req, res) => {
 });
 
 // --- Rutas de Gastos Operativos ---
-app.get('/api/gastos', exigeAdmin, async (req, res) => {
+app.get('/api/gastos', exigeSoloAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         res.json(await Gasto.find({ empresa }).sort({ fecha: -1 }));
     } catch (e) { res.status(500).send(e); }
 });
-app.post('/api/gastos', exigeAdmin, async (req, res) => {
+app.post('/api/gastos', exigeSoloAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const nuevo = new Gasto({ ...req.body, empresa });
@@ -2215,7 +2290,7 @@ app.post('/api/gastos', exigeAdmin, async (req, res) => {
         res.json(nuevo);
     } catch (e) { res.status(400).send(e); }
 });
-app.delete('/api/gastos/:id', exigeAdmin, async (req, res) => {
+app.delete('/api/gastos/:id', exigeSoloAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         await Gasto.deleteOne({ _id: req.params.id, empresa });
@@ -2224,7 +2299,7 @@ app.delete('/api/gastos/:id', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(500).send(e); }
 });
 
-app.get('/api/ventas', exigeAdmin, async (req, res) => {
+app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const page = parseInt(req.query.page) || 1;
@@ -2351,9 +2426,9 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
         }
 
         return res.json({
-            resumen,
-            ventas,
-            logs,
+            resumen: resumenSeguroPorRol(resumen, req),
+            ventas: sanitizarVentasParaRol(ventas, req),
+            logs: logsSegurosPorRol(logs, req),
             totalPages: Math.ceil(totalVentas / limit),
             currentPage: page
         });
@@ -2363,7 +2438,7 @@ app.get('/api/ventas', exigeAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/ventas', exigeAdmin, async (req, res) => {
+app.post('/api/ventas', exigeRol(['Admin', 'Editor']), bloquearMutacionVisualizador, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const { proveedor, ...datosVenta } = req.body;
@@ -2391,7 +2466,7 @@ app.post('/api/ventas', exigeAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
+app.put('/api/ventas/:id', exigeSoloAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const { id } = req.params;
@@ -2425,7 +2500,7 @@ app.put('/api/ventas/:id', exigeAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
+app.put('/api/ventas/:id/estado', exigeSoloAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const { id } = req.params;
@@ -2454,7 +2529,7 @@ app.put('/api/ventas/:id/estado', exigeAdmin, async (req, res) => {
     }
 });
 
-app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
+app.put('/api/ventas/escanear/:sku', exigeSoloAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const { sku } = req.params;
@@ -2497,7 +2572,7 @@ app.put('/api/ventas/escanear/:sku', exigeAdmin, async (req, res) => {
     }
 });
 
-app.delete('/api/ventas/:id', exigeAdmin, async (req, res) => {
+app.delete('/api/ventas/:id', exigeSoloAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const { id } = req.params;
@@ -2525,9 +2600,9 @@ app.post('/api/logout', async (req, res) => {
 });
 app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(200)); }); // Compatibilidad
 
-app.get('/admin-god', exigeAdmin, (req, res) => {
-    if ((req.session?.rol || 'Editor') !== 'Admin') {
-        return res.status(403).send('Acceso solo para rol Admin.');
+app.get('/admin-god', (req, res) => {
+    if (!tieneRol(req, ['Admin'])) {
+        return res.status(404).send('Not found');
     }
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     return res.sendFile(path.join(__dirname, 'public', 'admin-god.html'));

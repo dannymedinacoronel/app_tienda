@@ -344,6 +344,7 @@ const UI_SECTION_KEYS = [
     'sec-tareas',
     'sec-monopolio',
     'sec-analitica',
+    'sec-higiene',
     'sec-notas',
     'sec-crm',
     'sec-citas',
@@ -417,6 +418,225 @@ function limpiarTabLabels(labels) {
 }
 
 const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
+
+function normalizarClaveTexto(valor) {
+    return String(valor || '').trim().toLowerCase();
+}
+
+async function obtenerProveedoresSinTienda(empresa) {
+    const [proveedoresRaw, tiendasRaw] = await Promise.all([
+        VentaRopa.distinct('proveedor', { empresa, proveedor: { $exists: true, $ne: '' } }),
+        Tienda.distinct('nombre', { empresa })
+    ]);
+
+    const tiendasSet = new Set((tiendasRaw || []).map(normalizarClaveTexto).filter(Boolean));
+    const faltantesMap = new Map();
+
+    (proveedoresRaw || []).forEach((nombre) => {
+        const limpio = String(nombre || '').trim();
+        const key = normalizarClaveTexto(limpio);
+        if (!key || tiendasSet.has(key)) return;
+        if (!faltantesMap.has(key)) faltantesMap.set(key, limpio);
+    });
+
+    return Array.from(faltantesMap.values()).sort((a, b) => a.localeCompare(b, 'es'));
+}
+
+async function obtenerCategoriasSinCatalogo(empresa) {
+    const [categoriasRaw, catalogoRaw] = await Promise.all([
+        VentaRopa.distinct('categoria', { empresa, categoria: { $exists: true, $ne: '' } }),
+        Categoria.distinct('nombre', { empresa })
+    ]);
+
+    const catalogoSet = new Set((catalogoRaw || []).map(normalizarClaveTexto).filter(Boolean));
+    const faltantesMap = new Map();
+
+    (categoriasRaw || []).forEach((nombre) => {
+        const limpio = String(nombre || '').trim();
+        const key = normalizarClaveTexto(limpio);
+        if (!key || catalogoSet.has(key)) return;
+        if (!faltantesMap.has(key)) faltantesMap.set(key, limpio);
+    });
+
+    return Array.from(faltantesMap.values()).sort((a, b) => a.localeCompare(b, 'es'));
+}
+
+async function generarReporteHigiene(empresa, sampleLimit = 25) {
+    const limit = Math.max(5, Math.min(Number(sampleLimit) || 25, 100));
+
+    const [estados, tiendasRaw, categoriasRaw] = await Promise.all([
+        EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean(),
+        Tienda.distinct('nombre', { empresa }),
+        Categoria.distinct('nombre', { empresa })
+    ]);
+
+    const estadosValidos = (estados || []).map((e) => String(e.nombre || '').trim()).filter(Boolean);
+    const tiendasSet = new Set((tiendasRaw || []).map(normalizarClaveTexto).filter(Boolean));
+    const categoriasSet = new Set((categoriasRaw || []).map(normalizarClaveTexto).filter(Boolean));
+
+    const queryEstadoInvalido = estadosValidos.length
+        ? { empresa, estado: { $nin: estadosValidos } }
+        : { empresa };
+
+    const [estadosInvalidosCount, estadosInvalidosSample] = await Promise.all([
+        VentaRopa.countDocuments(queryEstadoInvalido),
+        VentaRopa.find(queryEstadoInvalido)
+            .select('_id prenda estado proveedor categoria fecha')
+            .sort({ fecha: -1, _id: -1 })
+            .limit(limit)
+            .lean()
+    ]);
+
+    const [incompletosCount, incompletosSample] = await Promise.all([
+        VentaRopa.countDocuments({
+            empresa,
+            $or: [
+                { prenda: { $in: ['', null] } },
+                { categoria: { $in: ['', null] } },
+                { talla: { $in: ['', null] } }
+            ]
+        }),
+        VentaRopa.find({
+            empresa,
+            $or: [
+                { prenda: { $in: ['', null] } },
+                { categoria: { $in: ['', null] } },
+                { talla: { $in: ['', null] } }
+            ]
+        })
+            .select('_id prenda categoria talla estado proveedor fecha')
+            .sort({ fecha: -1, _id: -1 })
+            .limit(limit)
+            .lean()
+    ]);
+
+    const proveedoresHuerfanos = await VentaRopa.aggregate([
+        { $match: { empresa, proveedor: { $type: 'string', $ne: '' } } },
+        { $addFields: { proveedorNorm: { $toLower: { $trim: { input: '$proveedor' } } } } },
+        { $match: { proveedorNorm: { $nin: Array.from(tiendasSet) } } },
+        {
+            $group: {
+                _id: '$proveedorNorm',
+                proveedor: { $first: '$proveedor' },
+                cantidad: { $sum: 1 },
+                ejemploVentaId: { $first: '$_id' },
+                ejemploPrenda: { $first: '$prenda' }
+            }
+        },
+        { $sort: { cantidad: -1 } },
+        { $limit: limit }
+    ]);
+
+    const categoriasHuerfanas = await VentaRopa.aggregate([
+        { $match: { empresa, categoria: { $type: 'string', $ne: '' } } },
+        { $addFields: { categoriaNorm: { $toLower: { $trim: { input: '$categoria' } } } } },
+        { $match: { categoriaNorm: { $nin: Array.from(categoriasSet) } } },
+        {
+            $group: {
+                _id: '$categoriaNorm',
+                categoria: { $first: '$categoria' },
+                cantidad: { $sum: 1 },
+                ejemploVentaId: { $first: '$_id' },
+                ejemploPrenda: { $first: '$prenda' }
+            }
+        },
+        { $sort: { cantidad: -1 } },
+        { $limit: limit }
+    ]);
+
+    const duplicadosTop = await VentaRopa.aggregate([
+        { $match: { empresa } },
+        {
+            $addFields: {
+                prendaNorm: { $toLower: { $trim: { input: { $ifNull: ['$prenda', ''] } } } },
+                proveedorNorm: { $toLower: { $trim: { input: { $ifNull: ['$proveedor', ''] } } } },
+                tallaNorm: { $toLower: { $trim: { input: { $ifNull: ['$talla', ''] } } } },
+                categoriaNorm: { $toLower: { $trim: { input: { $ifNull: ['$categoria', ''] } } } }
+            }
+        },
+        {
+            $group: {
+                _id: {
+                    prenda: '$prendaNorm',
+                    proveedor: '$proveedorNorm',
+                    talla: '$tallaNorm',
+                    categoria: '$categoriaNorm'
+                },
+                count: { $sum: 1 },
+                ejemploPrenda: { $first: '$prenda' },
+                ejemploProveedor: { $first: '$proveedor' },
+                ejemploCategoria: { $first: '$categoria' },
+                ejemploTalla: { $first: '$talla' }
+            }
+        },
+        {
+            $match: {
+                count: { $gt: 1 },
+                '_id.prenda': { $ne: '' }
+            }
+        },
+        { $sort: { count: -1 } },
+        { $limit: limit }
+    ]);
+
+    const duplicadosTotales = await VentaRopa.aggregate([
+        { $match: { empresa } },
+        {
+            $addFields: {
+                prendaNorm: { $toLower: { $trim: { input: { $ifNull: ['$prenda', ''] } } } },
+                proveedorNorm: { $toLower: { $trim: { input: { $ifNull: ['$proveedor', ''] } } } },
+                tallaNorm: { $toLower: { $trim: { input: { $ifNull: ['$talla', ''] } } } },
+                categoriaNorm: { $toLower: { $trim: { input: { $ifNull: ['$categoria', ''] } } } }
+            }
+        },
+        {
+            $group: {
+                _id: {
+                    prenda: '$prendaNorm',
+                    proveedor: '$proveedorNorm',
+                    talla: '$tallaNorm',
+                    categoria: '$categoriaNorm'
+                },
+                count: { $sum: 1 }
+            }
+        },
+        {
+            $match: {
+                count: { $gt: 1 },
+                '_id.prenda': { $ne: '' }
+            }
+        },
+        {
+            $group: {
+                _id: null,
+                grupos: { $sum: 1 },
+                extras: { $sum: { $subtract: ['$count', 1] } }
+            }
+        }
+    ]);
+
+    const dupResumen = duplicadosTotales[0] || { grupos: 0, extras: 0 };
+
+    return {
+        empresa,
+        generadoEn: new Date(),
+        resumen: {
+            estadosInvalidos: estadosInvalidosCount,
+            incompletos: incompletosCount,
+            proveedoresHuerfanos: proveedoresHuerfanos.reduce((acc, it) => acc + Number(it.cantidad || 0), 0),
+            categoriasHuerfanas: categoriasHuerfanas.reduce((acc, it) => acc + Number(it.cantidad || 0), 0),
+            duplicadosGrupos: Number(dupResumen.grupos || 0),
+            duplicadosExtras: Number(dupResumen.extras || 0)
+        },
+        detalles: {
+            estadosInvalidos: estadosInvalidosSample,
+            productosIncompletos: incompletosSample,
+            proveedoresHuerfanos,
+            categoriasHuerfanas,
+            duplicadosFirma: duplicadosTop
+        }
+    };
+}
 
 io.on('connection', (socket) => {
     socket.on('join_empresa', (empresa) => {
@@ -3058,6 +3278,128 @@ app.post('/api/scraper/aplicar', exigeAdmin, async (req, res) => {
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Error al actualizar precios.' });
+    }
+});
+
+// --- RUTAS DE HIGIENE DE DATOS ---
+
+app.get('/api/higiene/scan', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const limit = Math.max(5, Math.min(Number.parseInt(String(req.query?.limit || '25'), 10) || 25, 100));
+        const reporte = await generarReporteHigiene(empresa, limit);
+        res.json(reporte);
+    } catch (e) {
+        console.error('[HIGIENE] Error en scan:', e.message);
+        res.status(500).json({ error: 'No se pudo ejecutar el escaneo de higiene.' });
+    }
+});
+
+app.post('/api/higiene/apply', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const action = String(req.body?.action || '').trim();
+        const dryRun = req.body?.dryRun !== false;
+
+        if (!action) {
+            return res.status(400).json({ error: 'Acción requerida.' });
+        }
+
+        if (action === 'corregir-estados-invalidos') {
+            const estados = await EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean();
+            const estadosValidos = (estados || []).map((e) => String(e.nombre || '').trim()).filter(Boolean);
+            const fallback = (estados.find((e) => e.rolFinanciero === 'Stock')?.nombre)
+                || estadosValidos[0]
+                || 'No Vendido';
+
+            const queryInvalidos = estadosValidos.length
+                ? { empresa, estado: { $nin: estadosValidos } }
+                : { empresa };
+
+            const total = await VentaRopa.countDocuments(queryInvalidos);
+            const sample = await VentaRopa.find(queryInvalidos)
+                .select('_id prenda estado proveedor categoria fecha')
+                .limit(30)
+                .lean();
+
+            if (dryRun) {
+                return res.json({
+                    dryRun: true,
+                    action,
+                    empresa,
+                    fallback,
+                    total,
+                    sample
+                });
+            }
+
+            const result = await VentaRopa.updateMany(queryInvalidos, {
+                $set: {
+                    estado: fallback,
+                    fechaModificacion: new Date().toISOString().slice(0, 10)
+                }
+            });
+
+            invalidateKpiResumenCache(empresa);
+            await registrarLog(req.session.email, `[HIGIENE] Corrigió estados inválidos: ${result.modifiedCount} -> ${fallback}`);
+
+            return res.json({
+                dryRun: false,
+                action,
+                empresa,
+                fallback,
+                matched: result.matchedCount,
+                modified: result.modifiedCount
+            });
+        }
+
+        if (action === 'crear-tiendas-faltantes') {
+            const faltantes = await obtenerProveedoresSinTienda(empresa);
+            if (dryRun) {
+                return res.json({ dryRun: true, action, empresa, total: faltantes.length, items: faltantes.slice(0, 80) });
+            }
+
+            const docs = faltantes.map((nombre) => ({ nombre, empresa, fechaCreacion: new Date() }));
+            let created = 0;
+            if (docs.length) {
+                const result = await Tienda.insertMany(docs, { ordered: false }).catch((err) => {
+                    if (Array.isArray(err?.insertedDocs)) return err.insertedDocs;
+                    return [];
+                });
+                created = Array.isArray(result) ? result.length : 0;
+            }
+
+            await registrarLog(req.session.email, `[HIGIENE] Alta masiva de tiendas faltantes: ${created}`);
+            return res.json({ dryRun: false, action, empresa, detected: faltantes.length, created });
+        }
+
+        if (action === 'crear-categorias-faltantes') {
+            const faltantes = await obtenerCategoriasSinCatalogo(empresa);
+            if (dryRun) {
+                return res.json({ dryRun: true, action, empresa, total: faltantes.length, items: faltantes.slice(0, 80) });
+            }
+
+            const docs = faltantes.map((nombre) => ({ nombre, empresa }));
+            let created = 0;
+            if (docs.length) {
+                const result = await Categoria.insertMany(docs, { ordered: false }).catch((err) => {
+                    if (Array.isArray(err?.insertedDocs)) return err.insertedDocs;
+                    return [];
+                });
+                created = Array.isArray(result) ? result.length : 0;
+            }
+
+            await registrarLog(req.session.email, `[HIGIENE] Alta masiva de categorías faltantes: ${created}`);
+            return res.json({ dryRun: false, action, empresa, detected: faltantes.length, created });
+        }
+
+        return res.status(400).json({
+            error: 'Acción no soportada.',
+            allowed: ['corregir-estados-invalidos', 'crear-tiendas-faltantes', 'crear-categorias-faltantes']
+        });
+    } catch (e) {
+        console.error('[HIGIENE] Error en apply:', e.message);
+        res.status(500).json({ error: 'No se pudo ejecutar la acción de higiene.' });
     }
 });
 

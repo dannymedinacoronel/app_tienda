@@ -53,6 +53,7 @@ let MONOPOLIO_PROGRESS_ACTIVE = false;
 let MONOPOLIO_PROGRESS_MSG_INDEX = 0;
 let MONOPOLIO_PROGRESS_SEEN = new Set();
 let MONOPOLIO_DIAGNOSTICO = [];
+let HIGIENE_REPORTE_CACHE = null;
 let CHAT_SEARCH_QUERY = '';
 let SECCIONES_INHABILITADAS = new Set();
 let SCRAPER_PROGRESS_VALUE = 0;
@@ -1936,6 +1937,153 @@ function eliminarUrlGuardada(idx) {
     renderSavedUrls();
 }
 
+function setEstadoHigiene(msg, tone = 'slate') {
+    const el = document.getElementById('higiene-status');
+    if (!el) return;
+    const toneClass = tone === 'ok'
+        ? 'text-emerald-300'
+        : tone === 'warn'
+            ? 'text-amber-300'
+            : tone === 'error'
+                ? 'text-rose-300'
+                : 'text-slate-300';
+    el.className = `text-[11px] ${toneClass}`;
+    el.innerText = msg;
+}
+
+function pintarReporteHigiene(reporte) {
+    const resumen = reporte?.resumen || {};
+    const detalles = reporte?.detalles || {};
+
+    const setTxt = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = String(value || 0);
+    };
+
+    setTxt('higiene-kpi-estados', resumen.estadosInvalidos || 0);
+    setTxt('higiene-kpi-incompletos', resumen.incompletos || 0);
+    setTxt('higiene-kpi-prov', resumen.proveedoresHuerfanos || 0);
+    setTxt('higiene-kpi-cat', resumen.categoriasHuerfanas || 0);
+    setTxt('higiene-kpi-dup', resumen.duplicadosExtras || 0);
+
+    const generated = document.getElementById('higiene-generated-at');
+    if (generated) {
+        const ts = reporte?.generadoEn ? new Date(reporte.generadoEn) : new Date();
+        generated.innerText = `Último escaneo: ${ts.toLocaleString('es-ES')}`;
+    }
+
+    const renderRows = (items, mapFn) => {
+        if (!Array.isArray(items) || items.length === 0) return '<p class="text-[10px] opacity-45 italic">Sin hallazgos en esta categoría.</p>';
+        return items.map(mapFn).join('');
+    };
+
+    const panel = document.getElementById('higiene-detalles-panel');
+    if (!panel) return;
+
+    panel.innerHTML = `
+        <div class="card-bg border rounded-2xl p-3">
+            <p class="text-[10px] font-black uppercase tracking-widest text-rose-300 mb-2">Estados inválidos</p>
+            ${renderRows(detalles.estadosInvalidos, (x) => `
+                <div class="text-[10px] py-1 border-b border-white/10 last:border-b-0">
+                    <span class="font-mono opacity-75">${escapeHtmlSafe(x._id)}</span> · ${escapeHtmlSafe(x.prenda || 'Sin prenda')} · Estado: <b>${escapeHtmlSafe(x.estado || '-')}</b>
+                </div>
+            `)}
+        </div>
+        <div class="card-bg border rounded-2xl p-3">
+            <p class="text-[10px] font-black uppercase tracking-widest text-amber-300 mb-2">Proveedores huérfanos</p>
+            ${renderRows(detalles.proveedoresHuerfanos, (x) => `
+                <div class="text-[10px] py-1 border-b border-white/10 last:border-b-0">
+                    <b>${escapeHtmlSafe(x.proveedor || '-')}</b> · ${Number(x.cantidad || 0)} refs
+                </div>
+            `)}
+        </div>
+        <div class="card-bg border rounded-2xl p-3">
+            <p class="text-[10px] font-black uppercase tracking-widest text-cyan-300 mb-2">Categorías huérfanas</p>
+            ${renderRows(detalles.categoriasHuerfanas, (x) => `
+                <div class="text-[10px] py-1 border-b border-white/10 last:border-b-0">
+                    <b>${escapeHtmlSafe(x.categoria || '-')}</b> · ${Number(x.cantidad || 0)} refs
+                </div>
+            `)}
+        </div>
+        <div class="card-bg border rounded-2xl p-3">
+            <p class="text-[10px] font-black uppercase tracking-widest text-fuchsia-300 mb-2">Duplicados por firma</p>
+            ${renderRows(detalles.duplicadosFirma, (x) => `
+                <div class="text-[10px] py-1 border-b border-white/10 last:border-b-0">
+                    <b>${escapeHtmlSafe(x.ejemploPrenda || '-')}</b> · ${escapeHtmlSafe(x.ejemploProveedor || '-')} · x${Number(x.count || 0)}
+                </div>
+            `)}
+        </div>
+    `;
+}
+
+window.escanearHigieneDB = async function(forzar = true) {
+    const sec = document.getElementById('sec-higiene');
+    if (!sec || sec.classList.contains('hidden')) return;
+
+    if (!forzar && HIGIENE_REPORTE_CACHE) {
+        pintarReporteHigiene(HIGIENE_REPORTE_CACHE);
+        return;
+    }
+
+    setEstadoHigiene('Escaneando integridad de datos...', 'warn');
+    const btn = document.getElementById('btn-higiene-scan');
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/higiene/scan?limit=30', { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+        HIGIENE_REPORTE_CACHE = data;
+        pintarReporteHigiene(data);
+        setEstadoHigiene('Escaneo completado. Revisa hallazgos y aplica con dry-run.', 'ok');
+    } catch (e) {
+        setEstadoHigiene(`Error al escanear: ${e.message}`, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+};
+
+window.ejecutarAccionHigieneDB = async function() {
+    const actionEl = document.getElementById('higiene-action-select');
+    const dryEl = document.getElementById('higiene-dry-run');
+    const action = String(actionEl?.value || '').trim();
+    const dryRun = dryEl?.checked !== false;
+    if (!action) return;
+
+    if (!dryRun && !confirm('Vas a modificar datos reales de la empresa actual. ¿Continuar?')) return;
+
+    setEstadoHigiene(dryRun ? 'Simulando acción (dry-run)...' : 'Aplicando cambios reales...', 'warn');
+    const btn = document.getElementById('btn-higiene-apply');
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/higiene/apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ action, dryRun })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+
+        const resultBox = document.getElementById('higiene-action-result');
+        if (resultBox) {
+            resultBox.innerHTML = `<pre class="text-[10px] whitespace-pre-wrap break-words">${escapeHtmlSafe(JSON.stringify(data, null, 2))}</pre>`;
+        }
+
+        setEstadoHigiene(dryRun ? 'Dry-run completado. Revisa la simulación.' : 'Acción aplicada correctamente.', 'ok');
+        if (!dryRun) {
+            HIGIENE_REPORTE_CACHE = null;
+            await escanearHigieneDB(true);
+        }
+    } catch (e) {
+        setEstadoHigiene(`Error en acción: ${e.message}`, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+};
+
 // --- FUNCIONES DEBOUNCED GLOBALES ---
 window.debouncedCambiarFiltroColumna = debounce(cambiarFiltroColumna, 300);
 window.debouncedFiltrarProductosMenu = debounce(filtrarProductosMenu, 250);
@@ -3093,6 +3241,9 @@ window.navegarASeccion = function(idSeccion) {
     if (idSeccion === 'sec-ajustes') {
         setTimeout(() => { renderListaAjustesKanban(); }, 50);
     }
+    if (idSeccion === 'sec-higiene') {
+        setTimeout(() => { escanearHigieneDB(false); }, 50);
+    }
     if (idSeccion === 'sec-monopolio') {
         setTimeout(() => { renderMonopolioUrls(); }, 50);
     }
@@ -3107,10 +3258,10 @@ function aplicarConfiguracionVisualRuntime(cfg) {
     const bloqueadasPorRol = (() => {
         const rol = String(USUARIO_ROL_ACTUAL || 'Editor');
         if (rol === 'Editor') {
-            return ['sec-analitica', 'sec-auditoria', 'sec-gestion', 'sec-ajustes', 'sec-usuarios'];
+            return ['sec-analitica', 'sec-auditoria', 'sec-gestion', 'sec-ajustes', 'sec-usuarios', 'sec-higiene'];
         }
         if (rol === 'Visualizador') {
-            return ['sec-analitica', 'sec-auditoria', 'sec-monopolio', 'sec-tareas', 'sec-notas', 'sec-crm', 'sec-citas', 'sec-usuarios', 'sec-gestion', 'sec-ajustes', 'sec-faqs'];
+            return ['sec-analitica', 'sec-auditoria', 'sec-monopolio', 'sec-tareas', 'sec-notas', 'sec-crm', 'sec-citas', 'sec-usuarios', 'sec-gestion', 'sec-ajustes', 'sec-faqs', 'sec-higiene'];
         }
         return [];
     })();
@@ -7174,6 +7325,7 @@ document.addEventListener('keydown', (e) => {
 
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        document.getElementById('main-body')?.classList.remove('ui-booting');
         configurarForzadoHorizontal();
         iniciarCountdownTrial();
         await cargarNegociosCitasLanding();

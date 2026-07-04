@@ -42,6 +42,8 @@ let SCRAPER_PROGRESS_INTERVAL = null;
 let MONOPOLIO_URLS = [];
 let MONOPOLIO_SELECTED_KEYS = new Set();
 let MONOPOLIO_TEMP_URLS = [];
+let CHAT_SEARCH_QUERY = '';
+let SECCIONES_INHABILITADAS = new Set();
 let SCRAPER_PROGRESS_VALUE = 0;
 let SCRAPER_PROGRESS_MSG_INDEX = 0;
 
@@ -66,6 +68,15 @@ socket.on('connect', () => {
 socket.on('connect_error', (error) => {
     console.error('[SOCKET] Error de conexión:', error);
 });
+
+function escapeHtmlSafe(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 function mostrarLandingPublica() {
     const landing = document.getElementById('landing-page');
@@ -2352,10 +2363,15 @@ async function eliminarTiendaSeleccionadaCloud() {
 }
 
 window.navegarASeccion = function(idSeccion) {
+    if (SECCIONES_INHABILITADAS.has(idSeccion)) {
+        alert('No tienes acceso a esta sección.');
+        return;
+    }
+
     document.querySelectorAll('.seccion-app').forEach(sec => sec.classList.add('hidden'));
     document.getElementById(idSeccion).classList.remove('hidden');
     
-    document.querySelectorAll('nav button').forEach(btn => {
+    document.querySelectorAll('#main-nav-secciones button').forEach(btn => {
         btn.className = "flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100";
     });
     
@@ -2409,6 +2425,76 @@ window.navegarASeccion = function(idSeccion) {
     }
     if (idSeccion === 'sec-monopolio') {
         setTimeout(() => { renderMonopolioUrls(); }, 50);
+    }
+}
+
+function aplicarConfiguracionVisualRuntime(cfg) {
+    const nav = document.getElementById('main-nav-secciones');
+    if (!cfg || !nav) return;
+
+    const hidden = new Set([...(cfg.hiddenSections || []), ...(cfg.blockedSections || [])]);
+    SECCIONES_INHABILITADAS = hidden;
+
+    const orden = Array.isArray(cfg.sectionOrder) ? cfg.sectionOrder : [];
+    orden.forEach((secId) => {
+        const tab = document.getElementById(`tab-${secId}`);
+        if (tab) nav.appendChild(tab);
+    });
+
+    document.querySelectorAll('.seccion-app').forEach((sec) => {
+        const secId = sec.id;
+        const tab = document.getElementById(`tab-${secId}`);
+        const blocked = hidden.has(secId);
+        if (tab) tab.classList.toggle('hidden', blocked);
+        if (blocked) sec.classList.add('hidden');
+
+        const etiqueta = cfg.tabLabels && cfg.tabLabels[secId];
+        if (tab && etiqueta) {
+            const badge = tab.querySelector('span');
+            if (badge) {
+                const badgeHtml = badge.outerHTML;
+                tab.innerHTML = `${escapeHtmlSafe(etiqueta)} ${badgeHtml}`;
+            } else {
+                tab.textContent = etiqueta;
+            }
+        }
+    });
+
+    const theme = cfg.theme && typeof cfg.theme === 'object' ? cfg.theme : {};
+    if (theme.navBackground) nav.style.backgroundColor = theme.navBackground;
+    if (theme.textPrimary) document.body.style.color = theme.textPrimary;
+
+    document.querySelectorAll('.card-bg').forEach((el) => {
+        if (theme.cardBackground) el.style.backgroundColor = theme.cardBackground;
+        if (theme.textPrimary) el.style.color = theme.textPrimary;
+    });
+
+    const styleId = 'god-custom-css-runtime';
+    let styleNode = document.getElementById(styleId);
+    if (!styleNode) {
+        styleNode = document.createElement('style');
+        styleNode.id = styleId;
+        document.head.appendChild(styleNode);
+    }
+    styleNode.textContent = String(cfg.customCss || '');
+
+    const activa = document.querySelector('.seccion-app:not(.hidden)');
+    if (!activa || hidden.has(activa.id)) {
+        const primeraVisible = (cfg.sectionOrder || []).find(secId => !hidden.has(secId));
+        if (primeraVisible) {
+            navegarASeccion(primeraVisible);
+        }
+    }
+}
+
+async function cargarConfiguracionVisualRuntime() {
+    try {
+        const res = await fetch('/api/ui/runtime-config', { credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo cargar config visual.');
+        aplicarConfiguracionVisualRuntime(data);
+    } catch (e) {
+        console.warn('Config visual runtime no disponible:', e.message);
     }
 }
 
@@ -3100,31 +3186,64 @@ async function refrescarUsuariosChat() {
         ].filter(Boolean);
         if (containers.length === 0) return;
 
-        if (CHAT_USUARIOS.length === 0) {
+        const q = CHAT_SEARCH_QUERY.toLowerCase();
+        const visibles = CHAT_USUARIOS.filter((u) => {
+            if (!q) return true;
+            const nombre = String(u.nombreVisible || '').toLowerCase();
+            const email = String(u.email || '').toLowerCase();
+            return nombre.includes(q) || email.includes(q);
+        });
+
+        if (visibles.length === 0) {
             containers.forEach((cont) => {
-                cont.innerHTML = '<p class="text-[10px] opacity-50">No hay otros usuarios autorizados.</p>';
+                cont.innerHTML = '<p class="text-[10px] opacity-50">No hay usuarios para ese filtro.</p>';
             });
             return;
         }
 
-        const html = CHAT_USUARIOS.map(u => {
+        const html = visibles.map(u => {
             const activo = CHAT_USUARIO_ACTIVO && CHAT_USUARIO_ACTIVO.email === u.email;
             const nombre = u.nombreVisible || u.email.split('@')[0];
+            const preview = u.ultimoMensaje ? `${u.ultimoMensajeEsMio ? 'Tu: ' : ''}${u.ultimoMensaje}` : 'Sin mensajes aún';
+            const unread = Number(u.unread || 0);
+            const fecha = u.ultimoMensajeTs
+                ? new Date(u.ultimoMensajeTs).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+                : '';
+
             return `
                 <button onclick="seleccionarUsuarioChat('${u.email.replace(/'/g, "\\'")}')" class="w-full text-left p-2 rounded-xl border transition-all ${activo ? 'bg-blue-500/20 border-blue-500/40' : 'bg-black/20 border-white/10 hover:bg-white/10'}">
                     <div class="flex items-center gap-2">
                         <img src="${construirAvatarUsuario(u)}" class="w-8 h-8 rounded-lg object-cover border border-white/10" onerror="this.src='${construirAvatarUsuario({ email: u.email })}'">
                         <div class="min-w-0 flex-1">
-                            <p class="text-[10px] font-bold uppercase truncate">${nombre}</p>
-                            <p class="text-[9px] opacity-55 truncate">${u.email}</p>
+                            <div class="flex items-center justify-between gap-2">
+                                <p class="text-[10px] font-bold uppercase truncate">${escapeHtmlSafe(nombre)}</p>
+                                ${fecha ? `<span class="text-[8px] opacity-45 font-mono">${fecha}</span>` : ''}
+                            </div>
+                            <p class="text-[9px] opacity-65 truncate">${escapeHtmlSafe(preview)}</p>
+                            <p class="text-[8px] opacity-45 truncate">${escapeHtmlSafe(u.email)}</p>
                         </div>
+                        ${unread > 0 ? `<span class="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center">${unread > 99 ? '99+' : unread}</span>` : ''}
                     </div>
                 </button>`;
         }).join('');
         containers.forEach((cont) => { cont.innerHTML = html; });
+
+        if (!CHAT_USUARIO_ACTIVO && visibles.length > 0) {
+            CHAT_USUARIO_ACTIVO = visibles[0];
+            await cargarConversacionInterna(visibles[0].email);
+        }
     } catch (e) {
         console.error('Error chat usuarios:', e.message);
     }
+}
+
+window.filtrarUsuariosChatLista = function(query) {
+    CHAT_SEARCH_QUERY = String(query || '').trim();
+    const mainInput = document.getElementById('chat-user-search-main');
+    const popInput = document.getElementById('chat-user-search-popup');
+    if (mainInput && mainInput.value !== CHAT_SEARCH_QUERY) mainInput.value = CHAT_SEARCH_QUERY;
+    if (popInput && popInput.value !== CHAT_SEARCH_QUERY) popInput.value = CHAT_SEARCH_QUERY;
+    refrescarUsuariosChat();
 }
 
 function seleccionarUsuarioChat(email) {
@@ -3195,7 +3314,15 @@ async function enviarMensajeInterno(origen = 'panel') {
     if (!texto) return;
     if (!CHAT_USUARIO_ACTIVO) return alert('Selecciona un usuario para enviar mensaje.');
 
+    const btn = origen === 'popup'
+        ? document.querySelector('#internal-chat-window button[onclick="enviarMensajeInterno(\'popup\')"]')
+        : document.querySelector('#sec-usuarios button[onclick="enviarMensajeInterno()"]');
+
     try {
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add('opacity-60');
+        }
         const res = await fetch('/api/mensajes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -3209,8 +3336,14 @@ async function enviarMensajeInterno(origen = 'panel') {
         if (inputAlternativo) inputAlternativo.value = '';
         reproducirSonidoMensaje('send');
         await cargarConversacionInterna(CHAT_USUARIO_ACTIVO.email);
+        await refrescarUsuariosChat();
     } catch (e) {
         alert(`Error enviando mensaje: ${e.message}`);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('opacity-60');
+        }
     }
 }
 
@@ -4842,9 +4975,16 @@ async function iniciarEscanerCamara(cameraId = '') {
     if (btnRearmar) btnRearmar.classList.add('hidden');
 
     const cameraConfig = cameraId ? { deviceId: { exact: cameraId } } : { facingMode: 'environment' };
+    const qrSize = Math.min(300, Math.max(220, Math.floor(window.innerWidth * 0.52)));
     const scanConfig = {
-        fps: 14,
-        qrbox: { width: 270, height: 270 },
+        fps: 12,
+        qrbox: { width: qrSize, height: qrSize },
+        aspectRatio: 1,
+        formatsToSupport: formats
+    };
+    const scanConfigFallback = {
+        fps: 8,
+        qrbox: { width: 220, height: 220 },
         aspectRatio: 1,
         formatsToSupport: formats
     };
@@ -4878,6 +5018,17 @@ async function iniciarEscanerCamara(cameraId = '') {
                 return;
             } catch (_) {}
         }
+
+        try {
+            await OBJETO_ESCANER_CAMARA.start({ facingMode: 'environment' }, scanConfigFallback, async (decodedText) => {
+                if (LECTOR_BLOQUEADO_POR_CAPTURA) return;
+                await procesarCodigoEscaneadoDesdeCamara(decodedText);
+            }, () => {});
+            ESCANER_CAMARA_ACTIVO = true;
+            actualizarEstadoEscaner('Lector Listo (Modo estable)', 'emerald');
+            return;
+        } catch (_) {}
+
         ESCANER_CAMARA_ACTIVO = false;
         actualizarEstadoEscaner('Error camara', 'rose');
         alert('No se pudo iniciar la camara. Revisa permisos y prueba con otra camara.');
@@ -5914,6 +6065,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('internal-chat-btn')?.classList.remove('hidden');
             document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario.split('@')[0]} [${data.rol}]`; 
 
+            if ((data.rol || 'Editor') === 'Admin') {
+                document.getElementById('btn-open-god-panel')?.classList.remove('hidden');
+            }
+
             const cards3D = document.querySelectorAll('.kpi-3d-card');
             const handleCardMouseMove = throttle(function(e, card) {
                 const rect = card.getBoundingClientRect();
@@ -5932,6 +6087,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             await refrescarEstadosKanban();
             await refrescarYListarTiendasCloud();
             await refrescarCategoriasCloud();
+            await cargarConfiguracionVisualRuntime();
             await reloadCoreData(true); 
             await refrescarCitas();
             await actualizarBadgeCitasNav();

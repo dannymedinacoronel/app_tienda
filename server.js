@@ -334,6 +334,83 @@ const MonopolioUrlSchema = new mongoose.Schema({
 MonopolioUrlSchema.index({ empresa: 1, url: 1 }, { unique: true });
 const MonopolioUrl = mongoose.models.MonopolioUrl || mongoose.model('MonopolioUrl', MonopolioUrlSchema);
 
+const UI_SECTION_KEYS = [
+    'sec-inventario',
+    'sec-tareas',
+    'sec-monopolio',
+    'sec-analitica',
+    'sec-notas',
+    'sec-crm',
+    'sec-citas',
+    'sec-usuarios',
+    'sec-gestion',
+    'sec-faqs',
+    'sec-auditoria',
+    'sec-ajustes'
+];
+
+const UiGodConfigSchema = new mongoose.Schema({
+    empresa: { type: String, required: true, unique: true, trim: true, lowercase: true, index: true },
+    sectionOrder: { type: [String], default: UI_SECTION_KEYS },
+    hiddenSections: { type: [String], default: [] },
+    tabLabels: { type: Object, default: {} },
+    theme: {
+        navBackground: { type: String, default: '#0f172a' },
+        cardBackground: { type: String, default: '#111827' },
+        accent: { type: String, default: '#6366f1' },
+        textPrimary: { type: String, default: '#e2e8f0' }
+    },
+    customCss: { type: String, default: '' },
+    updatedBy: { type: String, default: '' },
+    updatedAt: { type: Date, default: Date.now }
+});
+const UiGodConfig = mongoose.models.UiGodConfig || mongoose.model('UiGodConfig', UiGodConfigSchema);
+
+const UiGodUserAccessSchema = new mongoose.Schema({
+    empresa: { type: String, required: true, trim: true, lowercase: true, index: true },
+    userEmail: { type: String, required: true, trim: true, lowercase: true, index: true },
+    blockedSections: { type: [String], default: [] },
+    updatedBy: { type: String, default: '' },
+    updatedAt: { type: Date, default: Date.now }
+});
+UiGodUserAccessSchema.index({ empresa: 1, userEmail: 1 }, { unique: true });
+const UiGodUserAccess = mongoose.models.UiGodUserAccess || mongoose.model('UiGodUserAccess', UiGodUserAccessSchema);
+
+function normalizarSeccionesInput(lista) {
+    const inList = Array.isArray(lista) ? lista : [];
+    const dedupe = new Set();
+    const out = [];
+    for (const raw of inList) {
+        const sec = String(raw || '').trim();
+        if (!UI_SECTION_KEYS.includes(sec)) continue;
+        if (dedupe.has(sec)) continue;
+        dedupe.add(sec);
+        out.push(sec);
+    }
+    return out;
+}
+
+function normalizarOrdenSecciones(lista) {
+    const parsed = normalizarSeccionesInput(lista);
+    const faltantes = UI_SECTION_KEYS.filter(sec => !parsed.includes(sec));
+    return [...parsed, ...faltantes];
+}
+
+function esColorHexValido(valor, fallback) {
+    const v = String(valor || '').trim();
+    return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback;
+}
+
+function limpiarTabLabels(labels) {
+    const raw = labels && typeof labels === 'object' ? labels : {};
+    const out = {};
+    UI_SECTION_KEYS.forEach((sec) => {
+        if (raw[sec] === undefined || raw[sec] === null) return;
+        out[sec] = String(raw[sec]).trim().slice(0, 40);
+    });
+    return out;
+}
+
 const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
 
 io.on('connection', (socket) => {
@@ -492,6 +569,19 @@ function empresaActual(req) {
 function exigeAdmin(req, res, next) {
     if (req.session && req.session.esAdmin) return next();
     return res.status(403).json({ error: 'No autorizado.' });
+}
+
+function exigeGodMode(req, res, next) {
+    if (!req.session || !req.session.esAdmin) {
+        return res.status(403).json({ error: 'No autorizado.' });
+    }
+    if ((req.session.rol || 'Editor') !== 'Admin') {
+        return res.status(403).json({ error: 'Solo rol Admin puede usar el panel Dios.' });
+    }
+    if (!req.session.godMode) {
+        return res.status(403).json({ error: 'Panel Dios bloqueado. Requiere clave de acceso.' });
+    }
+    return next();
 }
 
 async function registrarLog(usuario, accion, locationData = {}) {
@@ -899,10 +989,173 @@ app.get('/api/auth/verificar', (req, res) => {
             autenticado: true,
             usuario: req.session.email,
             rol: req.session.rol || 'Admin',
-            empresa: req.session.empresa || EMPRESA_DEFAULT
+            empresa: req.session.empresa || EMPRESA_DEFAULT,
+            godMode: Boolean(req.session.godMode)
         });
     }
     return res.json({ autenticado: false });
+});
+
+app.post('/api/god/login', exigeAdmin, (req, res) => {
+    try {
+        if ((req.session?.rol || 'Editor') !== 'Admin') {
+            return res.status(403).json({ error: 'Solo rol Admin puede desbloquear el panel Dios.' });
+        }
+
+        const clave = String(req.body?.clave || '').trim();
+        const GOD_PANEL_KEY = String(process.env.GOD_PANEL_KEY || 'SEYCHELLES-GOD-MODE').trim();
+        if (!clave || clave !== GOD_PANEL_KEY) {
+            return res.status(401).json({ error: 'Clave Dios incorrecta.' });
+        }
+
+        req.session.godMode = true;
+        return req.session.save((err) => {
+            if (err) return res.status(500).json({ error: 'No se pudo activar el modo Dios.' });
+            return res.json({ success: true, godMode: true });
+        });
+    } catch (_) {
+        return res.status(500).json({ error: 'No se pudo desbloquear el panel Dios.' });
+    }
+});
+
+app.post('/api/god/logout', exigeAdmin, (req, res) => {
+    req.session.godMode = false;
+    return req.session.save((err) => {
+        if (err) return res.status(500).json({ error: 'No se pudo cerrar modo Dios.' });
+        return res.json({ success: true, godMode: false });
+    });
+});
+
+app.get('/api/ui/runtime-config', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const email = String(req.session?.email || '').toLowerCase().trim();
+
+        const [config, acceso] = await Promise.all([
+            UiGodConfig.findOne({ empresa }).lean(),
+            UiGodUserAccess.findOne({ empresa, userEmail: email }).lean()
+        ]);
+
+        res.json({
+            sectionOrder: config?.sectionOrder || UI_SECTION_KEYS,
+            hiddenSections: config?.hiddenSections || [],
+            tabLabels: config?.tabLabels || {},
+            theme: config?.theme || {},
+            customCss: config?.customCss || '',
+            blockedSections: acceso?.blockedSections || []
+        });
+    } catch (_) {
+        res.status(500).json({ error: 'No se pudo cargar la configuración visual.' });
+    }
+});
+
+app.get('/api/god/bootstrap', exigeGodMode, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const [config, users, restricciones] = await Promise.all([
+            UiGodConfig.findOne({ empresa }).lean(),
+            UsuarioAutorizado.find({ empresa }).sort({ email: 1 }).select('email rol nombreVisible').lean(),
+            UiGodUserAccess.find({ empresa }).select('userEmail blockedSections').lean()
+        ]);
+
+        const restriccionesMap = {};
+        (restricciones || []).forEach((r) => {
+            restriccionesMap[String(r.userEmail || '').toLowerCase()] = normalizarSeccionesInput(r.blockedSections || []);
+        });
+
+        res.json({
+            success: true,
+            empresa,
+            sections: UI_SECTION_KEYS,
+            config: {
+                sectionOrder: config?.sectionOrder || UI_SECTION_KEYS,
+                hiddenSections: config?.hiddenSections || [],
+                tabLabels: config?.tabLabels || {},
+                theme: config?.theme || {},
+                customCss: config?.customCss || ''
+            },
+            users: (users || []).map((u) => ({
+                email: u.email,
+                rol: u.rol || 'Editor',
+                nombreVisible: u.nombreVisible || '',
+                blockedSections: restriccionesMap[String(u.email || '').toLowerCase()] || []
+            }))
+        });
+    } catch (_) {
+        res.status(500).json({ error: 'No se pudo cargar el panel Dios.' });
+    }
+});
+
+app.put('/api/god/ui-config', exigeGodMode, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const payload = req.body || {};
+        const sectionOrder = normalizarOrdenSecciones(payload.sectionOrder);
+        const hiddenSections = normalizarSeccionesInput(payload.hiddenSections);
+        const tabLabels = limpiarTabLabels(payload.tabLabels);
+        const customCss = String(payload.customCss || '').slice(0, 12000);
+        const themeRaw = payload.theme && typeof payload.theme === 'object' ? payload.theme : {};
+        const theme = {
+            navBackground: esColorHexValido(themeRaw.navBackground, '#0f172a'),
+            cardBackground: esColorHexValido(themeRaw.cardBackground, '#111827'),
+            accent: esColorHexValido(themeRaw.accent, '#6366f1'),
+            textPrimary: esColorHexValido(themeRaw.textPrimary, '#e2e8f0')
+        };
+
+        const updated = await UiGodConfig.findOneAndUpdate(
+            { empresa },
+            {
+                empresa,
+                sectionOrder,
+                hiddenSections,
+                tabLabels,
+                theme,
+                customCss,
+                updatedBy: String(req.session?.email || '').toLowerCase().trim(),
+                updatedAt: new Date()
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        ).lean();
+
+        await registrarLog(req.session.email, 'Actualizó configuración visual global (Panel Dios).');
+        res.json({ success: true, config: updated });
+    } catch (_) {
+        res.status(500).json({ error: 'No se pudo guardar la configuración visual.' });
+    }
+});
+
+app.put('/api/god/user-access/:email', exigeGodMode, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const userEmail = String(req.params?.email || '').toLowerCase().trim();
+        if (!userEmail) return res.status(400).json({ error: 'Email inválido.' });
+
+        const usuario = await UsuarioAutorizado.findOne({ empresa, email: userEmail }).lean();
+        if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado en tu empresa.' });
+
+        if (userEmail === String(req.session?.email || '').toLowerCase().trim()) {
+            return res.status(400).json({ error: 'No puedes bloquear tus propias secciones desde Panel Dios.' });
+        }
+
+        const blockedSections = normalizarSeccionesInput(req.body?.blockedSections || []);
+
+        await UiGodUserAccess.findOneAndUpdate(
+            { empresa, userEmail },
+            {
+                empresa,
+                userEmail,
+                blockedSections,
+                updatedBy: String(req.session?.email || '').toLowerCase().trim(),
+                updatedAt: new Date()
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+
+        await registrarLog(req.session.email, `Actualizó permisos de secciones para ${userEmail} (Panel Dios).`);
+        res.json({ success: true, userEmail, blockedSections });
+    } catch (_) {
+        res.status(500).json({ error: 'No se pudo actualizar acceso por secciones.' });
+    }
 });
 
 app.post('/api/auth/google', async (req, res) => {
@@ -1077,16 +1330,43 @@ app.get('/api/mensajes/usuarios', exigeAdmin, async (req, res) => {
             .sort({ fechaAgregado: -1 })
             .lean();
 
-        const filtrados = usuarios
-            .filter(u => u.email !== emailActual)
-            .map(u => ({
+        const filtrados = [];
+        for (const u of usuarios) {
+            if (u.email === emailActual) continue;
+
+            const [noLeidos, ultimoMensaje] = await Promise.all([
+                MensajeInterno.countDocuments({ empresa, deEmail: u.email, paraEmail: emailActual, leido: false }),
+                MensajeInterno.findOne({
+                    empresa,
+                    $or: [
+                        { deEmail: emailActual, paraEmail: u.email },
+                        { deEmail: u.email, paraEmail: emailActual }
+                    ]
+                }).sort({ creadoEn: -1 }).select('texto creadoEn deEmail').lean()
+            ]);
+
+            filtrados.push({
                 email: u.email,
                 rol: u.rol || 'Editor',
                 empresa: normalizarEmpresa(u.empresa || EMPRESA_DEFAULT),
                 nombreVisible: u.nombreVisible || '',
                 fotoPerfil: u.fotoPerfil || '',
-                ultimaConexion: u.ultimaConexion || null
-            }));
+                ultimaConexion: u.ultimaConexion || null,
+                unread: Number(noLeidos || 0),
+                ultimoMensaje: ultimoMensaje?.texto || '',
+                ultimoMensajeTs: ultimoMensaje?.creadoEn || null,
+                ultimoMensajeEsMio: ultimoMensaje?.deEmail === emailActual
+            });
+        }
+
+        filtrados.sort((a, b) => {
+            if (Number(b.unread || 0) !== Number(a.unread || 0)) {
+                return Number(b.unread || 0) - Number(a.unread || 0);
+            }
+            const bt = b.ultimoMensajeTs ? new Date(b.ultimoMensajeTs).getTime() : 0;
+            const at = a.ultimoMensajeTs ? new Date(a.ultimoMensajeTs).getTime() : 0;
+            return bt - at;
+        });
 
         res.json({ usuarios: filtrados });
     } catch (e) {
@@ -2244,6 +2524,15 @@ app.post('/api/logout', async (req, res) => {
     }
 });
 app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(200)); }); // Compatibilidad
+
+app.get('/admin-god', exigeAdmin, (req, res) => {
+    if ((req.session?.rol || 'Editor') !== 'Admin') {
+        return res.status(403).send('Acceso solo para rol Admin.');
+    }
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    return res.sendFile(path.join(__dirname, 'public', 'admin-god.html'));
+});
+
 // Fallback SPA solo para rutas no-API; evita romper endpoints GET registrados debajo.
 app.get(/^\/(?!api(?:\/|$)).*/, (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');

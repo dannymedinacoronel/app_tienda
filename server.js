@@ -76,6 +76,10 @@ function sugerirAliasDesdeUrl(url) {
     return txt.slice(0, 80) || 'Competidor';
 }
 
+function escapeRegexSafe(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function dispararWorkflowGithub({ workflowFile, inputs, logTag = 'SCRAPER' }) {
     const GITHUB_PAT = process.env.GITHUB_PAT;
     const REPO_OWNER = process.env.GITHUB_OWNER || 'dannymedinacoronel';
@@ -3058,6 +3062,42 @@ app.post('/api/scraper/aplicar', exigeAdmin, async (req, res) => {
 });
 
 // --- RUTAS DE TENDENCIAS Y MONOPOLIO ---
+
+app.get('/api/monopolio/urls/search', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const q = String(req.query?.q || '').trim();
+        const limitRaw = Number.parseInt(String(req.query?.limit || '25'), 10);
+        const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(limitRaw, 100)) : 25;
+
+        const baseFilter = { empresa };
+        if (!q) {
+            const recientes = await MonopolioUrl.find(baseFilter)
+                .sort({ createdAt: -1 })
+                .limit(limit)
+                .lean();
+            return res.json({ empresa, q: '', total: recientes.length, items: recientes });
+        }
+
+        const regex = new RegExp(escapeRegexSafe(q), 'i');
+        const filter = {
+            ...baseFilter,
+            $or: [
+                { alias: regex },
+                { url: regex }
+            ]
+        };
+
+        const items = await MonopolioUrl.find(filter)
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .lean();
+
+        res.json({ empresa, q, total: items.length, items });
+    } catch (e) {
+        res.status(500).json({ error: 'No se pudo buscar URLs de monopolio.' });
+    }
+});
 
 app.get('/api/monopolio/urls', exigeAdmin, async (req, res) => {
     try {

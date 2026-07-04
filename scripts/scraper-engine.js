@@ -1178,6 +1178,7 @@ async function ejecutarScraper(params) {
 
 module.exports = {
     ejecutarScraper,
+    scrapeMonopolio,
     normalizarPrecio,
     deduplicarProductos
 };

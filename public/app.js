@@ -85,6 +85,10 @@ function escapeHtmlSafe(value) {
         .replace(/'/g, '&#039;');
 }
 
+function esRolVisualizador() {
+    return String(USUARIO_ROL_ACTUAL || '').toLowerCase() === 'visualizador';
+}
+
 function mostrarLandingPublica() {
     const landing = document.getElementById('landing-page');
     const login = document.getElementById('login-box');
@@ -787,9 +791,9 @@ function registrarResultadoMonopolio(data) {
 
 function getSavedScraperUrls() {
     const keys = ['seychelles-scraper-urls', 'seychelles-scraper-urls-v2', 'scraper-urls', 'vinted-scraper-urls'];
-    const leerArraySeguro = (key) => {
+    const leerArraySeguro = (storage, key) => {
         try {
-            const raw = localStorage.getItem(key);
+            const raw = storage.getItem(key);
             if (!raw) return null;
             const parsed = JSON.parse(raw);
             return Array.isArray(parsed) ? parsed : null;
@@ -800,10 +804,27 @@ function getSavedScraperUrls() {
 
     let raw = [];
     for (const key of keys) {
-        const arr = leerArraySeguro(key);
+        const arr = leerArraySeguro(localStorage, key);
         if (arr && arr.length > 0) {
             raw = arr;
             break;
+        }
+    }
+
+    if (!raw.length) {
+        for (const key of keys) {
+            const arr = leerArraySeguro(sessionStorage, key);
+            if (arr && arr.length > 0) {
+                raw = arr;
+                break;
+            }
+        }
+    }
+
+    if (!raw.length) {
+        const legacyCsv = String(localStorage.getItem('seychelles-scraper-urls-csv') || '').trim();
+        if (legacyCsv) {
+            raw = legacyCsv.split(/\n|,/).map((u) => ({ url: String(u || '').trim(), alias: '', createdAt: Date.now() })).filter(x => x.url);
         }
     }
 
@@ -831,7 +852,25 @@ function setSavedScraperUrls(items) {
     const payload = JSON.stringify((items || []).slice(0, 20));
     for (const key of keys) {
         try { localStorage.setItem(key, payload); } catch (_) {}
+        try { sessionStorage.setItem(key, payload); } catch (_) {}
     }
+}
+
+function aplicarMascaraVisualizadorEnUI() {
+    const blurTargets = [
+        'kpi-ingresos', 'kpi-beneficio', 'kpi-inversion', 'kpi-roi',
+        'admin-profit-kpi-ingresos', 'admin-profit-kpi-beneficio', 'admin-profit-kpi-inversion', 'admin-profit-kpi-roi'
+    ];
+
+    const activo = esRolVisualizador();
+    blurTargets.forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.filter = activo ? 'blur(6px)' : '';
+        el.style.opacity = activo ? '0.65' : '';
+        if (activo) el.setAttribute('title', 'Sin permisos para datos sensibles');
+        else el.removeAttribute('title');
+    });
 }
 
 function mostrarNotificacionScraping(data) {
@@ -856,7 +895,7 @@ function mostrarNotificacionScraping(data) {
         </button>
     `;
     document.body.appendChild(toast);
-    
+
     // Auto-eliminar a los 15 segundos
     setTimeout(() => { if (toast.parentElement) toast.remove(); }, 15000);
 }
@@ -2553,7 +2592,11 @@ async function eliminarTiendaSeleccionadaCloud() {
 
 window.navegarASeccion = function(idSeccion) {
     if (SECCIONES_INHABILITADAS.has(idSeccion)) {
-        alert('No tienes acceso a esta sección.');
+        if (esRolVisualizador()) {
+            alert('No tienes permisos para esta sección. Tu rol Visualizador solo puede consultar productos sin datos sensibles.');
+        } else {
+            alert('No tienes acceso a esta sección.');
+        }
         return;
     }
 
@@ -2615,6 +2658,8 @@ window.navegarASeccion = function(idSeccion) {
     if (idSeccion === 'sec-monopolio') {
         setTimeout(() => { renderMonopolioUrls(); }, 50);
     }
+
+    aplicarMascaraVisualizadorEnUI();
 }
 
 function aplicarConfiguracionVisualRuntime(cfg) {
@@ -4649,10 +4694,21 @@ function limpiarFiltrosAnalitica() {
     actualizarTodoElBloqueGrafico();
 }
 
-window.allowDrop = function(e) { e.preventDefault(); const col = e.currentTarget; if(col) col.classList.add('drag-over'); };
-window.clearDrop = function(e) { const col = e.currentTarget; if(col) col.classList.remove('drag-over'); };
+window.allowDrop = function(e) {
+    e.preventDefault();
+    const col = e.currentTarget;
+    if (col && !col.classList.contains('drag-over')) col.classList.add('drag-over');
+};
+window.clearDrop = function(e) {
+    const col = e.currentTarget;
+    if (col) col.classList.remove('drag-over');
+};
 
 window.handleDragStart = function(e, id) { 
+    if (esRolVisualizador()) {
+        e.preventDefault();
+        return;
+    }
     e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData("text/plain", id);
     if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) {
         e.dataTransfer.setData("text/lote-items", JSON.stringify(ITEMS_SELECCIONADOS_MASIVOS));
@@ -4663,11 +4719,29 @@ window.handleDragStart = function(e, id) {
 };
 
 window.handleDropColumn = async function(e, newState) {
+    if (esRolVisualizador()) {
+        e.preventDefault();
+        window.clearDrop(e);
+        alert('No tienes permisos para mover productos.');
+        return;
+    }
     e.preventDefault(); window.clearDrop(e);
     const dragKind = e.dataTransfer.getData('text/drag-kind');
     if (dragKind && dragKind !== 'kanban-producto') return;
-    const loteRaw = e.dataTransfer.getData("text/lote-items"); if (!loteRaw) return;
-    const listaIds = JSON.parse(loteRaw);
+    const loteRaw = e.dataTransfer.getData("text/lote-items");
+    const idSimple = e.dataTransfer.getData("text/plain");
+    if (!loteRaw && !idSimple) return;
+
+    let listaIds = [];
+    try {
+        listaIds = loteRaw ? JSON.parse(loteRaw) : [];
+    } catch (_) {
+        listaIds = [];
+    }
+    if (!Array.isArray(listaIds) || listaIds.length === 0) {
+        if (idSimple) listaIds = [idSimple];
+    }
+    if (!Array.isArray(listaIds) || listaIds.length === 0) return;
     
     const estadoDestino = LISTA_ESTADOS_KANBAN.find(est => est.nombre === newState);
 
@@ -5716,6 +5790,7 @@ async function reloadCoreData(isInitialLoad = false) {
         document.getElementById('kpi-inversion').innerText = `${(data.resumen.inversion || 0).toFixed(2)} €`;
         document.getElementById('kpi-prendas').innerText = data.resumen.prendasVendidas || 0;
         document.getElementById('kpi-roi').innerText = `${(data.resumen.roi || 0).toFixed(1)}%`;
+        aplicarMascaraVisualizadorEnUI();
 
         renderKanban(true);
         requestAnimationFrame(() => {
@@ -5997,9 +6072,16 @@ function renderKanban(isFullRefresh = false) {
 
         const itemsToRender = isFullRefresh ? filtrados : filtrados.filter(v => !document.getElementById(v._id));
         const fragment = document.createDocumentFragment();
+        const soloLecturaVisual = esRolVisualizador();
 
         itemsToRender.forEach(v => {
-            const card = document.createElement('div'); card.id = v._id; card.setAttribute('draggable', 'true'); card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`); card.setAttribute('ondragend', `this.classList.remove('dragging')`);
+            const card = document.createElement('div');
+            card.id = v._id;
+            card.setAttribute('draggable', soloLecturaVisual ? 'false' : 'true');
+            if (!soloLecturaVisual) {
+                card.setAttribute('ondragstart', `window.handleDragStart(event, '${v._id}')`);
+                card.setAttribute('ondragend', `this.classList.remove('dragging')`);
+            }
             
             const esStockCritico = est.rolFinanciero === 'Stock' && totalStockPorPrenda[v.prenda] < 2;
             const claseAlertaStock = esStockCritico ? 'alerta-stock-critico border-amber-500/70 bg-amber-500/5' : '';
@@ -6031,14 +6113,27 @@ function renderKanban(isFullRefresh = false) {
             const fechaVenta = v.fechaVenta ? `<span class="text-emerald-400/80">💰 ${v.fechaVenta}</span>` : '';
             const fechasHtml = (fechaAlta || fechaVenta) ? `<div class="text-[8px] font-mono opacity-80 mt-1.5 flex flex-wrap gap-x-3">${fechaAlta} ${fechaVenta}</div>` : '';
             const miniComentario = v.comentariosProducto ? `<div class="text-[9px] italic opacity-60 mt-1.5 border-l-2 border-white/10 pl-2 truncate" title="${v.comentariosProducto}">${v.comentariosProducto.replace(/!importante/gi, '').replace(/^\*/, '').trim()}</div>` : '';
-            const btnAjustarVenta = est.rolFinanciero === 'Venta'
+            const btnAjustarVenta = (!soloLecturaVisual && est.rolFinanciero === 'Venta')
                 ? `<button onclick="abrirModalPostVenta(['${v._id}'], '${est.nombre}', { fechaSugerida: '${v.fechaVenta || ''}', comentarioSugerido: ${JSON.stringify(String(v.comentariosProducto || '')).replace(/"/g, '&quot;')}, canalSugerido: '${v.canalVenta || 'Vinted'}' }); event.stopPropagation();" class="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded hover:bg-emerald-500/20" title="Ajustar fecha/comentarios de venta">Ajustar venta</button>`
                 : '';
 
+            const precioMostrar = soloLecturaVisual ? '•••• €' : `${pVentaFormateado.toFixed(2)} €`;
+            const checkboxHtml = soloLecturaVisual
+                ? `<div class="w-4 h-4 rounded border border-white/10 opacity-30"></div>`
+                : `<input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0" onclick="event.stopPropagation();">`;
+            const onClickEdicion = soloLecturaVisual ? '' : `onclick="editItem('${v._id}'); event.stopPropagation();"`;
+            const accionesHtml = soloLecturaVisual ? '' : `
+                <div class="flex items-center gap-1.5 flex-shrink-0 text-[11px]">
+                    <button onclick="duplicarPrendaIndividual('${v._id}'); event.stopPropagation();" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg" title="Duplicar">👯</button>
+                    <button onclick="lanzarModalImpresionEtiqueta('${v._id}'); event.stopPropagation();" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg" title="Imprimir Código QR">🖨️</button>
+                    <button onclick="editItem('${v._id}'); event.stopPropagation();" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-0.5">Editar</button>
+                    <button onclick="deleteItem('${v._id}'); event.stopPropagation();" class="opacity-30 hover:opacity-100 text-xs px-0.5" title="Borrar">✕</button>
+                </div>`;
+
             card.innerHTML = `
-                <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0" onclick="event.stopPropagation();">
+                ${checkboxHtml}
                 ${thumb}
-                <div class="flex-1 min-w-0 cursor-pointer hover:opacity-80 transition-opacity" onclick="editItem('${v._id}'); event.stopPropagation();" title="Hacer clic para editar el artículo">
+                <div class="flex-1 min-w-0 ${soloLecturaVisual ? '' : 'cursor-pointer hover:opacity-80 transition-opacity'}" ${onClickEdicion} title="${soloLecturaVisual ? 'Modo visualizador: solo lectura' : 'Hacer clic para editar el artículo'}">
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
                         ${badgeCanal} ${badgeTienda} ${badgeEst} ${badgeComentarios}
@@ -6048,15 +6143,10 @@ function renderKanban(isFullRefresh = false) {
                     
                     ${fechasHtml}
                     ${miniComentario}
-                    <span class="text-[10px] font-bold block mt-2 font-mono">${pVentaFormateado.toFixed(2)} €</span>
+                    <span class="text-[10px] font-bold block mt-2 font-mono" style="filter:${soloLecturaVisual ? 'blur(4px)' : 'none'}; opacity:${soloLecturaVisual ? '0.7' : '1'}">${precioMostrar}</span>
                     ${btnAjustarVenta}
                 </div>
-                <div class="flex items-center gap-1.5 flex-shrink-0 text-[11px]">
-                    <button onclick="duplicarPrendaIndividual('${v._id}'); event.stopPropagation();" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg" title="Duplicar">👯</button>
-                    <button onclick="lanzarModalImpresionEtiqueta('${v._id}'); event.stopPropagation();" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg" title="Imprimir Código QR">🖨️</button>
-                    <button onclick="editItem('${v._id}'); event.stopPropagation();" class="text-[10px] text-blue-500 font-bold uppercase hover:underline px-0.5">Editar</button>
-                    <button onclick="deleteItem('${v._id}'); event.stopPropagation();" class="opacity-30 hover:opacity-100 text-xs px-0.5" title="Borrar">✕</button>
-                </div>`;
+                ${accionesHtml}`;
 
             fragment.appendChild(card);
         });
@@ -6475,6 +6565,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('ticker-bar').classList.remove('hidden'); 
             document.getElementById('internal-chat-btn')?.classList.remove('hidden');
             document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario.split('@')[0]} [${data.rol}]`; 
+            aplicarMascaraVisualizadorEnUI();
 
             asegurarAccesoGodParaAdmin(data.rol || 'Editor');
 
@@ -6505,6 +6596,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             await cargarConfiguracionVisualRuntime();
             asegurarAccesoGodParaAdmin(data.rol || 'Editor');
             await reloadCoreData(true); 
+            renderSavedUrls();
             await refrescarCitas();
             await actualizarBadgeCitasNav();
             await cargarNotasBoard();

@@ -10,6 +10,7 @@ const cheerio = require('cheerio');
 const nodemailer = require('nodemailer');
 const http = require('http');
 const { Server } = require('socket.io');
+const { scrapeMonopolio } = require('./scripts/scraper-engine');
 
 const app = express();
 const server = http.createServer(app);
@@ -567,6 +568,8 @@ function empresaActual(req) {
 }
 
 function rolActual(req) {
+    const email = String(req.session?.email || '').toLowerCase().trim();
+    if (email && ADMIN_WHITELIST.includes(email)) return 'Admin';
     return String(req.session?.rol || 'Editor').trim();
 }
 
@@ -600,7 +603,7 @@ function exigeGodMode(req, res, next) {
 
 function sanitizarVentasParaRol(ventas, req) {
     const rol = rolActual(req);
-    if (rol !== 'Editor') return ventas;
+    if (rol !== 'Editor' && rol !== 'Visualizador') return ventas;
 
     return (Array.isArray(ventas) ? ventas : []).map((v) => {
         const safe = { ...v };
@@ -615,7 +618,7 @@ function sanitizarVentasParaRol(ventas, req) {
 
 function resumenSeguroPorRol(resumen, req) {
     const rol = rolActual(req);
-    if (rol !== 'Editor') return resumen;
+    if (rol !== 'Editor' && rol !== 'Visualizador') return resumen;
     return {
         ingresos: 0,
         beneficio: 0,
@@ -628,7 +631,7 @@ function resumenSeguroPorRol(resumen, req) {
 
 function logsSegurosPorRol(logs, req) {
     const rol = rolActual(req);
-    if (rol !== 'Editor') return logs;
+    if (rol !== 'Editor' && rol !== 'Visualizador') return logs;
     return [];
 }
 
@@ -1073,7 +1076,7 @@ app.post('/api/public/citas', async (req, res) => {
 
 app.get('/api/auth/verificar', (req, res) => {
     if (req.session && req.session.esAdmin) {
-        const rol = req.session.rol || 'Admin';
+        const rol = rolActual(req);
         return res.json({
             autenticado: true,
             usuario: req.session.email,
@@ -1100,6 +1103,52 @@ app.post('/api/god/logout', exigeSoloAdmin, (req, res) => {
         return res.json({ success: true, godMode: false });
     });
 });
+
+function esperar(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function lanzarFallbackMonopolioLocal(empresa, items = []) {
+    const lista = Array.isArray(items) ? items.filter(i => i?.url) : [];
+    if (lista.length === 0) return;
+
+    setTimeout(async () => {
+        for (const item of lista) {
+            try {
+                const urlOrigen = normalizarUrlObjetivo(item.url);
+                const alias = String(item.alias || sugerirAliasDesdeUrl(urlOrigen)).trim() || urlOrigen;
+                const resultado = await scrapeMonopolio(urlOrigen, alias);
+
+                if (global.io) {
+                    global.io.to(`empresa:${empresa}`).emit('monopolio_update', {
+                        mensaje: `Scraping local finalizado para ${alias}.`,
+                        productos: Array.isArray(resultado?.productos) ? resultado.productos : [],
+                        grupos: Array.isArray(resultado?.grupos) ? resultado.grupos : [],
+                        esModoSeguidos: Boolean(resultado?.esModoSeguidos),
+                        urlOrigen,
+                        alias,
+                        empresa,
+                        origen: 'fallback-local',
+                        timestamp: new Date()
+                    });
+                }
+            } catch (err) {
+                if (global.io) {
+                    global.io.to(`empresa:${empresa}`).emit('monopolio_update', {
+                        error: err?.message || 'Fallo en fallback local de monopolio.',
+                        urlOrigen: item.url,
+                        alias: item.alias || item.url,
+                        empresa,
+                        origen: 'fallback-local',
+                        timestamp: new Date()
+                    });
+                }
+            }
+
+            await esperar(350);
+        }
+    }, 25);
+}
 
 app.get('/api/ui/runtime-config', exigeAdmin, async (req, res) => {
     try {
@@ -1242,16 +1291,28 @@ app.post('/api/auth/google', async (req, res) => {
         const payload = ticket.getPayload();
         const emailUsuario = payload['email'].toLowerCase().trim();
 
-        const autorizado = await UsuarioAutorizado.findOne({ email: emailUsuario });
+        let autorizado = await UsuarioAutorizado.findOne({ email: emailUsuario });
+
+        if (!autorizado && ADMIN_WHITELIST.includes(emailUsuario)) {
+            autorizado = await UsuarioAutorizado.create({
+                email: emailUsuario,
+                rol: 'Admin',
+                empresa: EMPRESA_DEFAULT,
+                nombreVisible: String(payload?.name || '').trim().slice(0, 80)
+            });
+        }
 
         if (autorizado) {
             autorizado.empresa = normalizarEmpresa(autorizado.empresa);
+            if (ADMIN_WHITELIST.includes(emailUsuario)) {
+                autorizado.rol = 'Admin';
+            }
             autorizado.ultimaConexion = new Date();
             await autorizado.save();
 
             req.session.esAdmin = true;
             req.session.email = emailUsuario;
-            req.session.rol = autorizado.rol || 'Admin';
+            req.session.rol = ADMIN_WHITELIST.includes(emailUsuario) ? 'Admin' : (autorizado.rol || 'Admin');
             req.session.empresa = autorizado.empresa || EMPRESA_DEFAULT;
             
             const locationData = await obtenerUbicacionCompleta(req, clientLocation);
@@ -3115,6 +3176,22 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
             await new Promise(resolve => setTimeout(resolve, 800));
         }
 
+        const fallbackItems = errores.map((e) => ({ url: e.url, alias: e.alias || e.url }));
+        if (fallbackItems.length > 0) {
+            lanzarFallbackMonopolioLocal(empresa, fallbackItems);
+        }
+
+        if (lanzadas === 0 && fallbackItems.length > 0) {
+            return res.json({
+                success: true,
+                lanzadas: 0,
+                lanzadasLocal: fallbackItems.length,
+                fallidas: 0,
+                detallesFallos: [],
+                message: `GitHub no respondió. Se lanzó fallback local para ${fallbackItems.length} URL(s).`
+            });
+        }
+
         if (lanzadas === 0) {
             return res.status(500).json({
                 error: 'No se pudo lanzar ninguna tarea de scraping en GitHub Actions.',
@@ -3125,9 +3202,10 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
         res.json({
             success: true,
             lanzadas,
+            lanzadasLocal: fallbackItems.length,
             fallidas: errores.length,
             detallesFallos: errores,
-            message: `Se han lanzado ${lanzadas}/${urls.length} tareas de scraping en GitHub Actions.`
+            message: `Se han lanzado ${lanzadas}/${urls.length} tareas de scraping en GitHub Actions.${fallbackItems.length ? ` Fallback local activo: ${fallbackItems.length}.` : ''}`
         });
 
     } catch (error) {
@@ -3194,6 +3272,23 @@ app.post('/api/monopolio/scrape-selected', exigeAdmin, async (req, res) => {
             await new Promise(resolve => setTimeout(resolve, 800));
         }
 
+        const fallbackItems = errores.map((e) => ({ url: e.url, alias: e.alias || e.url }));
+        if (fallbackItems.length > 0) {
+            lanzarFallbackMonopolioLocal(empresa, fallbackItems);
+        }
+
+        if (lanzadas === 0 && fallbackItems.length > 0) {
+            return res.json({
+                success: true,
+                lanzadas: 0,
+                lanzadasLocal: fallbackItems.length,
+                fallidas: 0,
+                detallesFallos: [],
+                totalSolicitadas: normalizadas.length,
+                message: `GitHub no respondió. Fallback local iniciado para ${fallbackItems.length} URL(s).`
+            });
+        }
+
         if (lanzadas === 0) {
             return res.status(500).json({
                 error: 'No se pudo lanzar ninguna tarea de scraping en GitHub Actions.',
@@ -3204,10 +3299,11 @@ app.post('/api/monopolio/scrape-selected', exigeAdmin, async (req, res) => {
         res.json({
             success: true,
             lanzadas,
+            lanzadasLocal: fallbackItems.length,
             fallidas: errores.length,
             detallesFallos: errores,
             totalSolicitadas: normalizadas.length,
-            message: `Se han lanzado ${lanzadas}/${normalizadas.length} tareas de scraping (modo sin guardar).`
+            message: `Se han lanzado ${lanzadas}/${normalizadas.length} tareas de scraping (modo sin guardar).${fallbackItems.length ? ` Fallback local activo: ${fallbackItems.length}.` : ''}`
         });
     } catch (error) {
         console.error('[MONOPOLIO-API] Error al lanzar workflows seleccionados:', error.response?.data || error.message);

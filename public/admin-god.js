@@ -196,7 +196,7 @@ async function ensureAuth() {
         window.location.href = '/';
         return false;
     }
-    if ((auth.rol || 'Editor') !== 'Admin') {
+    if (String(auth.rol || 'Editor').toLowerCase() !== 'admin') {
         byId('god-unlock').classList.remove('hidden');
         byId('god-unlock-msg').innerText = 'Acceso denegado: solo Admin.';
         return false;

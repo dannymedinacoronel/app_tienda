@@ -2772,6 +2772,85 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
     }
 });
 
+// Endpoint para lanzar scraping de URLs seleccionadas sin persistir en base de datos
+app.post('/api/monopolio/scrape-selected', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const entrada = Array.isArray(req.body?.urls) ? req.body.urls : [];
+
+        const normalizadas = [];
+        const dedupe = new Set();
+
+        for (const item of entrada) {
+            const rawUrl = typeof item === 'string' ? item : item?.url;
+            if (!rawUrl) continue;
+
+            const url = normalizarUrlObjetivo(rawUrl);
+            if (!url || dedupe.has(url)) continue;
+
+            const aliasRaw = typeof item === 'object' && item ? item.alias : '';
+            const alias = String(aliasRaw || '').trim() || sugerirAliasDesdeUrl(url);
+
+            dedupe.add(url);
+            normalizadas.push({ url, alias });
+        }
+
+        console.log(`[MONOPOLIO] scrape-selected empresa=${empresa} urls=${normalizadas.length}`);
+
+        if (normalizadas.length === 0) {
+            return res.status(400).json({ error: 'No hay URLs válidas seleccionadas para scrapear.' });
+        }
+
+        if (normalizadas.length > 25) {
+            return res.status(400).json({ error: 'Máximo 25 URLs por ejecución en modo sin guardar.' });
+        }
+
+        let lanzadas = 0;
+        const errores = [];
+
+        for (const item of normalizadas) {
+            try {
+                await dispararWorkflowGithub({
+                    workflowFile: 'monopolio-scraper.yml',
+                    inputs: {
+                        target_url: item.url,
+                        empresa,
+                        alias: item.alias
+                    },
+                    logTag: 'GITHUB-MONOPOLIO'
+                });
+                lanzadas += 1;
+            } catch (errItem) {
+                errores.push({
+                    url: item.url,
+                    alias: item.alias || item.url,
+                    detalle: errItem?.response?.data?.message || errItem?.response?.data?.error || errItem.message || 'error desconocido'
+                });
+            }
+            await new Promise(resolve => setTimeout(resolve, 800));
+        }
+
+        if (lanzadas === 0) {
+            return res.status(500).json({
+                error: 'No se pudo lanzar ninguna tarea de scraping en GitHub Actions.',
+                detalles: errores
+            });
+        }
+
+        res.json({
+            success: true,
+            lanzadas,
+            fallidas: errores.length,
+            detallesFallos: errores,
+            totalSolicitadas: normalizadas.length,
+            message: `Se han lanzado ${lanzadas}/${normalizadas.length} tareas de scraping (modo sin guardar).`
+        });
+    } catch (error) {
+        console.error('[MONOPOLIO-API] Error al lanzar workflows seleccionados:', error.response?.data || error.message);
+        res.status(500).json({ error: 'No se pudieron iniciar las tareas de scraping seleccionadas.' });
+    }
+});
+
 // Webhook para recibir datos del scraper de monopolio
 app.post('/api/monopolio/webhook-github', async (req, res) => {
     const token = req.headers['x-github-token'];

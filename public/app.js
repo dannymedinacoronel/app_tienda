@@ -40,6 +40,8 @@ let CALENDARIO_MES = new Date().getMonth() + 1;
 let CALENDARIO_ANIO = new Date().getFullYear();
 let SCRAPER_PROGRESS_INTERVAL = null;
 let MONOPOLIO_URLS = [];
+let MONOPOLIO_SELECTED_KEYS = new Set();
+let MONOPOLIO_TEMP_URLS = [];
 let SCRAPER_PROGRESS_VALUE = 0;
 let SCRAPER_PROGRESS_MSG_INDEX = 0;
 
@@ -404,6 +406,7 @@ socket.on('monopolio_update', (data) => {
     const resultBlock = document.createElement('div');
     resultBlock.id = `monopolio-res-${btoa(data.urlOrigen)}`;
     resultBlock.className = 'p-4 bg-black/20 border border-purple-500/20 rounded-2xl';
+    const analyticsHtml = construirAnaliticaMonopolio(productos, grupos);
     
     let productosHtml = '<p class="text-xs opacity-60">No se encontraron productos.</p>';
     if (esModoSeguidos && grupos.length === 0) {
@@ -440,6 +443,7 @@ socket.on('monopolio_update', (data) => {
     resultBlock.innerHTML = `
         <h5 class="font-bold text-purple-300 text-sm mb-2">${alias}</h5>
         <p class="text-[10px] opacity-60 mb-3">${productos.length} productos encontrados${grupos.length ? ` · ${grupos.length} cuentas analizadas` : ''}.</p>
+        ${analyticsHtml}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${productosHtml}</div>
     `;
 
@@ -460,6 +464,68 @@ function actualizarCargaScraper(percent, message, status) {
     if (percentEl) percentEl.innerText = `${Math.round(clamped)}%`;
     if (msgEl && message) msgEl.innerText = message;
     if (statusEl && status) statusEl.innerText = status;
+}
+
+function extraerPrecioNumericoMonopolio(valor) {
+    const raw = String(valor ?? '').trim();
+    if (!raw) return NaN;
+    const cleaned = raw.replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+    const n = Number.parseFloat(cleaned);
+    return Number.isFinite(n) ? n : NaN;
+}
+
+function construirAnaliticaMonopolio(productos, grupos) {
+    const listaProductos = Array.isArray(productos) ? productos : [];
+    const listaGrupos = Array.isArray(grupos) ? grupos : [];
+    const precios = listaProductos
+        .map(p => extraerPrecioNumericoMonopolio(p?.precio))
+        .filter(v => Number.isFinite(v) && v > 0);
+
+    const totalProductos = listaProductos.length;
+    const cuentasAnalizadas = listaGrupos.length;
+    const cuentasConProductos = listaGrupos.length
+        ? listaGrupos.filter(g => Number(g?.total || (g?.productos || []).length || 0) > 0).length
+        : (totalProductos > 0 ? 1 : 0);
+
+    const precioMin = precios.length ? Math.min(...precios) : null;
+    const precioMax = precios.length ? Math.max(...precios) : null;
+    const precioMedio = precios.length ? (precios.reduce((a, b) => a + b, 0) / precios.length) : null;
+
+    const topCuentas = [...listaGrupos]
+        .sort((a, b) => Number(b?.total || (b?.productos || []).length || 0) - Number(a?.total || (a?.productos || []).length || 0))
+        .slice(0, 3)
+        .map((g, idx) => {
+            const total = Number(g?.total || (g?.productos || []).length || 0);
+            const cuenta = String(g?.cuenta || g?.urlCuenta || `Cuenta ${idx + 1}`);
+            return `<p class="text-[10px] opacity-80 truncate">${idx + 1}. ${cuenta} · ${total} productos</p>`;
+        })
+        .join('');
+
+    return `
+        <div class="mb-3 p-3 rounded-xl border border-cyan-500/20 bg-cyan-500/5">
+            <p class="text-[10px] font-black uppercase tracking-widest text-cyan-200 mb-2">Analitica Rapida</p>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                <div class="bg-black/30 border border-white/10 rounded-lg p-2">
+                    <p class="text-[9px] opacity-60 uppercase">Productos</p>
+                    <p class="text-xs font-black text-emerald-300">${totalProductos}</p>
+                </div>
+                <div class="bg-black/30 border border-white/10 rounded-lg p-2">
+                    <p class="text-[9px] opacity-60 uppercase">Cuentas</p>
+                    <p class="text-xs font-black text-cyan-300">${cuentasAnalizadas || '-'}</p>
+                </div>
+                <div class="bg-black/30 border border-white/10 rounded-lg p-2">
+                    <p class="text-[9px] opacity-60 uppercase">Con producto</p>
+                    <p class="text-xs font-black text-purple-300">${cuentasConProductos || 0}</p>
+                </div>
+                <div class="bg-black/30 border border-white/10 rounded-lg p-2">
+                    <p class="text-[9px] opacity-60 uppercase">Precio medio</p>
+                    <p class="text-xs font-black text-amber-300">${precioMedio !== null ? `${precioMedio.toFixed(2)}€` : '-'}</p>
+                </div>
+            </div>
+            <p class="text-[10px] opacity-75">Rango de precio: ${precioMin !== null ? `${precioMin.toFixed(2)}€` : '-'} - ${precioMax !== null ? `${precioMax.toFixed(2)}€` : '-'}</p>
+            ${topCuentas ? `<div class="mt-2 border-t border-white/10 pt-2">${topCuentas}</div>` : ''}
+        </div>
+    `;
 }
 
 function renderBadgeChatInterno() {
@@ -507,24 +573,17 @@ function esMovilOSimilar() {
 }
 
 async function intentarForzarLandscape() {
-    try {
-        if (!screen?.orientation?.lock) return;
-        if (!esMovilOSimilar()) return;
-        await screen.orientation.lock('landscape');
-    } catch (_) {
-        // Algunos navegadores bloquean lock fuera de fullscreen/PWA. Mantendremos overlay de bloqueo.
-    }
+    // Bloqueo de orientación desactivado por UX.
+    return;
 }
 
 function actualizarBloqueoOrientacion() {
     const overlay = document.getElementById('orientation-lock-overlay');
     if (!overlay) return;
 
-    const esPortrait = window.innerHeight > window.innerWidth;
-    const camaraAbierta = !!(document.getElementById('modulo-camara') && !document.getElementById('modulo-camara').classList.contains('hidden'));
-    const bloquear = esMovilOSimilar() && esPortrait && !camaraAbierta;
-    overlay.classList.toggle('hidden', !bloquear);
-    document.body.classList.toggle('overflow-hidden', bloquear);
+    // Overlay de orientación siempre oculto.
+    overlay.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
 }
 
 function configurarForzadoHorizontal() {
@@ -1398,11 +1457,25 @@ function filtrarMonopolioUrls(query = '') {
         return;
     }
 
+    const escapeHtml = (txt) => String(txt || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
     container.innerHTML = filtradas.map(u => `
         <div class="p-3 bg-black/20 border border-white/10 rounded-xl flex items-center justify-between gap-3">
-            <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <input
+                    type="checkbox"
+                    class="w-4 h-4 accent-purple-500"
+                    ${MONOPOLIO_SELECTED_KEYS.has(String(u._id || u.url || '')) ? 'checked' : ''}
+                    onchange="toggleMonopolioSeleccionGuardada('${escapeHtml(String(u._id || u.url || ''))}', this.checked)">
+                <div class="min-w-0 flex-1">
                 <p class="font-bold text-sm truncate text-purple-300">${u.alias || 'Sin Alias'}</p>
                 <p class="text-xs opacity-60 truncate font-mono">${u.url}</p>
+                </div>
             </div>
             <div class="flex gap-2">
                 <button onclick="editarMonopolioUrl('${u._id}')" class="bg-blue-600/20 text-blue-300 px-3 py-1 rounded-lg text-xs font-bold">Editar</button>
@@ -1410,6 +1483,156 @@ function filtrarMonopolioUrls(query = '') {
             </div>
         </div>
     `).join('');
+}
+
+window.toggleMonopolioSeleccionGuardada = function(key, checked) {
+    const k = String(key || '');
+    if (!k) return;
+    if (checked) MONOPOLIO_SELECTED_KEYS.add(k);
+    else MONOPOLIO_SELECTED_KEYS.delete(k);
+}
+
+window.marcarTodasMonopolioGuardadas = function(checked) {
+    if (!Array.isArray(MONOPOLIO_URLS) || MONOPOLIO_URLS.length === 0) return;
+    MONOPOLIO_URLS.forEach((u) => {
+        const key = String(u._id || u.url || '');
+        if (!key) return;
+        if (checked) MONOPOLIO_SELECTED_KEYS.add(key);
+        else MONOPOLIO_SELECTED_KEYS.delete(key);
+    });
+
+    const searchValue = document.getElementById('monopolio-search-input')?.value || '';
+    filtrarMonopolioUrls(searchValue);
+}
+
+function normalizarMonopolioUrlManual(valor) {
+    let url = String(valor || '').trim();
+    if (!url) return '';
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+    try {
+        const u = new URL(url);
+        u.hash = '';
+        u.search = '';
+        u.pathname = u.pathname.replace(/\/+$/, '');
+        return u.toString();
+    } catch (_) {
+        return '';
+    }
+}
+
+function renderMonopolioTempUrls() {
+    const container = document.getElementById('lista-monopolio-temp');
+    if (!container) return;
+
+    if (!MONOPOLIO_TEMP_URLS.length) {
+        container.innerHTML = '<p class="text-[10px] opacity-50 italic">Aún no hay URLs temporales preparadas.</p>';
+        return;
+    }
+
+    container.innerHTML = MONOPOLIO_TEMP_URLS.map((item, idx) => `
+        <div class="p-2 rounded-xl border border-white/10 bg-black/20 flex items-start gap-2">
+            <input type="checkbox" class="mt-1 w-4 h-4 accent-cyan-500" ${item.selected ? 'checked' : ''} onchange="toggleMonopolioTempSeleccion(${idx}, this.checked)">
+            <div class="min-w-0 flex-1">
+                <p class="text-[10px] font-black uppercase tracking-widest text-cyan-200 truncate">${item.alias || `URL ${idx + 1}`}</p>
+                <p class="text-[10px] opacity-70 font-mono truncate">${item.url}</p>
+            </div>
+        </div>
+    `).join('');
+}
+
+window.prepararMonopolioUrlsTemporales = function() {
+    const input = document.getElementById('monopolio-temp-input');
+    const feedback = document.getElementById('monopolio-temp-feedback');
+    if (!input) return;
+
+    const raw = String(input.value || '');
+    const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const dedupe = new Set();
+    const validas = [];
+    let invalidas = 0;
+
+    lines.forEach((linea, idx) => {
+        let alias = '';
+        let urlParte = linea;
+
+        if (linea.includes('|')) {
+            const [left, right] = linea.split('|', 2).map(v => String(v || '').trim());
+            if (/^https?:\/\//i.test(left) || left.includes('vinted.')) {
+                urlParte = left;
+                alias = right;
+            } else {
+                alias = left;
+                urlParte = right;
+            }
+        }
+
+        const url = normalizarMonopolioUrlManual(urlParte);
+        if (!url) {
+            invalidas += 1;
+            return;
+        }
+        if (dedupe.has(url)) return;
+        dedupe.add(url);
+
+        validas.push({
+            key: `tmp-${Date.now()}-${idx}`,
+            alias: alias || `Temporal ${idx + 1}`,
+            url,
+            selected: true
+        });
+    });
+
+    MONOPOLIO_TEMP_URLS = validas;
+    renderMonopolioTempUrls();
+
+    if (feedback) {
+        feedback.innerHTML = `<span class="text-cyan-300">${validas.length} URLs válidas</span>${invalidas ? ` · <span class="text-amber-300">${invalidas} inválidas</span>` : ''}`;
+    }
+}
+
+window.toggleMonopolioTempSeleccion = function(idx, checked) {
+    const item = MONOPOLIO_TEMP_URLS[idx];
+    if (!item) return;
+    item.selected = Boolean(checked);
+}
+
+window.marcarTodasMonopolioTemp = function(checked) {
+    MONOPOLIO_TEMP_URLS = MONOPOLIO_TEMP_URLS.map(item => ({ ...item, selected: Boolean(checked) }));
+    renderMonopolioTempUrls();
+}
+
+window.limpiarMonopolioTemp = function() {
+    MONOPOLIO_TEMP_URLS = [];
+    const input = document.getElementById('monopolio-temp-input');
+    if (input) input.value = '';
+    const feedback = document.getElementById('monopolio-temp-feedback');
+    if (feedback) feedback.innerHTML = '';
+    renderMonopolioTempUrls();
+}
+
+function obtenerUrlsSeleccionadasMonopolio() {
+    const seleccionadasGuardadas = MONOPOLIO_URLS
+        .filter(u => MONOPOLIO_SELECTED_KEYS.has(String(u._id || u.url || '')))
+        .map(u => ({ url: u.url, alias: u.alias || '' }));
+
+    const seleccionadasTemp = MONOPOLIO_TEMP_URLS
+        .filter(u => u.selected)
+        .map(u => ({ url: u.url, alias: u.alias || '' }));
+
+    const unicas = [];
+    const dedupe = new Set();
+
+    [...seleccionadasGuardadas, ...seleccionadasTemp].forEach((item) => {
+        const url = normalizarMonopolioUrlManual(item.url);
+        if (!url || dedupe.has(url)) return;
+        dedupe.add(url);
+        unicas.push({
+            url,
+            alias: String(item.alias || '').trim() || url
+        });
+    });
+
+    return unicas;
 }
 
 window.limpiarFormMonopolio = function() {
@@ -1516,6 +1739,48 @@ window.iniciarScrapingMonopolio = async function() {
             </div>
         `;
         cantarPorVoz('Scraping masivo iniciado');
+    } catch (e) {
+        resultadosContainer.innerHTML = `<p class="text-xs text-rose-400">Error: ${e.message}</p>`;
+    }
+}
+
+window.iniciarScrapingMonopolioSeleccionadas = async function() {
+    const seleccionadas = obtenerUrlsSeleccionadasMonopolio();
+    if (seleccionadas.length === 0) {
+        alert('Marca al menos una web (guardada o temporal) para analizar.');
+        return;
+    }
+
+    if (!confirm(`Se lanzará scraping para ${seleccionadas.length} webs seleccionadas sin guardarlas en la base de datos. ¿Continuar?`)) return;
+
+    const resultadosContainer = document.getElementById('resultados-monopolio-scraping');
+    if (!resultadosContainer) return;
+
+    resultadosContainer.innerHTML = `<div class="text-center py-4"><div class="w-8 h-8 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto"></div><p class="mt-2 text-xs text-cyan-300">Lanzando análisis seleccionado (sin guardar)...</p></div>`;
+
+    try {
+        const res = await fetch('/api/monopolio/scrape-selected', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ urls: seleccionadas })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al iniciar el scraping seleccionado');
+
+        let detalleFallos = '';
+        if (Number(data.fallidas || 0) > 0 && Array.isArray(data.detallesFallos)) {
+            const top = data.detallesFallos.slice(0, 3).map((f) => `• ${f.alias || f.url}: ${String(f.detalle || 'fallo').slice(0, 90)}`).join('<br>');
+            detalleFallos = `<p class="mt-2 text-[10px] text-amber-300">${data.fallidas} dispatch fallidos.<br>${top}</p>`;
+        }
+
+        resultadosContainer.innerHTML = `
+            <div class="text-center py-2">
+                <p class="mt-2 text-xs text-cyan-300">${data.message} Esperando resultados...</p>
+                ${detalleFallos}
+            </div>
+        `;
+        cantarPorVoz('Analisis seleccionado iniciado');
     } catch (e) {
         resultadosContainer.innerHTML = `<p class="text-xs text-rose-400">Error: ${e.message}</p>`;
     }

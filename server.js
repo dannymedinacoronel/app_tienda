@@ -51,6 +51,57 @@ function normalizarEmpresa(empresa) {
         .slice(0, 60) || EMPRESA_DEFAULT;
 }
 
+function normalizarUrlObjetivo(rawUrl) {
+    const raw = String(rawUrl || '').trim();
+    if (!raw) return '';
+    const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    try {
+        const u = new URL(withProtocol);
+        u.hash = '';
+        u.search = '';
+        u.pathname = u.pathname.replace(/\/+$/, '');
+        return u.toString();
+    } catch (_) {
+        return withProtocol.replace(/\/+$/, '');
+    }
+}
+
+function sugerirAliasDesdeUrl(url) {
+    const txt = String(url || 'Competidor').trim();
+    const match = txt.match(/\/member\/\d+-([a-z0-9_-]+)/i);
+    if (match && match[1]) {
+        return match[1].replace(/[-_]+/g, ' ').slice(0, 80);
+    }
+    return txt.slice(0, 80) || 'Competidor';
+}
+
+async function dispararWorkflowGithub({ workflowFile, inputs, logTag = 'SCRAPER' }) {
+    const GITHUB_PAT = process.env.GITHUB_PAT;
+    const REPO_OWNER = process.env.GITHUB_OWNER || 'dannymedinacoronel';
+    const REPO_NAME = process.env.GITHUB_REPO || 'app_tienda';
+
+    if (!GITHUB_PAT) {
+        throw new Error('Falta configurar GITHUB_PAT en Render para lanzar el scraper remoto.');
+    }
+    if (!REPO_OWNER || !REPO_NAME) {
+        throw new Error('Falta configurar GITHUB_OWNER o GITHUB_REPO en Render.');
+    }
+
+    const endpoint = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/${workflowFile}/dispatches`;
+    console.log(`[${logTag}] Dispatch workflow=${workflowFile}`);
+
+    await axios.post(
+        endpoint,
+        { ref: 'main', inputs },
+        {
+            headers: {
+                'Authorization': `token ${GITHUB_PAT}`,
+                'Accept': 'application/vnd.github.v3+json'
+            }
+        }
+    );
+}
+
 const KPI_CACHE_TTL_MS = Math.max(10000, Math.min(parseInt(process.env.KPI_CACHE_TTL_MS, 10) || 15000, 20000));
 const kpiResumenCache = new Map();
 const LOGS_CACHE_TTL_MS = Math.max(5000, Math.min(parseInt(process.env.LOGS_CACHE_TTL_MS, 10) || 8000, 15000));
@@ -1355,8 +1406,13 @@ app.get('/api/producto/lookup-codigo/:codigo', exigeAdmin, async (req, res) => {
 app.post('/api/producto/analizar-foto', exigeAdmin, async (req, res) => {
     try {
         const imagen = String(req.body?.imagen || '').trim();
+        const imagenesRaw = Array.isArray(req.body?.imagenes) ? req.body.imagenes : [];
+        const imagenes = [
+            imagen,
+            ...imagenesRaw.map((x) => String(x || '').trim())
+        ].filter(Boolean).slice(0, 3);
         const codigo = sanitizarCodigoProducto(req.body?.codigo || '');
-        if (!imagen) return res.status(400).json({ error: 'Imagen vacia.' });
+        if (!imagenes.length) return res.status(400).json({ error: 'Imagen vacia.' });
 
         const apiKey = (process.env.TOGETHER_API_KEY || '').replace(/['"]/g, '').trim();
         if (!apiKey) {
@@ -1383,7 +1439,8 @@ app.post('/api/producto/analizar-foto', exigeAdmin, async (req, res) => {
   "condicion": "Nueva|Muy buena|Buena|Usada",
   "skuSugerido": "${codigo || 'SKU sugerido'}"
 }
-Usa precioVenta en EUR como numero. Si no estas seguro, usa 0.`;
+Usa precioVenta en EUR como numero. Si no estas seguro, usa 0.
+Si vienen varias imagenes, combina todas para una unica respuesta.`;
 
         const modelos = [
             'google/gemini-2.0-flash-lite-preview-02-05:free',
@@ -1404,12 +1461,12 @@ Usa precioVenta en EUR como numero. Si no estas seguro, usa 0.`;
                             role: 'user',
                             content: [
                                 { type: 'text', text: prompt },
-                                { type: 'image_url', image_url: { url: imagen } }
+                                ...imagenes.map((img) => ({ type: 'image_url', image_url: { url: img } }))
                             ]
                         }
                     ],
                     temperature: 0.2,
-                    max_tokens: 500
+                    max_tokens: 650
                 };
 
                 const r = await axios.post('https://openrouter.ai/api/v1/chat/completions', payload, {
@@ -1419,7 +1476,7 @@ Usa precioVenta en EUR como numero. Si no estas seguro, usa 0.`;
                         'HTTP-Referer': 'https://seychelles-shop.com',
                         'X-Title': 'Seychelles Core'
                     },
-                    timeout: 20000
+                    timeout: 28000
                 });
 
                 const text = r?.data?.choices?.[0]?.message?.content || '';
@@ -1431,7 +1488,16 @@ Usa precioVenta en EUR como numero. Si no estas seguro, usa 0.`;
         }
 
         if (!parsed) {
-            return res.status(400).json({ error: `No se pudo interpretar respuesta de IA: ${lastError}` });
+            return res.json({
+                fuente: 'fallback-ia',
+                producto: normalizarProductoIA({
+                    prenda: codigo ? `Articulo ${codigo}` : 'Articulo fotografiado',
+                    categoria: 'General',
+                    precioVenta: 0,
+                    descripcion: `Analisis parcial: la IA no devolvio JSON parseable (${String(lastError || 'sin detalle').slice(0, 180)}).`,
+                    skuSugerido: codigo || `AI-${Date.now().toString().slice(-6)}`
+                }, codigo)
+            });
         }
 
         return res.json({
@@ -2186,41 +2252,18 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         const { url, alias } = req.body;
         if (!url) return res.status(400).json({ error: 'URL de Vinted requerida.' });
 
-        // 🚀 NUEVA LÓGICA: En lugar de escrapear desde Render (bloqueado),
-        // le pedimos a GitHub Actions que haga el trabajo por nosotros.
-        
-        const GITHUB_PAT = process.env.GITHUB_PAT;
-        const REPO_OWNER = process.env.GITHUB_OWNER || 'dannymedinacoronel'; 
-        const REPO_NAME = process.env.GITHUB_REPO || 'app_tienda'; // El nombre exacto de tu repo en GitHub
+        const urlNormalizada = normalizarUrlObjetivo(url);
+        const aliasLimpio = String(alias || '').trim() || 'Vinted';
 
-        if (!GITHUB_PAT) {
-            return res.status(500).json({ error: 'Falta configurar GITHUB_PAT en Render para lanzar el scraper remoto.' });
-        }
-
-        if (!REPO_OWNER || !REPO_NAME) {
-            return res.status(500).json({ error: 'Falta configurar GITHUB_OWNER o GITHUB_REPO en Render.' });
-        }
-
-        console.log(`[GITHUB-API] Lanzando scraper remoto para: ${url}`);
-
-        // Llamada a la API de GitHub para ejecutar el flujo manual-scraper.yml
-        await axios.post(
-            `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/manual-scraper.yml/dispatches`,
-            {
-                ref: 'main', // o la rama que estés usando
-                inputs: {
-                    vinted_url: url,
-                    empresa: empresa,
-                    alias: String(alias || '').trim() || 'Vinted'
-                }
+        await dispararWorkflowGithub({
+            workflowFile: 'manual-scraper.yml',
+            inputs: {
+                vinted_url: urlNormalizada,
+                empresa,
+                alias: aliasLimpio
             },
-            {
-                headers: {
-                    'Authorization': `token ${GITHUB_PAT}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                }
-            }
-        );
+            logTag: 'GITHUB-MANUAL'
+        });
 
         res.json({ 
             success: true, 
@@ -2586,13 +2629,26 @@ app.post('/api/monopolio/urls', exigeAdmin, async (req, res) => {
         const { url, alias } = req.body;
         if (!url) return res.status(400).json({ error: 'La URL es obligatoria.' });
 
-        const nuevaUrl = new MonopolioUrl({ empresa, url, alias });
+        const urlNormalizada = normalizarUrlObjetivo(url);
+        const aliasLimpio = String(alias || '').trim() || sugerirAliasDesdeUrl(urlNormalizada);
+        const nuevaUrl = new MonopolioUrl({ empresa, url: urlNormalizada, alias: aliasLimpio });
         await nuevaUrl.save();
-        await registrarLog(req.session.email, `Añadió URL a Monopolio: ${alias || url || 'sin alias'}`);
+        await registrarLog(req.session.email, `Añadió URL a Monopolio: ${aliasLimpio || urlNormalizada || 'sin alias'}`);
         res.status(201).json(nuevaUrl);
     } catch (e) {
         if (e.code === 11000) {
-            return res.status(409).json({ error: 'Esa URL ya está guardada.' });
+            const empresa = empresaActual(req);
+            const urlNormalizada = normalizarUrlObjetivo(req.body?.url || '');
+            const aliasLimpio = String(req.body?.alias || '').trim();
+            const existente = await MonopolioUrl.findOne({ empresa, url: urlNormalizada });
+            if (!existente) return res.status(409).json({ error: 'Esa URL ya está guardada.' });
+
+            if (aliasLimpio && aliasLimpio !== existente.alias) {
+                existente.alias = aliasLimpio;
+                await existente.save();
+            }
+
+            return res.json({ ...existente.toObject(), actualizada: true, duplicada: true, mensaje: 'La URL ya existía; se ha mantenido/actualizado su alias.' });
         }
         res.status(500).json({ error: 'No se pudo guardar la URL.' });
     }
@@ -2605,15 +2661,21 @@ app.put('/api/monopolio/urls/:id', exigeAdmin, async (req, res) => {
         const { url, alias } = req.body;
         if (!url) return res.status(400).json({ error: 'La URL es obligatoria.' });
 
+        const urlNormalizada = normalizarUrlObjetivo(url);
+        const aliasLimpio = String(alias || '').trim() || sugerirAliasDesdeUrl(urlNormalizada);
+
         const actualizada = await MonopolioUrl.findOneAndUpdate(
             { _id: id, empresa },
-            { url, alias },
+            { url: urlNormalizada, alias: aliasLimpio },
             { new: true }
         );
         if (!actualizada) return res.status(404).json({ error: 'URL no encontrada.' });
-        await registrarLog(req.session.email, `Modificó URL de Monopolio: ${alias || url}`);
+        await registrarLog(req.session.email, `Modificó URL de Monopolio: ${aliasLimpio || urlNormalizada}`);
         res.json(actualizada);
     } catch (e) {
+        if (e.code === 11000) {
+            return res.status(409).json({ error: 'Ya existe otra URL igual en Monopolio.' });
+        }
         res.status(500).json({ error: 'No se pudo actualizar la URL.' });
     }
 });
@@ -2640,30 +2702,26 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
             return res.status(400).json({ error: 'No hay URLs guardadas para scrapear.' });
         }
 
-        const GITHUB_PAT = process.env.GITHUB_PAT;
-        const REPO_OWNER = process.env.GITHUB_OWNER || 'dannymedinacoronel';
-        const REPO_NAME = process.env.GITHUB_REPO || 'app_tienda';
-
-        if (!GITHUB_PAT || !REPO_OWNER || !REPO_NAME) {
-            return res.status(500).json({ error: 'Falta configuración de GitHub (PAT, OWNER, REPO) en el servidor.' });
-        }
-
         let lanzadas = 0;
         const errores = [];
 
         for (const item of urls) {
             try {
-                await axios.post(
-                    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/monopolio-scraper.yml/dispatches`,
-                    { ref: 'main', inputs: { target_url: item.url, empresa: empresa, alias: item.alias || item.url } },
-                    { headers: { 'Authorization': `token ${GITHUB_PAT}`, 'Accept': 'application/vnd.github.v3+json' } }
-                );
+                await dispararWorkflowGithub({
+                    workflowFile: 'monopolio-scraper.yml',
+                    inputs: {
+                        target_url: normalizarUrlObjetivo(item.url),
+                        empresa,
+                        alias: String(item.alias || '').trim() || sugerirAliasDesdeUrl(item.url)
+                    },
+                    logTag: 'GITHUB-MONOPOLIO'
+                });
                 lanzadas += 1;
             } catch (errItem) {
                 errores.push({
                     url: item.url,
                     alias: item.alias || item.url,
-                    detalle: errItem?.response?.data?.message || errItem.message || 'error desconocido'
+                    detalle: errItem?.response?.data?.message || errItem?.response?.data?.error || errItem.message || 'error desconocido'
                 });
             }
             await new Promise(resolve => setTimeout(resolve, 800));

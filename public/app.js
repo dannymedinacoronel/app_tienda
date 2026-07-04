@@ -29,6 +29,9 @@ let ESCANER_CAMARA_ID_ACTUAL = '';
 let ULTIMO_CODIGO_ESCANEADO = '';
 let ULTIMO_SCAN_TS = 0;
 let ULTIMA_FOTO_ESCANER = '';
+let ESCANER_CAMARA_INICIANDO = false;
+let ESCANER_CAMARA_ACTIVO = false;
+let ESCANER_CAMARA_SECUENCIA = 0;
 let ITEMS_SELECCIONADOS_MASIVOS = [];
 let SOUND_MUTED_GLOBAL = false;
 let CONFIG_ORDEN_COLUMNAS = { 'No Vendido': 'reciente', 'Vendido': 'reciente', 'Devuelto': 'reciente' };
@@ -1416,23 +1419,44 @@ window.guardarMonopolioUrl = async function(event) {
         event.preventDefault();
     }
     const id = document.getElementById('monopolio-url-id').value;
-    const url = (document.getElementById('monopolio-url-input')?.value || '').trim();
+    const urlInputEl = document.getElementById('monopolio-url-input');
+    const btnSubmitEl = document.getElementById('btn-submit-monopolio');
+    let url = (urlInputEl?.value || '').trim();
     const alias = (document.getElementById('monopolio-url-alias')?.value || '').trim();
     if (!url) return alert('La URL es obligatoria.');
-    const esUrlValida = /^https?:\/\//i.test(url);
-    if (!esUrlValida) return alert('La URL debe empezar por http:// o https://');
+    if (!/^https?:\/\//i.test(url)) {
+        url = `https://${url}`;
+        if (urlInputEl) urlInputEl.value = url;
+    }
     const method = id ? 'PUT' : 'POST';
     const endpoint = id ? `/api/monopolio/urls/${id}` : '/api/monopolio/urls';
 
     try {
+        if (btnSubmitEl) {
+            btnSubmitEl.disabled = true;
+            btnSubmitEl.classList.add('opacity-60');
+            btnSubmitEl.innerText = id ? 'Actualizando...' : 'Guardando...';
+        }
+
         const res = await fetch(endpoint, { method, headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ url, alias }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al guardar');
-        cantarPorVoz('Web guardada');
+        if (data?.duplicada) {
+            cantarPorVoz('Web ya existente, alias actualizado');
+            alert(data?.mensaje || 'La URL ya existía; se actualizó su alias.');
+        } else {
+            cantarPorVoz('Web guardada');
+        }
         limpiarFormMonopolio();
         await renderMonopolioUrls();
     } catch (e) {
         alert(`Error: ${e.message}`);
+    } finally {
+        if (btnSubmitEl) {
+            btnSubmitEl.disabled = false;
+            btnSubmitEl.classList.remove('opacity-60');
+            btnSubmitEl.innerText = id ? 'Actualizar Web' : 'Guardar Web';
+        }
     }
 }
 
@@ -1458,8 +1482,19 @@ window.iniciarScrapingMonopolio = async function() {
         const res = await fetch('/api/monopolio/scrape-all', { method: 'POST', credentials: 'include' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al iniciar el scraping');
-        
-        resultadosContainer.querySelector('p').innerText = data.message + ' Esperando resultados...';
+
+        let detalleFallos = '';
+        if (Number(data.fallidas || 0) > 0 && Array.isArray(data.detallesFallos)) {
+            const top = data.detallesFallos.slice(0, 3).map((f) => `• ${f.alias || f.url}: ${String(f.detalle || 'fallo').slice(0, 90)}`).join('<br>');
+            detalleFallos = `<p class="mt-2 text-[10px] text-amber-300">${data.fallidas} dispatch fallidos.<br>${top}</p>`;
+        }
+
+        resultadosContainer.innerHTML = `
+            <div class="text-center py-2">
+                <p class="mt-2 text-xs text-purple-300">${data.message} Esperando resultados...</p>
+                ${detalleFallos}
+            </div>
+        `;
         cantarPorVoz('Scraping masivo iniciado');
     } catch (e) {
         resultadosContainer.innerHTML = `<p class="text-xs text-rose-400">Error: ${e.message}</p>`;
@@ -4492,10 +4527,15 @@ async function iniciarEscanerCamara(cameraId = '') {
         return;
     }
 
+    if (ESCANER_CAMARA_INICIANDO) return;
+    ESCANER_CAMARA_INICIANDO = true;
+    const secuenciaLocal = ++ESCANER_CAMARA_SECUENCIA;
+
     if (OBJETO_ESCANER_CAMARA) {
         try { await OBJETO_ESCANER_CAMARA.stop(); } catch (_) {}
         try { OBJETO_ESCANER_CAMARA.clear(); } catch (_) {}
         OBJETO_ESCANER_CAMARA = null;
+        ESCANER_CAMARA_ACTIVO = false;
     }
 
     const formats = (typeof Html5QrcodeSupportedFormats !== 'undefined') ? [
@@ -4529,11 +4569,35 @@ async function iniciarEscanerCamara(cameraId = '') {
             if (LECTOR_BLOQUEADO_POR_CAPTURA) return;
             await procesarCodigoEscaneadoDesdeCamara(decodedText);
         }, () => {});
+
+        if (secuenciaLocal !== ESCANER_CAMARA_SECUENCIA) {
+            try { await OBJETO_ESCANER_CAMARA.stop(); } catch (_) {}
+            try { OBJETO_ESCANER_CAMARA.clear(); } catch (_) {}
+            OBJETO_ESCANER_CAMARA = null;
+            ESCANER_CAMARA_ACTIVO = false;
+            return;
+        }
+
+        ESCANER_CAMARA_ACTIVO = true;
         actualizarEstadoEscaner('Lector Listo', 'emerald');
     } catch (err) {
         console.error('Error iniciando camara:', err);
+        if (cameraId) {
+            try {
+                await OBJETO_ESCANER_CAMARA.start({ facingMode: 'environment' }, scanConfig, async (decodedText) => {
+                    if (LECTOR_BLOQUEADO_POR_CAPTURA) return;
+                    await procesarCodigoEscaneadoDesdeCamara(decodedText);
+                }, () => {});
+                ESCANER_CAMARA_ACTIVO = true;
+                actualizarEstadoEscaner('Lector Listo (Auto)', 'emerald');
+                return;
+            } catch (_) {}
+        }
+        ESCANER_CAMARA_ACTIVO = false;
         actualizarEstadoEscaner('Error camara', 'rose');
         alert('No se pudo iniciar la camara. Revisa permisos y prueba con otra camara.');
+    } finally {
+        ESCANER_CAMARA_INICIANDO = false;
     }
 }
 
@@ -4571,11 +4635,15 @@ async function cerrarCamara() {
     if (modulo) modulo.classList.add('hidden');
     actualizarBloqueoOrientacion();
 
+    ESCANER_CAMARA_SECUENCIA += 1;
+
     if (OBJETO_ESCANER_CAMARA) {
         try { await OBJETO_ESCANER_CAMARA.stop(); } catch (_) {}
         try { OBJETO_ESCANER_CAMARA.clear(); } catch (_) {}
         OBJETO_ESCANER_CAMARA = null;
     }
+    ESCANER_CAMARA_ACTIVO = false;
+    ESCANER_CAMARA_INICIANDO = false;
 }
 
 async function archivoADataUrlReducido(file, maxSize = 1024, quality = 0.8) {
@@ -4661,7 +4729,11 @@ function capturarFotoEscaner() {
 }
 
 async function analizarFotoEscanerIA() {
-    const imagen = ULTIMA_FOTO_ESCANER || (FOTOS_FORMULARIO_TEMP[0] || '');
+    const imagenes = Array.from(new Set([
+        ULTIMA_FOTO_ESCANER,
+        ...(Array.isArray(FOTOS_FORMULARIO_TEMP) ? FOTOS_FORMULARIO_TEMP : [])
+    ].filter(Boolean))).slice(0, 3);
+    const imagen = imagenes[0] || '';
     if (!imagen) {
         return alert('Primero captura o sube una foto para analizar el producto.');
     }
@@ -4675,7 +4747,7 @@ async function analizarFotoEscanerIA() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ imagen, codigo })
+            body: JSON.stringify({ imagen, imagenes, codigo })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'No se pudo analizar la foto.');
@@ -5590,6 +5662,28 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 });
             }
+
+            const formMonopolio = document.getElementById('form-monopolio-url');
+            if (formMonopolio) {
+                formMonopolio.addEventListener('submit', (ev) => {
+                    ev.preventDefault();
+                    guardarMonopolioUrl(ev);
+                });
+            }
+
+            const reactivarCamaraSiHaceFalta = async () => {
+                const modulo = document.getElementById('modulo-camara');
+                if (!modulo || modulo.classList.contains('hidden')) return;
+                if (ESCANER_CAMARA_INICIANDO || ESCANER_CAMARA_ACTIVO) return;
+                await iniciarEscanerCamara(ESCANER_CAMARA_ID_ACTUAL || '');
+            };
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') {
+                    setTimeout(() => { reactivarCamaraSiHaceFalta(); }, 250);
+                }
+            });
+            window.addEventListener('focus', () => { reactivarCamaraSiHaceFalta(); });
         }
     } catch(e){ console.error("Error en la inicialización:", e); }
 });

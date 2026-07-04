@@ -997,127 +997,15 @@ app.get('/api/auth/verificar', (req, res) => {
 });
 
 app.post('/api/god/login', exigeAdmin, (req, res) => {
-    const claveDios = String(process.env.GOD_KEY || '').trim();
-    if (!claveDios) {
-        return res.status(500).json({ error: 'Clave Dios no configurada en el servidor.' });
-    }
-    if (req.body.clave === claveDios) {
-        req.session.godMode = true;
-        return res.json({ success: true });
-    }
-    return res.status(401).json({ error: 'Clave incorrecta.' });
-});
-
-app.post('/api/god/logout', exigeAdmin, (req, res) => {
-    req.session.godMode = false;
-    res.json({ success: true });
-});
-
-app.get('/api/god/bootstrap', exigeGodMode, async (req, res) => {
-    try {
-        const empresa = empresaActual(req);
-        const [users, config] = await Promise.all([
-            UsuarioAutorizado.find({ empresa }).select('email rol nombreVisible fotoPerfil').lean(),
-            UiGodConfig.findOne({ empresa }).lean()
-        ]);
-
-        const userAccessPromises = users.map(u => UiGodUserAccess.findOne({ empresa, userEmail: u.email }).select('blockedSections').lean());
-        const userAccessList = await Promise.all(userAccessPromises);
-
-        const usersWithAccess = users.map((u, i) => ({
-            ...u,
-            blockedSections: userAccessList[i]?.blockedSections || []
-        }));
-
-        let finalConfig = config;
-        if (!finalConfig) {
-            const newConf = new UiGodConfig({ empresa });
-            await newConf.save();
-            finalConfig = newConf.toObject();
-        }
-        
-        if (!finalConfig.sectionOrder || finalConfig.sectionOrder.length === 0) {
-            finalConfig.sectionOrder = UI_SECTION_KEYS;
-        }
-
-        res.json({
-            empresa,
-            sections: UI_SECTION_KEYS,
-            users: usersWithAccess,
-            config: finalConfig
-        });
-    } catch (e) {
-        res.status(500).json({ error: 'No se pudo cargar la configuración.' });
-    }
-});
-
-app.put('/api/god/ui-config', exigeGodMode, async (req, res) => {
-    try {
-        const empresa = empresaActual(req);
-        const { sectionOrder, hiddenSections, tabLabels, theme, customCss } = req.body;
-
-        const updatePayload = {
-            sectionOrder: normalizarOrdenSecciones(sectionOrder),
-            hiddenSections: normalizarSeccionesInput(hiddenSections),
-            tabLabels: limpiarTabLabels(tabLabels),
-            theme: {
-                navBackground: esColorHexValido(theme?.navBackground, '#0f172a'),
-                cardBackground: esColorHexValido(theme?.cardBackground, '#111827'),
-                accent: esColorHexValido(theme?.accent, '#6366f1'),
-                textPrimary: esColorHexValido(theme?.textPrimary, '#e2e8f0')
-            },
-            customCss: String(customCss || '').trim(),
-            updatedBy: req.session.email,
-            updatedAt: new Date()
-        };
-
-        await UiGodConfig.updateOne({ empresa }, { $set: updatePayload }, { upsert: true });
-        
-        if (global.io) {
-            global.io.to(`empresa:${empresa}`).emit('config_updated');
-        }
-
-        res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ error: 'No se pudo guardar la configuración.' });
-    }
-});
-
-app.put('/api/god/user-access/:email', exigeGodMode, async (req, res) => {
-    try {
-        const empresa = empresaActual(req);
-        const userEmail = String(req.params.email || '').toLowerCase().trim();
-        const { blockedSections } = req.body;
-
-        if (!userEmail) return res.status(400).json({ error: 'Email de usuario requerido.' });
-
-        const updatePayload = {
-            blockedSections: normalizarSeccionesInput(blockedSections),
-            updatedBy: req.session.email,
-            updatedAt: new Date()
-        };
-
-        await UiGodUserAccess.updateOne({ empresa, userEmail }, { $set: updatePayload }, { upsert: true });
-        
-        if (global.io) {
-            global.io.to(`empresa:${empresa}`).emit('access_updated', { userEmail });
-        }
-
-        res.json({ success: true });
-    } catch (e) {
-        res.status(500).json({ error: 'No se pudieron guardar los permisos.' });
-    }
-});
-
     try {
         if ((req.session?.rol || 'Editor') !== 'Admin') {
             return res.status(403).json({ error: 'Solo rol Admin puede desbloquear el panel Dios.' });
         }
 
         const clave = String(req.body?.clave || '').trim();
-        const GOD_PANEL_KEY = String(process.env.GOD_PANEL_KEY || 'SEYCHELLES-GOD-MODE').trim();
-        if (!clave || clave !== GOD_PANEL_KEY) {
-            return res.status(401).json({ error: 'Clave Dios incorrecta.' });
+        const claveDios = String(process.env.GOD_PANEL_KEY || process.env.GOD_KEY || 'SEYCHELLES-GOD-MODE').trim();
+        if (!clave || clave !== claveDios) {
+            return res.status(401).json({ error: 'Clave incorrecta.' });
         }
 
         req.session.godMode = true;

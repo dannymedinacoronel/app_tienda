@@ -107,6 +107,31 @@ async function dispararWorkflowGithub({ workflowFile, inputs, logTag = 'SCRAPER'
     );
 }
 
+async function lanzarScraperUnificadoGithub({
+    mode,
+    targetUrl,
+    empresa,
+    alias,
+    webhookPath,
+    logTag = 'SCRAPER-UNIFIED'
+}) {
+    const modeNormalizado = String(mode || 'manual').trim().toLowerCase() === 'monopolio' ? 'monopolio' : 'manual';
+    const urlNormalizada = normalizarUrlObjetivo(targetUrl);
+    const aliasNormalizado = String(alias || '').trim() || sugerirAliasDesdeUrl(urlNormalizada);
+
+    await dispararWorkflowGithub({
+        workflowFile: 'vinted-scraper.yml',
+        inputs: {
+            mode: modeNormalizado,
+            target_url: urlNormalizada,
+            empresa,
+            alias: aliasNormalizado,
+            webhook_path: webhookPath || (modeNormalizado === 'monopolio' ? '/api/monopolio/webhook-github' : '/api/scraper/webhook-github')
+        },
+        logTag
+    });
+}
+
 const KPI_CACHE_TTL_MS = Math.max(10000, Math.min(parseInt(process.env.KPI_CACHE_TTL_MS, 10) || 15000, 20000));
 const kpiResumenCache = new Map();
 const LOGS_CACHE_TTL_MS = Math.max(5000, Math.min(parseInt(process.env.LOGS_CACHE_TTL_MS, 10) || 8000, 15000));
@@ -2766,19 +2791,15 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         const { url, alias } = req.body;
         if (!url) return res.status(400).json({ error: 'URL de Vinted requerida.' });
 
-        const urlNormalizada = normalizarUrlObjetivo(url);
         const aliasLimpio = String(alias || '').trim() || 'Vinted';
 
-        await dispararWorkflowGithub({
-            workflowFile: 'vinted-scraper.yml',
-            inputs: {
-                mode: 'manual',
-                target_url: urlNormalizada,
-                empresa,
-                alias: aliasLimpio,
-                webhook_path: '/api/scraper/webhook-github'
-            },
-            logTag: 'GITHUB-MANUAL'
+        await lanzarScraperUnificadoGithub({
+            mode: 'manual',
+            targetUrl: url,
+            empresa,
+            alias: aliasLimpio,
+            webhookPath: '/api/scraper/webhook-github',
+            logTag: 'GITHUB-UNIFIED-MANUAL'
         });
 
         res.json({ 
@@ -3572,16 +3593,13 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
 
         for (const item of urls) {
             try {
-                await dispararWorkflowGithub({
-                    workflowFile: 'vinted-scraper.yml',
-                    inputs: {
-                        mode: 'monopolio',
-                        target_url: normalizarUrlObjetivo(item.url),
-                        empresa,
-                        alias: String(item.alias || '').trim() || sugerirAliasDesdeUrl(item.url),
-                        webhook_path: '/api/monopolio/webhook-github'
-                    },
-                    logTag: 'GITHUB-MONOPOLIO'
+                await lanzarScraperUnificadoGithub({
+                    mode: 'monopolio',
+                    targetUrl: item.url,
+                    empresa,
+                    alias: String(item.alias || '').trim() || sugerirAliasDesdeUrl(item.url),
+                    webhookPath: '/api/monopolio/webhook-github',
+                    logTag: 'GITHUB-UNIFIED-MONOPOLIO'
                 });
                 lanzadas += 1;
             } catch (errItem) {
@@ -3670,16 +3688,13 @@ app.post('/api/monopolio/scrape-selected', exigeAdmin, async (req, res) => {
 
         for (const item of normalizadas) {
             try {
-                await dispararWorkflowGithub({
-                    workflowFile: 'vinted-scraper.yml',
-                    inputs: {
-                        mode: 'monopolio',
-                        target_url: item.url,
-                        empresa,
-                        alias: item.alias,
-                        webhook_path: '/api/monopolio/webhook-github'
-                    },
-                    logTag: 'GITHUB-MONOPOLIO'
+                await lanzarScraperUnificadoGithub({
+                    mode: 'monopolio',
+                    targetUrl: item.url,
+                    empresa,
+                    alias: item.alias,
+                    webhookPath: '/api/monopolio/webhook-github',
+                    logTag: 'GITHUB-UNIFIED-MONOPOLIO'
                 });
                 lanzadas += 1;
             } catch (errItem) {
@@ -3728,6 +3743,59 @@ app.post('/api/monopolio/scrape-selected', exigeAdmin, async (req, res) => {
     } catch (error) {
         console.error('[MONOPOLIO-API] Error al lanzar workflows seleccionados:', error.response?.data || error.message);
         res.status(500).json({ error: 'No se pudieron iniciar las tareas de scraping seleccionadas.' });
+    }
+});
+
+// Descubre perfiles desde una URL de Monopolio sin scrapear productos (pasada 1)
+app.post('/api/monopolio/discover-profiles', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const rawUrl = String(req.body?.url || '').trim();
+        if (!rawUrl) return res.status(400).json({ error: 'La URL es obligatoria.' });
+
+        const url = normalizarUrlObjetivo(rawUrl);
+        if (!url) return res.status(400).json({ error: 'La URL no es valida.' });
+
+        const alias = String(req.body?.alias || sugerirAliasDesdeUrl(url)).trim() || sugerirAliasDesdeUrl(url);
+        const maxProfilesRaw = Number.parseInt(req.body?.maxProfiles, 10);
+        const maxProfiles = Number.isFinite(maxProfilesRaw)
+            ? Math.max(1, Math.min(maxProfilesRaw, 600))
+            : undefined;
+
+        const resultado = await scrapeMonopolio(url, alias, {
+            discoverOnly: true,
+            maxProfiles
+        });
+
+        const perfilesCrudos = Array.isArray(resultado?.perfiles) ? resultado.perfiles : [];
+        const dedupe = new Map();
+        for (const p of perfilesCrudos) {
+            const urlPerfil = normalizarUrlObjetivo(String(p?.url || '').trim());
+            if (!urlPerfil || dedupe.has(urlPerfil)) continue;
+            dedupe.set(urlPerfil, {
+                url: urlPerfil,
+                alias: String(p?.alias || sugerirAliasDesdeUrl(urlPerfil)).trim() || sugerirAliasDesdeUrl(urlPerfil),
+                nivelCadena: Number(p?.nivelCadena || 0),
+                parentUrl: String(p?.parentUrl || '').trim(),
+                parentAlias: String(p?.parentAlias || '').trim()
+            });
+        }
+
+        const perfiles = Array.from(dedupe.values());
+        await registrarLog(req.session.email, `Descubrió perfiles Monopolio desde ${alias} (${perfiles.length} detectados)`);
+
+        return res.json({
+            success: true,
+            empresa,
+            urlOrigen: url,
+            alias,
+            total: perfiles.length,
+            perfiles,
+            exploracion: resultado?.exploracion || null
+        });
+    } catch (error) {
+        console.error('[MONOPOLIO-DISCOVER] Error descubriendo perfiles:', error?.message || error);
+        return res.status(500).json({ error: 'No se pudieron descubrir perfiles desde la URL indicada.' });
     }
 });
 

@@ -552,26 +552,36 @@ tr:hover td {
   backdrop-filter: blur(16px) saturate(130%);
   -webkit-backdrop-filter: blur(16px) saturate(130%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 20px rgba(2, 8, 20, 0.2);
+  justify-content: flex-start;
+}
+
+#barra-filtros-generales select {
+  min-height: 2.2rem;
+  min-width: 145px;
 }
 
 #main-nav-secciones {
   border-color: rgba(148, 163, 184, 0.2) !important;
   background: linear-gradient(180deg, color-mix(in srgb, var(--ui-card-top) 70%, transparent), color-mix(in srgb, var(--ui-card-bottom) 60%, transparent));
   padding: 0.5rem;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(124px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.45rem;
   backdrop-filter: blur(14px) saturate(115%);
   -webkit-backdrop-filter: blur(14px) saturate(115%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 20px rgba(2, 8, 20, 0.2);
   align-items: stretch;
-  justify-self: end;
+  margin-left: auto;
+  margin-right: auto;
   position: relative;
   z-index: 30;
 }
 
 #main-nav-secciones button {
   min-height: 2.45rem;
+  flex: 0 0 auto;
+  min-width: 124px;
   font-size: 10px;
   letter-spacing: 0.04em;
   border: 1px solid transparent;
@@ -810,6 +820,8 @@ tr:hover td {
   #barra-filtros-generales select {
     min-height: 2.15rem;
     font-size: 11px;
+    flex: 1 1 calc(50% - 0.45rem);
+    min-width: 150px;
   }
 
   #main-nav-secciones {
@@ -857,6 +869,19 @@ tr:hover td {
     padding-left: 0.65rem;
     padding-right: 0.65rem;
     scroll-snap-align: start;
+  }
+
+  #barra-filtros-generales {
+    gap: 0.4rem;
+  }
+
+  #barra-filtros-generales span {
+    width: 100%;
+  }
+
+  #barra-filtros-generales select {
+    flex: 1 1 100%;
+    min-width: 0;
   }
 }
 

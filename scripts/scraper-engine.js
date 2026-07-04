@@ -1000,20 +1000,26 @@ async function extraerPerfilesDesdeItemsVinted(itemUrls, session = null) {
     }
 }
 
-async function scrapeMonopolio(url, aliasBase = '') {
+async function scrapeMonopolio(url, aliasBase = '', options = {}) {
     const urlNormalizada = normalizarUrlVinted(url);
     const aliasPrincipal = sanitizarAlias(aliasBase || extraerAliasDesdeUrlPerfil(urlNormalizada), 'Competidor');
+    const discoverOnly = Boolean(options?.discoverOnly);
+    const maxProfilesOverride = Number.parseInt(options?.maxProfiles, 10);
     const grupos = [];
     const session = await crearSesionNavegador('monopolio');
     const semillaRelacion = obtenerSemillaRelacionMonopolio(urlNormalizada);
     let totalRelacionesCapturadas = 0;
     let totalPerfilesDetectados = 0;
+    let perfilesDescubiertos = [];
 
     try {
         if (semillaRelacion) {
             const maxDepth = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_DEPTH || '5', 10), 8));
             const maxChainUrls = Math.max(8, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_URLS || '220', 10), 1200));
-            const maxCuentas = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_ACCOUNTS || '260', 10), 1800));
+            const maxCuentasBase = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_ACCOUNTS || '260', 10), 1800));
+            const maxCuentas = Number.isFinite(maxProfilesOverride) && maxProfilesOverride > 0
+                ? Math.max(1, Math.min(maxProfilesOverride, maxCuentasBase))
+                : maxCuentasBase;
             const maxBranch = Math.max(4, Math.min(parseInt(process.env.MONOPOLIO_CHAIN_BRANCH || '120', 10), 600));
 
             const cola = [{ url: semillaRelacion, depth: 0, parentProfileUrl: '', parentAlias: '' }];
@@ -1164,6 +1170,31 @@ async function scrapeMonopolio(url, aliasBase = '') {
 
             totalPerfilesDetectados = objetivosFinales.length;
 
+            perfilesDescubiertos = objetivosFinales.map((cuenta) => ({
+                alias: sanitizarAlias(cuenta.alias, extraerAliasDesdeUrlPerfil(cuenta.url)),
+                url: cuenta.url,
+                nivelCadena: Number(cuenta.depth || 0),
+                parentUrl: cuenta.parentProfileUrl || '',
+                parentAlias: cuenta.parentAlias || ''
+            }));
+
+            if (discoverOnly) {
+                return {
+                    productos: [],
+                    grupos: [],
+                    perfiles: perfilesDescubiertos,
+                    esModoSeguidos: true,
+                    aliasPrincipal,
+                    urlNormalizada,
+                    exploracion: {
+                        semillaRelacion,
+                        maxDepth: Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_DEPTH || '5', 10), 8)),
+                        urlsCapturadas: Number(totalRelacionesCapturadas || 0),
+                        usuariosDetectados: Number(totalPerfilesDetectados || perfilesDescubiertos.length)
+                    }
+                };
+            }
+
             for (const cuenta of objetivosFinales) {
                 const { productos } = await scrapeVinted(cuenta.url, { playwrightFirst: true, session, deepMode: true });
                 const aliasCuenta = sanitizarAlias(cuenta.alias, extraerAliasDesdeUrlPerfil(cuenta.url));
@@ -1213,6 +1244,32 @@ async function scrapeMonopolio(url, aliasBase = '') {
                 }
             }
         } else {
+            const perfilBase = normalizarUrlPerfilVinted(urlNormalizada) || urlNormalizada;
+            perfilesDescubiertos = [{
+                alias: sanitizarAlias(aliasPrincipal, extraerAliasDesdeUrlPerfil(perfilBase)),
+                url: perfilBase,
+                nivelCadena: 0,
+                parentUrl: '',
+                parentAlias: ''
+            }];
+
+            if (discoverOnly) {
+                return {
+                    productos: [],
+                    grupos: [],
+                    perfiles: perfilesDescubiertos,
+                    esModoSeguidos: false,
+                    aliasPrincipal,
+                    urlNormalizada,
+                    exploracion: {
+                        semillaRelacion,
+                        maxDepth: 1,
+                        urlsCapturadas: 1,
+                        usuariosDetectados: 1
+                    }
+                };
+            }
+
             const { productos } = await scrapeVinted(urlNormalizada, { playwrightFirst: true, session, deepMode: true });
             const aliasCuenta = sanitizarAlias(aliasPrincipal, extraerAliasDesdeUrlPerfil(urlNormalizada));
             const enriquecidos = (productos || []).map((p) => enriquecerProductoMonopolio(p, {
@@ -1243,9 +1300,21 @@ async function scrapeMonopolio(url, aliasBase = '') {
         if (productos.length === 0 && productosCrudos.length > 0) {
             productos = productosCrudos;
         }
+
+        if ((!Array.isArray(perfilesDescubiertos) || perfilesDescubiertos.length === 0) && grupos.length > 0) {
+            perfilesDescubiertos = grupos.map((g) => ({
+                alias: sanitizarAlias(g?.cuenta || extraerAliasDesdeUrlPerfil(g?.urlCuenta), 'Perfil'),
+                url: normalizarUrlPerfilVinted(g?.urlCuenta || ''),
+                nivelCadena: Number(g?.nivelCadena || 0),
+                parentUrl: String(g?.parentUrl || ''),
+                parentAlias: String(g?.parentCuenta || '')
+            })).filter((p) => Boolean(p.url));
+        }
+
         return {
             productos,
             grupos,
+            perfiles: perfilesDescubiertos,
             esModoSeguidos: Boolean(semillaRelacion),
             aliasPrincipal,
             urlNormalizada,

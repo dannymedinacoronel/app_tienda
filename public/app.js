@@ -44,6 +44,7 @@ let MONOPOLIO_URLS = [];
 let MONOPOLIO_URLS_VISTA = [];
 let MONOPOLIO_SELECTED_KEYS = new Set();
 let MONOPOLIO_TEMP_URLS = [];
+let MONOPOLIO_DISCOVERED_PROFILES = [];
 let MONOPOLIO_SEARCH_REQUEST_SEQ = 0;
 let MONOPOLIO_PROGRESS_INTERVAL = null;
 let MONOPOLIO_PROGRESS_TOTAL = 0;
@@ -2679,6 +2680,108 @@ function renderMonopolioTempUrls() {
     `).join('');
 }
 
+function extraerAliasDesdeUrlSeguro(url) {
+    try {
+        const parsed = new URL(String(url || '').trim());
+        const parts = parsed.pathname.split('/').filter(Boolean);
+        return parts.length > 0 ? parts[parts.length - 1] : 'Perfil';
+    } catch (_) {
+        return 'Perfil';
+    }
+}
+
+function renderMonopolioPerfilesDescubiertos() {
+    const container = document.getElementById('monopolio-discovery-list');
+    const feedback = document.getElementById('monopolio-discovery-feedback');
+    if (!container) return;
+
+    if (!Array.isArray(MONOPOLIO_DISCOVERED_PROFILES) || MONOPOLIO_DISCOVERED_PROFILES.length === 0) {
+        container.innerHTML = '<p class="text-[10px] opacity-50 italic">Aqui aparecera la lista de perfiles detectados.</p>';
+        return;
+    }
+
+    const total = MONOPOLIO_DISCOVERED_PROFILES.length;
+    const seleccionados = MONOPOLIO_DISCOVERED_PROFILES.filter((p) => p.selected !== false).length;
+    if (feedback) feedback.innerText = `${total} perfiles detectados · ${seleccionados} seleccionados para analizar`;
+
+    container.innerHTML = MONOPOLIO_DISCOVERED_PROFILES.map((perfil, idx) => {
+        const alias = escapeHtmlSafe(perfil.alias || `Perfil ${idx + 1}`);
+        const url = escapeHtmlSafe(perfil.url || '');
+        const parent = String(perfil.parentAlias || perfil.parentCuenta || '').trim();
+        const parentTxt = parent ? ` · Padre: ${escapeHtmlSafe(parent)}` : '';
+        const nivel = Number(perfil.nivelCadena || 0);
+        return `
+            <div class="p-2 rounded-xl border border-white/10 bg-black/20 flex items-start gap-2">
+                <input type="checkbox" class="mt-1 w-4 h-4 accent-emerald-500" ${perfil.selected !== false ? 'checked' : ''} onchange="togglePerfilDescubiertoMonopolio(${idx}, this.checked)">
+                <div class="min-w-0 flex-1">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-emerald-200 truncate">${alias}</p>
+                    <p class="text-[10px] opacity-70 font-mono truncate">${url}</p>
+                    <p class="text-[9px] opacity-60">Nivel: ${nivel}${parentTxt}</p>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+window.togglePerfilDescubiertoMonopolio = function(idx, checked) {
+    const item = MONOPOLIO_DISCOVERED_PROFILES[idx];
+    if (!item) return;
+    item.selected = Boolean(checked);
+    renderMonopolioPerfilesDescubiertos();
+}
+
+window.marcarTodosPerfilesDescubiertosMonopolio = function(checked) {
+    MONOPOLIO_DISCOVERED_PROFILES = (MONOPOLIO_DISCOVERED_PROFILES || []).map((p) => ({ ...p, selected: Boolean(checked) }));
+    renderMonopolioPerfilesDescubiertos();
+}
+
+window.descubrirPerfilesMonopolioDesdeInput = async function() {
+    const input = document.getElementById('monopolio-discovery-input') || document.getElementById('monopolio-url-input');
+    const feedback = document.getElementById('monopolio-discovery-feedback');
+    if (!input) return;
+
+    const url = normalizarMonopolioUrlManual(String(input.value || '').trim());
+    if (!url) {
+        alert('Introduce una URL valida para descubrir perfiles.');
+        return;
+    }
+
+    if (feedback) feedback.innerText = 'Descubriendo perfiles y enlaces internos...';
+
+    try {
+        const res = await fetch('/api/monopolio/discover-profiles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo descubrir perfiles.');
+
+        MONOPOLIO_DISCOVERED_PROFILES = (Array.isArray(data?.perfiles) ? data.perfiles : [])
+            .map((perfil) => ({
+                alias: String(perfil?.alias || '').trim() || extraerAliasDesdeUrlSeguro(perfil?.url),
+                url: normalizarMonopolioUrlManual(perfil?.url),
+                nivelCadena: Number(perfil?.nivelCadena || 0),
+                parentAlias: String(perfil?.parentAlias || perfil?.parentCuenta || '').trim(),
+                selected: true
+            }))
+            .filter((perfil) => Boolean(perfil.url));
+
+        const exploracion = data?.exploracion || {};
+        if (feedback) {
+            feedback.innerText = `Descubrimiento listo: ${MONOPOLIO_DISCOVERED_PROFILES.length} perfiles · URLs exploradas ${Number(exploracion.urlsCapturadas || 0)} · profundidad ${Number(exploracion.maxDepth || 0)}`;
+        }
+
+        renderMonopolioPerfilesDescubiertos();
+        cantarPorVoz('Perfiles detectados.');
+    } catch (e) {
+        MONOPOLIO_DISCOVERED_PROFILES = [];
+        renderMonopolioPerfilesDescubiertos();
+        if (feedback) feedback.innerText = `Error en descubrimiento: ${e.message}`;
+    }
+}
+
 window.prepararMonopolioUrlsTemporales = function() {
     const input = document.getElementById('monopolio-temp-input');
     const feedback = document.getElementById('monopolio-temp-feedback');
@@ -2893,28 +2996,20 @@ window.iniciarScrapingMonopolio = async function() {
     }
 }
 
-window.iniciarScrapingMonopolioSeleccionadas = async function() {
-    const seleccionadas = obtenerUrlsSeleccionadasMonopolio();
-    if (seleccionadas.length === 0) {
-        alert('Marca al menos una web (guardada o temporal) para analizar.');
-        return;
-    }
-
-    if (!confirm(`Se lanzará scraping para ${seleccionadas.length} webs seleccionadas sin guardarlas en la base de datos. ¿Continuar?`)) return;
-
+async function lanzarScrapingMonopolioSeleccion(urlsSeleccionadas, introMsg = 'Lanzando analisis seleccionado (sin guardar)...', classColor = 'cyan', vozMsg = 'Analisis seleccionado iniciado') {
     const resultadosContainer = document.getElementById('resultados-monopolio-scraping');
     if (!resultadosContainer) return;
 
     resultadosContainer.innerHTML = '';
     resetDiagnosticoMonopolio();
-    iniciarAnimacionCargaMonopolio(0, 'Lanzando análisis seleccionado (sin guardar)...');
+    iniciarAnimacionCargaMonopolio(0, introMsg);
 
     try {
         const res = await fetch('/api/monopolio/scrape-selected', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ urls: seleccionadas })
+            body: JSON.stringify({ urls: urlsSeleccionadas })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al iniciar el scraping seleccionado');
@@ -2933,16 +3028,53 @@ window.iniciarScrapingMonopolioSeleccionadas = async function() {
             const extra = document.createElement('div');
             extra.className = 'mt-2 text-center py-1';
             extra.innerHTML = `
-                <p class="text-xs text-cyan-300">${data.message} Esperando resultados...</p>
+                <p class="text-xs text-${classColor}-300">${data.message} Esperando resultados...</p>
                 ${detalleFallos}
             `;
             bloque.appendChild(extra);
         }
-        cantarPorVoz('Analisis seleccionado iniciado');
+        cantarPorVoz(vozMsg);
     } catch (e) {
         detenerAnimacionCargaMonopolio(false);
         resultadosContainer.innerHTML = `<p class="text-xs text-rose-400">Error: ${e.message}</p>`;
     }
+}
+
+window.iniciarScrapingMonopolioSeleccionadas = async function() {
+    const seleccionadas = obtenerUrlsSeleccionadasMonopolio();
+    if (seleccionadas.length === 0) {
+        alert('Marca al menos una web (guardada o temporal) para analizar.');
+        return;
+    }
+
+    if (!confirm(`Se lanzará scraping para ${seleccionadas.length} webs seleccionadas sin guardarlas en la base de datos. ¿Continuar?`)) return;
+
+    await lanzarScrapingMonopolioSeleccion(
+        seleccionadas,
+        'Lanzando analisis seleccionado (sin guardar)...',
+        'cyan',
+        'Analisis seleccionado iniciado'
+    );
+}
+
+window.analizarPerfilesDescubiertosMonopolio = async function() {
+    const seleccionadas = (MONOPOLIO_DISCOVERED_PROFILES || [])
+        .filter((p) => p.selected !== false && p.url)
+        .map((p) => ({ url: p.url, alias: p.alias || extraerAliasDesdeUrlSeguro(p.url) }));
+
+    if (seleccionadas.length === 0) {
+        alert('Primero descubre perfiles y marca al menos uno para analizar.');
+        return;
+    }
+
+    if (!confirm(`Se analizaran ${seleccionadas.length} perfiles detectados en la pasada de descubrimiento. ¿Continuar?`)) return;
+
+    await lanzarScrapingMonopolioSeleccion(
+        seleccionadas,
+        'Lanzando segunda pasada por perfiles detectados...',
+        'emerald',
+        'Analisis por perfiles iniciado'
+    );
 }
 
 function cerrarVisorFotos() {
@@ -3661,7 +3793,10 @@ window.navegarASeccion = function(idSeccion) {
         }, 50);
     }
     if (idSeccion === 'sec-monopolio') {
-        setTimeout(() => { renderMonopolioUrls(); }, 50);
+        setTimeout(() => {
+            renderMonopolioUrls();
+            renderMonopolioPerfilesDescubiertos();
+        }, 50);
     }
 
     aplicarMascaraVisualizadorEnUI();
@@ -3695,9 +3830,9 @@ function aplicarRestriccionesRolUI() {
     });
 
     const activa = document.querySelector('.seccion-app:not(.hidden)');
-    if (!activa || hidden.has(activa.id)) {
-        navegarASeccion('sec-inventario');
-    }
+    const destinoInicial = (!activa || hidden.has(activa.id)) ? 'sec-inventario' : activa.id;
+    // Fuerza la clase seccion-active para evitar panel inicial invisible hasta el primer click.
+    navegarASeccion(destinoInicial);
 }
 
 function formatearFechaISO(dateObj) {

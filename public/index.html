@@ -1060,6 +1060,19 @@
                         </div>
                     </div>
                     <p id="admin-profit-kpi-rango" class="mt-3 text-[10px] opacity-65 font-mono">Rango: -</p>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mt-4">
+                        <div class="lg:col-span-2 bg-black/25 border border-white/10 rounded-2xl p-3">
+                            <p class="text-[9px] uppercase tracking-widest opacity-65 mb-2">Evolución beneficio neto (rango seleccionado)</p>
+                            <div class="h-40 relative">
+                                <canvas id="admin-profit-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="bg-black/25 border border-white/10 rounded-2xl p-3">
+                            <p class="text-[9px] uppercase tracking-widest opacity-65 mb-2">Top canales por beneficio</p>
+                            <div id="admin-profit-top-canales" class="space-y-1.5 text-[10px]"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="card-bg border p-5 rounded-3xl shadow-xl">
@@ -1133,8 +1146,21 @@
                 </div>
 
                 <div class="card-bg border p-6 rounded-3xl shadow-xl w-full">
-                    <h3 class="text-xs font-black uppercase mb-1 tracking-wider text-amber-500">🔥 Mapa de Calor: Densidad Horaria de Operaciones (Día vs Hora)</h3>
-                    <p class="text-[10px] opacity-60 mb-4 font-mono">Localiza de un vistazo las franjas horarias con mayor volumen de transacciones.</p>
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+                        <h3 class="text-xs font-black uppercase tracking-wider text-amber-500">🔥 Mapa de Calor: Densidad Horaria de Operaciones</h3>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <select id="heatmap-granularidad" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border rounded-xl px-2 py-1 text-[10px] focus:outline-none dropdown-bg">
+                                <option value="bloques">Bloques (4 franjas)</option>
+                                <option value="hora">Por hora (24h)</option>
+                            </select>
+                            <select id="heatmap-metrica" onchange="actualizarTodoElBloqueGrafico()" class="input-bg border rounded-xl px-2 py-1 text-[10px] focus:outline-none dropdown-bg">
+                                <option value="prendas">Métrica: Prendas</option>
+                                <option value="ingresos">Métrica: Ingresos</option>
+                                <option value="beneficio">Métrica: Beneficio</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p id="heatmap-summary" class="text-[10px] opacity-65 mb-4 font-mono">Localiza de un vistazo las franjas horarias con mayor volumen de transacciones.</p>
                     <div class="w-full h-80 relative">
                         <canvas id="graficaMapaCalor"></canvas>
                     </div>

@@ -22,6 +22,7 @@ let INSTANCIA_CHARTS = null;
 let INSTANCIA_TARTA = null;
 let INSTANCIA_BARRAS = null;
 let INSTANCIA_MAPA_CALOR = null;
+let INSTANCIA_ADMIN_PROFIT_CHART = null;
 let OBJETO_ESCANER_CAMARA = null;
 let HISTORIAL_TIMESTAMPS_OPERACIONES = [];
 let LECTOR_BLOQUEADO_POR_CAPTURA = false;
@@ -55,6 +56,7 @@ let SECCIONES_INHABILITADAS = new Set();
 let SCRAPER_PROGRESS_VALUE = 0;
 let SCRAPER_PROGRESS_MSG_INDEX = 0;
 let SCRAPER_FAVORITOS_RECOVERY_DONE = false;
+let DRAG_PREVIEW_NODE = null;
 
 const SCRAPER_PROGRESS_MESSAGES = [
     'Conectando con GitHub Actions...',
@@ -85,6 +87,32 @@ function escapeHtmlSafe(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+function limpiarEstadoVisualDrag() {
+    document.body.classList.remove('drag-active');
+    if (DRAG_PREVIEW_NODE && DRAG_PREVIEW_NODE.parentNode) {
+        DRAG_PREVIEW_NODE.parentNode.removeChild(DRAG_PREVIEW_NODE);
+    }
+    DRAG_PREVIEW_NODE = null;
+}
+
+function crearDragPreviewMinimizado(e, titulo = 'Elemento', subtitulo = '') {
+    try {
+        limpiarEstadoVisualDrag();
+        const node = document.createElement('div');
+        node.className = 'drag-preview-ghost';
+        node.innerHTML = `
+            <p class="drag-preview-title">${escapeHtmlSafe(titulo)}</p>
+            <p class="drag-preview-sub">${escapeHtmlSafe(subtitulo || 'Arrastra y suelta')}</p>
+        `;
+        document.body.appendChild(node);
+        DRAG_PREVIEW_NODE = node;
+        if (e?.dataTransfer?.setDragImage) {
+            e.dataTransfer.setDragImage(node, 22, 18);
+        }
+        document.body.classList.add('drag-active');
+    } catch (_) {}
 }
 
 function resetDiagnosticoMonopolio() {
@@ -2551,6 +2579,83 @@ function editarEstadoKanban(id) { const e = LISTA_ESTADOS_KANBAN.find(x => x._id
 function limpiarFormEstadoKanban() { document.getElementById('form-estado-kanban').reset(); document.getElementById('ek-id').value = ''; }
 async function borrarEstadoKanban(id) { if(confirm("¿Eliminar columna del tablero? Los productos conservarán su estado textualmente, pero desaparecerán de la vista principal hasta que los reasignes.")) { await fetch(`/api/estados-kanban/${id}`, { method: 'DELETE', credentials: 'include' }); await refrescarEstadosKanban(); renderKanban(true); } }
 
+function normalizarTextoCategoria(texto) {
+    return String(texto || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+}
+
+function inferirGrupoCategoria(nombreCategoria) {
+    const n = normalizarTextoCategoria(nombreCategoria);
+
+    if (/(camisa|camiseta|blusa|top|polo|jersey|sudadera|chaqueta|abrigo|cazadora|vestido|falda|pantalon|jean|mono|conjunto|ropa)/.test(n)) {
+        return '👚 Ropa';
+    }
+    if (/(zapat|zapato|bota|sandalia|tacon|calzado|sneaker)/.test(n)) {
+        return '👟 Calzado';
+    }
+    if (/(bolso|mochila|cinturon|gaf|sombrero|gorra|bisuter|joy|reloj|accesor|pañuelo|bufanda)/.test(n)) {
+        return '👜 Accesorios';
+    }
+    if (/(nino|nina|beb|infantil|kid|juvenil)/.test(n)) {
+        return '🧸 Infantil';
+    }
+    if (/(hogar|deco|casa|textil hogar)/.test(n)) {
+        return '🏠 Hogar';
+    }
+    if (/(belleza|cosmet|maquill|perfume|skincare|salud)/.test(n)) {
+        return '💄 Belleza';
+    }
+    return '📦 Otras';
+}
+
+function construirMapaCategoriasAgrupadas(listaCategorias) {
+    const ordenGrupos = ['👚 Ropa', '👟 Calzado', '👜 Accesorios', '🧸 Infantil', '🏠 Hogar', '💄 Belleza', '📦 Otras'];
+    const mapa = new Map();
+    ordenGrupos.forEach((g) => mapa.set(g, []));
+
+    (listaCategorias || []).forEach((c) => {
+        const nombre = String(c?.nombre || '').trim();
+        if (!nombre) return;
+        const grupo = inferirGrupoCategoria(nombre);
+        if (!mapa.has(grupo)) mapa.set(grupo, []);
+        mapa.get(grupo).push(nombre);
+    });
+
+    mapa.forEach((arr, key) => {
+        arr.sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+        if (!arr.length) mapa.delete(key);
+    });
+
+    return mapa;
+}
+
+function poblarSelectCategoriasAgrupadas(selectNode, mapaGrupos, cfg = {}) {
+    if (!selectNode) return;
+    const { opcionInicialValor = null, opcionInicialTexto = '' } = cfg;
+
+    selectNode.innerHTML = '';
+    if (opcionInicialValor !== null) {
+        const optBase = document.createElement('option');
+        optBase.value = opcionInicialValor;
+        optBase.textContent = opcionInicialTexto;
+        selectNode.appendChild(optBase);
+    }
+
+    mapaGrupos.forEach((nombres, grupo) => {
+        const og = document.createElement('optgroup');
+        og.label = `${grupo} (${nombres.length})`;
+        nombres.forEach((nombre) => {
+            const opt = document.createElement('option');
+            opt.value = nombre;
+            opt.textContent = nombre;
+            og.appendChild(opt);
+        });
+        selectNode.appendChild(og);
+    });
+}
+
 async function refrescarCategoriasCloud() {
     const selectForm = document.getElementById('categoria');
     const selectFiltro = document.getElementById('filtro-categoria');
@@ -2560,20 +2665,13 @@ async function refrescarCategoriasCloud() {
         const res = await fetch(`${BACKEND_URL}/api/categorias`, { credentials: 'include' });
         const data = await res.json();
         LISTA_CATEGORIAS_GLOBAL = data.categorias || [];
-        
-        selectForm.innerHTML = '';
-        if(selectFiltro) selectFiltro.innerHTML = '<option value="TODOS">👕 Todas las categorías</option>';
-        if(selectAn) selectAn.innerHTML = '<option value="TODOS">👕 Todas</option>';
-        if(selectMasivo) selectMasivo.innerHTML = '<option value="">👕 Categoría...</option>';
 
-        LISTA_CATEGORIAS_GLOBAL.forEach(c => {
-            const opt = document.createElement('option');
-            opt.value = c.nombre; opt.textContent = c.nombre;
-            selectForm.appendChild(opt.cloneNode(true));
-            if(selectFiltro) selectFiltro.appendChild(opt.cloneNode(true));
-            if(selectAn) selectAn.appendChild(opt.cloneNode(true));
-            if(selectMasivo) selectMasivo.appendChild(opt.cloneNode(true));
-        });
+        const mapaGrupos = construirMapaCategoriasAgrupadas(LISTA_CATEGORIAS_GLOBAL);
+        poblarSelectCategoriasAgrupadas(selectForm, mapaGrupos);
+        poblarSelectCategoriasAgrupadas(selectFiltro, mapaGrupos, { opcionInicialValor: 'TODOS', opcionInicialTexto: '👕 Todas las categorías' });
+        poblarSelectCategoriasAgrupadas(selectAn, mapaGrupos, { opcionInicialValor: 'TODOS', opcionInicialTexto: '👕 Todas' });
+        poblarSelectCategoriasAgrupadas(selectMasivo, mapaGrupos, { opcionInicialValor: '', opcionInicialTexto: '👕 Categoría...' });
+
         if (!document.getElementById('edit-id').value) establecerValoresPorDefecto();
     } catch(e) { console.error("Error cargando categorías:", e); }
 }
@@ -3117,6 +3215,8 @@ function actualizarDashboardGananciasAdmin() {
     let ingresos = 0;
     let inversion = 0;
     let prendas = 0;
+    const beneficioPorFecha = {};
+    const beneficioPorCanal = {};
 
     vendidos.forEach((v) => {
         const qty = Number(v.cantidad || 1) || 1;
@@ -3129,6 +3229,15 @@ function actualizarDashboardGananciasAdmin() {
         ingresos += (pv - comision) * qty;
         inversion += (pc + ge) * qty;
         prendas += qty;
+
+        const neto = (pv - comision) * qty;
+        const inv = (pc + ge) * qty;
+        const ben = neto - inv;
+        const fecha = String(v.fechaVenta || '').slice(0, 10) || 'Sin fecha';
+        const canalTag = String(v.canalVenta || 'Sin canal');
+
+        beneficioPorFecha[fecha] = (beneficioPorFecha[fecha] || 0) + ben;
+        beneficioPorCanal[canalTag] = (beneficioPorCanal[canalTag] || 0) + ben;
     });
 
     const beneficio = ingresos - inversion;
@@ -3146,10 +3255,86 @@ function actualizarDashboardGananciasAdmin() {
     if (kBeneficio) kBeneficio.innerText = `${beneficio.toFixed(2)} €`;
     if (kRoi) kRoi.innerText = `${roi.toFixed(1)}%`;
     if (kPrendas) kPrendas.innerText = String(prendas);
+    if (kBeneficio) {
+        kBeneficio.classList.toggle('kpi-positive', beneficio >= 0);
+        kBeneficio.classList.toggle('kpi-negative', beneficio < 0);
+    }
+    if (kRoi) {
+        kRoi.classList.toggle('kpi-positive', roi >= 0);
+        kRoi.classList.toggle('kpi-negative', roi < 0);
+    }
 
     const inicio = document.getElementById('admin-profit-date-start')?.value || '-';
     const fin = document.getElementById('admin-profit-date-end')?.value || '-';
     if (kRango) kRango.innerText = `Rango: ${inicio} -> ${fin} · Registros vendidos: ${vendidos.length}`;
+
+    const canvas = document.getElementById('admin-profit-chart');
+    if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (INSTANCIA_ADMIN_PROFIT_CHART) INSTANCIA_ADMIN_PROFIT_CHART.destroy();
+
+        const labels = Object.keys(beneficioPorFecha).sort();
+        const data = labels.map((f) => Number(beneficioPorFecha[f] || 0));
+        INSTANCIA_ADMIN_PROFIT_CHART = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels.map((f) => f.split('-').reverse().slice(0, 2).join('/')),
+                datasets: [{
+                    data,
+                    borderColor: '#22d3ee',
+                    backgroundColor: 'rgba(34, 211, 238, 0.14)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.24,
+                    pointRadius: 2.5,
+                    pointBackgroundColor: '#67e8f9'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => ` Beneficio: ${Number(context.parsed.y || 0).toFixed(2)} €`
+                        }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#94a3b8', maxRotation: 0, autoSkip: true }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { ticks: { color: '#94a3b8', callback: (v) => `${v}€` }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                }
+            }
+        });
+    }
+
+    const topCanalesEl = document.getElementById('admin-profit-top-canales');
+    if (topCanalesEl) {
+        const entries = Object.entries(beneficioPorCanal).sort((a, b) => b[1] - a[1]).slice(0, 6);
+        if (!entries.length) {
+            topCanalesEl.innerHTML = '<p class="text-[10px] opacity-45">Sin datos en el rango seleccionado.</p>';
+        } else {
+            const maxAbs = Math.max(...entries.map((x) => Math.abs(Number(x[1] || 0))), 1);
+            topCanalesEl.innerHTML = entries.map(([canal, ben], idx) => {
+                const positivo = ben >= 0;
+                const color = positivo ? 'text-emerald-300' : 'text-rose-300';
+                const barraColor = positivo ? 'from-emerald-500/50 to-cyan-500/40' : 'from-rose-500/50 to-orange-500/40';
+                const width = Math.max(8, (Math.abs(ben) / maxAbs) * 100);
+                return `
+                    <div class="p-2 rounded-xl border border-white/10 bg-black/20">
+                        <div class="flex items-center justify-between text-[10px] mb-1">
+                            <span class="font-black uppercase tracking-wide">${idx + 1}. ${escapeHtmlSafe(canal)}</span>
+                            <span class="font-mono ${color}">${Number(ben).toFixed(2)} €</span>
+                        </div>
+                        <div class="h-1.5 rounded-full bg-black/30 overflow-hidden border border-white/10">
+                            <div class="h-full bg-gradient-to-r ${barraColor}" style="width:${width}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
 }
 
 window.onCambiarPresetGananciasAdmin = onCambiarPresetGananciasAdmin;
@@ -3518,15 +3703,20 @@ function renderKanbanCitas() {
 }
 
 window.handleDragStartCita = function(e, id) {
+    const cita = (LISTA_CITAS || []).find((x) => x._id === id);
+    const titulo = cita ? `${cita.nombre || ''} ${cita.apellidos || ''}`.trim() : 'Cita';
+    const subtitulo = cita ? `${cita.fechaDia || '-'} · ${cita.hora || '-'}` : 'Mover cita';
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/cita-id', id);
     e.dataTransfer.setData('text/drag-kind', 'cita-kanban');
+    crearDragPreviewMinimizado(e, titulo || 'Cita', subtitulo);
     setTimeout(() => { e.target.classList.add('opacity-40'); }, 0);
 };
 
 window.handleDropCita = async function(e, nuevoEstado) {
     e.preventDefault();
     window.clearDrop(e);
+    limpiarEstadoVisualDrag();
     const dragKind = e.dataTransfer.getData('text/drag-kind');
     if (dragKind !== 'cita-kanban') return;
     const id = e.dataTransfer.getData('text/cita-id');
@@ -3540,6 +3730,10 @@ window.handleDropCita = async function(e, nuevoEstado) {
 
     LISTA_CITAS[idx].estado = nuevoEstado;
     renderKanbanCitas();
+    if (e.currentTarget?.classList) {
+        e.currentTarget.classList.add('drop-highlight');
+        setTimeout(() => e.currentTarget?.classList.remove('drop-highlight'), 420);
+    }
 
     try {
         const res = await fetch(`/api/citas/${id}/estado`, {
@@ -3615,13 +3809,26 @@ function renderKanbanTareas() {
     });
 }
 
-window.handleDragStartTarea = function(e, id) { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData("text/tarea-id", id); setTimeout(() => { e.target.classList.add('opacity-30'); }, 0); };
+window.handleDragStartTarea = function(e, id) {
+    const t = (LISTA_TAREAS || []).find((x) => x._id === id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData("text/tarea-id", id);
+    e.dataTransfer.setData('text/drag-kind', 'tarea-kanban');
+    crearDragPreviewMinimizado(e, t?.titulo || 'Tarea', t?.prioridad ? `Prioridad ${t.prioridad}` : 'Mover tarea');
+    setTimeout(() => { e.target.classList.add('opacity-30'); }, 0);
+};
 window.handleDropTarea = async function(e, nuevoEstado) {
-    e.preventDefault(); window.clearDrop(e);
+    e.preventDefault(); window.clearDrop(e); limpiarEstadoVisualDrag();
+    const dragKind = e.dataTransfer.getData('text/drag-kind');
+    if (dragKind && dragKind !== 'tarea-kanban') return;
     const id = e.dataTransfer.getData("text/tarea-id"); if(!id) return;
     
     const idx = LISTA_TAREAS.findIndex(t => t._id === id);
     if(idx !== -1) { LISTA_TAREAS[idx].estado = nuevoEstado; renderKanbanTareas(); }
+    if (e.currentTarget?.classList) {
+        e.currentTarget.classList.add('drop-highlight');
+        setTimeout(() => e.currentTarget?.classList.remove('drop-highlight'), 420);
+    }
     
     try { await fetch(`/api/tareas/${id}/estado`, { method: 'PUT', headers: {'Content-Type':'application/json'}, credentials: 'include', body: JSON.stringify({ estado: nuevoEstado }) }); } 
     catch(err) { refrescarTareas(); }
@@ -4974,6 +5181,10 @@ window.clearDrop = function(e) {
     if (col) col.classList.remove('drag-over');
 };
 
+document.addEventListener('dragend', () => {
+    limpiarEstadoVisualDrag();
+});
+
 window.handleDragStart = function(e, id) { 
     if (esRolVisualizador()) {
         e.preventDefault();
@@ -4984,6 +5195,10 @@ window.handleDragStart = function(e, id) {
         e.dataTransfer.setData("text/lote-items", JSON.stringify(ITEMS_SELECCIONADOS_MASIVOS));
     } else { e.dataTransfer.setData("text/lote-items", JSON.stringify([id])); }
     e.dataTransfer.setData('text/drag-kind', 'kanban-producto');
+    const producto = (BASE_DATOS || []).find((x) => x._id === id);
+    const totalItems = ITEMS_SELECCIONADOS_MASIVOS.includes(id) ? ITEMS_SELECCIONADOS_MASIVOS.length : 1;
+    const subtitulo = totalItems > 1 ? `${totalItems} fichas seleccionadas` : `${producto?.categoria || 'Producto'} · ${producto?.talla || '-'}`;
+    crearDragPreviewMinimizado(e, producto?.prenda || 'Producto', subtitulo);
     const card = document.getElementById(id);
     if(card) { setTimeout(() => { if (ITEMS_SELECCIONADOS_MASIVOS.includes(id)) { ITEMS_SELECCIONADOS_MASIVOS.forEach(xId => { const cNode = document.getElementById(xId); if(cNode) cNode.classList.add('dragging'); }); } else { card.classList.add('dragging'); } }, 0); }
 };
@@ -4995,7 +5210,7 @@ window.handleDropColumn = async function(e, newState) {
         alert('No tienes permisos para mover productos.');
         return;
     }
-    e.preventDefault(); window.clearDrop(e);
+    e.preventDefault(); window.clearDrop(e); limpiarEstadoVisualDrag();
     const dragKind = e.dataTransfer.getData('text/drag-kind');
     if (dragKind && dragKind !== 'kanban-producto') return;
     const loteRaw = e.dataTransfer.getData("text/lote-items");
@@ -5032,6 +5247,10 @@ window.handleDropColumn = async function(e, newState) {
         } 
     });
     renderKanban();
+    if (e.currentTarget?.classList) {
+        e.currentTarget.classList.add('drop-highlight');
+        setTimeout(() => e.currentTarget?.classList.remove('drop-highlight'), 420);
+    }
 
     cantarPorVoz(`Columna actualizada`);
     procesarMultiplicadorCombo();
@@ -6229,23 +6448,59 @@ function dibujarMapaCalor() {
     const ctx = canvasContenedor.getContext('2d'); if (INSTANCIA_MAPA_CALOR) { INSTANCIA_MAPA_CALOR.destroy(); }
 
     const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    const bloquesHorarios = ['00:00-06:00', '06:00-12:00', '12:00-18:00', '18:00-00:00'];
-    const matrizDatos = Array(7).fill(0).map(() => Array(4).fill(0)); let maxVentas = 1;
+    const selectGran = document.getElementById('heatmap-granularidad');
+    const selectMet = document.getElementById('heatmap-metrica');
+    const resumenEl = document.getElementById('heatmap-summary');
+    const granularidad = String(selectGran?.value || 'bloques');
+    const metrica = String(selectMet?.value || 'prendas');
+
+    const bloquesHorarios = granularidad === 'hora'
+        ? Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`)
+        : ['00:00-06:00', '06:00-12:00', '12:00-18:00', '18:00-00:00'];
+
+    const bloquesCount = bloquesHorarios.length;
+    const matrizDatos = Array(7).fill(0).map(() => Array(bloquesCount).fill(0));
+    let maxVentas = 1;
 
     const datosFiltrados = obtenerDatosFiltradosParaAnalitica();
     datosFiltrados.forEach(v => {
         const fechaObj = v.fechaVenta ? new Date(v.fechaVenta) : new Date(); if (isNaN(fechaObj.getTime())) return;
         const diaIndex = fechaObj.getDay(); const hora = fechaObj.getHours();
         let bloqueIndex = 0;
-        if (hora >= 6 && hora < 12) bloqueIndex = 1;
-        else if (hora >= 12 && hora < 18) bloqueIndex = 2;
-        else if (hora >= 18) bloqueIndex = 3;
-        matrizDatos[diaIndex][bloqueIndex] += (parseInt(v.cantidad) || 1);
+
+        if (granularidad === 'hora') {
+            bloqueIndex = hora;
+        } else {
+            if (hora >= 6 && hora < 12) bloqueIndex = 1;
+            else if (hora >= 12 && hora < 18) bloqueIndex = 2;
+            else if (hora >= 18) bloqueIndex = 3;
+        }
+
+        const qty = (parseInt(v.cantidad, 10) || 1);
+        const pv = Number(v.precioVenta || 0) || 0;
+        const pc = Number(v.precioCompra || 0) || 0;
+        const ge = Number(v.gastosEnvio || 0) || 0;
+        const canal = String(v.canalVenta || '').toLowerCase();
+        const comision = (canal === 'vinted' || canal === 'wallapop') ? (pv * 0.05) : 0;
+
+        let valor = qty;
+        if (metrica === 'ingresos') valor = (pv - comision) * qty;
+        if (metrica === 'beneficio') valor = ((pv - comision) - (pc + ge)) * qty;
+
+        matrizDatos[diaIndex][bloqueIndex] += valor;
         if (matrizDatos[diaIndex][bloqueIndex] > maxVentas) maxVentas = matrizDatos[diaIndex][bloqueIndex];
     });
 
     const scatterData = [];
-    for (let d = 0; d < 7; d++) { for (let h = 0; h < 4; h++) { if (matrizDatos[d][h] > 0) scatterData.push({ x: d, y: h, v: matrizDatos[d][h] }); } }
+    let topSlot = null;
+    for (let d = 0; d < 7; d++) {
+        for (let h = 0; h < bloquesCount; h++) {
+            if (matrizDatos[d][h] <= 0) continue;
+            const point = { x: d, y: h, v: matrizDatos[d][h] };
+            scatterData.push(point);
+            if (!topSlot || point.v > topSlot.v) topSlot = point;
+        }
+    }
 
     const currentTheme = localStorage.getItem('seychelles-theme-multi') || 'dark';
     const paletasTema = {
@@ -6261,20 +6516,55 @@ function dibujarMapaCalor() {
         data: {
             datasets: [{
                 data: scatterData,
-                backgroundColor: function(context) { const value = context.raw ? context.raw.v : 0; const alpha = Math.min(0.2 + (value / maxVentas) * 0.8, 1); return `rgba(${cfg.base}, ${alpha})`; },
-                pointStyle: 'rectRounded', radius: function(context) { return Math.min(context.chart.width / 24, 28); }
+                backgroundColor: function(context) {
+                    const value = context.raw ? context.raw.v : 0;
+                    const alpha = Math.min(0.2 + (Math.abs(value) / Math.max(Math.abs(maxVentas), 1)) * 0.8, 1);
+                    if (metrica === 'beneficio' && value < 0) return `rgba(244, 63, 94, ${alpha})`;
+                    return `rgba(${cfg.base}, ${alpha})`;
+                },
+                pointStyle: 'rectRounded',
+                radius: function(context) {
+                    const value = Math.abs(context.raw?.v || 0);
+                    const base = granularidad === 'hora' ? Math.min(context.chart.width / 44, 17) : Math.min(context.chart.width / 24, 26);
+                    const factor = Math.max(0.55, value / Math.max(Math.abs(maxVentas), 1));
+                    return Math.max(6, base * factor);
+                }
             }]
         },
         options: {
             responsive: true, maintainAspectRatio: false,
             animation: { duration: 1500, easing: 'easeOutElastic', delay: (context) => context.dataIndex * 30 },
-            plugins: { legend: { display: false }, tooltip: { callbacks: { label: context => ` ${diasSemana[context.raw.x]} (${bloquesHorarios[context.raw.y]}): ${context.raw.v} prenda(s)` } } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => {
+                            const val = Number(context.raw?.v || 0);
+                            const metricLabel = metrica === 'prendas'
+                                ? `${val.toFixed(0)} prenda(s)`
+                                : `${val.toFixed(2)} €`;
+                            return ` ${diasSemana[context.raw.x]} (${bloquesHorarios[context.raw.y]}): ${metricLabel}`;
+                        }
+                    }
+                }
+            },
             scales: {
                 x: { type: 'linear', min: -0.5, max: 6.5, grid: { color: cfg.malla }, ticks: { color: cfg.texto, stepSize: 1, callback: v => diasSemana[v] } },
-                y: { type: 'linear', min: -0.5, max: 3.5, grid: { color: cfg.malla }, ticks: { color: cfg.texto, stepSize: 1, callback: v => bloquesHorarios[v] } }
+                y: { type: 'linear', min: -0.5, max: bloquesCount - 0.5, grid: { color: cfg.malla }, ticks: { color: cfg.texto, stepSize: 1, callback: v => bloquesHorarios[v] } }
             }
         }
     });
+
+    if (resumenEl) {
+        if (!topSlot) {
+            resumenEl.innerText = 'Sin transacciones para los filtros activos.';
+        } else {
+            const valorTxt = metrica === 'prendas'
+                ? `${Number(topSlot.v).toFixed(0)} prendas`
+                : `${Number(topSlot.v).toFixed(2)} €`;
+            resumenEl.innerText = `Pico detectado: ${diasSemana[topSlot.x]} · ${bloquesHorarios[topSlot.y]} · ${valorTxt}.`;
+        }
+    }
 }
 
 function renderKanban(isFullRefresh = false) {

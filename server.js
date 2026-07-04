@@ -2769,11 +2769,13 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
         const aliasLimpio = String(alias || '').trim() || 'Vinted';
 
         await dispararWorkflowGithub({
-            workflowFile: 'manual-scraper.yml',
+            workflowFile: 'vinted-scraper.yml',
             inputs: {
-                vinted_url: urlNormalizada,
+                mode: 'manual',
+                target_url: urlNormalizada,
                 empresa,
-                alias: aliasLimpio
+                alias: aliasLimpio,
+                webhook_path: '/api/scraper/webhook-github'
             },
             logTag: 'GITHUB-MANUAL'
         });
@@ -2791,7 +2793,7 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
 
         if (ghStatus === 404) {
             return res.status(500).json({
-                error: 'GitHub no encontró el repo o el workflow. Revisa GITHUB_OWNER/GITHUB_REPO y que exista .github/workflows/manual-scraper.yml en main.'
+                error: 'GitHub no encontró el repo o el workflow. Revisa GITHUB_OWNER/GITHUB_REPO y que exista .github/workflows/vinted-scraper.yml en main.'
             });
         }
 
@@ -2803,7 +2805,7 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
 
         if (ghStatus === 422) {
             return res.status(500).json({
-                error: 'GitHub rechazó el dispatch (posible rama o workflow incorrecto). Verifica que la rama main exista y el archivo manual-scraper.yml esté en esa rama.'
+                error: 'GitHub rechazó el dispatch (posible rama o workflow incorrecto). Verifica que la rama main exista y el archivo vinted-scraper.yml esté en esa rama.'
             });
         }
 
@@ -3570,11 +3572,13 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
         for (const item of urls) {
             try {
                 await dispararWorkflowGithub({
-                    workflowFile: 'monopolio-scraper.yml',
+                    workflowFile: 'vinted-scraper.yml',
                     inputs: {
+                        mode: 'monopolio',
                         target_url: normalizarUrlObjetivo(item.url),
                         empresa,
-                        alias: String(item.alias || '').trim() || sugerirAliasDesdeUrl(item.url)
+                        alias: String(item.alias || '').trim() || sugerirAliasDesdeUrl(item.url),
+                        webhook_path: '/api/monopolio/webhook-github'
                     },
                     logTag: 'GITHUB-MONOPOLIO'
                 });
@@ -3666,11 +3670,13 @@ app.post('/api/monopolio/scrape-selected', exigeAdmin, async (req, res) => {
         for (const item of normalizadas) {
             try {
                 await dispararWorkflowGithub({
-                    workflowFile: 'monopolio-scraper.yml',
+                    workflowFile: 'vinted-scraper.yml',
                     inputs: {
+                        mode: 'monopolio',
                         target_url: item.url,
                         empresa,
-                        alias: item.alias
+                        alias: item.alias,
+                        webhook_path: '/api/monopolio/webhook-github'
                     },
                     logTag: 'GITHUB-MONOPOLIO'
                 });

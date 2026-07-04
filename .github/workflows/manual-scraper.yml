@@ -45,4 +45,8 @@ jobs:
         env:
           MY_WEB_URL: ${{ secrets.MY_WEB_URL }}
           SCRAPER_TOKEN: ${{ secrets.SCRAPER_TOKEN }}
+          SCRAPER_PLAYWRIGHT_FIRST: "false"
+          SCRAPER_LOCALE: "es-ES"
+          SCRAPER_TIMEZONE: "Europe/Madrid"
+          SCRAPER_SCROLL_BURSTS: "4"
         run: node scripts/manual-scrape.js "${{ github.event.inputs.vinted_url }}" "${{ github.event.inputs.empresa }}" "${{ github.event.inputs.alias }}"

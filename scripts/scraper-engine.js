@@ -1,10 +1,19 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const os = require('os');
+const path = require('path');
+const fs = require('fs');
 
 const DEFAULT_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36';
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function randomBetween(min, max) {
+    const a = Number(min) || 0;
+    const b = Number(max) || 0;
+    return Math.floor(a + Math.random() * Math.max(1, b - a + 1));
 }
 
 async function withRetry(task, options = {}) {
@@ -185,6 +194,90 @@ function normalizarUrlVinted(inputUrl) {
     if (!raw) return '';
     if (/^https?:\/\//i.test(raw)) return raw;
     return `https://${raw}`;
+}
+
+function parseBoolEnv(name, fallback = false) {
+    const raw = String(process.env[name] || '').trim().toLowerCase();
+    if (!raw) return fallback;
+    return ['1', 'true', 'yes', 'on'].includes(raw);
+}
+
+function leerStorageStateDesdeEnv() {
+    const b64 = String(process.env.VINTED_STORAGE_STATE_B64 || '').trim();
+    if (!b64) return null;
+    try {
+        const json = Buffer.from(b64, 'base64').toString('utf8');
+        const parsed = JSON.parse(json);
+        if (parsed && typeof parsed === 'object') return parsed;
+    } catch (error) {
+        console.warn(`[SCRAPER] VINTED_STORAGE_STATE_B64 invalido: ${error.message}`);
+    }
+    return null;
+}
+
+async function crearSesionNavegador(tag = 'scraper') {
+    let chromium;
+    try {
+        ({ chromium } = require('playwright'));
+    } catch (_) {
+        return null;
+    }
+
+    const headless = !parseBoolEnv('SCRAPER_SHOW_BROWSER', false);
+    const storageState = leerStorageStateDesdeEnv();
+    const locale = String(process.env.SCRAPER_LOCALE || 'es-ES');
+    const timezoneId = String(process.env.SCRAPER_TIMEZONE || 'Europe/Madrid');
+    const userDataDir = path.join(os.tmpdir(), `seychelles-${tag}-${Date.now()}-${randomBetween(100, 999)}`);
+
+    const browser = await chromium.launch({
+        headless,
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-blink-features=AutomationControlled'
+        ]
+    });
+
+    const context = await browser.newContext({
+        locale,
+        timezoneId,
+        userAgent: DEFAULT_UA,
+        viewport: { width: 1366, height: 900 },
+        storageState: storageState || undefined
+    });
+
+    // Reducimos señales automáticas sin alterar funcionalidad de la web.
+    await context.addInitScript(() => {
+        try {
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        } catch (_) {}
+    });
+
+    return { browser, context, userDataDir };
+}
+
+async function cerrarSesionNavegador(session) {
+    if (!session) return;
+    try { await session.context?.close(); } catch (_) {}
+    try { await session.browser?.close(); } catch (_) {}
+    try {
+        if (session.userDataDir && fs.existsSync(session.userDataDir)) {
+            fs.rmSync(session.userDataDir, { recursive: true, force: true });
+        }
+    } catch (_) {}
+}
+
+async function navegarComoNavegadorReal(page, urlObjetivo) {
+    await page.goto(urlObjetivo, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await page.waitForTimeout(randomBetween(900, 1700));
+    await page.mouse.move(randomBetween(80, 420), randomBetween(60, 260), { steps: randomBetween(6, 14) });
+
+    const scrollBursts = Math.max(2, Math.min(parseInt(process.env.SCRAPER_SCROLL_BURSTS || '4', 10), 10));
+    for (let i = 0; i < scrollBursts; i++) {
+        await page.mouse.wheel(0, randomBetween(1400, 3200));
+        await page.waitForTimeout(randomBetween(700, 1400));
+    }
 }
 
 function extraerProductosDesdeLdJson($) {
@@ -389,27 +482,15 @@ async function extraerPorApiVinted(urlObjetivo) {
     return deduplicarProductos(out);
 }
 
-async function extraerConPlaywright(urlObjetivo) {
-    let chromium;
-    try {
-        ({ chromium } = require('playwright'));
-    } catch (_) {
+async function extraerConPlaywright(urlObjetivo, session = null) {
+    const ownSession = !session;
+    const internalSession = session || await crearSesionNavegador('vinted');
+    if (!internalSession) {
         console.log('[SCRAPER] Playwright no esta disponible.');
         return [];
     }
 
-    const browser = await chromium.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
-
-    const context = await browser.newContext({
-        locale: 'es-ES',
-        userAgent: DEFAULT_UA,
-        viewport: { width: 1366, height: 900 }
-    });
-
-    const page = await context.newPage();
+    const page = await internalSession.context.newPage();
     const capturedApi = [];
 
     page.on('response', async (response) => {
@@ -429,12 +510,7 @@ async function extraerConPlaywright(urlObjetivo) {
     });
 
     try {
-        await page.goto(urlObjetivo, { waitUntil: 'domcontentloaded', timeout: 45000 });
-        await page.waitForTimeout(1600);
-        await page.mouse.wheel(0, 2500);
-        await page.waitForTimeout(1200);
-        await page.mouse.wheel(0, 2500);
-        await page.waitForTimeout(1600);
+        await navegarComoNavegadorReal(page, urlObjetivo);
 
         const domProducts = await page.evaluate(() => {
             const normalizePrice = (value) => {
@@ -475,37 +551,27 @@ async function extraerConPlaywright(urlObjetivo) {
         console.error(`[SCRAPER] Playwright fallo: ${error.message}`);
         return deduplicarProductos(capturedApi);
     } finally {
-        await context.close();
-        await browser.close();
+        try { await page.close(); } catch (_) {}
+        if (ownSession) {
+            await cerrarSesionNavegador(internalSession);
+        }
     }
 }
 
-async function extraerCuentasDesdeSeguidores(urlObjetivo) {
-    let chromium;
-    try {
-        ({ chromium } = require('playwright'));
-    } catch (_) {
+async function extraerCuentasDesdeSeguidores(urlObjetivo, session = null) {
+    const ownSession = !session;
+    const internalSession = session || await crearSesionNavegador('following');
+    if (!internalSession) {
         console.log('[MONOPOLIO] Playwright no esta disponible para expandir seguidos.');
         return [];
     }
-
-    const browser = await chromium.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-    });
-
-    const context = await browser.newContext({
-        locale: 'es-ES',
-        userAgent: DEFAULT_UA,
-        viewport: { width: 1366, height: 900 }
-    });
-    const page = await context.newPage();
+    const page = await internalSession.context.newPage();
 
     try {
-        await page.goto(urlObjetivo, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        for (let i = 0; i < 5; i++) {
-            await page.mouse.wheel(0, 4000);
-            await page.waitForTimeout(1000);
+        await navegarComoNavegadorReal(page, urlObjetivo);
+        for (let i = 0; i < 4; i++) {
+            await page.mouse.wheel(0, randomBetween(2200, 5200));
+            await page.waitForTimeout(randomBetween(700, 1400));
         }
 
         const perfiles = await page.evaluate(() => {
@@ -535,8 +601,10 @@ async function extraerCuentasDesdeSeguidores(urlObjetivo) {
         console.error(`[MONOPOLIO] Fallo al extraer cuentas seguidas: ${error.message}`);
         return [];
     } finally {
-        await context.close();
-        await browser.close();
+        try { await page.close(); } catch (_) {}
+        if (ownSession) {
+            await cerrarSesionNavegador(internalSession);
+        }
     }
 }
 
@@ -544,59 +612,64 @@ async function scrapeMonopolio(url, aliasBase = '') {
     const urlNormalizada = normalizarUrlVinted(url);
     const aliasPrincipal = sanitizarAlias(aliasBase || extraerAliasDesdeUrlPerfil(urlNormalizada), 'Competidor');
     const grupos = [];
+    const session = await crearSesionNavegador('monopolio');
 
-    if (esUrlSeguidoresVinted(urlNormalizada)) {
-        const cuentas = await extraerCuentasDesdeSeguidores(urlNormalizada);
-        const maxCuentas = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_ACCOUNTS || '20', 10), 40));
-        const objetivos = cuentas.slice(0, maxCuentas);
+    try {
+        if (esUrlSeguidoresVinted(urlNormalizada)) {
+            const cuentas = await extraerCuentasDesdeSeguidores(urlNormalizada, session);
+            const maxCuentas = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_ACCOUNTS || '20', 10), 40));
+            const objetivos = cuentas.slice(0, maxCuentas);
 
-        console.log(`[MONOPOLIO] Enlace de seguidos detectado. Cuentas encontradas: ${cuentas.length}, procesando: ${objetivos.length}`);
+            console.log(`[MONOPOLIO] Enlace de seguidos detectado. Cuentas encontradas: ${cuentas.length}, procesando: ${objetivos.length}`);
 
-        for (const cuenta of objetivos) {
-            const { productos } = await scrapeVinted(cuenta.url);
-            const aliasCuenta = sanitizarAlias(cuenta.alias, extraerAliasDesdeUrlPerfil(cuenta.url));
+            for (const cuenta of objetivos) {
+                const { productos } = await scrapeVinted(cuenta.url, { playwrightFirst: true, session });
+                const aliasCuenta = sanitizarAlias(cuenta.alias, extraerAliasDesdeUrlPerfil(cuenta.url));
+                const enriquecidos = (productos || []).map((p) => ({
+                    ...p,
+                    proveedor: aliasCuenta,
+                    cuenta: aliasCuenta,
+                    urlCuenta: cuenta.url,
+                    origenGrupo: aliasPrincipal
+                }));
+
+                grupos.push({
+                    cuenta: aliasCuenta,
+                    urlCuenta: cuenta.url,
+                    total: enriquecidos.length,
+                    productos: enriquecidos
+                });
+            }
+        } else {
+            const { productos } = await scrapeVinted(urlNormalizada, { playwrightFirst: true, session });
+            const aliasCuenta = sanitizarAlias(aliasPrincipal, extraerAliasDesdeUrlPerfil(urlNormalizada));
             const enriquecidos = (productos || []).map((p) => ({
                 ...p,
                 proveedor: aliasCuenta,
                 cuenta: aliasCuenta,
-                urlCuenta: cuenta.url,
+                urlCuenta: urlNormalizada,
                 origenGrupo: aliasPrincipal
             }));
 
             grupos.push({
                 cuenta: aliasCuenta,
-                urlCuenta: cuenta.url,
+                urlCuenta: urlNormalizada,
                 total: enriquecidos.length,
                 productos: enriquecidos
             });
         }
-    } else {
-        const { productos } = await scrapeVinted(urlNormalizada);
-        const aliasCuenta = sanitizarAlias(aliasPrincipal, extraerAliasDesdeUrlPerfil(urlNormalizada));
-        const enriquecidos = (productos || []).map((p) => ({
-            ...p,
-            proveedor: aliasCuenta,
-            cuenta: aliasCuenta,
-            urlCuenta: urlNormalizada,
-            origenGrupo: aliasPrincipal
-        }));
 
-        grupos.push({
-            cuenta: aliasCuenta,
-            urlCuenta: urlNormalizada,
-            total: enriquecidos.length,
-            productos: enriquecidos
-        });
+        const productos = deduplicarProductos(grupos.flatMap((g) => g.productos || []));
+        return {
+            productos,
+            grupos,
+            esModoSeguidos: esUrlSeguidoresVinted(urlNormalizada),
+            aliasPrincipal,
+            urlNormalizada
+        };
+    } finally {
+        await cerrarSesionNavegador(session);
     }
-
-    const productos = deduplicarProductos(grupos.flatMap((g) => g.productos || []));
-    return {
-        productos,
-        grupos,
-        esModoSeguidos: esUrlSeguidoresVinted(urlNormalizada),
-        aliasPrincipal,
-        urlNormalizada
-    };
 }
 
 function construirWebhookTargets(webUrl, webhookPath) {
@@ -667,7 +740,20 @@ async function enviarWebhook(payload, options) {
     throw new Error(`No se pudo entregar el webhook (${webhookPath}). Detalle: ${detalle}`);
 }
 
-async function scrapeVinted(url) {
+async function scrapeVinted(url, options = {}) {
+    const playwrightFirst = Boolean(options.playwrightFirst || parseBoolEnv('SCRAPER_PLAYWRIGHT_FIRST', false));
+    const sharedSession = options.session || null;
+
+    if (playwrightFirst) {
+        const porPlaywright = await extraerConPlaywright(url, sharedSession);
+        if (porPlaywright.length >= 3) {
+            return {
+                productos: deduplicarProductos(porPlaywright),
+                resumen: { scripts: 0, ldjson: 0, dom: 0, api: 0, playwright: porPlaywright.length }
+            };
+        }
+    }
+
     const htmlResponse = await withRetry(
         () => axios.get(url, {
             timeout: 20000,
@@ -703,7 +789,7 @@ async function scrapeVinted(url) {
     }
 
     if (productos.length < 3) {
-        const porPlaywright = await extraerConPlaywright(url);
+        const porPlaywright = await extraerConPlaywright(url, sharedSession);
         resumen.playwright = porPlaywright.length;
         productos = deduplicarProductos([...productos, ...porPlaywright]);
     }

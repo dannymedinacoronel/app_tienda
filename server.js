@@ -555,7 +555,9 @@ const transporter = nodemailer.createTransport({
     auth: {
         user: process.env.BACKUP_EMAIL_USER,
         pass: process.env.BACKUP_EMAIL_PASS
-    }
+    },
+    disableFileAccess: true,
+    disableUrlAccess: true
 });
 
 async function realizarBackupDiarioEmail() {
@@ -573,12 +575,20 @@ async function realizarBackupDiarioEmail() {
         const ahora = new Date();
         const dateStr = ahora.toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/:/g, '-');
 
+        const fromAddress = String(process.env.BACKUP_EMAIL_USER || '').trim();
+        const toAddress = 'dannymedinacoronel@gmail.com';
+        if (!fromAddress || !fromAddress.includes('@')) {
+            throw new Error('BACKUP_EMAIL_USER no válido para envío de backup.');
+        }
+
         const mailOptions = {
             from: process.env.BACKUP_EMAIL_USER,
-            to: 'dannymedinacoronel@gmail.com',
+            to: toAddress,
             subject: `BACKUP_${dateStr}`,
             text: `Backup diario automático generado el ${ahora.toLocaleString('es-ES')}.`,
-            attachments: [{ filename: `Backup_Seychelles_${dateStr}.json`, content: backupData }]
+            attachments: [{ filename: `Backup_Seychelles_${dateStr}.json`, content: backupData }],
+            disableFileAccess: true,
+            disableUrlAccess: true
         };
 
         await transporter.sendMail(mailOptions);

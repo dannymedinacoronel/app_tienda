@@ -476,7 +476,14 @@ app.use(session({
 app.use(express.static(path.join(__dirname, 'public'), {
     etag: true,
     lastModified: true,
-    maxAge: isProd ? '7d' : 0
+    maxAge: isProd ? '7d' : 0,
+    setHeaders: (res, filePath) => {
+        const f = String(filePath || '').replace(/\\/g, '/').toLowerCase();
+        // Evita quedarte con frontend viejo cuando hay fixes críticos en app.js/index.html
+        if (f.endsWith('/index.html') || f.endsWith('/app.js')) {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+        }
+    }
 }));
 function empresaActual(req) {
     return normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
@@ -2239,6 +2246,7 @@ app.post('/api/logout', async (req, res) => {
 app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(200)); }); // Compatibilidad
 // Fallback SPA solo para rutas no-API; evita romper endpoints GET registrados debajo.
 app.get(/^\/(?!api(?:\/|$)).*/, (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -2630,6 +2638,7 @@ app.get('/api/monopolio/urls', exigeAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const urls = await MonopolioUrl.find({ empresa }).sort({ alias: 1, createdAt: -1 }).lean();
+        console.log(`[MONOPOLIO] GET urls empresa=${empresa} total=${urls.length}`);
         res.json(urls);
     } catch (e) {
         res.status(500).json({ error: 'Error al cargar las URLs de monopolio.' });
@@ -2640,6 +2649,7 @@ app.post('/api/monopolio/urls', exigeAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const { url, alias } = req.body;
+        console.log(`[MONOPOLIO] POST url empresa=${empresa} url=${String(url || '').slice(0, 140)} alias=${String(alias || '').slice(0, 80)}`);
         if (!url) return res.status(400).json({ error: 'La URL es obligatoria.' });
 
         const urlNormalizada = normalizarUrlObjetivo(url);
@@ -2711,6 +2721,7 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const urls = await MonopolioUrl.find({ empresa }).lean();
+        console.log(`[MONOPOLIO] scrape-all empresa=${empresa} urls=${urls.length}`);
         if (urls.length === 0) {
             return res.status(400).json({ error: 'No hay URLs guardadas para scrapear.' });
         }

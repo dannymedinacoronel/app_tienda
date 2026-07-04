@@ -54,7 +54,10 @@ jobs:
           SCRAPER_TOKEN: ${{ secrets.SCRAPER_TOKEN }}
           SCRAPER_LOCALE: "es-ES"
           SCRAPER_TIMEZONE: "Europe/Madrid"
-          MONOPOLIO_MAX_ACCOUNTS: "25"
+          MONOPOLIO_MAX_ACCOUNTS: "60"
+          MONOPOLIO_MAX_CHAIN_DEPTH: "3"
+          MONOPOLIO_MAX_CHAIN_URLS: "60"
+          MONOPOLIO_CHAIN_BRANCH: "12"
         run: |
           MODE="${{ github.event.inputs.mode }}"
           if [ "$MODE" = "monopolio" ]; then

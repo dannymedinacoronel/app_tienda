@@ -560,6 +560,7 @@ socket.on('monopolio_update', (data) => {
     const productosPlano = Array.isArray(data.productos) ? data.productos : [];
     const grupos = Array.isArray(data.grupos) ? data.grupos : [];
     const esModoSeguidos = Boolean(data.esModoSeguidos);
+    const exploracion = data?.exploracion && typeof data.exploracion === 'object' ? data.exploracion : null;
     const productos = productosPlano.length > 0 ? productosPlano : grupos.flatMap((g) => Array.isArray(g?.productos) ? g.productos : []);
 
     let existingContainer = document.getElementById(`monopolio-res-${btoa(data.urlOrigen)}`);
@@ -571,44 +572,24 @@ socket.on('monopolio_update', (data) => {
     resultBlock.id = `monopolio-res-${btoa(data.urlOrigen)}`;
     resultBlock.className = 'p-4 bg-black/20 border border-purple-500/20 rounded-2xl';
     const analyticsHtml = construirAnaliticaMonopolio(productos, grupos);
-    
+
     let productosHtml = '<p class="text-xs opacity-60">No se encontraron productos.</p>';
     if (esModoSeguidos && grupos.length === 0) {
         productosHtml = '<p class="text-xs text-amber-300">No se detectaron perfiles en la URL de seguidos. Prueba con una URL de seguidos pública o con otra cuenta.</p>';
     }
-    if (grupos.length > 0) {
-        productosHtml = grupos.map((g, idx) => {
-            const lista = (g.productos || []).slice(0, 12).map(p => `
-                <div class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5">
-                    <img src="${p.imagen || ''}" class="w-8 h-8 rounded object-cover" onerror="this.style.display='none'">
-                    <p class="text-xs flex-1 truncate">${p.titulo}</p>
-                    <p class="text-xs font-bold text-emerald-400">${p.precio}€</p>
-                </div>
-            `).join('');
-
-            return `
-                <div class="border border-white/10 rounded-xl p-2 bg-black/30">
-                    <p class="text-[10px] font-black uppercase tracking-widest text-cyan-200 mb-1">${idx + 1}. ${g.cuenta || 'Cuenta'}</p>
-                    <p class="text-[9px] opacity-55 font-mono truncate mb-2">${g.urlCuenta || ''} · ${g.total || 0} productos</p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-1">${lista || '<p class="text-[10px] opacity-60 italic">Sin productos detectados.</p>'}</div>
-                </div>
-            `;
-        }).join('');
-    } else if (productos.length > 0) {
-        productosHtml = productos.slice(0, 20).map(p => `
-            <div class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5">
-                <img src="${p.imagen}" class="w-8 h-8 rounded object-cover" onerror="this.style.display='none'">
-                <p class="text-xs flex-1 truncate">${p.titulo}</p>
-                <p class="text-xs font-bold text-emerald-400">${p.precio}€</p>
-            </div>
-        `).join('');
+    if (productos.length > 0) {
+        productosHtml = construirCarruselMonopolio(productos, grupos);
     }
+
+    const exploracionTxt = exploracion
+        ? ` · Exploracion: ${Number(exploracion.urlsCapturadas || 0)} URLs / ${Number(exploracion.usuariosDetectados || 0)} usuarios / hasta ${Number(exploracion.maxDepth || 0)} hijos`
+        : '';
 
     resultBlock.innerHTML = `
         <h5 class="font-bold text-purple-300 text-sm mb-2">${alias}</h5>
-        <p class="text-[10px] opacity-60 mb-3">${productos.length} productos encontrados${grupos.length ? ` · ${grupos.length} cuentas analizadas` : ''}${(grupos.length > 0 && productosPlano.length === 0) ? ' · consolidado desde grupos' : ''}.</p>
+        <p class="text-[10px] opacity-60 mb-3">${productos.length} productos encontrados${grupos.length ? ` · ${grupos.length} cuentas analizadas` : ''}${(grupos.length > 0 && productosPlano.length === 0) ? ' · consolidado desde grupos' : ''}${exploracionTxt}.</p>
         ${analyticsHtml}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${productosHtml}</div>
+        <div class="grid grid-cols-1 gap-2">${productosHtml}</div>
     `;
 
     container.prepend(resultBlock);
@@ -689,6 +670,96 @@ function construirAnaliticaMonopolio(productos, grupos) {
             </div>
             <p class="text-[10px] opacity-75">Rango de precio: ${precioMin !== null ? `${precioMin.toFixed(2)}€` : '-'} - ${precioMax !== null ? `${precioMax.toFixed(2)}€` : '-'}</p>
             ${topCuentas ? `<div class="mt-2 border-t border-white/10 pt-2">${topCuentas}</div>` : ''}
+        </div>
+    `;
+}
+
+function obtenerClaseClasificacionMonopolio(label = '') {
+    const k = String(label || '').trim().toLowerCase();
+    if (k === 'premium') return 'bg-fuchsia-500/20 text-fuchsia-200 border border-fuchsia-400/30';
+    if (k === 'medio') return 'bg-cyan-500/20 text-cyan-100 border border-cyan-400/30';
+    if (k === 'entry') return 'bg-emerald-500/20 text-emerald-100 border border-emerald-400/30';
+    if (k === 'nueva') return 'bg-lime-500/20 text-lime-100 border border-lime-400/30';
+    if (k === 'muy_buena') return 'bg-sky-500/20 text-sky-100 border border-sky-400/30';
+    if (k === 'buena') return 'bg-indigo-500/20 text-indigo-100 border border-indigo-400/30';
+    if (k === 'usada') return 'bg-amber-500/20 text-amber-100 border border-amber-400/30';
+    return 'bg-slate-500/20 text-slate-100 border border-slate-400/30';
+}
+
+function normalizarClasificacionMonopolioUI(producto = {}) {
+    const precio = extraerPrecioNumericoMonopolio(producto?.precio);
+    const condicion = String(producto?.condicion || '').toLowerCase();
+
+    const precioTag = (() => {
+        const backend = String(producto?.clasificacionPrecio || '').trim();
+        if (backend) return backend;
+        if (!Number.isFinite(precio) || precio <= 0) return 'sin_precio';
+        if (precio < 12) return 'entry';
+        if (precio < 35) return 'medio';
+        return 'premium';
+    })();
+
+    const condicionTag = (() => {
+        const backend = String(producto?.clasificacionCondicion || '').trim();
+        if (backend) return backend;
+        if (!condicion) return 'sin_dato';
+        if (condicion.includes('nuevo') || condicion.includes('new')) return 'nueva';
+        if (condicion.includes('muy buena') || condicion.includes('very good')) return 'muy_buena';
+        if (condicion.includes('buena') || condicion.includes('good')) return 'buena';
+        return 'usada';
+    })();
+
+    return { precioTag, condicionTag };
+}
+
+function construirCarruselMonopolio(productos, grupos) {
+    const lista = Array.isArray(productos) ? productos.slice(0, 220) : [];
+    if (!lista.length) return '<p class="text-xs opacity-60">No se encontraron productos para visualizar.</p>';
+
+    const usuarios = (() => {
+        const fromProductos = lista.map((p) => String(p?.cuenta || p?.proveedor || '').trim()).filter(Boolean);
+        const fromGrupos = (Array.isArray(grupos) ? grupos : []).map((g) => String(g?.cuenta || '').trim()).filter(Boolean);
+        return [...new Set([...fromProductos, ...fromGrupos])].slice(0, 24);
+    })();
+
+    const chipsUsuarios = usuarios.length
+        ? `<div class="flex flex-wrap gap-1.5 mb-3">${usuarios.map((u) => `<span class="text-[10px] px-2 py-1 rounded-full bg-cyan-500/15 text-cyan-100 border border-cyan-400/30">${escapeHtmlSafe(u)}</span>`).join('')}</div>`
+        : '<p class="text-[10px] opacity-55 mb-3">Sin usuarios/cuentas identificados.</p>';
+
+    const cards = lista.map((p, idx) => {
+        const precio = extraerPrecioNumericoMonopolio(p?.precio);
+        const precioTxt = Number.isFinite(precio) ? `${precio.toFixed(2)}€` : String(p?.precio || '-');
+        const cuenta = String(p?.cuenta || p?.proveedor || 'Cuenta desconocida').trim();
+        const nivel = Number.isFinite(Number(p?.nivelCadena)) ? Number(p.nivelCadena) : 0;
+        const { precioTag, condicionTag } = normalizarClasificacionMonopolioUI(p);
+
+        return `
+            <article class="snap-start shrink-0 w-[215px] rounded-2xl border border-white/12 bg-black/30 p-2.5 shadow-lg">
+                <div class="w-full h-36 rounded-xl overflow-hidden bg-slate-900/70 mb-2 flex items-center justify-center">
+                    ${p?.imagen ? `<img src="${escapeHtmlSafe(String(p.imagen))}" class="w-full h-full object-cover" onerror="this.style.display='none'">` : '<p class="text-[10px] opacity-50">Sin imagen</p>'}
+                </div>
+                <p class="text-[11px] font-bold leading-snug min-h-[34px]" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtmlSafe(p?.titulo || `Producto ${idx + 1}`)}</p>
+                <p class="text-[12px] font-black text-emerald-300 mt-1">${escapeHtmlSafe(precioTxt)}</p>
+                <p class="text-[10px] opacity-75 truncate mt-1">Usuario: ${escapeHtmlSafe(cuenta)}</p>
+                <p class="text-[10px] opacity-65 truncate">Nivel hijo: ${nivel}</p>
+                <div class="flex gap-1 mt-2 flex-wrap">
+                    <span class="text-[9px] px-1.5 py-0.5 rounded ${obtenerClaseClasificacionMonopolio(precioTag)}">${escapeHtmlSafe(precioTag)}</span>
+                    <span class="text-[9px] px-1.5 py-0.5 rounded ${obtenerClaseClasificacionMonopolio(condicionTag)}">${escapeHtmlSafe(condicionTag)}</span>
+                </div>
+            </article>
+        `;
+    }).join('');
+
+    return `
+        <div class="rounded-xl border border-white/10 bg-black/25 p-3">
+            <p class="text-[10px] font-black uppercase tracking-widest text-cyan-200 mb-2">Usuarios donde se detectaron productos</p>
+            ${chipsUsuarios}
+            <p class="text-[10px] font-black uppercase tracking-widest text-purple-200 mb-2">Carrusel de productos (solo visualización)</p>
+            <div class="overflow-x-auto custom-scrollbar pb-2">
+                <div class="flex gap-2 snap-x snap-mandatory w-max">
+                    ${cards}
+                </div>
+            </div>
         </div>
     `;
 }

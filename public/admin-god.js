@@ -1,14 +1,26 @@
 const GOD_STATE = {
     sections: [],
     users: [],
-    config: {
-        sectionOrder: [],
-        hiddenSections: [],
-        tabLabels: {},
-        theme: {},
-        customCss: ''
-    }
+    config: {}
 };
+
+// Socket.IO para actualizaciones en tiempo real
+const socket = io();
+
+socket.on('connect', () => {
+    const empresa = new URLSearchParams(window.location.search).get('empresa') || 'seychelles';
+    socket.emit('join_empresa', empresa);
+});
+
+socket.on('config_updated', () => {
+    console.log('[GOD] Configuración visual actualizada por otro admin. Recargando...');
+    loadGodDashboard();
+});
+
+socket.on('access_updated', (data) => {
+    console.log(`[GOD] Permisos de ${data.userEmail} actualizados. Recargando...`);
+    loadGodDashboard();
+});
 
 function byId(id) {
     return document.getElementById(id);

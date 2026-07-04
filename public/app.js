@@ -42,6 +42,13 @@ let SCRAPER_PROGRESS_INTERVAL = null;
 let MONOPOLIO_URLS = [];
 let MONOPOLIO_SELECTED_KEYS = new Set();
 let MONOPOLIO_TEMP_URLS = [];
+let MONOPOLIO_PROGRESS_INTERVAL = null;
+let MONOPOLIO_PROGRESS_TOTAL = 0;
+let MONOPOLIO_PROGRESS_DONE = 0;
+let MONOPOLIO_PROGRESS_VALUE = 0;
+let MONOPOLIO_PROGRESS_ACTIVE = false;
+let MONOPOLIO_PROGRESS_MSG_INDEX = 0;
+let MONOPOLIO_PROGRESS_SEEN = new Set();
 let CHAT_SEARCH_QUERY = '';
 let SECCIONES_INHABILITADAS = new Set();
 let SCRAPER_PROGRESS_VALUE = 0;
@@ -382,6 +389,8 @@ socket.on('monopolio_update', (data) => {
     const container = document.getElementById('resultados-monopolio-scraping');
     if (!container) return;
 
+    registrarResultadoMonopolio(data);
+
     const alias = data.alias || data.urlOrigen;
 
     if (data.error) {
@@ -397,6 +406,7 @@ socket.on('monopolio_update', (data) => {
             <p class="text-xs text-rose-200">Scraping fallido: ${data.error}</p>
         `;
         container.prepend(errorBlock);
+        fijarBloqueProgresoMonopolioAlInicio();
         cantarPorVoz(`Scraping de ${alias} ha fallado.`);
         return;
     }
@@ -459,6 +469,7 @@ socket.on('monopolio_update', (data) => {
     `;
 
     container.prepend(resultBlock);
+    fijarBloqueProgresoMonopolioAlInicio();
     cantarPorVoz(`Scraping de ${alias} finalizado.`);
 });
 
@@ -639,6 +650,138 @@ function detenerAnimacionCargaScraper(silent = false) {
     }
     if (!silent) {
         actualizarCargaScraper(100, 'Proceso finalizado.', 'Completado');
+    }
+}
+
+function crearBloqueCargaMonopolioSiNoExiste() {
+    const container = document.getElementById('resultados-monopolio-scraping');
+    if (!container) return null;
+
+    let bloque = document.getElementById('monopolio-progress-wrap');
+    if (!bloque) {
+        bloque = document.createElement('div');
+        bloque.id = 'monopolio-progress-wrap';
+        bloque.className = 'mb-3 p-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10';
+        bloque.innerHTML = `
+            <div class="flex items-center justify-between gap-2 mb-2">
+                <p class="text-[10px] font-black uppercase tracking-widest text-cyan-200">Scraping Monopolio</p>
+                <p id="monopolio-progress-percent" class="text-[10px] font-bold text-cyan-200">0%</p>
+            </div>
+            <div class="w-full h-2 rounded-full bg-black/40 overflow-hidden border border-white/10 mb-2">
+                <div id="monopolio-progress-bar" class="h-full bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400 transition-all duration-500" style="width: 0%"></div>
+            </div>
+            <div class="flex items-center justify-between gap-2 text-[10px] opacity-80">
+                <p id="monopolio-progress-message" class="text-cyan-100">Preparando ejecución...</p>
+                <p id="monopolio-progress-status" class="text-cyan-300">Inicializando</p>
+            </div>
+            <p id="monopolio-progress-counts" class="mt-1 text-[10px] opacity-65">0 / 0 tareas completadas</p>
+        `;
+        container.prepend(bloque);
+    }
+
+    return bloque;
+}
+
+function fijarBloqueProgresoMonopolioAlInicio() {
+    const container = document.getElementById('resultados-monopolio-scraping');
+    const bloque = document.getElementById('monopolio-progress-wrap');
+    if (!container || !bloque) return;
+    if (container.firstElementChild !== bloque) {
+        container.prepend(bloque);
+    }
+}
+
+function actualizarCargaMonopolio(percent, message, status) {
+    const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
+    MONOPOLIO_PROGRESS_VALUE = clamped;
+
+    const bar = document.getElementById('monopolio-progress-bar');
+    const percentEl = document.getElementById('monopolio-progress-percent');
+    const msgEl = document.getElementById('monopolio-progress-message');
+    const statusEl = document.getElementById('monopolio-progress-status');
+    const countsEl = document.getElementById('monopolio-progress-counts');
+
+    if (bar) bar.style.width = `${clamped}%`;
+    if (percentEl) percentEl.innerText = `${Math.round(clamped)}%`;
+    if (msgEl && message) msgEl.innerText = message;
+    if (statusEl && status) statusEl.innerText = status;
+    if (countsEl) {
+        countsEl.innerText = `${MONOPOLIO_PROGRESS_DONE} / ${MONOPOLIO_PROGRESS_TOTAL} tareas completadas`;
+    }
+}
+
+function detenerAnimacionCargaMonopolio(completado = false, message = '') {
+    MONOPOLIO_PROGRESS_ACTIVE = false;
+    if (MONOPOLIO_PROGRESS_INTERVAL) {
+        clearInterval(MONOPOLIO_PROGRESS_INTERVAL);
+        MONOPOLIO_PROGRESS_INTERVAL = null;
+    }
+    if (completado) {
+        MONOPOLIO_PROGRESS_DONE = Math.max(MONOPOLIO_PROGRESS_DONE, MONOPOLIO_PROGRESS_TOTAL);
+        actualizarCargaMonopolio(100, message || 'Scraping finalizado.', 'Completado');
+    }
+}
+
+function iniciarAnimacionCargaMonopolio(totalTareas = 0, mensajeInicial = 'Lanzando tareas remotas...') {
+    detenerAnimacionCargaMonopolio(false);
+    MONOPOLIO_PROGRESS_TOTAL = Math.max(0, Number(totalTareas) || 0);
+    MONOPOLIO_PROGRESS_DONE = 0;
+    MONOPOLIO_PROGRESS_VALUE = 2;
+    MONOPOLIO_PROGRESS_MSG_INDEX = 0;
+    MONOPOLIO_PROGRESS_SEEN = new Set();
+    MONOPOLIO_PROGRESS_ACTIVE = true;
+
+    crearBloqueCargaMonopolioSiNoExiste();
+    actualizarCargaMonopolio(2, mensajeInicial, 'Inicializando');
+    fijarBloqueProgresoMonopolioAlInicio();
+
+    MONOPOLIO_PROGRESS_INTERVAL = setInterval(() => {
+        if (!MONOPOLIO_PROGRESS_ACTIVE) return;
+
+        const progresoPorResultados = MONOPOLIO_PROGRESS_TOTAL > 0
+            ? (MONOPOLIO_PROGRESS_DONE / MONOPOLIO_PROGRESS_TOTAL) * 100
+            : 0;
+
+        const avanceNatural = MONOPOLIO_PROGRESS_VALUE + (MONOPOLIO_PROGRESS_VALUE < 35 ? 4 : MONOPOLIO_PROGRESS_VALUE < 75 ? 2.5 : 1.2);
+        const techoDinamico = MONOPOLIO_PROGRESS_TOTAL > 0
+            ? Math.min(94, progresoPorResultados + 14)
+            : 30;
+        const siguiente = Math.min(techoDinamico, avanceNatural);
+
+        const msg = SCRAPER_PROGRESS_MESSAGES[MONOPOLIO_PROGRESS_MSG_INDEX % SCRAPER_PROGRESS_MESSAGES.length];
+        MONOPOLIO_PROGRESS_MSG_INDEX += 1;
+        actualizarCargaMonopolio(siguiente, msg, 'En ejecución');
+        fijarBloqueProgresoMonopolioAlInicio();
+
+        if (MONOPOLIO_PROGRESS_TOTAL > 0 && MONOPOLIO_PROGRESS_DONE >= MONOPOLIO_PROGRESS_TOTAL) {
+            detenerAnimacionCargaMonopolio(true, 'Todas las tareas de Monopolio han finalizado.');
+        }
+    }, 1400);
+}
+
+function registrarResultadoMonopolio(data) {
+    if (!MONOPOLIO_PROGRESS_ACTIVE) return;
+
+    const clave = String(data?.urlOrigen || data?.alias || '').trim();
+    if (!clave || MONOPOLIO_PROGRESS_SEEN.has(clave)) return;
+
+    MONOPOLIO_PROGRESS_SEEN.add(clave);
+    MONOPOLIO_PROGRESS_DONE += 1;
+
+    if (MONOPOLIO_PROGRESS_TOTAL > 0) {
+        MONOPOLIO_PROGRESS_DONE = Math.min(MONOPOLIO_PROGRESS_DONE, MONOPOLIO_PROGRESS_TOTAL);
+        const porcentaje = (MONOPOLIO_PROGRESS_DONE / MONOPOLIO_PROGRESS_TOTAL) * 100;
+        const estado = MONOPOLIO_PROGRESS_DONE >= MONOPOLIO_PROGRESS_TOTAL ? 'Completado' : 'Procesando resultados';
+        const mensaje = MONOPOLIO_PROGRESS_DONE >= MONOPOLIO_PROGRESS_TOTAL
+            ? 'Todas las respuestas han llegado.'
+            : `Resultados recibidos: ${MONOPOLIO_PROGRESS_DONE}/${MONOPOLIO_PROGRESS_TOTAL}.`;
+        actualizarCargaMonopolio(Math.min(99, porcentaje), mensaje, estado);
+
+        if (MONOPOLIO_PROGRESS_DONE >= MONOPOLIO_PROGRESS_TOTAL) {
+            detenerAnimacionCargaMonopolio(true, 'Monopolio finalizado con todas las URLs lanzadas.');
+        }
+    } else {
+        actualizarCargaMonopolio(Math.min(90, MONOPOLIO_PROGRESS_VALUE + 6), 'Recibiendo resultados de Monopolio...', 'Procesando resultados');
     }
 }
 
@@ -1730,12 +1873,16 @@ window.iniciarScrapingMonopolio = async function() {
     if (!confirm(`Esto iniciará un proceso de scraping para TODAS las webs guardadas. Puede tardar varios minutos y consumir recursos. ¿Continuar?`)) return;
     
     const resultadosContainer = document.getElementById('resultados-monopolio-scraping');
-    resultadosContainer.innerHTML = `<div class="text-center py-4"><div class="w-8 h-8 border-4 border-purple-400 border-t-transparent rounded-full animate-spin mx-auto"></div><p class="mt-2 text-xs text-purple-300">Lanzando tareas de scraping en GitHub Actions...</p></div>`;
+    resultadosContainer.innerHTML = '';
+    iniciarAnimacionCargaMonopolio(0, 'Lanzando tareas de scraping en GitHub Actions...');
 
     try {
         const res = await fetch('/api/monopolio/scrape-all', { method: 'POST', credentials: 'include' });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al iniciar el scraping');
+
+        MONOPOLIO_PROGRESS_TOTAL = Math.max(0, Number(data?.lanzadas) || 0);
+        actualizarCargaMonopolio(8, `${data.message} Esperando resultados...`, 'Esperando workers');
 
         let detalleFallos = '';
         if (Number(data.fallidas || 0) > 0 && Array.isArray(data.detallesFallos)) {
@@ -1743,14 +1890,19 @@ window.iniciarScrapingMonopolio = async function() {
             detalleFallos = `<p class="mt-2 text-[10px] text-amber-300">${data.fallidas} dispatch fallidos.<br>${top}</p>`;
         }
 
-        resultadosContainer.innerHTML = `
-            <div class="text-center py-2">
-                <p class="mt-2 text-xs text-purple-300">${data.message} Esperando resultados...</p>
+        const bloque = crearBloqueCargaMonopolioSiNoExiste();
+        if (bloque) {
+            const extra = document.createElement('div');
+            extra.className = 'mt-2 text-center py-1';
+            extra.innerHTML = `
+                <p class="text-xs text-purple-300">${data.message} Esperando resultados...</p>
                 ${detalleFallos}
-            </div>
-        `;
+            `;
+            bloque.appendChild(extra);
+        }
         cantarPorVoz('Scraping masivo iniciado');
     } catch (e) {
+        detenerAnimacionCargaMonopolio(false);
         resultadosContainer.innerHTML = `<p class="text-xs text-rose-400">Error: ${e.message}</p>`;
     }
 }
@@ -1767,7 +1919,8 @@ window.iniciarScrapingMonopolioSeleccionadas = async function() {
     const resultadosContainer = document.getElementById('resultados-monopolio-scraping');
     if (!resultadosContainer) return;
 
-    resultadosContainer.innerHTML = `<div class="text-center py-4"><div class="w-8 h-8 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto"></div><p class="mt-2 text-xs text-cyan-300">Lanzando análisis seleccionado (sin guardar)...</p></div>`;
+    resultadosContainer.innerHTML = '';
+    iniciarAnimacionCargaMonopolio(0, 'Lanzando análisis seleccionado (sin guardar)...');
 
     try {
         const res = await fetch('/api/monopolio/scrape-selected', {
@@ -1779,20 +1932,28 @@ window.iniciarScrapingMonopolioSeleccionadas = async function() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al iniciar el scraping seleccionado');
 
+        MONOPOLIO_PROGRESS_TOTAL = Math.max(0, Number(data?.lanzadas) || 0);
+        actualizarCargaMonopolio(8, `${data.message} Esperando resultados...`, 'Esperando workers');
+
         let detalleFallos = '';
         if (Number(data.fallidas || 0) > 0 && Array.isArray(data.detallesFallos)) {
             const top = data.detallesFallos.slice(0, 3).map((f) => `• ${f.alias || f.url}: ${String(f.detalle || 'fallo').slice(0, 90)}`).join('<br>');
             detalleFallos = `<p class="mt-2 text-[10px] text-amber-300">${data.fallidas} dispatch fallidos.<br>${top}</p>`;
         }
 
-        resultadosContainer.innerHTML = `
-            <div class="text-center py-2">
-                <p class="mt-2 text-xs text-cyan-300">${data.message} Esperando resultados...</p>
+        const bloque = crearBloqueCargaMonopolioSiNoExiste();
+        if (bloque) {
+            const extra = document.createElement('div');
+            extra.className = 'mt-2 text-center py-1';
+            extra.innerHTML = `
+                <p class="text-xs text-cyan-300">${data.message} Esperando resultados...</p>
                 ${detalleFallos}
-            </div>
-        `;
+            `;
+            bloque.appendChild(extra);
+        }
         cantarPorVoz('Analisis seleccionado iniciado');
     } catch (e) {
+        detenerAnimacionCargaMonopolio(false);
         resultadosContainer.innerHTML = `<p class="text-xs text-rose-400">Error: ${e.message}</p>`;
     }
 }

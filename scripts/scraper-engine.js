@@ -228,6 +228,35 @@ function normalizarUrlPerfilVinted(inputUrl) {
     return urlObj.toString().replace(/\/+$/, '');
 }
 
+function normalizarUrlRelacionVinted(inputUrl) {
+    const abs = normalizarUrlVinted(inputUrl);
+    if (!abs) return '';
+
+    let urlObj;
+    try {
+        urlObj = new URL(abs);
+    } catch (_) {
+        return '';
+    }
+
+    const pathOnly = String(urlObj.pathname || '').replace(/\/+$/, '');
+    const relMatch = pathOnly.match(/\/(following|followers|relations)\b/i);
+    const relationType = relMatch && relMatch[1] ? relMatch[1].toLowerCase() : 'following';
+
+    if (!pathOnly.toLowerCase().includes('/member/')) return '';
+
+    const idPerfil = pathOnly.match(/\/member\/(?:general\/)?(\d{3,})(?:-[^/?#]+)?/i);
+    if (!idPerfil || !idPerfil[1]) return '';
+
+    return `https://www.vinted.es/member/${idPerfil[1]}/${relationType}`;
+}
+
+function construirUrlFollowingDesdePerfil(urlPerfil) {
+    const perfil = normalizarUrlPerfilVinted(urlPerfil);
+    if (!perfil) return '';
+    return `${perfil}/following`;
+}
+
 function parseBoolEnv(name, fallback = false) {
     const raw = String(process.env[name] || '').trim().toLowerCase();
     if (!raw) return fallback;
@@ -595,7 +624,7 @@ async function extraerCuentasDesdeSeguidores(urlObjetivo, session = null) {
     const internalSession = session || await crearSesionNavegador('following');
     if (!internalSession) {
         console.log('[MONOPOLIO] Playwright no esta disponible para expandir seguidos.');
-        return [];
+        return { cuentas: [], relaciones: [] };
     }
     const page = await internalSession.context.newPage();
 
@@ -625,6 +654,7 @@ async function extraerCuentasDesdeSeguidores(urlObjetivo, session = null) {
 
         const perfiles = await page.evaluate(() => {
             const out = [];
+            const rels = [];
             const anchors = Array.from(document.querySelectorAll('a[href*="/member/"]'));
             for (const a of anchors) {
                 const href = a.getAttribute('href') || '';
@@ -632,23 +662,39 @@ async function extraerCuentasDesdeSeguidores(urlObjetivo, session = null) {
                 if (!/\/member\//i.test(abs)) continue;
                 const clean = abs.split('?')[0].replace(/\/+$/, '');
                 const txt = (a.textContent || '').trim().replace(/\s+/g, ' ');
-                out.push({ url: clean, alias: txt || '' });
+                if (/\/(following|followers|relations)\b/i.test(clean)) {
+                    rels.push({ url: clean, alias: txt || '' });
+                } else {
+                    out.push({ url: clean, alias: txt || '' });
+                }
             }
-            return out;
+            return { out, rels };
         });
 
         const map = new Map();
-        for (const p of perfiles || []) {
+        for (const p of perfiles?.out || []) {
             const url = normalizarUrlPerfilVinted(String(p.url || '').trim());
             if (!url) continue;
             const alias = sanitizarAlias(p.alias || extraerAliasDesdeUrlPerfil(url), extraerAliasDesdeUrlPerfil(url));
             if (!map.has(url)) map.set(url, { url, alias });
         }
 
-        return Array.from(map.values());
+        const relaciones = [];
+        const seenRel = new Set();
+        for (const r of perfiles?.rels || []) {
+            const relUrl = normalizarUrlRelacionVinted(String(r.url || '').trim());
+            if (!relUrl || seenRel.has(relUrl)) continue;
+            seenRel.add(relUrl);
+            relaciones.push(relUrl);
+        }
+
+        return {
+            cuentas: Array.from(map.values()),
+            relaciones
+        };
     } catch (error) {
         console.error(`[MONOPOLIO] Fallo al extraer cuentas seguidas: ${error.message}`);
-        return [];
+        return { cuentas: [], relaciones: [] };
     } finally {
         try { await page.close(); } catch (_) {}
         if (ownSession) {
@@ -665,11 +711,61 @@ async function scrapeMonopolio(url, aliasBase = '') {
 
     try {
         if (esUrlSeguidoresVinted(urlNormalizada)) {
-            const cuentas = await extraerCuentasDesdeSeguidores(urlNormalizada, session);
-            const maxCuentas = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_ACCOUNTS || '20', 10), 40));
-            const objetivos = cuentas.slice(0, maxCuentas);
+            const maxDepth = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_DEPTH || '3', 10), 3));
+            const maxChainUrls = Math.max(8, Math.min(parseInt(process.env.MONOPOLIO_MAX_CHAIN_URLS || '36', 10), 60));
+            const maxCuentas = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_ACCOUNTS || '60', 10), 120));
+            const maxBranch = Math.max(4, Math.min(parseInt(process.env.MONOPOLIO_CHAIN_BRANCH || '12', 10), 30));
 
-            console.log(`[MONOPOLIO] Enlace de seguidos detectado. Cuentas encontradas: ${cuentas.length}, procesando: ${objetivos.length}`);
+            const cola = [{ url: normalizarUrlRelacionVinted(urlNormalizada) || urlNormalizada, depth: 0 }];
+            const visitadas = new Set();
+            const perfilesMap = new Map();
+
+            while (cola.length > 0 && visitadas.size < maxChainUrls) {
+                const actual = cola.shift();
+                const relUrl = normalizarUrlRelacionVinted(actual?.url || '');
+                if (!relUrl || visitadas.has(relUrl)) continue;
+                visitadas.add(relUrl);
+
+                const perfilOrigen = normalizarUrlPerfilVinted(relUrl);
+                if (perfilOrigen && !perfilesMap.has(perfilOrigen)) {
+                    perfilesMap.set(perfilOrigen, {
+                        url: perfilOrigen,
+                        alias: sanitizarAlias(extraerAliasDesdeUrlPerfil(perfilOrigen), 'Competidor')
+                    });
+                }
+
+                const resultado = await extraerCuentasDesdeSeguidores(relUrl, session);
+                const cuentas = Array.isArray(resultado?.cuentas) ? resultado.cuentas : [];
+                const relaciones = Array.isArray(resultado?.relaciones) ? resultado.relaciones : [];
+
+                for (const cuenta of cuentas) {
+                    const urlCuenta = normalizarUrlPerfilVinted(cuenta.url);
+                    if (!urlCuenta || perfilesMap.has(urlCuenta)) continue;
+                    perfilesMap.set(urlCuenta, {
+                        url: urlCuenta,
+                        alias: sanitizarAlias(cuenta.alias, extraerAliasDesdeUrlPerfil(urlCuenta))
+                    });
+                }
+
+                if (actual.depth < maxDepth - 1) {
+                    for (const rel of relaciones) {
+                        const relNorm = normalizarUrlRelacionVinted(rel);
+                        if (!relNorm || visitadas.has(relNorm)) continue;
+                        cola.push({ url: relNorm, depth: actual.depth + 1 });
+                    }
+
+                    for (const cuenta of cuentas.slice(0, maxBranch)) {
+                        const nextRel = construirUrlFollowingDesdePerfil(cuenta.url);
+                        const relNorm = normalizarUrlRelacionVinted(nextRel);
+                        if (!relNorm || visitadas.has(relNorm)) continue;
+                        cola.push({ url: relNorm, depth: actual.depth + 1 });
+                    }
+                }
+            }
+
+            const objetivos = Array.from(perfilesMap.values()).slice(0, maxCuentas);
+
+            console.log(`[MONOPOLIO] Cadena de seguidos: visitadas=${visitadas.size}, perfiles=${perfilesMap.size}, procesando=${objetivos.length}`);
 
             if (objetivos.length === 0) {
                 console.warn('[MONOPOLIO] No se detectaron perfiles desde la URL de seguidos.');

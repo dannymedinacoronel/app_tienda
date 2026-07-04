@@ -164,8 +164,16 @@ function mapearProductoVinted(item, fuente = 'api') {
 
 function extraerMemberId(urlObjetivo) {
     const str = String(urlObjetivo || '');
-    const match = str.match(/\/member\/(\d+)/i);
-    return match ? match[1] : '';
+    const direct = str.match(/\/member\/(\d+)/i);
+    if (direct && direct[1]) return direct[1];
+
+    const withGeneral = str.match(/\/member\/general\/(\d+)(?:-[^/?#]+)?/i);
+    if (withGeneral && withGeneral[1]) return withGeneral[1];
+
+    const relationTail = str.match(/\/(?:following|followers|relations)\/(\d+)(?:-[^/?#]+)?/i);
+    if (relationTail && relationTail[1]) return relationTail[1];
+
+    return '';
 }
 
 function sanitizarAlias(alias, fallback = 'Vinted') {
@@ -893,9 +901,18 @@ async function scrapeMonopolio(url, aliasBase = '') {
 
             if (objetivos.length === 0) {
                 console.warn('[MONOPOLIO] No se detectaron perfiles desde la URL de seguidos.');
+                const perfilFallback = normalizarUrlPerfilVinted(urlNormalizada);
+                if (perfilFallback) {
+                    perfilesMap.set(perfilFallback, {
+                        url: perfilFallback,
+                        alias: sanitizarAlias(aliasPrincipal, extraerAliasDesdeUrlPerfil(perfilFallback))
+                    });
+                }
             }
 
-            for (const cuenta of objetivos) {
+            const objetivosFinales = Array.from(perfilesMap.values()).slice(0, maxCuentas);
+
+            for (const cuenta of objetivosFinales) {
                 const { productos } = await scrapeVinted(cuenta.url, { playwrightFirst: true, session });
                 const aliasCuenta = sanitizarAlias(cuenta.alias, extraerAliasDesdeUrlPerfil(cuenta.url));
                 const enriquecidos = (productos || []).map((p) => ({
@@ -912,6 +929,28 @@ async function scrapeMonopolio(url, aliasBase = '') {
                     total: enriquecidos.length,
                     productos: enriquecidos
                 });
+            }
+
+            // Fallback final: si venimos de seguidos y no hubo productos, intentar la cuenta origen.
+            const totalProductos = grupos.reduce((acc, g) => acc + Number(g?.total || 0), 0);
+            if (totalProductos === 0) {
+                const perfilOrigen = normalizarUrlPerfilVinted(urlNormalizada);
+                if (perfilOrigen) {
+                    const { productos } = await scrapeVinted(perfilOrigen, { playwrightFirst: true, session });
+                    const aliasCuenta = sanitizarAlias(aliasPrincipal, extraerAliasDesdeUrlPerfil(perfilOrigen));
+                    grupos.push({
+                        cuenta: aliasCuenta,
+                        urlCuenta: perfilOrigen,
+                        total: (productos || []).length,
+                        productos: (productos || []).map((p) => ({
+                            ...p,
+                            proveedor: aliasCuenta,
+                            cuenta: aliasCuenta,
+                            urlCuenta: perfilOrigen,
+                            origenGrupo: aliasPrincipal
+                        }))
+                    });
+                }
             }
         } else {
             const { productos } = await scrapeVinted(urlNormalizada, { playwrightFirst: true, session });

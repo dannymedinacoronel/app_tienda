@@ -786,9 +786,29 @@ function registrarResultadoMonopolio(data) {
 }
 
 function getSavedScraperUrls() {
-    const raw = JSON.parse(localStorage.getItem('seychelles-scraper-urls') || '[]');
+    const keys = ['seychelles-scraper-urls', 'seychelles-scraper-urls-v2', 'scraper-urls', 'vinted-scraper-urls'];
+    const leerArraySeguro = (key) => {
+        try {
+            const raw = localStorage.getItem(key);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : null;
+        } catch (_) {
+            return null;
+        }
+    };
+
+    let raw = [];
+    for (const key of keys) {
+        const arr = leerArraySeguro(key);
+        if (arr && arr.length > 0) {
+            raw = arr;
+            break;
+        }
+    }
+
     if (!Array.isArray(raw)) return [];
-    return raw
+    const normalizadas = raw
         .map((item) => {
             if (typeof item === 'string') {
                 return { alias: '', url: item, createdAt: Date.now() };
@@ -800,10 +820,18 @@ function getSavedScraperUrls() {
             };
         })
         .filter((it) => it.url);
+
+    // Migra silenciosamente cualquier formato legacy a la clave principal.
+    setSavedScraperUrls(normalizadas);
+    return normalizadas;
 }
 
 function setSavedScraperUrls(items) {
-    localStorage.setItem('seychelles-scraper-urls', JSON.stringify(items.slice(0, 8)));
+    const keys = ['seychelles-scraper-urls', 'seychelles-scraper-urls-v2', 'scraper-urls', 'vinted-scraper-urls'];
+    const payload = JSON.stringify((items || []).slice(0, 20));
+    for (const key of keys) {
+        try { localStorage.setItem(key, payload); } catch (_) {}
+    }
 }
 
 function mostrarNotificacionScraping(data) {
@@ -1687,8 +1715,8 @@ function renderMonopolioTempUrls() {
         <div class="p-2 rounded-xl border border-white/10 bg-black/20 flex items-start gap-2">
             <input type="checkbox" class="mt-1 w-4 h-4 accent-cyan-500" ${item.selected ? 'checked' : ''} onchange="toggleMonopolioTempSeleccion(${idx}, this.checked)">
             <div class="min-w-0 flex-1">
-                <p class="text-[10px] font-black uppercase tracking-widest text-cyan-200 truncate">${item.alias || `URL ${idx + 1}`}</p>
-                <p class="text-[10px] opacity-70 font-mono truncate">${item.url}</p>
+                <p class="text-[10px] font-black uppercase tracking-widest text-cyan-200 truncate">${escapeHtmlSafe(item.alias || `URL ${idx + 1}`)}</p>
+                <p class="text-[10px] opacity-70 font-mono truncate">${escapeHtmlSafe(item.url)}</p>
             </div>
         </div>
     `).join('');
@@ -3610,12 +3638,14 @@ async function cargarConversacionInterna(email) {
 
         const html = mensajes.map(m => {
             const mio = m.deEmail === USUARIO_EMAIL_ACTUAL;
+            const emisor = mio ? 'Tu' : (m.deNombreVisible || m.deEmail || 'Usuario');
             const fecha = new Date(m.creadoEn).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
             return `
                 <div class="flex ${mio ? 'justify-end' : 'justify-start'}">
-                    <div class="max-w-[85%] px-3 py-2 rounded-2xl border ${mio ? 'bg-blue-600/20 border-blue-500/40' : 'bg-slate-700/40 border-white/10'}">
-                        <p class="text-[11px] leading-relaxed whitespace-pre-wrap break-words">${m.texto}</p>
-                        <p class="text-[9px] opacity-50 mt-1 font-mono">${fecha}</p>
+                    <div class="max-w-[86%] px-3 py-2 rounded-2xl border shadow-sm ${mio ? 'bg-blue-600/20 border-blue-500/40' : 'bg-slate-700/40 border-white/10'}">
+                        <p class="text-[9px] font-black uppercase tracking-wider opacity-70 mb-1">${escapeHtmlSafe(emisor)}</p>
+                        <p class="text-[11px] leading-relaxed whitespace-pre-wrap break-words">${escapeHtmlSafe(m.texto)}</p>
+                        <p class="text-[9px] opacity-50 mt-1 font-mono text-right">${fecha}</p>
                     </div>
                 </div>`;
         }).join('');
@@ -3826,16 +3856,29 @@ async function refrescarClientesCRM() {
 function renderizarTablaClientes(clientes) {
     const container = document.getElementById('contenedor-clientes-crm');
     if(!container) return;
+    if (!Array.isArray(clientes) || clientes.length === 0) {
+        container.innerHTML = '<div class="col-span-full p-6 rounded-2xl border border-white/10 bg-black/20 text-center text-sm opacity-70">No hay clientes en CRM todavia.</div>';
+        return;
+    }
+
+    const hoy = new Date();
+    const sumarDias = (fechaTxt) => {
+        if (!fechaTxt) return null;
+        const f = new Date(fechaTxt);
+        if (isNaN(f.getTime())) return null;
+        return Math.ceil((f - hoy) / 86400000);
+    };
+
     container.innerHTML = clientes.map(c => `
-        <div class="card-bg border rounded-3xl p-5 flex flex-col gap-3 hover:scale-[1.02] transition-transform shadow-xl">
+        <div class="card-bg border rounded-3xl p-5 flex flex-col gap-3 hover:scale-[1.01] transition-transform shadow-xl bg-gradient-to-br from-slate-900/60 to-slate-800/40">
             <div class="flex justify-between items-start">
                 <div class="flex items-center gap-3">
                     <div class="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-xl shadow-md border-2 border-white/10">
-                        ${c.nombre.charAt(0).toUpperCase()}
+                        ${escapeHtmlSafe((c.nombre || '?').charAt(0).toUpperCase())}
                     </div>
                     <div>
-                        <h4 class="font-black text-sm uppercase tracking-tight text-blue-400">${c.nombre}</h4>
-                        <span class="text-[10px] font-mono opacity-50">${c.nif || 'Sin DNI/NIF'}</span>
+                        <h4 class="font-black text-sm uppercase tracking-tight text-blue-400">${escapeHtmlSafe(c.nombre || 'Sin nombre')}</h4>
+                        <span class="text-[10px] font-mono opacity-50">${escapeHtmlSafe(c.nif || 'Sin DNI/NIF')}</span>
                     </div>
                 </div>
                 <div class="flex gap-1">
@@ -3844,14 +3887,22 @@ function renderizarTablaClientes(clientes) {
                 </div>
             </div>
             <div class="text-[11px] space-y-1.5 mt-2 opacity-80">
-                <p class="flex items-center gap-2"><span class="opacity-40">📞</span> <span class="font-bold tracking-wider">${c.telefono || 'Sin teléfono'}</span></p>
-                <p class="flex items-center gap-2"><span class="opacity-40">✉️</span> <span class="font-mono">${c.email || 'Sin email'}</span></p>
+                <p class="flex items-center gap-2"><span class="opacity-40">📞</span> <span class="font-bold tracking-wider">${escapeHtmlSafe(c.telefono || 'Sin telefono')}</span></p>
+                <p class="flex items-center gap-2"><span class="opacity-40">✉️</span> <span class="font-mono truncate">${escapeHtmlSafe(c.email || 'Sin email')}</span></p>
+                ${c.direccion ? `<p class="flex items-start gap-2"><span class="opacity-40 mt-0.5">📍</span><span class="text-[10px] opacity-70 max-h-8 overflow-hidden">${escapeHtmlSafe(c.direccion)}</span></p>` : ''}
             </div>
-            ${c.comentarios ? `<div class="mt-2 p-3 bg-black/20 rounded-xl border border-white/5 text-[10px] italic opacity-80 leading-relaxed break-words">${c.comentarios}</div>` : ''}
+            ${c.comentarios ? `<div class="mt-2 p-3 bg-black/20 rounded-xl border border-white/5 text-[10px] italic opacity-80 leading-relaxed break-words">${escapeHtmlSafe(c.comentarios)}</div>` : ''}
             <div class="mt-4 pt-4 border-t border-white/10">
                 <p class="text-[9px] font-black uppercase tracking-widest opacity-40 mb-2">📅 Próximas Reservas</p>
                 <div class="flex flex-wrap gap-1.5">
-                    ${c.reservas?.length ? c.reservas.map(r => `<span class="bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">${new Date(r.fecha).toLocaleDateString()}</span>`).join('') : '<span class="text-[9px] opacity-30 italic">No hay reservas programadas</span>'}
+                    ${c.reservas?.length ? c.reservas.map(r => {
+                        const fechaTxt = new Date(r.fecha).toLocaleDateString();
+                        const d = sumarDias(r.fecha);
+                        const badge = d !== null
+                            ? (d < 0 ? '<span class="text-[8px] text-rose-300">Vencida</span>' : d <= 7 ? '<span class="text-[8px] text-amber-300">Esta semana</span>' : '<span class="text-[8px] text-emerald-300">Planificada</span>')
+                            : '';
+                        return `<span class="bg-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg text-[9px] font-bold border border-indigo-500/30">${fechaTxt} ${badge}</span>`;
+                    }).join('') : '<span class="text-[9px] opacity-30 italic">No hay reservas programadas</span>'}
                 </div>
             </div>
         </div>

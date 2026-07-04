@@ -29,6 +29,7 @@
     <meta name="apple-mobile-web-app-title" content="Seychelles">
     <link rel="apple-touch-icon" href="logo.png">
     <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="tailwind.generated.css">
     <link rel="stylesheet" href="styles.css">
     <script>
         window.__pendingGoogleCredential = null;
@@ -40,7 +41,6 @@
         };
     </script>
 
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
@@ -462,6 +462,7 @@
                         <div id="g_id_onload"
                              data-client_id="463908353578-o70ia5lgf0c7fcce0utp8qqlqnc41iuo.apps.googleusercontent.com"
                              data-callback="handleCredentialResponse"
+                                data-auto_prompt="false"
                              data-use_fedcm_for_prompt="false"
                         ></div>
                         <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_black"></div>
@@ -921,7 +922,7 @@
                             <input type="text" oninput="debouncedFiltrarCRM(this.value)" placeholder="Buscar por nombre, DNI, email o teléfono..." class="input-bg border w-full rounded-2xl pl-10 pr-4 py-3 text-xs focus:outline-none shadow-inner">
                         </div>
 
-                        <div id="contenedor-clientes-crm" class="grid grid-cols-1 md:grid-cols-2 gap-4 overflow-y-auto pr-2 pb-10 content-start">
+                        <div id="contenedor-clientes-crm" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 overflow-y-auto pr-2 pb-10 content-start">
                             <!-- Inyectado vía JS -->
                         </div>
                     </div>
@@ -979,7 +980,7 @@
                         </div>
                     </div>
 
-                    <div class="lg:col-span-2 card-bg border p-6 rounded-3xl shadow-xl grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[420px]">
+                    <div class="lg:col-span-2 card-bg border p-6 rounded-3xl shadow-xl grid grid-cols-1 md:grid-cols-[1fr_1.4fr] gap-4 min-h-[440px]">
                         <div class="md:col-span-1 border border-white/10 rounded-2xl p-3 bg-black/20 flex flex-col">
                             <h4 class="text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-2">Usuarios</h4>
                             <input type="text" id="chat-user-search-main" oninput="filtrarUsuariosChatLista(this.value)" placeholder="Buscar usuario..." class="input-bg border w-full rounded-xl px-2 py-1.5 text-[10px] mb-2 focus:outline-none">
@@ -1717,7 +1718,7 @@
         <span id="internal-chat-badge" class="hidden absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center border border-white/20">0</span>
     </div>
 
-    <div id="internal-chat-window" class="hidden fixed bottom-24 right-24 w-[360px] h-[520px] max-h-[72vh] card-bg border rounded-3xl shadow-2xl z-[910] flex flex-col overflow-hidden transition-all duration-300">
+    <div id="internal-chat-window" class="hidden fixed bottom-24 right-24 w-[420px] h-[560px] max-h-[76vh] max-w-[95vw] card-bg border rounded-3xl shadow-2xl z-[910] flex flex-col overflow-hidden transition-all duration-300">
         <div class="bg-gradient-to-r from-cyan-600/20 to-blue-600/20 border-b border-white/10 p-4 flex justify-between items-center shadow-md">
             <div class="flex items-center gap-3">
                 <div class="w-8 h-8 rounded-full bg-cyan-600/30 border border-cyan-400/40 flex items-center justify-center text-lg shadow-inner">💬</div>
@@ -1728,15 +1729,15 @@
             </div>
             <button onclick="toggleChatInternoPopup()" class="text-white/50 hover:text-white transition-colors text-lg px-2">✕</button>
         </div>
-        <div class="flex-1 min-h-0 grid grid-cols-[120px_1fr] gap-2 p-3">
-            <div class="border border-white/10 rounded-xl p-2 bg-black/20 overflow-hidden flex flex-col">
+        <div class="flex-1 min-h-0 grid grid-cols-[150px_1fr] gap-2 p-3">
+            <div class="border border-white/10 rounded-xl p-2 bg-black/20 overflow-hidden flex flex-col min-h-0">
                 <h4 class="text-[9px] font-bold uppercase tracking-widest text-cyan-300 mb-2">Usuarios</h4>
                 <input type="text" id="chat-user-search-popup" oninput="filtrarUsuariosChatLista(this.value)" placeholder="Buscar..." class="input-bg border w-full rounded-lg px-2 py-1 text-[10px] mb-2 focus:outline-none">
                 <div id="chat-popup-usuarios" class="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1"></div>
             </div>
             <div class="border border-white/10 rounded-xl p-2 bg-black/20 flex flex-col min-h-0">
                 <h4 id="chat-popup-header-usuario" class="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-2">Selecciona un usuario</h4>
-                <div id="chat-popup-conversacion" class="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 mb-2"></div>
+                <div id="chat-popup-conversacion" class="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 mb-2 bg-black/10 rounded-lg p-2"></div>
                 <div class="flex gap-2">
                     <input type="text" id="chat-popup-input" placeholder="Escribe un mensaje..." class="input-bg border flex-1 rounded-xl px-3 py-2 text-xs focus:outline-none" onkeydown="if(event.key==='Enter'){event.preventDefault(); enviarMensajeInterno('popup');}">
                     <button onclick="enviarMensajeInterno('popup')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-2 rounded-xl text-xs">Enviar</button>

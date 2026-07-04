@@ -4,6 +4,15 @@
   sin un proceso de compilación.
 */
 
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+:root {
+  --ui-radius-card: 22px;
+  --ui-radius-control: 14px;
+  --ui-shadow-soft: 0 10px 26px rgba(2, 8, 20, 0.22);
+  --ui-shadow-card: 0 16px 36px rgba(2, 8, 20, 0.3);
+}
+
 /* --- Definición de Temas con Variables CSS --- */
 .theme-dark {
   --color-bg: #0f172a;
@@ -148,6 +157,8 @@
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
+  font-family: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+  letter-spacing: 0.01em;
 }
 
 .card-bg {
@@ -155,11 +166,14 @@ body {
   border-color: var(--color-border);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  border-radius: var(--ui-radius-card);
+  box-shadow: var(--ui-shadow-soft);
 }
 
 .input-bg {
   background-color: var(--color-input-bg);
   border-color: var(--color-border);
+  border-radius: var(--ui-radius-control);
 }
 
 .dropdown-bg {
@@ -167,6 +181,7 @@ body {
   border-color: var(--color-border);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  border-radius: var(--ui-radius-control);
 }
 
 .nav-btn-active {
@@ -174,6 +189,32 @@ body {
   box-shadow: 0 0 15px rgba(99, 102, 241, 0.4);
   color: white !important;
   opacity: 1 !important;
+}
+
+button,
+select,
+input,
+textarea {
+  font-family: inherit;
+}
+
+input,
+textarea,
+select {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-accent-b) 24%, transparent);
+}
+
+.font-mono,
+code,
+pre,
+.ticker-content {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 /* --- Estilos y Animaciones Personalizadas --- */
@@ -677,7 +718,7 @@ tr:hover td {
 
 #kpi-container-grid .kpi-3d-card {
   min-height: 116px;
-  box-shadow: 0 12px 22px rgba(2, 8, 20, 0.34);
+  box-shadow: var(--ui-shadow-card);
   border: 1px solid rgba(191, 219, 254, 0.16);
 }
 
@@ -751,7 +792,7 @@ tr:hover td {
 
 .seccion-app .card-bg:hover {
   border-color: rgba(96, 165, 250, 0.28);
-  box-shadow: 0 14px 28px rgba(2, 8, 20, 0.4);
+  box-shadow: 0 18px 38px rgba(2, 8, 20, 0.38);
 }
 
 .seccion-app h2,

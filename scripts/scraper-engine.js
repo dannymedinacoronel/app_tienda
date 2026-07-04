@@ -136,6 +136,28 @@ function deduplicarProductos(list) {
     return Array.from(map.values());
 }
 
+function deduplicarProductosMonopolio(list) {
+    const map = new Map();
+    for (const raw of list || []) {
+        const p = limpiarProducto(raw, raw?.fuente || 'monopolio');
+        if (!p) continue;
+
+        const cuentaKey = normalizarTexto(raw?.cuenta || raw?.proveedor || raw?.urlCuenta || 'sin-cuenta') || 'sin-cuenta';
+        const key = `${cuentaKey}__${firmaProducto(p)}`;
+        const prev = map.get(key);
+
+        const candidate = {
+            ...raw,
+            ...p
+        };
+
+        if (!prev || scoreProducto(candidate) > scoreProducto(prev)) {
+            map.set(key, candidate);
+        }
+    }
+    return Array.from(map.values());
+}
+
 function mapearProductoVinted(item, fuente = 'api') {
     if (!item) return null;
     const precio = normalizarPrecio(
@@ -1215,7 +1237,7 @@ async function scrapeMonopolio(url, aliasBase = '') {
         }
 
         const productosCrudos = grupos.flatMap((g) => g.productos || []);
-        let productos = deduplicarProductos(productosCrudos);
+        let productos = deduplicarProductosMonopolio(productosCrudos);
         if (productos.length === 0 && productosCrudos.length > 0) {
             productos = productosCrudos;
         }

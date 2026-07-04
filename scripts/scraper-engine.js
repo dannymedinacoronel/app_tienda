@@ -196,6 +196,38 @@ function normalizarUrlVinted(inputUrl) {
     return `https://${raw}`;
 }
 
+function normalizarUrlPerfilVinted(inputUrl) {
+    const abs = normalizarUrlVinted(inputUrl);
+    if (!abs) return '';
+
+    let urlObj;
+    try {
+        urlObj = new URL(abs);
+    } catch (_) {
+        return '';
+    }
+
+    const pathOnly = String(urlObj.pathname || '').replace(/\/+$/, '');
+    if (!pathOnly.toLowerCase().includes('/member/')) return '';
+
+    // Evitar rutas de relación/listados, queremos URL de perfil.
+    if (/\/(following|followers|relations)\b/i.test(pathOnly)) {
+        const idInPath = pathOnly.match(/\/(\d{3,})\b/);
+        if (!idInPath) return '';
+        return `https://www.vinted.es/member/${idInPath[1]}`;
+    }
+
+    const idPerfil = pathOnly.match(/\/member\/(?:general\/)?(\d{3,})(?:-[^/?#]+)?/i);
+    if (idPerfil && idPerfil[1]) {
+        return `https://www.vinted.es/member/${idPerfil[1]}`;
+    }
+
+    // Fallback: conservar ruta miembro limpia si no encontramos id, pero evitar query/hash.
+    urlObj.search = '';
+    urlObj.hash = '';
+    return urlObj.toString().replace(/\/+$/, '');
+}
+
 function parseBoolEnv(name, fallback = false) {
     const raw = String(process.env[name] || '').trim().toLowerCase();
     if (!raw) return fallback;
@@ -569,9 +601,26 @@ async function extraerCuentasDesdeSeguidores(urlObjetivo, session = null) {
 
     try {
         await navegarComoNavegadorReal(page, urlObjetivo);
-        for (let i = 0; i < 4; i++) {
+
+        const maxScrolls = Math.max(6, Math.min(parseInt(process.env.MONOPOLIO_SCROLL_MAX || '14', 10), 28));
+        let estables = 0;
+        let lastCount = -1;
+
+        for (let i = 0; i < maxScrolls; i++) {
+            const count = await page.evaluate(() => {
+                const anchors = Array.from(document.querySelectorAll('a[href*="/member/"]'));
+                return anchors.length;
+            });
+
+            if (count === lastCount) estables += 1;
+            else estables = 0;
+            lastCount = count;
+
             await page.mouse.wheel(0, randomBetween(2200, 5200));
             await page.waitForTimeout(randomBetween(700, 1400));
+
+            // Si tras varias iteraciones no aparecen más enlaces, cortamos.
+            if (estables >= 3) break;
         }
 
         const perfiles = await page.evaluate(() => {
@@ -580,7 +629,7 @@ async function extraerCuentasDesdeSeguidores(urlObjetivo, session = null) {
             for (const a of anchors) {
                 const href = a.getAttribute('href') || '';
                 const abs = href.startsWith('http') ? href : `https://www.vinted.es${href}`;
-                if (!/\/member\/\d+/i.test(abs)) continue;
+                if (!/\/member\//i.test(abs)) continue;
                 const clean = abs.split('?')[0].replace(/\/+$/, '');
                 const txt = (a.textContent || '').trim().replace(/\s+/g, ' ');
                 out.push({ url: clean, alias: txt || '' });
@@ -590,7 +639,7 @@ async function extraerCuentasDesdeSeguidores(urlObjetivo, session = null) {
 
         const map = new Map();
         for (const p of perfiles || []) {
-            const url = String(p.url || '').trim();
+            const url = normalizarUrlPerfilVinted(String(p.url || '').trim());
             if (!url) continue;
             const alias = sanitizarAlias(p.alias || extraerAliasDesdeUrlPerfil(url), extraerAliasDesdeUrlPerfil(url));
             if (!map.has(url)) map.set(url, { url, alias });
@@ -621,6 +670,10 @@ async function scrapeMonopolio(url, aliasBase = '') {
             const objetivos = cuentas.slice(0, maxCuentas);
 
             console.log(`[MONOPOLIO] Enlace de seguidos detectado. Cuentas encontradas: ${cuentas.length}, procesando: ${objetivos.length}`);
+
+            if (objetivos.length === 0) {
+                console.warn('[MONOPOLIO] No se detectaron perfiles desde la URL de seguidos.');
+            }
 
             for (const cuenta of objetivos) {
                 const { productos } = await scrapeVinted(cuenta.url, { playwrightFirst: true, session });

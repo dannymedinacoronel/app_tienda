@@ -394,6 +394,7 @@ socket.on('monopolio_update', (data) => {
     }
     const productos = data.productos || [];
     const grupos = Array.isArray(data.grupos) ? data.grupos : [];
+    const esModoSeguidos = Boolean(data.esModoSeguidos);
 
     let existingContainer = document.getElementById(`monopolio-res-${btoa(data.urlOrigen)}`);
     if (existingContainer) {
@@ -405,6 +406,9 @@ socket.on('monopolio_update', (data) => {
     resultBlock.className = 'p-4 bg-black/20 border border-purple-500/20 rounded-2xl';
     
     let productosHtml = '<p class="text-xs opacity-60">No se encontraron productos.</p>';
+    if (esModoSeguidos && grupos.length === 0) {
+        productosHtml = '<p class="text-xs text-amber-300">No se detectaron perfiles en la URL de seguidos. Prueba con una URL de seguidos pública o con otra cuenta.</p>';
+    }
     if (grupos.length > 0) {
         productosHtml = grupos.map((g, idx) => {
             const lista = (g.productos || []).slice(0, 12).map(p => `

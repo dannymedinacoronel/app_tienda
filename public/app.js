@@ -2688,7 +2688,129 @@ function asegurarAccesoGodParaAdmin(rol) {
         a.textContent = 'Panel Dios';
         document.body.appendChild(a);
     }
+
+    const panelGanancias = document.getElementById('admin-gains-dashboard');
+    if (panelGanancias) {
+        panelGanancias.classList.toggle('hidden', !esAdmin);
+    }
 }
+
+function formatearFechaISO(dateObj) {
+    const d = new Date(dateObj);
+    if (isNaN(d.getTime())) return '';
+    return d.toISOString().slice(0, 10);
+}
+
+function obtenerRangoFechasPorPresetGananciasAdmin(preset, anio) {
+    const now = new Date();
+    const y = Number.isFinite(Number(anio)) ? Number(anio) : now.getFullYear();
+
+    const primerDiaMesActual = new Date(now.getFullYear(), now.getMonth(), 1);
+    const ultimoDiaMesActual = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    if (preset === 'mes-actual') {
+        return { inicio: formatearFechaISO(primerDiaMesActual), fin: formatearFechaISO(ultimoDiaMesActual) };
+    }
+
+    const quarterActual = Math.floor(now.getMonth() / 3) + 1;
+    const q = preset === 'quarter-actual' ? quarterActual :
+        (preset === 'q1' ? 1 : preset === 'q2' ? 2 : preset === 'q3' ? 3 : preset === 'q4' ? 4 : 0);
+
+    if (q >= 1 && q <= 4) {
+        const mesInicio = (q - 1) * 3;
+        const inicio = new Date(y, mesInicio, 1);
+        const fin = new Date(y, mesInicio + 3, 0);
+        return { inicio: formatearFechaISO(inicio), fin: formatearFechaISO(fin) };
+    }
+
+    return { inicio: '', fin: '' };
+}
+
+function onCambiarPresetGananciasAdmin() {
+    const presetEl = document.getElementById('admin-profit-range-preset');
+    const yearEl = document.getElementById('admin-profit-year');
+    const startEl = document.getElementById('admin-profit-date-start');
+    const endEl = document.getElementById('admin-profit-date-end');
+    if (!presetEl || !yearEl || !startEl || !endEl) return;
+
+    const preset = presetEl.value || 'mes-actual';
+    const rango = obtenerRangoFechasPorPresetGananciasAdmin(preset, yearEl.value);
+
+    const custom = preset === 'personalizado';
+    startEl.disabled = !custom;
+    endEl.disabled = !custom;
+
+    if (!custom) {
+        startEl.value = rango.inicio;
+        endEl.value = rango.fin;
+    }
+
+    actualizarDashboardGananciasAdmin();
+}
+
+function obtenerVentasEnRangoAdmin() {
+    const startEl = document.getElementById('admin-profit-date-start');
+    const endEl = document.getElementById('admin-profit-date-end');
+    const inicio = String(startEl?.value || '').trim();
+    const fin = String(endEl?.value || '').trim();
+
+    if (!inicio || !fin) return [];
+
+    const estadosVenta = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
+    return (BASE_DATOS || []).filter((v) => {
+        if (!estadosVenta.includes(v.estado)) return false;
+        const fechaVenta = String(v.fechaVenta || '').slice(0, 10);
+        if (!fechaVenta) return false;
+        return fechaVenta >= inicio && fechaVenta <= fin;
+    });
+}
+
+function actualizarDashboardGananciasAdmin() {
+    const panel = document.getElementById('admin-gains-dashboard');
+    if (!panel || String(USUARIO_ROL_ACTUAL || '').toLowerCase() !== 'admin') return;
+
+    const vendidos = obtenerVentasEnRangoAdmin();
+
+    let ingresos = 0;
+    let inversion = 0;
+    let prendas = 0;
+
+    vendidos.forEach((v) => {
+        const qty = Number(v.cantidad || 1) || 1;
+        const pv = Number(v.precioVenta || 0) || 0;
+        const pc = Number(v.precioCompra || 0) || 0;
+        const ge = Number(v.gastosEnvio || 0) || 0;
+        const canal = String(v.canalVenta || '').toLowerCase();
+        const comision = (canal === 'vinted' || canal === 'wallapop') ? (pv * 0.05) : 0;
+
+        ingresos += (pv - comision) * qty;
+        inversion += (pc + ge) * qty;
+        prendas += qty;
+    });
+
+    const beneficio = ingresos - inversion;
+    const roi = inversion > 0 ? (beneficio / inversion) * 100 : 0;
+
+    const kIngresos = document.getElementById('admin-profit-kpi-ingresos');
+    const kInversion = document.getElementById('admin-profit-kpi-inversion');
+    const kBeneficio = document.getElementById('admin-profit-kpi-beneficio');
+    const kRoi = document.getElementById('admin-profit-kpi-roi');
+    const kPrendas = document.getElementById('admin-profit-kpi-prendas');
+    const kRango = document.getElementById('admin-profit-kpi-rango');
+
+    if (kIngresos) kIngresos.innerText = `${ingresos.toFixed(2)} €`;
+    if (kInversion) kInversion.innerText = `${inversion.toFixed(2)} €`;
+    if (kBeneficio) kBeneficio.innerText = `${beneficio.toFixed(2)} €`;
+    if (kRoi) kRoi.innerText = `${roi.toFixed(1)}%`;
+    if (kPrendas) kPrendas.innerText = String(prendas);
+
+    const inicio = document.getElementById('admin-profit-date-start')?.value || '-';
+    const fin = document.getElementById('admin-profit-date-end')?.value || '-';
+    if (kRango) kRango.innerText = `Rango: ${inicio} -> ${fin} · Registros vendidos: ${vendidos.length}`;
+}
+
+window.onCambiarPresetGananciasAdmin = onCambiarPresetGananciasAdmin;
+window.actualizarDashboardGananciasAdmin = actualizarDashboardGananciasAdmin;
 
 async function cargarConfiguracionVisualRuntime() {
     try {
@@ -4305,30 +4427,57 @@ async function generarInformePDF() {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
         let y = 10;
+        const esAdmin = String(USUARIO_ROL_ACTUAL || '').toLowerCase() === 'admin';
+
+        const vendidosParaResumen = esAdmin ? obtenerVentasEnRangoAdmin() : obtenerDatosFiltradosParaAnalitica();
+        let ingresosResumen = 0;
+        let inversionResumen = 0;
+        let prendasResumen = 0;
+
+        vendidosParaResumen.forEach((v) => {
+            const qty = Number(v.cantidad || 1) || 1;
+            const pv = Number(v.precioVenta || 0) || 0;
+            const pc = Number(v.precioCompra || 0) || 0;
+            const ge = Number(v.gastosEnvio || 0) || 0;
+            const canal = String(v.canalVenta || '').toLowerCase();
+            const comision = (canal === 'vinted' || canal === 'wallapop') ? (pv * 0.05) : 0;
+            ingresosResumen += (pv - comision) * qty;
+            inversionResumen += (pc + ge) * qty;
+            prendasResumen += qty;
+        });
+        const beneficioResumen = ingresosResumen - inversionResumen;
+        const roiResumen = inversionResumen > 0 ? (beneficioResumen / inversionResumen) * 100 : 0;
+
+        const rangoAdminInicio = document.getElementById('admin-profit-date-start')?.value || '';
+        const rangoAdminFin = document.getElementById('admin-profit-date-end')?.value || '';
+        const textoRangoResumen = esAdmin && rangoAdminInicio && rangoAdminFin
+            ? `${rangoAdminInicio} -> ${rangoAdminFin}`
+            : 'Filtros de Analitica activos';
 
         doc.setFontSize(22);
         doc.text('Informe de Rendimiento - Seychelles Shop', 10, y);
         y += 10;
         doc.setFontSize(10);
         doc.text(`Fecha del Informe: ${new Date().toLocaleDateString('es-ES')}`, 10, y);
+        y += 5;
+        doc.text(`Rango aplicado: ${textoRangoResumen}`, 10, y);
         y += 10;
 
         doc.setFontSize(14);
         doc.text('Resumen Financiero', 10, y);
         y += 7;
         doc.setFontSize(10);
-        doc.text(`Facturación Bruta: ${document.getElementById('kpi-ingresos').innerText}`, 10, y); y += 5;
-        doc.text(`Ganancia Neta: ${document.getElementById('kpi-beneficio').innerText}`, 10, y); y += 5;
-        doc.text(`Inversión Total: ${document.getElementById('kpi-inversion').innerText}`, 10, y); y += 5;
-        doc.text(`Retorno (ROI): ${document.getElementById('kpi-roi').innerText}`, 10, y); y += 5;
-        doc.text(`Prendas Vendidas: ${document.getElementById('kpi-prendas').innerText}`, 10, y); y += 10;
+        doc.text(`Facturación Bruta: ${ingresosResumen.toFixed(2)} €`, 10, y); y += 5;
+        doc.text(`Ganancia Neta: ${beneficioResumen.toFixed(2)} €`, 10, y); y += 5;
+        doc.text(`Inversión Total: ${inversionResumen.toFixed(2)} €`, 10, y); y += 5;
+        doc.text(`Retorno (ROI): ${roiResumen.toFixed(1)}%`, 10, y); y += 5;
+        doc.text(`Prendas Vendidas: ${prendasResumen}`, 10, y); y += 10;
 
         doc.setFontSize(14);
         doc.text('Productos Vendidos', 10, y);
         y += 7;
         doc.setFontSize(9);
-        const nombresEstadosVenta = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
-        const vendidos = BASE_DATOS.filter(v => nombresEstadosVenta.includes(v.estado));
+        const vendidos = vendidosParaResumen;
         if (vendidos.length > 0) {
             const headers = [['SKU', 'Prenda', 'Categoría', 'Talla', 'Venta (€)', 'Canal', 'Fecha Venta']];
             const data = vendidos.map(v => [
@@ -5528,6 +5677,7 @@ async function reloadCoreData(isInitialLoad = false) {
         if (!document.getElementById('sec-analitica').classList.contains('hidden')) {
             actualizarTodoElBloqueGrafico();
         }
+        actualizarDashboardGananciasAdmin();
         
         const contenedorLogs = document.getElementById('contenedor-logs-auditoria');
         if (logsVisible && contenedorLogs && data.logs && data.logs.length > 0) {
@@ -5580,6 +5730,7 @@ function actualizarTodoElBloqueGrafico() {
     dibujarGraficaTarta();
     dibujarGraficaBarrasTiendas();
     dibujarMapaCalor();
+    actualizarDashboardGananciasAdmin();
 }
 
 function dibujarGrafica() {
@@ -5829,6 +5980,9 @@ function renderKanban(isFullRefresh = false) {
             const fechaVenta = v.fechaVenta ? `<span class="text-emerald-400/80">💰 ${v.fechaVenta}</span>` : '';
             const fechasHtml = (fechaAlta || fechaVenta) ? `<div class="text-[8px] font-mono opacity-80 mt-1.5 flex flex-wrap gap-x-3">${fechaAlta} ${fechaVenta}</div>` : '';
             const miniComentario = v.comentariosProducto ? `<div class="text-[9px] italic opacity-60 mt-1.5 border-l-2 border-white/10 pl-2 truncate" title="${v.comentariosProducto}">${v.comentariosProducto.replace(/!importante/gi, '').replace(/^\*/, '').trim()}</div>` : '';
+            const btnAjustarVenta = est.rolFinanciero === 'Venta'
+                ? `<button onclick="abrirModalPostVenta(['${v._id}'], '${est.nombre}', { fechaSugerida: '${v.fechaVenta || ''}', comentarioSugerido: ${JSON.stringify(String(v.comentariosProducto || '')).replace(/"/g, '&quot;')}, canalSugerido: '${v.canalVenta || 'Vinted'}' }); event.stopPropagation();" class="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded hover:bg-emerald-500/20" title="Ajustar fecha/comentarios de venta">Ajustar venta</button>`
+                : '';
 
             card.innerHTML = `
                 <input type="checkbox" id="check-${v._id}" ${estaMarcado ? 'checked' : ''} onchange="manejarSeleccionCheckMasiva('${v._id}', this)" class="w-4 h-4 rounded text-blue-600 border-slate-700 bg-black/20 cursor-pointer flex-shrink-0" onclick="event.stopPropagation();">
@@ -5844,6 +5998,7 @@ function renderKanban(isFullRefresh = false) {
                     ${fechasHtml}
                     ${miniComentario}
                     <span class="text-[10px] font-bold block mt-2 font-mono">${pVentaFormateado.toFixed(2)} €</span>
+                    ${btnAjustarVenta}
                 </div>
                 <div class="flex items-center gap-1.5 flex-shrink-0 text-[11px]">
                     <button onclick="duplicarPrendaIndividual('${v._id}'); event.stopPropagation();" class="bg-current/5 hover:bg-current/10 p-1 rounded-lg" title="Duplicar">👯</button>
@@ -6271,6 +6426,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('user-display').innerText = `👤 Conectado: ${data.usuario.split('@')[0]} [${data.rol}]`; 
 
             asegurarAccesoGodParaAdmin(data.rol || 'Editor');
+
+            const yearEl = document.getElementById('admin-profit-year');
+            if (yearEl && !yearEl.value) {
+                yearEl.value = String(new Date().getFullYear());
+            }
+            onCambiarPresetGananciasAdmin();
 
             const cards3D = document.querySelectorAll('.kpi-3d-card');
             const handleCardMouseMove = throttle(function(e, card) {

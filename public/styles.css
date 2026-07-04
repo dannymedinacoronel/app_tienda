@@ -515,22 +515,35 @@ tr:hover td {
 #main-nav-secciones {
   border-color: rgba(148, 163, 184, 0.2) !important;
   background: linear-gradient(180deg, color-mix(in srgb, var(--ui-card-top) 70%, transparent), color-mix(in srgb, var(--ui-card-bottom) 60%, transparent));
-  padding: 0.45rem;
-  gap: 0.35rem;
+  padding: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  gap: 0.45rem;
   backdrop-filter: blur(14px) saturate(115%);
   -webkit-backdrop-filter: blur(14px) saturate(115%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 20px rgba(2, 8, 20, 0.2);
+  align-items: stretch;
+  position: relative;
+  z-index: 30;
 }
 
 #main-nav-secciones button {
-  min-height: 2.15rem;
+  min-height: 2.35rem;
   font-size: 10px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   border: 1px solid transparent;
   background: linear-gradient(180deg, var(--ui-nav-idle-a), var(--ui-nav-idle-b));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   position: relative;
   overflow: hidden;
+  line-height: 1.08;
+  text-wrap: nowrap;
+  padding-left: 0.58rem;
+  padding-right: 0.58rem;
+}
+
+#main-nav-secciones .nav-tab-chip {
+  border-radius: 0.9rem;
 }
 
 .nav-tab-btn::before {
@@ -556,7 +569,7 @@ tr:hover td {
 
 #main-nav-secciones button:not(.nav-btn-active):hover {
   opacity: 1 !important;
-  transform: translateY(-1px);
+  transform: translateY(-1px) scale(1.01);
   border-color: rgba(56, 189, 248, 0.34);
   background: linear-gradient(180deg, var(--ui-nav-hover-a), var(--ui-nav-hover-b));
 }
@@ -632,6 +645,8 @@ tr:hover td {
 
 [data-quick-menu-wrapper="1"] {
   isolation: isolate;
+  position: relative;
+  z-index: 220;
 }
 
 [data-quick-menu-wrapper="1"] > button::after {
@@ -646,6 +661,7 @@ tr:hover td {
 
 #main-nav-secciones .nav-btn-active {
   border-color: rgba(204, 251, 241, 0.35);
+  box-shadow: 0 12px 22px color-mix(in srgb, var(--ui-accent-a) 28%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 #main-nav-secciones .nav-btn-active::before {
@@ -743,8 +759,12 @@ tr:hover td {
 }
 
 @media (max-width: 1180px) {
+  #main-nav-secciones {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  }
+
   #main-nav-secciones button {
-    min-height: 2rem;
+    min-height: 2.1rem;
     font-size: 9px;
   }
 }
@@ -756,12 +776,22 @@ tr:hover td {
   }
 
   #main-nav-secciones {
-    gap: 0.28rem;
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 0.38rem;
+    scrollbar-width: thin;
+    scroll-snap-type: x proximity;
+    padding-bottom: 0.55rem;
   }
 
   #main-nav-secciones button {
-    min-height: 1.95rem;
-    padding-left: 0.4rem;
-    padding-right: 0.4rem;
+    flex: 0 0 auto;
+    min-width: max-content;
+    min-height: 2rem;
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+    scroll-snap-align: start;
   }
 }

@@ -97,6 +97,9 @@ function closeQuickMenus() {
     document.querySelectorAll('.quick-menu-panel').forEach((panel) => panel.classList.add('hidden'));
 }
 
+const NAV_TAB_BASE_CLASS = 'nav-tab-btn nav-tab-chip py-2 rounded-xl font-black uppercase tracking-tight transition-all';
+const NAV_TAB_ACTIVE_CLASS = `${NAV_TAB_BASE_CLASS} nav-btn-active text-white`;
+
 window.toggleQuickMenu = function(menuId) {
     const panel = document.getElementById(menuId);
     if (!panel) return;
@@ -3460,12 +3463,12 @@ window.navegarASeccion = function(idSeccion) {
     });
     
     document.querySelectorAll('#main-nav-secciones button').forEach(btn => {
-        btn.className = "nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all";
+        btn.className = NAV_TAB_BASE_CLASS;
     });
     
     const tabActivo = document.getElementById(`tab-${idSeccion}`);
     if (tabActivo) {
-        tabActivo.className = "nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all nav-btn-active text-white";
+        tabActivo.className = NAV_TAB_ACTIVE_CLASS;
     }
     
     if (idSeccion === 'sec-analitica' && BASE_DATOS.length > 0) {
@@ -6678,8 +6681,29 @@ async function reloadCoreData(isInitialLoad = false) {
         const res = await fetch(`${BACKEND_URL}/api/ventas?page=1&includeLogs=${logsVisible ? '1' : '0'}`, { credentials: 'include' });
         if (!res.ok) throw new Error('Fallo de red al cargar datos.');
         const data = await res.json();
+
+        // Si la configuración de columnas no está lista, fuerza fallback para no bloquear el render inicial.
+        if (!Array.isArray(LISTA_ESTADOS_KANBAN) || LISTA_ESTADOS_KANBAN.length === 0) {
+            try {
+                await refrescarEstadosKanban();
+            } catch (_) {}
+        }
         
         BASE_DATOS = Array.isArray(data.ventas) ? data.ventas : [];
+
+        // Último seguro: construir estados mínimos desde ventas si todo lo anterior falló.
+        if ((!Array.isArray(LISTA_ESTADOS_KANBAN) || LISTA_ESTADOS_KANBAN.length === 0) && BASE_DATOS.length > 0) {
+            const estadoNombres = [...new Set(BASE_DATOS.map((v) => String(v?.estado || '').trim()).filter(Boolean))];
+            LISTA_ESTADOS_KANBAN = estadoNombres.map((nombre, idx) => ({
+                _id: `fallback-${idx + 1}`,
+                nombre,
+                icono: nombre.toLowerCase().includes('vend') ? '💰' : (nombre.toLowerCase().includes('reserv') ? '🤝' : '📦'),
+                color: nombre.toLowerCase().includes('vend') ? 'emerald' : (nombre.toLowerCase().includes('reserv') ? 'indigo' : 'amber'),
+                rolFinanciero: nombre.toLowerCase().includes('vend') ? 'Venta' : 'Stock',
+                orden: idx + 1
+            }));
+        }
+
         CURRENT_PAGE = data.currentPage || 1;
         TOTAL_PAGES = data.totalPages || 1;
         const resumen = (data && typeof data.resumen === 'object' && data.resumen) ? data.resumen : {};
@@ -6690,6 +6714,14 @@ async function reloadCoreData(isInitialLoad = false) {
         document.getElementById('kpi-prendas').innerText = Number(resumen.prendasVendidas || 0);
         document.getElementById('kpi-roi').innerText = `${(Number(resumen.roi || 0)).toFixed(1)}%`;
         aplicarMascaraVisualizadorEnUI();
+
+        if (isInitialLoad) {
+            cachearInventarioInicial({
+                ventas: BASE_DATOS,
+                resumen,
+                estados: LISTA_ESTADOS_KANBAN
+            });
+        }
 
         renderKanban(true);
         requestAnimationFrame(() => {
@@ -6716,6 +6748,75 @@ async function reloadCoreData(isInitialLoad = false) {
         IS_LOADING_MORE = false;
     }
     actualizarUsoBaseDatos();
+}
+
+function obtenerClaveCacheInventario() {
+    const empresa = String(EMPRESA_CHAT_ACTUAL || 'default').toLowerCase().trim() || 'default';
+    return `seychelles-cache-inventario:${empresa}`;
+}
+
+function cachearInventarioInicial(payload) {
+    try {
+        const ventas = Array.isArray(payload?.ventas) ? payload.ventas.slice(0, 250) : [];
+        const resumen = payload?.resumen && typeof payload.resumen === 'object' ? payload.resumen : {};
+        const estados = Array.isArray(payload?.estados) ? payload.estados : [];
+        const snapshot = {
+            createdAt: Date.now(),
+            ventas,
+            resumen,
+            estados
+        };
+        localStorage.setItem(obtenerClaveCacheInventario(), JSON.stringify(snapshot));
+    } catch (_) {}
+}
+
+function pintarInventarioDesdeCacheInicial() {
+    try {
+        const raw = localStorage.getItem(obtenerClaveCacheInventario());
+        if (!raw) return false;
+        const snapshot = JSON.parse(raw);
+        if (!snapshot || typeof snapshot !== 'object') return false;
+
+        const ageMs = Date.now() - Number(snapshot.createdAt || 0);
+        if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > (1000 * 60 * 30)) return false;
+
+        const ventas = Array.isArray(snapshot.ventas) ? snapshot.ventas : [];
+        if (!ventas.length) return false;
+
+        BASE_DATOS = ventas;
+        if ((!Array.isArray(LISTA_ESTADOS_KANBAN) || LISTA_ESTADOS_KANBAN.length === 0) && Array.isArray(snapshot.estados) && snapshot.estados.length > 0) {
+            LISTA_ESTADOS_KANBAN = snapshot.estados;
+        }
+
+        if ((!Array.isArray(LISTA_ESTADOS_KANBAN) || LISTA_ESTADOS_KANBAN.length === 0) && BASE_DATOS.length > 0) {
+            const estadoNombres = [...new Set(BASE_DATOS.map((v) => String(v?.estado || '').trim()).filter(Boolean))];
+            LISTA_ESTADOS_KANBAN = estadoNombres.map((nombre, idx) => ({
+                _id: `cache-fallback-${idx + 1}`,
+                nombre,
+                icono: nombre.toLowerCase().includes('vend') ? '💰' : (nombre.toLowerCase().includes('reserv') ? '🤝' : '📦'),
+                color: nombre.toLowerCase().includes('vend') ? 'emerald' : (nombre.toLowerCase().includes('reserv') ? 'indigo' : 'amber'),
+                rolFinanciero: nombre.toLowerCase().includes('vend') ? 'Venta' : 'Stock',
+                orden: idx + 1
+            }));
+        }
+
+        const resumen = snapshot.resumen && typeof snapshot.resumen === 'object' ? snapshot.resumen : {};
+        const elIngresos = document.getElementById('kpi-ingresos');
+        const elBeneficio = document.getElementById('kpi-beneficio');
+        const elInversion = document.getElementById('kpi-inversion');
+        const elPrendas = document.getElementById('kpi-prendas');
+        const elRoi = document.getElementById('kpi-roi');
+        if (elIngresos) elIngresos.innerText = `${(Number(resumen.ingresos || 0)).toFixed(2)} €`;
+        if (elBeneficio) elBeneficio.innerText = `${(Number(resumen.beneficio || 0)).toFixed(2)} €`;
+        if (elInversion) elInversion.innerText = `${(Number(resumen.inversion || 0)).toFixed(2)} €`;
+        if (elPrendas) elPrendas.innerText = Number(resumen.prendasVendidas || 0);
+        if (elRoi) elRoi.innerText = `${(Number(resumen.roi || 0)).toFixed(1)}%`;
+
+        renderKanban(true);
+        return true;
+    } catch (_) {
+        return false;
+    }
 }
 
 async function loadMoreData() {
@@ -7570,10 +7671,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
 
             await ejecutarPasoInit('refrescarEstadosKanban', async () => refrescarEstadosKanban());
+            aplicarRestriccionesRolUI();
+
+            // Primer paint instantáneo con snapshot local por empresa mientras llega el backend.
+            pintarInventarioDesdeCacheInicial();
+
+            // Prioridad: mostrar productos cuanto antes.
+            await ejecutarPasoInit('reloadCoreData', async () => reloadCoreData(true));
+
+            // Cargas secundarias: no bloquear el primer render del inventario.
             await ejecutarPasoInit('refrescarYListarTiendasCloud', async () => refrescarYListarTiendasCloud());
             await ejecutarPasoInit('refrescarCategoriasCloud', async () => refrescarCategoriasCloud());
-            aplicarRestriccionesRolUI();
-            await ejecutarPasoInit('reloadCoreData', async () => reloadCoreData(true));
             await ejecutarPasoInit('renderSavedUrls', async () => renderSavedUrls());
             await ejecutarPasoInit('refrescarCitas', async () => refrescarCitas());
             await ejecutarPasoInit('actualizarBadgeCitasNav', async () => actualizarBadgeCitasNav());

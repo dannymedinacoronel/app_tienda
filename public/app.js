@@ -41,8 +41,10 @@ let CALENDARIO_MES = new Date().getMonth() + 1;
 let CALENDARIO_ANIO = new Date().getFullYear();
 let SCRAPER_PROGRESS_INTERVAL = null;
 let MONOPOLIO_URLS = [];
+let MONOPOLIO_URLS_VISTA = [];
 let MONOPOLIO_SELECTED_KEYS = new Set();
 let MONOPOLIO_TEMP_URLS = [];
+let MONOPOLIO_SEARCH_REQUEST_SEQ = 0;
 let MONOPOLIO_PROGRESS_INTERVAL = null;
 let MONOPOLIO_PROGRESS_TOTAL = 0;
 let MONOPOLIO_PROGRESS_DONE = 0;
@@ -87,6 +89,34 @@ function escapeHtmlSafe(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+function closeQuickMenus() {
+    document.querySelectorAll('.quick-menu-panel').forEach((panel) => panel.classList.add('hidden'));
+}
+
+window.toggleQuickMenu = function(menuId) {
+    const panel = document.getElementById(menuId);
+    if (!panel) return;
+    const openNow = panel.classList.contains('hidden');
+    closeQuickMenus();
+    if (openNow) panel.classList.remove('hidden');
+};
+
+document.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-quick-menu-wrapper="1"]')) {
+        closeQuickMenus();
+    }
+});
+
+function actualizarEstadoBotonesTema(theme) {
+    const current = String(theme || localStorage.getItem('seychelles-theme-multi') || 'dark');
+    document.querySelectorAll('[data-theme-option]').forEach((btn) => {
+        const option = String(btn.getAttribute('data-theme-option') || '');
+        const active = option === current;
+        btn.classList.toggle('theme-item-active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
 }
 
 function limpiarEstadoVisualDrag() {
@@ -1960,19 +1990,10 @@ async function renderMonopolioUrls() {
 }
 
 function filtrarMonopolioUrls(query = '') {
-    const q = query.toLowerCase();
+    const q = String(query || '').trim();
+    const qLower = q.toLowerCase();
     const container = document.getElementById('lista-monopolio-urls');
     if (!container) return;
-
-    const filtradas = MONOPOLIO_URLS.filter(u => 
-        (u.alias && u.alias.toLowerCase().includes(q)) ||
-        (u.url && u.url.toLowerCase().includes(q))
-    );
-
-    if (filtradas.length === 0) {
-        container.innerHTML = '<p class="text-xs opacity-50 italic">No hay webs guardadas.</p>';
-        return;
-    }
 
     const escapeHtml = (txt) => String(txt || '')
         .replace(/&/g, '&amp;')
@@ -1981,7 +2002,16 @@ function filtrarMonopolioUrls(query = '') {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
 
-    container.innerHTML = filtradas.map(u => `
+    const renderListaMonopolio = (lista) => {
+        const filtradas = Array.isArray(lista) ? lista : [];
+        MONOPOLIO_URLS_VISTA = filtradas;
+
+        if (filtradas.length === 0) {
+            container.innerHTML = '<p class="text-xs opacity-50 italic">No hay webs guardadas.</p>';
+            return;
+        }
+
+        container.innerHTML = filtradas.map(u => `
         <div class="p-3 bg-black/20 border border-white/10 rounded-xl flex items-center justify-between gap-3">
             <div class="flex items-center gap-3 flex-1 min-w-0">
                 <input
@@ -2000,6 +2030,36 @@ function filtrarMonopolioUrls(query = '') {
             </div>
         </div>
     `).join('');
+    };
+
+    if (!qLower) {
+        renderListaMonopolio(MONOPOLIO_URLS);
+        return;
+    }
+
+    const reqSeq = ++MONOPOLIO_SEARCH_REQUEST_SEQ;
+    container.innerHTML = '<p class="text-xs opacity-60 italic">Buscando en Mongo...</p>';
+
+    fetch(`/api/monopolio/urls/search?q=${encodeURIComponent(q)}&limit=80`, { credentials: 'include' })
+        .then(async (res) => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            const items = Array.isArray(data?.items) ? data.items : [];
+            return items;
+        })
+        .then((items) => {
+            // Evita pisar resultados nuevos con respuestas lentas anteriores.
+            if (reqSeq !== MONOPOLIO_SEARCH_REQUEST_SEQ) return;
+            renderListaMonopolio(items);
+        })
+        .catch(() => {
+            if (reqSeq !== MONOPOLIO_SEARCH_REQUEST_SEQ) return;
+            const fallback = MONOPOLIO_URLS.filter(u =>
+                (u.alias && u.alias.toLowerCase().includes(qLower)) ||
+                (u.url && u.url.toLowerCase().includes(qLower))
+            );
+            renderListaMonopolio(fallback);
+        });
 }
 
 window.toggleMonopolioSeleccionGuardada = function(key, checked) {
@@ -2010,8 +2070,11 @@ window.toggleMonopolioSeleccionGuardada = function(key, checked) {
 }
 
 window.marcarTodasMonopolioGuardadas = function(checked) {
-    if (!Array.isArray(MONOPOLIO_URLS) || MONOPOLIO_URLS.length === 0) return;
-    MONOPOLIO_URLS.forEach((u) => {
+    const baseLista = Array.isArray(MONOPOLIO_URLS_VISTA) && MONOPOLIO_URLS_VISTA.length
+        ? MONOPOLIO_URLS_VISTA
+        : MONOPOLIO_URLS;
+    if (!Array.isArray(baseLista) || baseLista.length === 0) return;
+    baseLista.forEach((u) => {
         const key = String(u._id || u.url || '');
         if (!key) return;
         if (checked) MONOPOLIO_SELECTED_KEYS.add(key);
@@ -2968,16 +3031,23 @@ window.navegarASeccion = function(idSeccion) {
         return;
     }
 
-    document.querySelectorAll('.seccion-app').forEach(sec => sec.classList.add('hidden'));
-    document.getElementById(idSeccion).classList.remove('hidden');
+    document.querySelectorAll('.seccion-app').forEach(sec => {
+        sec.classList.add('hidden');
+        sec.classList.remove('seccion-active');
+    });
+    const seccionDestino = document.getElementById(idSeccion);
+    seccionDestino.classList.remove('hidden');
+    requestAnimationFrame(() => {
+        seccionDestino.classList.add('seccion-active');
+    });
     
     document.querySelectorAll('#main-nav-secciones button').forEach(btn => {
-        btn.className = "flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100";
+        btn.className = "nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all";
     });
     
     const tabActivo = document.getElementById(`tab-${idSeccion}`);
     if (tabActivo) {
-        tabActivo.className = "flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all nav-btn-active text-white";
+        tabActivo.className = "nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all nav-btn-active text-white";
     }
     
     if (idSeccion === 'sec-analitica' && BASE_DATOS.length > 0) {
@@ -5380,6 +5450,8 @@ function setTheme(theme) {
     body.classList.add(`theme-${theme}`);
 
     localStorage.setItem('seychelles-theme-multi', theme);
+    actualizarEstadoBotonesTema(theme);
+    closeQuickMenus();
     if(BASE_DATOS.length > 0) { actualizarTodoElBloqueGrafico(); }
 }
 

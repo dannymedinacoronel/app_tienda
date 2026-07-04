@@ -526,38 +526,38 @@
                         </button>
                     </div>
 
-                    <button id="btn-mute-volumen" onclick="toggleMuteVolumenGlobal()" class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md transition-colors" title="Quitar/Poner Volumen">
+                    <button id="btn-mute-volumen" onclick="toggleMuteVolumenGlobal()" class="toolbar-btn px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md transition-colors" title="Quitar/Poner Volumen">
                         🔊 <span id="txt-mute-volumen">Sonido</span>
                     </button>
 
-                    <div class="relative group">
-                        <button class="bg-slate-800/60 border border-current/10 hover:bg-slate-700 px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md tracking-wide">
+                    <div class="relative" data-quick-menu-wrapper="1">
+                        <button onclick="toggleQuickMenu('menu-theme-panel')" class="toolbar-btn px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1 shadow-md tracking-wide">
                             🎨 Temas <span class="text-[9px] opacity-60">▼</span>
                         </button>
-                        <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-32 dropdown-bg border rounded-xl shadow-2xl z-[150] p-1 space-y-0.5 animate-fadeIn">
-                            <button onclick="setTheme('dark')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌌 Oscuro</button>
-                            <button onclick="setTheme('pink')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌸 Rosa</button>
-                            <button onclick="setTheme('light')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">☀️ Claro</button>
-                            <button onclick="setTheme('emerald')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🌲 Verde</button>
-                            <button onclick="setTheme('purple')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5">🔮 Morado</button>
-                            <button onclick="setTheme('premium')" class="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-black/10 flex items-center gap-1.5 text-amber-500">👑 Premium</button>
+                        <div id="menu-theme-panel" class="quick-menu-panel hidden absolute right-0 top-full mt-2 w-40 dropdown-bg border rounded-2xl shadow-2xl z-[150] p-1.5 space-y-1 animate-fadeIn">
+                            <button onclick="setTheme('dark')" data-theme-option="dark" class="toolbar-item w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">🌌 Oscuro</button>
+                            <button onclick="setTheme('pink')" data-theme-option="pink" class="toolbar-item w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">🌸 Rosa</button>
+                            <button onclick="setTheme('light')" data-theme-option="light" class="toolbar-item w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">☀️ Claro</button>
+                            <button onclick="setTheme('emerald')" data-theme-option="emerald" class="toolbar-item w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">🌲 Verde</button>
+                            <button onclick="setTheme('purple')" data-theme-option="purple" class="toolbar-item w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">🔮 Morado</button>
+                            <button onclick="setTheme('premium')" data-theme-option="premium" class="toolbar-item w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">👑 Premium</button>
                         </div>
                     </div>
 
                     <!-- MENÚ ACCIONES AGRUPADAS -->
-                    <div class="relative group">
-                        <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md tracking-wide transition-all active:scale-95">
+                    <div class="relative" data-quick-menu-wrapper="1">
+                        <button onclick="toggleQuickMenu('menu-actions-panel')" class="toolbar-btn toolbar-btn-primary px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md tracking-wide transition-all active:scale-95">
                             ⚙️ Acciones <span class="text-[9px] opacity-60">▼</span>
                         </button>
-                        <div class="hidden group-hover:block absolute right-0 top-full mt-1 w-48 dropdown-bg border rounded-2xl shadow-2xl z-[150] p-1.5 space-y-1 animate-fadeIn">
-                            <button onclick="forceRefreshDataManual()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors"><span id="icon-refresh" class="inline-block">🔄</span> Sincronizar DB</button>
-                            <button onclick="procesarScraperVinted()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors text-blue-400">👗 Scraper / CSV</button>
-                            <button onclick="exportarExcel()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors text-emerald-400">📊 Exportar Excel</button>
+                        <div id="menu-actions-panel" class="quick-menu-panel hidden absolute right-0 top-full mt-2 w-52 dropdown-bg border rounded-2xl shadow-2xl z-[150] p-1.5 space-y-1 animate-fadeIn">
+                            <button onclick="forceRefreshDataManual()" class="toolbar-item w-full text-left px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors"><span id="icon-refresh" class="inline-block">🔄</span> Sincronizar DB</button>
+                            <button onclick="procesarScraperVinted()" class="toolbar-item w-full text-left px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors text-sky-300">👗 Scraper / CSV</button>
+                            <button onclick="exportarExcel()" class="toolbar-item w-full text-left px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors text-emerald-300">📊 Exportar Excel</button>
                             <div class="h-px w-full bg-white/10 my-1"></div>
-                            <button onclick="descargarBackupSeguridadLocal()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors text-purple-400">💾 Bajar Backup</button>
-                            <button onclick="document.getElementById('input-restore-backup').click()" class="w-full text-left px-3 py-2 rounded-lg text-xs font-bold hover:bg-white/10 flex items-center gap-2 transition-colors text-amber-400">📂 Cargar Backup</button>
+                            <button onclick="descargarBackupSeguridadLocal()" class="toolbar-item w-full text-left px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors text-fuchsia-300">💾 Bajar Backup</button>
+                            <button onclick="document.getElementById('input-restore-backup').click()" class="toolbar-item w-full text-left px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors text-amber-300">📂 Cargar Backup</button>
                             <div class="h-px w-full bg-white/10 my-1"></div>
-                            <button onclick="logout(event)" class="w-full text-left px-3 py-2 rounded-lg text-xs font-black hover:bg-rose-500/20 text-rose-500 flex items-center gap-2 transition-colors">🚪 Cerrar Sesión</button>
+                            <button onclick="logout(event)" class="toolbar-item w-full text-left px-3 py-2 rounded-lg text-xs font-black text-rose-300 flex items-center gap-2 transition-colors">🚪 Cerrar Sesión</button>
                         </div>
                     </div>
                     <input type="file" id="input-restore-backup" class="hidden" accept=".json" onchange="importarBackupJSON(event)">
@@ -632,18 +632,18 @@
 
                 <!-- DERECHA: NAV (50%) -->
                 <nav id="main-nav-secciones" class="lg:w-1/2 flex flex-wrap gap-1.5 p-1.5 card-bg rounded-2xl text-[9px] w-full border border-white/5">
-                    <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all nav-btn-active text-white">📦 Panel</button>
-                    <button onclick="navegarASeccion('sec-tareas')" id="tab-sec-tareas" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">✅ Tareas</button>
-                    <button onclick="navegarASeccion('sec-monopolio')" id="tab-sec-monopolio" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📈 Monopolio</button>
-                    <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📊 Analítica</button>
-                    <button onclick="navegarASeccion('sec-notas')" id="tab-sec-notas" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📝 Notas</button>
-                    <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">👥 CRM</button>
-                    <button onclick="navegarASeccion('sec-citas')" id="tab-sec-citas" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📅 Citas <span id="badge-citas-nav" class="hidden ml-1 bg-rose-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">0</span></button>
-                    <button onclick="navegarASeccion('sec-usuarios')" id="tab-sec-usuarios" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">🔑 Acceso</button>
-                    <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📋 Fact.</button>
-                    <button onclick="navegarASeccion('sec-faqs')" id="tab-sec-faqs" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">❓ FAQs</button>
-                    <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📜 Logs</button>
-                    <button onclick="navegarASeccion('sec-ajustes')" id="tab-sec-ajustes" class="flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100 text-amber-500">⚙️ Ajustes</button>
+                    <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all nav-btn-active text-white">📦 Panel</button>
+                    <button onclick="navegarASeccion('sec-tareas')" id="tab-sec-tareas" class="nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">✅ Tareas</button>
+                    <button onclick="navegarASeccion('sec-monopolio')" id="tab-sec-monopolio" class="nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📈 Monopolio</button>
+                    <button onclick="navegarASeccion('sec-analitica')" id="tab-sec-analitica" class="nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📊 Analítica</button>
+                    <button onclick="navegarASeccion('sec-notas')" id="tab-sec-notas" class="nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📝 Notas</button>
+                    <button onclick="navegarASeccion('sec-crm')" id="tab-sec-crm" class="nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">👥 CRM</button>
+                    <button onclick="navegarASeccion('sec-citas')" id="tab-sec-citas" class="nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📅 Citas <span id="badge-citas-nav" class="hidden ml-1 bg-rose-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">0</span></button>
+                    <button onclick="navegarASeccion('sec-usuarios')" id="tab-sec-usuarios" class="nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">🔑 Acceso</button>
+                    <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📋 Fact.</button>
+                    <button onclick="navegarASeccion('sec-faqs')" id="tab-sec-faqs" class="nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">❓ FAQs</button>
+                    <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100">📜 Logs</button>
+                    <button onclick="navegarASeccion('sec-ajustes')" id="tab-sec-ajustes" class="nav-tab-btn flex-1 py-2 rounded-xl font-black uppercase tracking-tighter transition-all opacity-40 hover:opacity-100 text-amber-500">⚙️ Ajustes</button>
                 </nav>
             </div>
 

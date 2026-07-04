@@ -612,9 +612,9 @@
                 </div>
             </section>
 
-            <div class="flex flex-col lg:flex-row gap-4 mb-8 items-center">
+            <div class="flex flex-col xl:flex-row gap-4 mb-8 items-center">
                 <!-- IZQUIERDA: FILTROS (50%) -->
-                <div id="barra-filtros-generales" class="lg:w-1/2 card-bg p-3.5 rounded-2xl flex flex-wrap gap-3 items-center text-[10px] w-full border border-white/5">
+                <div id="barra-filtros-generales" class="xl:w-1/2 card-bg p-3.5 rounded-2xl flex flex-wrap gap-3 items-center text-[10px] w-full border border-white/5">
                     <span class="font-black uppercase opacity-40">🎯 Filtros:</span>
                     <select id="filtro-categoria" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2 py-1 focus:outline-none"></select>
                     <select id="filtro-talla" onchange="aplicarFiltrosFrontLineal()" class="input-bg border rounded-xl px-2 py-1 focus:outline-none">
@@ -631,7 +631,7 @@
                 </div>
 
                 <!-- DERECHA: NAV (50%) -->
-                <nav id="main-nav-secciones" class="lg:w-1/2 card-bg rounded-2xl text-[10px] w-full border border-white/5">
+                <nav id="main-nav-secciones" class="xl:w-1/2 card-bg rounded-2xl text-[10px] w-full border border-white/5">
                     <button onclick="navegarASeccion('sec-inventario')" id="tab-sec-inventario" class="nav-tab-btn nav-tab-chip py-2 rounded-xl font-black uppercase tracking-tight transition-all nav-btn-active text-white">📦 Panel</button>
                     <button onclick="navegarASeccion('sec-tareas')" id="tab-sec-tareas" class="nav-tab-btn nav-tab-chip py-2 rounded-xl font-black uppercase tracking-tight transition-all opacity-40 hover:opacity-100">✅ Tareas</button>
                     <button onclick="navegarASeccion('sec-monopolio')" id="tab-sec-monopolio" class="nav-tab-btn nav-tab-chip py-2 rounded-xl font-black uppercase tracking-tight transition-all opacity-40 hover:opacity-100">📈 Monopolio</button>
@@ -641,8 +641,6 @@
                     <button onclick="navegarASeccion('sec-citas')" id="tab-sec-citas" class="nav-tab-btn nav-tab-chip py-2 rounded-xl font-black uppercase tracking-tight transition-all opacity-40 hover:opacity-100">📅 Citas <span id="badge-citas-nav" class="hidden ml-1 bg-rose-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">0</span></button>
                     <button onclick="navegarASeccion('sec-usuarios')" id="tab-sec-usuarios" class="nav-tab-btn nav-tab-chip py-2 rounded-xl font-black uppercase tracking-tight transition-all opacity-40 hover:opacity-100">🔑 Acceso</button>
                     <button onclick="navegarASeccion('sec-gestion')" id="tab-sec-gestion" class="nav-tab-btn nav-tab-chip py-2 rounded-xl font-black uppercase tracking-tight transition-all opacity-40 hover:opacity-100">📋 Fact.</button>
-                    <button onclick="navegarASeccion('sec-faqs')" id="tab-sec-faqs" class="nav-tab-btn nav-tab-chip py-2 rounded-xl font-black uppercase tracking-tight transition-all opacity-40 hover:opacity-100">❓ FAQs</button>
-                    <button onclick="navegarASeccion('sec-auditoria')" id="tab-sec-auditoria" class="nav-tab-btn nav-tab-chip py-2 rounded-xl font-black uppercase tracking-tight transition-all opacity-40 hover:opacity-100">📜 Logs</button>
                     <button onclick="navegarASeccion('sec-ajustes')" id="tab-sec-ajustes" class="nav-tab-btn nav-tab-chip py-2 rounded-xl font-black uppercase tracking-tight transition-all opacity-40 hover:opacity-100 text-amber-500">⚙️ Ajustes</button>
                 </nav>
             </div>
@@ -1169,6 +1167,22 @@
             
             <!-- SECCIÓN GESTIÓN / FACTURACIÓN -->
             <div id="sec-gestion" class="seccion-app hidden flex flex-col gap-6 mb-8">
+                <div class="card-bg border p-5 rounded-3xl shadow-xl">
+                    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                        <div>
+                            <p class="text-[10px] font-black uppercase tracking-widest text-emerald-300">Atajos de contabilidad por quarter</p>
+                            <p class="text-[10px] opacity-65">Abre Analítica con el rango preconfigurado para revisar resultados trimestrales.</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="abrirQuarterContabilidad('quarter-actual')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase tracking-widest">Quarter actual</button>
+                            <button onclick="abrirQuarterContabilidad('q1')" class="bg-blue-600 hover:bg-blue-700 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase">Q1</button>
+                            <button onclick="abrirQuarterContabilidad('q2')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase">Q2</button>
+                            <button onclick="abrirQuarterContabilidad('q3')" class="bg-violet-600 hover:bg-violet-700 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase">Q3</button>
+                            <button onclick="abrirQuarterContabilidad('q4')" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-black py-2 px-3 rounded-xl text-[10px] uppercase">Q4</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <!-- Formulario de Datos -->
                     <div class="card-bg border p-6 rounded-3xl shadow-xl flex flex-col gap-4">
@@ -1418,6 +1432,20 @@
 
         <!-- SECCIÓN AJUSTES (NUEVA) -->
         <div id="sec-ajustes" class="seccion-app hidden flex flex-col gap-6 mb-8">
+            <div class="card-bg border p-6 rounded-3xl shadow-xl">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div>
+                        <p class="text-[10px] font-black uppercase tracking-widest text-purple-300">Centro de sistema</p>
+                        <h3 class="text-lg font-black">FAQs y Logs ahora viven dentro de Ajustes</h3>
+                        <p class="text-[10px] opacity-65 mt-1">Desde aquí accedes a la configuración de preguntas frecuentes y al panel de auditoría.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="navegarASeccion('sec-faqs')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2.5 px-4 rounded-xl text-[10px] uppercase tracking-widest">❓ Abrir FAQs</button>
+                        <button onclick="navegarASeccion('sec-auditoria')" class="bg-slate-700 hover:bg-slate-600 text-white font-black py-2.5 px-4 rounded-xl text-[10px] uppercase tracking-widest">📜 Abrir Logs</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="card-bg border p-6 rounded-3xl shadow-xl">
                 <div class="flex justify-between items-center mb-6">
                     <h3 class="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">

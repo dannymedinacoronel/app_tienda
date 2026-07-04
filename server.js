@@ -1331,6 +1331,7 @@ function lanzarFallbackMonopolioLocal(empresa, items = []) {
                         productos: Array.isArray(resultado?.productos) ? resultado.productos : [],
                         grupos: Array.isArray(resultado?.grupos) ? resultado.grupos : [],
                         esModoSeguidos: Boolean(resultado?.esModoSeguidos),
+                        exploracion: resultado?.exploracion || null,
                         urlOrigen,
                         alias,
                         empresa,
@@ -3738,7 +3739,7 @@ app.post('/api/monopolio/webhook-github', async (req, res) => {
     if (!GITHUB_SECRET || token !== GITHUB_SECRET) return res.status(401).json({ error: 'No autorizado' });
 
     try {
-        const { productos, grupos, esModoSeguidos, urlOrigen, empresa, alias, error: errorMsg } = req.body;
+        const { productos, grupos, esModoSeguidos, exploracion, urlOrigen, empresa, alias, error: errorMsg } = req.body;
         const empresaNormalizada = normalizarEmpresa(empresa || EMPRESA_DEFAULT);
 
         if (errorMsg) {
@@ -3762,6 +3763,7 @@ app.post('/api/monopolio/webhook-github', async (req, res) => {
                 productos: productos || [],
                 grupos: Array.isArray(grupos) ? grupos : [],
                 esModoSeguidos: Boolean(esModoSeguidos),
+                exploracion: exploracion || null,
                 urlOrigen,
                 alias,
                 empresa: empresaNormalizada,

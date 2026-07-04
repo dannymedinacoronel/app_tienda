@@ -52,6 +52,7 @@ let MONOPOLIO_PROGRESS_VALUE = 0;
 let MONOPOLIO_PROGRESS_ACTIVE = false;
 let MONOPOLIO_PROGRESS_MSG_INDEX = 0;
 let MONOPOLIO_PROGRESS_SEEN = new Set();
+let MONOPOLIO_PHASE_RESULTS = new Map();
 let MONOPOLIO_DIAGNOSTICO = [];
 let HIGIENE_REPORTE_CACHE = null;
 let HIGIENE_DECISIONES_UI = [];
@@ -534,6 +535,7 @@ socket.on('monopolio_update', (data) => {
     if (!container) return;
 
     registrarResultadoMonopolio(data);
+    actualizarFasesMonopolioDesdeEvento(data);
     upsertDiagnosticoMonopolio(data);
 
     const alias = data.alias || data.urlOrigen;
@@ -719,17 +721,7 @@ function construirCarruselMonopolio(productos, grupos) {
     const lista = Array.isArray(productos) ? productos.slice(0, 220) : [];
     if (!lista.length) return '<p class="text-xs opacity-60">No se encontraron productos para visualizar.</p>';
 
-    const usuarios = (() => {
-        const fromProductos = lista.map((p) => String(p?.cuenta || p?.proveedor || '').trim()).filter(Boolean);
-        const fromGrupos = (Array.isArray(grupos) ? grupos : []).map((g) => String(g?.cuenta || '').trim()).filter(Boolean);
-        return [...new Set([...fromProductos, ...fromGrupos])].slice(0, 24);
-    })();
-
-    const chipsUsuarios = usuarios.length
-        ? `<div class="flex flex-wrap gap-1.5 mb-3">${usuarios.map((u) => `<span class="text-[10px] px-2 py-1 rounded-full bg-cyan-500/15 text-cyan-100 border border-cyan-400/30">${escapeHtmlSafe(u)}</span>`).join('')}</div>`
-        : '<p class="text-[10px] opacity-55 mb-3">Sin usuarios/cuentas identificados.</p>';
-
-    const cards = lista.map((p, idx) => {
+    const construirCard = (p, idx) => {
         const precio = extraerPrecioNumericoMonopolio(p?.precio);
         const precioTxt = Number.isFinite(precio) ? `${precio.toFixed(2)}€` : String(p?.precio || '-');
         const cuenta = String(p?.cuenta || p?.proveedor || 'Cuenta desconocida').trim();
@@ -751,18 +743,90 @@ function construirCarruselMonopolio(productos, grupos) {
                 </div>
             </article>
         `;
-    }).join('');
+    };
+
+    const gruposNormalizados = (() => {
+        const fromBackend = Array.isArray(grupos) ? grupos : [];
+        const validos = fromBackend
+            .map((g, idx) => {
+                const cuenta = String(g?.cuenta || g?.urlCuenta || `Cuenta ${idx + 1}`).trim();
+                const productosGrupo = Array.isArray(g?.productos) ? g.productos : [];
+                return {
+                    cuenta,
+                    urlCuenta: String(g?.urlCuenta || '').trim(),
+                    nivelCadena: Number.isFinite(Number(g?.nivelCadena)) ? Number(g.nivelCadena) : 0,
+                    parentCuenta: String(g?.parentCuenta || '').trim(),
+                    total: Number(g?.total || productosGrupo.length || 0),
+                    productos: productosGrupo.slice(0, 50)
+                };
+            })
+            .filter((g) => g.cuenta && g.productos.length > 0);
+
+        if (validos.length > 0) return validos;
+
+        const tmp = new Map();
+        for (const p of lista) {
+            const cuenta = String(p?.cuenta || p?.proveedor || '').trim() || 'Cuenta desconocida';
+            if (!tmp.has(cuenta)) {
+                tmp.set(cuenta, {
+                    cuenta,
+                    urlCuenta: String(p?.urlCuenta || '').trim(),
+                    nivelCadena: Number.isFinite(Number(p?.nivelCadena)) ? Number(p.nivelCadena) : 0,
+                    parentCuenta: String(p?.parentCuenta || '').trim(),
+                    total: 0,
+                    productos: []
+                });
+            }
+            const item = tmp.get(cuenta);
+            item.total += 1;
+            if (item.productos.length < 50) item.productos.push(p);
+        }
+        return Array.from(tmp.values());
+    })();
+
+    const usuarios = [...new Set(gruposNormalizados.map((g) => g.cuenta).filter(Boolean))].slice(0, 40);
+    const chipsUsuarios = usuarios.length
+        ? `<div class="flex flex-wrap gap-1.5 mb-3">${usuarios.map((u) => `<span class="text-[10px] px-2 py-1 rounded-full bg-cyan-500/15 text-cyan-100 border border-cyan-400/30">${escapeHtmlSafe(u)}</span>`).join('')}</div>`
+        : '<p class="text-[10px] opacity-55 mb-3">Sin usuarios/cuentas identificados.</p>';
+
+    const bloquesPorPerfil = gruposNormalizados
+        .sort((a, b) => Number(b.total || 0) - Number(a.total || 0))
+        .slice(0, 30)
+        .map((g, gIdx) => {
+            const urlPerfil = g.urlCuenta
+                ? `<a href="${escapeHtmlSafe(g.urlCuenta)}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-cyan-300 hover:text-cyan-200 underline truncate">${escapeHtmlSafe(g.urlCuenta)}</a>`
+                : '<span class="text-[10px] opacity-60">URL no disponible</span>';
+            const parent = g.parentCuenta
+                ? `<p class="text-[10px] opacity-65">Padre: ${escapeHtmlSafe(g.parentCuenta)} · Nivel ${Number(g.nivelCadena || 0)}</p>`
+                : `<p class="text-[10px] opacity-65">Nivel ${Number(g.nivelCadena || 0)}</p>`;
+
+            const cards = g.productos.map((p, idx) => construirCard(p, (gIdx * 100) + idx)).join('');
+
+            return `
+                <section class="rounded-xl border border-cyan-500/20 bg-black/25 p-3">
+                    <div class="flex items-start justify-between gap-2 mb-2">
+                        <div class="min-w-0">
+                            <p class="text-[11px] font-black uppercase tracking-widest text-cyan-200 truncate">${escapeHtmlSafe(g.cuenta)} · ${Number(g.total || g.productos.length || 0)} productos</p>
+                            ${parent}
+                            ${urlPerfil}
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto custom-scrollbar pb-2">
+                        <div class="flex gap-2 snap-x snap-mandatory w-max">
+                            ${cards}
+                        </div>
+                    </div>
+                </section>
+            `;
+        })
+        .join('');
 
     return `
         <div class="rounded-xl border border-white/10 bg-black/25 p-3">
             <p class="text-[10px] font-black uppercase tracking-widest text-cyan-200 mb-2">Usuarios donde se detectaron productos</p>
             ${chipsUsuarios}
-            <p class="text-[10px] font-black uppercase tracking-widest text-purple-200 mb-2">Carrusel de productos (solo visualización)</p>
-            <div class="overflow-x-auto custom-scrollbar pb-2">
-                <div class="flex gap-2 snap-x snap-mandatory w-max">
-                    ${cards}
-                </div>
-            </div>
+            <p class="text-[10px] font-black uppercase tracking-widest text-purple-200 mb-2">Carruseles por perfil (solo visualización)</p>
+            <div class="grid grid-cols-1 gap-3">${bloquesPorPerfil || '<p class="text-xs opacity-60">Sin agrupaciones por perfil disponibles.</p>'}</div>
         </div>
     `;
 }
@@ -892,11 +956,88 @@ function crearBloqueCargaMonopolioSiNoExiste() {
                 <p id="monopolio-progress-status" class="text-cyan-300">Inicializando</p>
             </div>
             <p id="monopolio-progress-counts" class="mt-1 text-[10px] opacity-65">0 / 0 tareas completadas</p>
+            <div class="mt-2.5 grid grid-cols-2 md:grid-cols-5 gap-2">
+                <div class="rounded-lg border border-cyan-500/20 bg-black/25 p-2">
+                    <p class="text-[9px] uppercase opacity-60">Respuestas</p>
+                    <p id="monopolio-phase-urls" class="text-[11px] font-black text-cyan-200">0</p>
+                </div>
+                <div class="rounded-lg border border-blue-500/20 bg-black/25 p-2">
+                    <p class="text-[9px] uppercase opacity-60">Perfiles detectados</p>
+                    <p id="monopolio-phase-detectados" class="text-[11px] font-black text-blue-200">0</p>
+                </div>
+                <div class="rounded-lg border border-indigo-500/20 bg-black/25 p-2">
+                    <p class="text-[9px] uppercase opacity-60">Perfiles scrapeados</p>
+                    <p id="monopolio-phase-scrapeados" class="text-[11px] font-black text-indigo-200">0</p>
+                </div>
+                <div class="rounded-lg border border-emerald-500/20 bg-black/25 p-2">
+                    <p class="text-[9px] uppercase opacity-60">Productos totales</p>
+                    <p id="monopolio-phase-productos" class="text-[11px] font-black text-emerald-200">0</p>
+                </div>
+                <div class="rounded-lg border border-amber-500/20 bg-black/25 p-2">
+                    <p class="text-[9px] uppercase opacity-60">Promedio por perfil</p>
+                    <p id="monopolio-phase-promedio" class="text-[11px] font-black text-amber-200">0.0</p>
+                </div>
+            </div>
         `;
         container.prepend(bloque);
     }
 
     return bloque;
+}
+
+function recomputarFasesMonopolio() {
+    const urls = MONOPOLIO_PHASE_RESULTS.size;
+    let detectados = 0;
+    let scrapeados = 0;
+    let productos = 0;
+
+    MONOPOLIO_PHASE_RESULTS.forEach((item) => {
+        detectados += Number(item?.detectados || 0);
+        scrapeados += Number(item?.scrapeados || 0);
+        productos += Number(item?.productos || 0);
+    });
+
+    const promedio = scrapeados > 0 ? (productos / scrapeados) : 0;
+
+    const urlsEl = document.getElementById('monopolio-phase-urls');
+    const detectadosEl = document.getElementById('monopolio-phase-detectados');
+    const scrapeadosEl = document.getElementById('monopolio-phase-scrapeados');
+    const productosEl = document.getElementById('monopolio-phase-productos');
+    const promedioEl = document.getElementById('monopolio-phase-promedio');
+
+    if (urlsEl) urlsEl.innerText = String(urls);
+    if (detectadosEl) detectadosEl.innerText = String(detectados);
+    if (scrapeadosEl) scrapeadosEl.innerText = String(scrapeados);
+    if (productosEl) productosEl.innerText = String(productos);
+    if (promedioEl) promedioEl.innerText = promedio.toFixed(1);
+}
+
+function resetFasesMonopolio() {
+    MONOPOLIO_PHASE_RESULTS = new Map();
+    recomputarFasesMonopolio();
+}
+
+function actualizarFasesMonopolioDesdeEvento(data) {
+    const key = String(data?.urlOrigen || data?.alias || '').trim();
+    if (!key) return;
+
+    const grupos = Array.isArray(data?.grupos) ? data.grupos : [];
+    const productosPlano = Array.isArray(data?.productos) ? data.productos : [];
+    const productosDesdeGrupos = grupos.flatMap((g) => Array.isArray(g?.productos) ? g.productos : []);
+    const productosTotales = productosPlano.length > 0 ? productosPlano.length : productosDesdeGrupos.length;
+
+    const perfilesConProductos = grupos.filter((g) => Number(g?.total || (g?.productos || []).length || 0) > 0);
+    const detectadosExploracion = Number(data?.exploracion?.usuariosDetectados || 0);
+    const detectados = Math.max(detectadosExploracion, grupos.length);
+    const scrapeados = perfilesConProductos.length;
+
+    MONOPOLIO_PHASE_RESULTS.set(key, {
+        detectados,
+        scrapeados,
+        productos: productosTotales
+    });
+
+    recomputarFasesMonopolio();
 }
 
 function fijarBloqueProgresoMonopolioAlInicio() {
@@ -949,6 +1090,7 @@ function iniciarAnimacionCargaMonopolio(totalTareas = 0, mensajeInicial = 'Lanza
     MONOPOLIO_PROGRESS_ACTIVE = true;
 
     crearBloqueCargaMonopolioSiNoExiste();
+    resetFasesMonopolio();
     actualizarCargaMonopolio(2, mensajeInicial, 'Inicializando');
     fijarBloqueProgresoMonopolioAlInicio();
 
@@ -3609,6 +3751,23 @@ function onCambiarPresetGananciasAdmin() {
 
     actualizarDashboardGananciasAdmin();
 }
+
+window.abrirQuarterContabilidad = function(preset = 'quarter-actual') {
+    const presetEl = document.getElementById('admin-profit-range-preset');
+    const yearEl = document.getElementById('admin-profit-year');
+    if (yearEl && !yearEl.value) {
+        yearEl.value = String(new Date().getFullYear());
+    }
+    if (presetEl) {
+        const normalizado = String(preset || 'quarter-actual').trim().toLowerCase();
+        presetEl.value = ['q1', 'q2', 'q3', 'q4', 'quarter-actual'].includes(normalizado) ? normalizado : 'quarter-actual';
+    }
+
+    navegarASeccion('sec-analitica');
+    setTimeout(() => {
+        onCambiarPresetGananciasAdmin();
+    }, 80);
+};
 
 function obtenerVentasEnRangoAdmin() {
     const startEl = document.getElementById('admin-profit-date-start');
@@ -7142,10 +7301,9 @@ function renderKanban(isFullRefresh = false) {
         });
 
         const itemsToRender = isFullRefresh ? filtrados : filtrados.filter(v => !document.getElementById(v._id));
-        const fragment = document.createDocumentFragment();
         const soloLecturaVisual = esRolVisualizador();
 
-        itemsToRender.forEach(v => {
+        const crearCardNodo = (v) => {
             const card = document.createElement('div');
             card.id = v._id;
             card.setAttribute('draggable', soloLecturaVisual ? 'false' : 'true');
@@ -7219,11 +7377,33 @@ function renderKanban(isFullRefresh = false) {
                 </div>
                 ${accionesHtml}`;
 
-            fragment.appendChild(card);
-        });
+            return card;
+        };
 
-        if (fragment.childNodes.length > 0) {
+        const anexarLote = (lote) => {
+            if (!Array.isArray(lote) || lote.length === 0) return;
+            const fragment = document.createDocumentFragment();
+            lote.forEach((v) => fragment.appendChild(crearCardNodo(v)));
             colDom.appendChild(fragment);
+        };
+
+        if (isFullRefresh && itemsToRender.length > 90) {
+            anexarLote(itemsToRender.slice(0, 36));
+
+            let idx = 36;
+            const pintarSiguienteLote = () => {
+                if (idx >= itemsToRender.length) return;
+                const end = Math.min(idx + 54, itemsToRender.length);
+                anexarLote(itemsToRender.slice(idx, end));
+                idx = end;
+                if (idx < itemsToRender.length) {
+                    requestAnimationFrame(pintarSiguienteLote);
+                }
+            };
+
+            requestAnimationFrame(pintarSiguienteLote);
+        } else {
+            anexarLote(itemsToRender);
         }
         
         const badgeDom = document.getElementById(`badge-kanban-${est._id}`);

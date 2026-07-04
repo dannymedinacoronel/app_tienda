@@ -390,6 +390,7 @@ socket.on('monopolio_update', (data) => {
         container.innerHTML = '';
     }
     const productos = data.productos || [];
+    const grupos = Array.isArray(data.grupos) ? data.grupos : [];
 
     let existingContainer = document.getElementById(`monopolio-res-${btoa(data.urlOrigen)}`);
     if (existingContainer) {
@@ -401,7 +402,25 @@ socket.on('monopolio_update', (data) => {
     resultBlock.className = 'p-4 bg-black/20 border border-purple-500/20 rounded-2xl';
     
     let productosHtml = '<p class="text-xs opacity-60">No se encontraron productos.</p>';
-    if (productos.length > 0) {
+    if (grupos.length > 0) {
+        productosHtml = grupos.map((g, idx) => {
+            const lista = (g.productos || []).slice(0, 12).map(p => `
+                <div class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5">
+                    <img src="${p.imagen || ''}" class="w-8 h-8 rounded object-cover" onerror="this.style.display='none'">
+                    <p class="text-xs flex-1 truncate">${p.titulo}</p>
+                    <p class="text-xs font-bold text-emerald-400">${p.precio}€</p>
+                </div>
+            `).join('');
+
+            return `
+                <div class="border border-white/10 rounded-xl p-2 bg-black/30">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-cyan-200 mb-1">${idx + 1}. ${g.cuenta || 'Cuenta'}</p>
+                    <p class="text-[9px] opacity-55 font-mono truncate mb-2">${g.urlCuenta || ''} · ${g.total || 0} productos</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-1">${lista || '<p class="text-[10px] opacity-60 italic">Sin productos detectados.</p>'}</div>
+                </div>
+            `;
+        }).join('');
+    } else if (productos.length > 0) {
         productosHtml = productos.slice(0, 20).map(p => `
             <div class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white/5">
                 <img src="${p.imagen}" class="w-8 h-8 rounded object-cover" onerror="this.style.display='none'">
@@ -413,7 +432,7 @@ socket.on('monopolio_update', (data) => {
 
     resultBlock.innerHTML = `
         <h5 class="font-bold text-purple-300 text-sm mb-2">${alias}</h5>
-        <p class="text-[10px] opacity-60 mb-3">${productos.length} productos encontrados.</p>
+        <p class="text-[10px] opacity-60 mb-3">${productos.length} productos encontrados${grupos.length ? ` · ${grupos.length} cuentas analizadas` : ''}.</p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${productosHtml}</div>
     `;
 
@@ -711,6 +730,7 @@ function cerrarModalScraper() {
 
 async function iniciarScraping() {
     const url = document.getElementById('scraper-url').value;
+    const alias = (document.getElementById('scraper-url-alias')?.value || '').trim();
     if(!url) return alert('Debes introducir una cuenta o URL.');
 
     document.getElementById('scraper-step-1').classList.add('hidden');
@@ -723,7 +743,7 @@ async function iniciarScraping() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ url })
+            body: JSON.stringify({ url, alias })
         });
 
         const data = await response.json();
@@ -941,8 +961,14 @@ function renderizarResultadosScraping(data) {
 
     const tiendasDisponibles = (LISTA_TIENDAS_GLOBAL || []).map(t => t.nombre);
     const tiendasUnicas = [...new Set(tiendasDisponibles)];
-    const tieneVinted = tiendasUnicas.some(n => n.toLowerCase() === 'vinted');
-    const defaultImportStore = tieneVinted ? 'Vinted' : (tiendasUnicas[0] || 'Sin asignar');
+    const normalizarTxt = (v) => String(v || '').trim().toLowerCase();
+    const resolverTiendaDefault = (item) => {
+        const origen = String(item?.proveedor || item?.cuenta || item?.origenGrupo || '').trim();
+        if (!origen) return 'Vinted';
+        const exacta = tiendasUnicas.find((n) => normalizarTxt(n) === normalizarTxt(origen));
+        return exacta || origen;
+    };
+    const defaultImportStore = 'Vinted';
 
     summaryText.innerHTML = `Análisis completado. He comparado Vinted con tu inventario de MongoDB:<br>
         • <span class="text-amber-400 font-bold">${discCount} cambios de precio</span>: Se han detectado modificaciones en Vinted que no tienes en el sistema.<br>
@@ -980,8 +1006,9 @@ function renderizarResultadosScraping(data) {
 
     if (nuevoCount > 0) {
         let catOptions = LISTA_CATEGORIAS_GLOBAL.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
-        const tiendaOptions = ['<option value="">🏬 Sin asignar</option>', ...tiendasUnicas.map(t => `<option value="${t}" ${t === defaultImportStore ? 'selected' : ''}>🏬 ${t}</option>`)].join('');
         data.nuevos.forEach((n, i) => {
+            const tiendaSugerida = resolverTiendaDefault(n);
+            const tiendaOptions = ['<option value="">🏬 Sin asignar</option>', ...tiendasUnicas.map(t => `<option value="${t}" ${t === tiendaSugerida ? 'selected' : ''}>🏬 ${t}</option>`)].join('');
             const badgeGaleriaInfo = n.galeria && n.galeria.length > 0 ? `<div class="absolute bottom-1 right-1 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${n.galeria.length}</div>` : '';
             
             // Pre-seleccionar talla
@@ -1004,6 +1031,7 @@ function renderizarResultadosScraping(data) {
                         </div>
                         <div class="min-w-0 flex-1 flex flex-col gap-2 pr-6">
                             <input type="text" id="new-item-title-${i}" value="${n.prenda}" class="bg-transparent border-b-2 border-white/10 text-sm font-black uppercase w-full focus:outline-none focus:border-emerald-400 px-1 py-1 text-white transition-colors" placeholder="Título a guardar...">
+                            <p class="text-[10px] font-mono opacity-70">Origen: <span class="text-cyan-300">${n.proveedor || n.cuenta || 'Vinted'}</span></p>
                             
                             <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-[10px] mt-1">
                                 <div class="flex items-center gap-1.5" title="Marca">
@@ -1304,6 +1332,19 @@ let IDX_FOTO_ACTUAL = -1;
 
 function abrirVisorFotos(id) {
 
+    const item = BASE_DATOS.find(v => v._id === id);
+    if (!item) return;
+    ITEM_FOTOS_ACTUAL = item;
+    if (!ITEM_FOTOS_ACTUAL.galeria) ITEM_FOTOS_ACTUAL.galeria = [];
+    
+    document.getElementById('visor-item-id').value = id;
+    document.getElementById('visor-fotos-titulo').innerText = item.prenda;
+    document.getElementById('modal-visor-fotos').classList.remove('hidden');
+    
+    seleccionarFotoVisor(item.imagen ? -1 : (item.galeria.length > 0 ? 0 : -1));
+    renderizarMiniaturasVisor();
+}
+
 // --- LÓGICA DE MONOPOLIO ---
 
 async function renderMonopolioUrls() {
@@ -1416,19 +1457,6 @@ window.iniciarScrapingMonopolio = async function() {
     } catch (e) {
         resultadosContainer.innerHTML = `<p class="text-xs text-rose-400">Error: ${e.message}</p>`;
     }
-}
-
-    const item = BASE_DATOS.find(v => v._id === id);
-    if (!item) return;
-    ITEM_FOTOS_ACTUAL = item;
-    if (!ITEM_FOTOS_ACTUAL.galeria) ITEM_FOTOS_ACTUAL.galeria = [];
-    
-    document.getElementById('visor-item-id').value = id;
-    document.getElementById('visor-fotos-titulo').innerText = item.prenda;
-    document.getElementById('modal-visor-fotos').classList.remove('hidden');
-    
-    seleccionarFotoVisor(item.imagen ? -1 : (item.galeria.length > 0 ? 0 : -1));
-    renderizarMiniaturasVisor();
 }
 
 function cerrarVisorFotos() {

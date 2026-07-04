@@ -2183,7 +2183,7 @@ server.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto
 app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
-        const { url } = req.body;
+        const { url, alias } = req.body;
         if (!url) return res.status(400).json({ error: 'URL de Vinted requerida.' });
 
         // 🚀 NUEVA LÓGICA: En lugar de escrapear desde Render (bloqueado),
@@ -2210,7 +2210,8 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
                 ref: 'main', // o la rama que estés usando
                 inputs: {
                     vinted_url: url,
-                    empresa: empresa
+                    empresa: empresa,
+                    alias: String(alias || '').trim() || 'Vinted'
                 }
             },
             {
@@ -2269,30 +2270,37 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
         const resultados = { discrepancias: [], nuevos: [], identicos: [], desaparecidos: [] };
         const productosBD = await VentaRopa.find({ canalVenta: 'Vinted', empresa }).lean();
 
-        const cleanStr = str => str.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+        const cleanStr = str => String(str || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+        const normalizarProveedor = (v) => String(v || 'Vinted').trim().toLowerCase() || 'vinted';
         const hayCoincidenciaFlexible = (a, b) => {
             if (!a || !b) return false;
             if (a === b) return true;
             return (a.length > 4 && b.includes(a)) || (b.length > 4 && a.includes(b));
         };
 
-        const titulosWebNormalizados = [];
+        const titulosWebPorProveedor = new Map();
 
         productosExtraidos.forEach(item => {
-            const titulo = item.titulo || '';
+            const titulo = item.titulo || item.prenda || '';
             const precioWeb = parseFloat(item.precio);
             const imagen = item.imagen || '';
             const galeria = item.galeria || [];
+            const proveedorFuente = normalizarProveedor(
+                item.proveedor || item.cuenta || item.aliasFuente || item.origenGrupo || item.alias || 'Vinted'
+            );
+            const proveedorLabel = String(item.proveedor || item.cuenta || item.aliasFuente || item.origenGrupo || item.alias || 'Vinted').trim() || 'Vinted';
 
             if (titulo && !isNaN(precioWeb)) {
                 const cleanItemTitle = cleanStr(titulo);
-                titulosWebNormalizados.push(cleanItemTitle);
+                const listaActual = titulosWebPorProveedor.get(proveedorFuente) || [];
+                listaActual.push(cleanItemTitle);
+                titulosWebPorProveedor.set(proveedorFuente, listaActual);
                 
                 // MODIFICACIÓN: Ahora la coincidencia requiere que el título y el proveedor (tienda) sean similares.
                 const coincidencia = productosBD.find(p => {
                     const cleanP = cleanStr(p.prenda);
                     const mismoTitulo = hayCoincidenciaFlexible(cleanP, cleanItemTitle);
-                    const mismoProveedor = (p.proveedor || 'Vinted').toLowerCase() === (item.proveedor || 'Vinted').toLowerCase();
+                    const mismoProveedor = normalizarProveedor(p.proveedor) === proveedorFuente;
                     return mismoTitulo && mismoProveedor;
                 });
 
@@ -2304,6 +2312,7 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
                             prendaNueva: titulo,
                             valorAntiguo: coincidencia.precioVenta,
                             valorNuevo: precioWeb,
+                            proveedor: proveedorLabel,
                             imagen,
                             fechaRegistro: coincidencia.fecha || '',
                             fechaVenta: coincidencia.fechaVenta || ''
@@ -2313,6 +2322,7 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
                             idMongo: coincidencia._id,
                             prenda: coincidencia.prenda,
                             precio: coincidencia.precioVenta,
+                            proveedor: proveedorLabel,
                             imagen,
                             fechaRegistro: coincidencia.fecha || '',
                             fechaVenta: coincidencia.fechaVenta || ''
@@ -2323,6 +2333,7 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
                         prenda: titulo, 
                         precioVenta: precioWeb, 
                         imagen, galeria, canalVenta: 'Vinted', 
+                        proveedor: proveedorLabel,
                         estado: 'No Vendido',
                         marca: item.marca || '', talla: item.talla || '',
                         condicion: item.condicion || '', popularidad: item.favoritos || 0,
@@ -2336,12 +2347,18 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
         activosMongo.forEach(p => {
             const cleanP = cleanStr(p.prenda || '');
             if (!cleanP) return;
-            const existeEnWeb = titulosWebNormalizados.some(t => hayCoincidenciaFlexible(cleanP, t));
+            const proveedorMongo = normalizarProveedor(p.proveedor);
+            const titulosProveedor = titulosWebPorProveedor.get(proveedorMongo);
+            // Si no se ha scrapeado ese proveedor concreto, no lo marcamos como desaparecido.
+            if (!titulosProveedor || titulosProveedor.length === 0) return;
+
+            const existeEnWeb = titulosProveedor.some(t => hayCoincidenciaFlexible(cleanP, t));
             if (!existeEnWeb) {
                 resultados.desaparecidos.push({
                     idMongo: p._id,
                     prenda: p.prenda,
                     precio: p.precioVenta,
+                    proveedor: p.proveedor || 'Vinted',
                     imagen: p.imagen || '',
                     fechaRegistro: p.fecha || '',
                     comentariosProducto: p.comentariosProducto || ''

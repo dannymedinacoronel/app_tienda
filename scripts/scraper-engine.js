@@ -159,6 +159,34 @@ function extraerMemberId(urlObjetivo) {
     return match ? match[1] : '';
 }
 
+function sanitizarAlias(alias, fallback = 'Vinted') {
+    return String(alias || fallback)
+        .trim()
+        .replace(/\s+/g, ' ')
+        .slice(0, 80) || fallback;
+}
+
+function esUrlSeguidoresVinted(url) {
+    const u = String(url || '').toLowerCase();
+    return u.includes('/following') || u.includes('/followers') || u.includes('/relations');
+}
+
+function extraerAliasDesdeUrlPerfil(url) {
+    const str = String(url || '').trim();
+    const match = str.match(/\/member\/\d+-([a-z0-9_-]+)/i);
+    if (match && match[1]) {
+        return match[1].replace(/[-_]+/g, ' ');
+    }
+    return 'Competidor';
+}
+
+function normalizarUrlVinted(inputUrl) {
+    const raw = String(inputUrl || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return `https://${raw}`;
+}
+
 function extraerProductosDesdeLdJson($) {
     const productos = [];
 
@@ -452,6 +480,125 @@ async function extraerConPlaywright(urlObjetivo) {
     }
 }
 
+async function extraerCuentasDesdeSeguidores(urlObjetivo) {
+    let chromium;
+    try {
+        ({ chromium } = require('playwright'));
+    } catch (_) {
+        console.log('[MONOPOLIO] Playwright no esta disponible para expandir seguidos.');
+        return [];
+    }
+
+    const browser = await chromium.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+
+    const context = await browser.newContext({
+        locale: 'es-ES',
+        userAgent: DEFAULT_UA,
+        viewport: { width: 1366, height: 900 }
+    });
+    const page = await context.newPage();
+
+    try {
+        await page.goto(urlObjetivo, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        for (let i = 0; i < 5; i++) {
+            await page.mouse.wheel(0, 4000);
+            await page.waitForTimeout(1000);
+        }
+
+        const perfiles = await page.evaluate(() => {
+            const out = [];
+            const anchors = Array.from(document.querySelectorAll('a[href*="/member/"]'));
+            for (const a of anchors) {
+                const href = a.getAttribute('href') || '';
+                const abs = href.startsWith('http') ? href : `https://www.vinted.es${href}`;
+                if (!/\/member\/\d+/i.test(abs)) continue;
+                const clean = abs.split('?')[0].replace(/\/+$/, '');
+                const txt = (a.textContent || '').trim().replace(/\s+/g, ' ');
+                out.push({ url: clean, alias: txt || '' });
+            }
+            return out;
+        });
+
+        const map = new Map();
+        for (const p of perfiles || []) {
+            const url = String(p.url || '').trim();
+            if (!url) continue;
+            const alias = sanitizarAlias(p.alias || extraerAliasDesdeUrlPerfil(url), extraerAliasDesdeUrlPerfil(url));
+            if (!map.has(url)) map.set(url, { url, alias });
+        }
+
+        return Array.from(map.values());
+    } catch (error) {
+        console.error(`[MONOPOLIO] Fallo al extraer cuentas seguidas: ${error.message}`);
+        return [];
+    } finally {
+        await context.close();
+        await browser.close();
+    }
+}
+
+async function scrapeMonopolio(url, aliasBase = '') {
+    const urlNormalizada = normalizarUrlVinted(url);
+    const aliasPrincipal = sanitizarAlias(aliasBase || extraerAliasDesdeUrlPerfil(urlNormalizada), 'Competidor');
+    const grupos = [];
+
+    if (esUrlSeguidoresVinted(urlNormalizada)) {
+        const cuentas = await extraerCuentasDesdeSeguidores(urlNormalizada);
+        const maxCuentas = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_MAX_ACCOUNTS || '20', 10), 40));
+        const objetivos = cuentas.slice(0, maxCuentas);
+
+        console.log(`[MONOPOLIO] Enlace de seguidos detectado. Cuentas encontradas: ${cuentas.length}, procesando: ${objetivos.length}`);
+
+        for (const cuenta of objetivos) {
+            const { productos } = await scrapeVinted(cuenta.url);
+            const aliasCuenta = sanitizarAlias(cuenta.alias, extraerAliasDesdeUrlPerfil(cuenta.url));
+            const enriquecidos = (productos || []).map((p) => ({
+                ...p,
+                proveedor: aliasCuenta,
+                cuenta: aliasCuenta,
+                urlCuenta: cuenta.url,
+                origenGrupo: aliasPrincipal
+            }));
+
+            grupos.push({
+                cuenta: aliasCuenta,
+                urlCuenta: cuenta.url,
+                total: enriquecidos.length,
+                productos: enriquecidos
+            });
+        }
+    } else {
+        const { productos } = await scrapeVinted(urlNormalizada);
+        const aliasCuenta = sanitizarAlias(aliasPrincipal, extraerAliasDesdeUrlPerfil(urlNormalizada));
+        const enriquecidos = (productos || []).map((p) => ({
+            ...p,
+            proveedor: aliasCuenta,
+            cuenta: aliasCuenta,
+            urlCuenta: urlNormalizada,
+            origenGrupo: aliasPrincipal
+        }));
+
+        grupos.push({
+            cuenta: aliasCuenta,
+            urlCuenta: urlNormalizada,
+            total: enriquecidos.length,
+            productos: enriquecidos
+        });
+    }
+
+    const productos = deduplicarProductos(grupos.flatMap((g) => g.productos || []));
+    return {
+        productos,
+        grupos,
+        esModoSeguidos: esUrlSeguidoresVinted(urlNormalizada),
+        aliasPrincipal,
+        urlNormalizada
+    };
+}
+
 function construirWebhookTargets(webUrl, webhookPath) {
     if (!webUrl || typeof webUrl !== 'string') return [];
     const raw = webUrl.trim().replace(/\/+$/, '');
@@ -576,9 +723,34 @@ async function ejecutarScraper(params) {
     }
 
     console.log(`[SCRAPER:${mode}] Iniciando URL=${url} empresa=${empresa}`);
-    const { productos, resumen } = await scrapeVinted(url);
-    console.log(`[SCRAPER:${mode}] Productos unicos: ${productos.length}`);
-    console.log(`[SCRAPER:${mode}] Cobertura fuentes -> scripts:${resumen.scripts} ldjson:${resumen.ldjson} dom:${resumen.dom} api:${resumen.api} pw:${resumen.playwright}`);
+
+    let productos = [];
+    let grupos = null;
+    let esModoSeguidos = false;
+
+    if (mode === 'monopolio') {
+        const resultadoMonopolio = await scrapeMonopolio(url, alias);
+        productos = resultadoMonopolio.productos;
+        grupos = resultadoMonopolio.grupos;
+        esModoSeguidos = resultadoMonopolio.esModoSeguidos;
+        console.log(`[SCRAPER:${mode}] Modo ${esModoSeguidos ? 'seguidos' : 'perfil'} | grupos=${grupos.length} | productos=${productos.length}`);
+    } else {
+        const resultado = await scrapeVinted(url);
+        productos = resultado.productos;
+        const resumen = resultado.resumen;
+        console.log(`[SCRAPER:${mode}] Productos unicos: ${productos.length}`);
+        console.log(`[SCRAPER:${mode}] Cobertura fuentes -> scripts:${resumen.scripts} ldjson:${resumen.ldjson} dom:${resumen.dom} api:${resumen.api} pw:${resumen.playwright}`);
+
+        if (alias) {
+            const aliasProveedor = sanitizarAlias(alias, 'Vinted');
+            productos = productos.map((p) => ({
+                ...p,
+                proveedor: aliasProveedor,
+                cuenta: aliasProveedor,
+                origenGrupo: aliasProveedor
+            }));
+        }
+    }
 
     const payload = {
         productos,
@@ -586,7 +758,11 @@ async function ejecutarScraper(params) {
         empresa
     };
 
-    if (mode === 'monopolio') payload.alias = alias;
+    if (mode === 'monopolio') {
+        payload.alias = alias;
+        payload.grupos = grupos || [];
+        payload.esModoSeguidos = esModoSeguidos;
+    }
 
     await enviarWebhook(payload, {
         webUrl: process.env.MY_WEB_URL,

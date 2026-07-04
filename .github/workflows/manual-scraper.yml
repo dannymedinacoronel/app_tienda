@@ -11,6 +11,10 @@ on:
         description: 'Identificador de la empresa para el webhook'
         required: false
         default: 'seychelles'
+      alias:
+        description: 'Alias/proveedor de origen para etiquetar productos importados'
+        required: false
+        default: 'Vinted'
 
 jobs:
   scrape:
@@ -41,4 +45,4 @@ jobs:
         env:
           MY_WEB_URL: ${{ secrets.MY_WEB_URL }}
           SCRAPER_TOKEN: ${{ secrets.SCRAPER_TOKEN }}
-        run: node scripts/manual-scrape.js "${{ github.event.inputs.vinted_url }}" "${{ github.event.inputs.empresa }}"
+        run: node scripts/manual-scrape.js "${{ github.event.inputs.vinted_url }}" "${{ github.event.inputs.empresa }}" "${{ github.event.inputs.alias }}"

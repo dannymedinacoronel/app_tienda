@@ -54,6 +54,7 @@ let CHAT_SEARCH_QUERY = '';
 let SECCIONES_INHABILITADAS = new Set();
 let SCRAPER_PROGRESS_VALUE = 0;
 let SCRAPER_PROGRESS_MSG_INDEX = 0;
+let SCRAPER_FAVORITOS_RECOVERY_DONE = false;
 
 const SCRAPER_PROGRESS_MESSAGES = [
     'Conectando con GitHub Actions...',
@@ -867,75 +868,261 @@ function registrarResultadoMonopolio(data) {
     }
 }
 
-function getSavedScraperUrls() {
-    const keys = ['seychelles-scraper-urls', 'seychelles-scraper-urls-v2', 'scraper-urls', 'vinted-scraper-urls'];
-    const leerArraySeguro = (storage, key) => {
+function normalizarFavoritoScraperEntrada(item, fallbackAlias = '') {
+    if (item == null) return null;
+
+    if (typeof item === 'string') {
+        const texto = item.trim();
+        if (!texto) return null;
+
+        const parts = texto.split('|');
+        if (parts.length >= 2) {
+            const alias = String(parts[0] || '').trim();
+            const url = String(parts.slice(1).join('|') || '').trim();
+            if (url) return { alias, url, createdAt: Date.now() };
+        }
+
+        const maybeUrl = texto.match(/https?:\/\/[^\s,;]+/i);
+        if (maybeUrl?.[0]) {
+            const url = maybeUrl[0].trim();
+            const alias = texto.replace(url, '').replace(/[|\-:]+$/, '').trim();
+            return { alias: alias || fallbackAlias || '', url, createdAt: Date.now() };
+        }
+
+        if (/^https?:\/\//i.test(texto) || /vinted\./i.test(texto)) {
+            const url = /^https?:\/\//i.test(texto) ? texto : `https://${texto.replace(/^\/+/, '')}`;
+            return { alias: fallbackAlias || '', url, createdAt: Date.now() };
+        }
+
+        return null;
+    }
+
+    if (typeof item === 'object') {
+        const aliasRaw = item?.alias || item?.name || item?.titulo || fallbackAlias || '';
+        const urlRaw = item?.url || item?.link || item?.href || item?.targetUrl || item?.target || item?.value || '';
+        const url = String(urlRaw || '').trim();
+        if (!url) return null;
+        return {
+            alias: String(aliasRaw || '').trim(),
+            url,
+            createdAt: Number(item?.createdAt) || Date.now()
+        };
+    }
+
+    return null;
+}
+
+function extraerFavoritosDesdeTextoLibre(rawText) {
+    const text = String(rawText || '').trim();
+    if (!text) return [];
+    const tokens = text
+        .split(/\r?\n|,|;/)
+        .map((x) => x.trim())
+        .filter(Boolean);
+    return tokens
+        .map((t) => normalizarFavoritoScraperEntrada(t))
+        .filter(Boolean);
+}
+
+function extraerFavoritosDesdeValorStorage(rawValue) {
+    const raw = String(rawValue || '').trim();
+    if (!raw) return [];
+
+    const out = [];
+    try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            parsed.forEach((item) => {
+                const n = normalizarFavoritoScraperEntrada(item);
+                if (n) out.push(n);
+            });
+            return out;
+        }
+
+        if (parsed && typeof parsed === 'object') {
+            const nestedArrays = [parsed.urls, parsed.favoritos, parsed.favorites, parsed.items, parsed.saved, parsed.data]
+                .filter((v) => Array.isArray(v));
+            nestedArrays.forEach((arr) => {
+                arr.forEach((item) => {
+                    const n = normalizarFavoritoScraperEntrada(item);
+                    if (n) out.push(n);
+                });
+            });
+
+            Object.entries(parsed).forEach(([k, v]) => {
+                if (Array.isArray(v) || (v && typeof v === 'object')) return;
+                const keyTxt = String(k || '').trim();
+                const valTxt = String(v || '').trim();
+
+                const fromValue = normalizarFavoritoScraperEntrada(valTxt, keyTxt);
+                if (fromValue) {
+                    out.push(fromValue);
+                    return;
+                }
+
+                const fromKey = normalizarFavoritoScraperEntrada(keyTxt, valTxt);
+                if (fromKey) out.push(fromKey);
+            });
+
+            return out;
+        }
+    } catch (_) {
+        return extraerFavoritosDesdeTextoLibre(raw);
+    }
+
+    return out;
+}
+
+function recolectarFavoritosLegacyScraper() {
+    const keysBase = [
+        'seychelles-scraper-urls',
+        'seychelles-scraper-urls-v2',
+        'scraper-urls',
+        'vinted-scraper-urls',
+        'seychelles-scraper-urls-csv',
+        'manual-scraper-urls',
+        'manual_scraper_urls',
+        'vinted-favorites',
+        'vinted-favoritos',
+        'scraper-favorites',
+        'scraper-favoritos',
+        'saved-scraper-urls',
+        'savedScraperUrls',
+        'favoritos-scraper'
+    ];
+
+    const storages = [localStorage, sessionStorage];
+    const out = [];
+
+    storages.forEach((storage) => {
+        const dynamicKeys = [];
         try {
-            const raw = storage.getItem(key);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed : null;
-        } catch (_) {
-            return null;
-        }
-    };
-
-    let raw = [];
-    for (const key of keys) {
-        const arr = leerArraySeguro(localStorage, key);
-        if (arr && arr.length > 0) {
-            raw = arr;
-            break;
-        }
-    }
-
-    if (!raw.length) {
-        for (const key of keys) {
-            const arr = leerArraySeguro(sessionStorage, key);
-            if (arr && arr.length > 0) {
-                raw = arr;
-                break;
+            for (let i = 0; i < storage.length; i += 1) {
+                const k = storage.key(i);
+                if (!k) continue;
+                if (/(scraper|vinted|favorit|favorite|saved.?urls?|manual)/i.test(k)) {
+                    dynamicKeys.push(k);
+                }
             }
-        }
-    }
+        } catch (_) {}
 
-    if (!raw.length) {
-        const legacyCsv = String(localStorage.getItem('seychelles-scraper-urls-csv') || '').trim();
-        if (legacyCsv) {
-            raw = legacyCsv.split(/\n|,/).map((u) => ({ url: String(u || '').trim(), alias: '', createdAt: Date.now() })).filter(x => x.url);
-        }
-    }
-
-    if (!Array.isArray(raw)) return [];
-    const normalizadas = raw
-        .map((item) => {
-            if (typeof item === 'string') {
-                return { alias: '', url: item, createdAt: Date.now() };
+        const allKeys = [...new Set([...keysBase, ...dynamicKeys])];
+        allKeys.forEach((key) => {
+            let raw = '';
+            try {
+                raw = String(storage.getItem(key) || '');
+            } catch (_) {
+                raw = '';
             }
+            if (!raw.trim()) return;
+            const parsed = extraerFavoritosDesdeValorStorage(raw);
+            if (parsed.length) out.push(...parsed);
+        });
+    });
 
-            const urlRaw = item?.url || item?.link || item?.href || item?.targetUrl || '';
-            const aliasRaw = item?.alias || item?.name || item?.titulo || '';
-            return {
-                alias: String(aliasRaw || '').trim(),
-                url: String(urlRaw || '').trim(),
-                createdAt: Number(item?.createdAt) || Date.now()
-            };
-        })
-        .filter((it) => it.url);
+    const dedupe = new Map();
+    out.forEach((item) => {
+        const normalized = normalizarFavoritoScraperEntrada(item);
+        if (!normalized?.url) return;
+        const key = normalized.url.trim().toLowerCase();
+        if (!key) return;
+        if (!dedupe.has(key)) {
+            dedupe.set(key, normalized);
+            return;
+        }
+        const prev = dedupe.get(key);
+        const merged = {
+            ...prev,
+            alias: normalized.alias || prev.alias || '',
+            createdAt: Math.max(Number(prev.createdAt) || 0, Number(normalized.createdAt) || 0, Date.now())
+        };
+        dedupe.set(key, merged);
+    });
 
-    // Migra silenciosamente cualquier formato legacy a la clave principal.
-    setSavedScraperUrls(normalizadas);
+    return Array.from(dedupe.values());
+}
+
+function getSavedScraperUrls() {
+    const recuperados = recolectarFavoritosLegacyScraper();
+    const dedupe = new Map();
+
+    recuperados.forEach((item) => {
+        const n = normalizarFavoritoScraperEntrada(item);
+        if (!n?.url) return;
+        const key = String(n.url).trim().toLowerCase();
+        if (!key) return;
+        if (!dedupe.has(key)) {
+            dedupe.set(key, n);
+            return;
+        }
+        const prev = dedupe.get(key);
+        dedupe.set(key, {
+            ...prev,
+            alias: n.alias || prev.alias || '',
+            createdAt: Math.max(Number(prev.createdAt) || 0, Number(n.createdAt) || 0, Date.now())
+        });
+    });
+
+    const normalizadas = Array.from(dedupe.values())
+        .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+        .slice(0, 120);
+
+    // Migra silenciosamente cualquier formato legacy a claves actuales.
+    if (normalizadas.length) {
+        setSavedScraperUrls(normalizadas);
+        SCRAPER_FAVORITOS_RECOVERY_DONE = true;
+    }
+
     return normalizadas;
 }
 
 function setSavedScraperUrls(items) {
     const keys = ['seychelles-scraper-urls', 'seychelles-scraper-urls-v2', 'scraper-urls', 'vinted-scraper-urls'];
-    const payload = JSON.stringify((items || []).slice(0, 20));
+    const payload = JSON.stringify((items || []).slice(0, 120));
     for (const key of keys) {
         try { localStorage.setItem(key, payload); } catch (_) {}
         try { sessionStorage.setItem(key, payload); } catch (_) {}
     }
 }
+
+window.recuperarFavoritosScraperManual = function() {
+    const prev = getSavedScraperUrls();
+    const totalAntes = Array.isArray(prev) ? prev.length : 0;
+    const recovered = recolectarFavoritosLegacyScraper();
+    if (!recovered.length) {
+        alert('No encontré favoritos legacy en este navegador/dispositivo. Si limpiaste caché local o cambiaste de navegador, no hay forma de recuperarlos automáticamente.');
+        return;
+    }
+
+    const mergedMap = new Map();
+    [...prev, ...recovered].forEach((item) => {
+        const n = normalizarFavoritoScraperEntrada(item);
+        if (!n?.url) return;
+        const key = n.url.trim().toLowerCase();
+        if (!key) return;
+        const prevItem = mergedMap.get(key);
+        if (!prevItem) {
+            mergedMap.set(key, n);
+            return;
+        }
+        mergedMap.set(key, {
+            ...prevItem,
+            alias: n.alias || prevItem.alias || '',
+            createdAt: Math.max(Number(prevItem.createdAt) || 0, Number(n.createdAt) || 0, Date.now())
+        });
+    });
+
+    const merged = Array.from(mergedMap.values())
+        .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+        .slice(0, 120);
+
+    setSavedScraperUrls(merged);
+    SCRAPER_FAVORITOS_RECOVERY_DONE = true;
+    renderSavedUrls();
+
+    const added = Math.max(0, merged.length - totalAntes);
+    alert(`Recuperación completada. Favoritos actuales: ${merged.length}. Nuevos recuperados: ${added}.`);
+};
 
 function aplicarMascaraVisualizadorEnUI() {
     const blurTargets = [

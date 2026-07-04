@@ -1232,6 +1232,217 @@ app.delete('/api/faqs/:id', exigeAdmin, async (req, res) => {
     } catch (e) { res.status(500).send(e); }
 });
 
+function sanitizarCodigoProducto(codigo) {
+    return String(codigo || '')
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9_-]/g, '-')
+        .replace(/-+/g, '-')
+        .slice(0, 64);
+}
+
+function inferirCategoriaPorTexto(texto) {
+    const t = String(texto || '').toLowerCase();
+    if (!t) return 'General';
+    if (/camis|t-shirt|tee|shirt/.test(t)) return 'Camisetas';
+    if (/pantal|jean|trouser/.test(t)) return 'Pantalones';
+    if (/chaquet|jacket|blazer|abrigo|coat/.test(t)) return 'Chaquetas';
+    if (/sudader|hoodie/.test(t)) return 'Sudaderas';
+    if (/vestido|dress/.test(t)) return 'Vestidos';
+    if (/zapat|sneaker|shoe|calzado/.test(t)) return 'Calzado';
+    if (/bolso|bag|mochila/.test(t)) return 'Accesorios';
+    return 'General';
+}
+
+function normalizarProductoIA(producto = {}, codigo = '') {
+    const prenda = String(producto.prenda || producto.nombre || 'Articulo detectado').trim().slice(0, 120);
+    const categoria = String(producto.categoria || inferirCategoriaPorTexto(prenda)).trim().slice(0, 80) || 'General';
+    const precioNum = Number(producto.precioVenta || producto.precio || 0);
+    const precioVenta = Number.isFinite(precioNum) && precioNum > 0 ? Number(precioNum.toFixed(2)) : 0;
+    const marca = String(producto.marca || '').trim().slice(0, 60);
+    const descripcion = String(producto.descripcion || '').trim().slice(0, 600);
+    const talla = String(producto.talla || '').trim().slice(0, 20);
+    const condicion = String(producto.condicion || '').trim().slice(0, 40);
+    const skuSugerido = sanitizarCodigoProducto(producto.skuSugerido || codigo || `AI-${Date.now().toString().slice(-6)}`);
+
+    return { prenda, categoria, precioVenta, marca, descripcion, talla, condicion, skuSugerido };
+}
+
+function extraerJsonDeTexto(texto) {
+    const raw = String(texto || '').trim();
+    if (!raw) return null;
+
+    const fenced = raw.match(/```json\s*([\s\S]*?)```/i);
+    if (fenced && fenced[1]) {
+        try { return JSON.parse(fenced[1]); } catch (_) {}
+    }
+
+    const first = raw.indexOf('{');
+    const last = raw.lastIndexOf('}');
+    if (first >= 0 && last > first) {
+        try { return JSON.parse(raw.slice(first, last + 1)); } catch (_) {}
+    }
+
+    return null;
+}
+
+// Lookup de codigo (barcode/QR SKU) para autocompletar formulario
+app.get('/api/producto/lookup-codigo/:codigo', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const codigoRaw = String(req.params.codigo || '').trim();
+        if (!codigoRaw) return res.status(400).json({ error: 'Codigo vacio.' });
+
+        const codigo = sanitizarCodigoProducto(codigoRaw);
+        const encontrado = await VentaRopa.findOne({ empresa, sku: codigo }).lean();
+        if (encontrado) {
+            return res.json({
+                fuente: 'inventario',
+                producto: {
+                    skuSugerido: encontrado.sku || codigo,
+                    prenda: encontrado.prenda || '',
+                    categoria: encontrado.categoria || 'General',
+                    precioVenta: Number(encontrado.precioVenta || 0),
+                    marca: encontrado.marca || '',
+                    descripcion: encontrado.comentariosProducto || '',
+                    talla: encontrado.talla || '',
+                    condicion: encontrado.condicion || ''
+                }
+            });
+        }
+
+        // Intento de enriquecimiento con OpenFoodFacts para codigos EAN/UPC.
+        if (/^\d{8,14}$/.test(codigoRaw)) {
+            try {
+                const off = await axios.get(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(codigoRaw)}.json`, { timeout: 10000 });
+                const p = off?.data?.product || {};
+                if (off?.data?.status === 1 && p) {
+                    const nombre = p.product_name || p.product_name_es || p.generic_name || `Producto ${codigoRaw}`;
+                    const marca = p.brands || '';
+                    const categoria = inferirCategoriaPorTexto(p.categories || nombre);
+                    return res.json({
+                        fuente: 'openfoodfacts',
+                        producto: normalizarProductoIA({
+                            prenda: nombre,
+                            categoria,
+                            marca,
+                            descripcion: p.ingredients_text_es || p.ingredients_text || '',
+                            precioVenta: 0,
+                            skuSugerido: codigo
+                        }, codigo)
+                    });
+                }
+            } catch (_) {
+                // Fallo remoto no bloquea la respuesta.
+            }
+        }
+
+        return res.json({
+            fuente: 'codigo',
+            producto: normalizarProductoIA({
+                prenda: `Articulo ${codigoRaw}`,
+                categoria: 'General',
+                precioVenta: 0,
+                skuSugerido: codigo
+            }, codigo)
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'No se pudo resolver informacion del codigo.' });
+    }
+});
+
+// Analisis de foto para generar sugerencias de producto sin modificar la base de datos.
+app.post('/api/producto/analizar-foto', exigeAdmin, async (req, res) => {
+    try {
+        const imagen = String(req.body?.imagen || '').trim();
+        const codigo = sanitizarCodigoProducto(req.body?.codigo || '');
+        if (!imagen) return res.status(400).json({ error: 'Imagen vacia.' });
+
+        const apiKey = (process.env.TOGETHER_API_KEY || '').replace(/['"]/g, '').trim();
+        if (!apiKey) {
+            return res.json({
+                fuente: 'fallback-local',
+                producto: normalizarProductoIA({
+                    prenda: 'Articulo fotografiado',
+                    categoria: 'General',
+                    precioVenta: 0,
+                    descripcion: 'Configura TOGETHER_API_KEY para analisis visual avanzado.',
+                    skuSugerido: codigo || `AI-${Date.now().toString().slice(-6)}`
+                }, codigo)
+            });
+        }
+
+        const prompt = `Analiza la imagen del producto y devuelve SOLO JSON valido, sin texto extra, con esta estructura:
+{
+  "prenda": "nombre comercial corto",
+  "categoria": "categoria sugerida",
+  "precioVenta": 0,
+  "marca": "marca si se ve",
+  "descripcion": "resumen breve para inventario",
+  "talla": "si se detecta",
+  "condicion": "Nueva|Muy buena|Buena|Usada",
+  "skuSugerido": "${codigo || 'SKU sugerido'}"
+}
+Usa precioVenta en EUR como numero. Si no estas seguro, usa 0.`;
+
+        const modelos = [
+            'google/gemini-2.0-flash-lite-preview-02-05:free',
+            'meta-llama/llama-3.2-11b-vision-instruct:free',
+            'qwen/qwen-vl-plus:free'
+        ];
+
+        let parsed = null;
+        let lastError = 'No hubo respuesta de IA.';
+
+        for (const modelId of modelos) {
+            try {
+                const payload = {
+                    model: modelId,
+                    messages: [
+                        { role: 'system', content: 'Eres un analista de catalogo. Responde estrictamente con JSON valido.' },
+                        {
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: prompt },
+                                { type: 'image_url', image_url: { url: imagen } }
+                            ]
+                        }
+                    ],
+                    temperature: 0.2,
+                    max_tokens: 500
+                };
+
+                const r = await axios.post('https://openrouter.ai/api/v1/chat/completions', payload, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': 'https://seychelles-shop.com',
+                        'X-Title': 'Seychelles Core'
+                    },
+                    timeout: 20000
+                });
+
+                const text = r?.data?.choices?.[0]?.message?.content || '';
+                parsed = extraerJsonDeTexto(text);
+                if (parsed) break;
+            } catch (e) {
+                lastError = e?.response?.data?.error?.message || e.message;
+            }
+        }
+
+        if (!parsed) {
+            return res.status(400).json({ error: `No se pudo interpretar respuesta de IA: ${lastError}` });
+        }
+
+        return res.json({
+            fuente: 'ia-vision',
+            producto: normalizarProductoIA(parsed, codigo)
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Error analizando la foto del producto.' });
+    }
+});
+
 // --- Rutas de Ajustes del Tablero Kanban ---
 app.get('/api/estados-kanban', exigeAdmin, async (req, res) => {
     try {

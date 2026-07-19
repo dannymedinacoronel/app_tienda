@@ -859,7 +859,8 @@ function exigeSoloAdmin(req, res, next) {
 
 function sanitizarVentasParaRol(ventas, req) {
     const rol = rolActual(req);
-    if (rol !== 'Editor' && rol !== 'Visualizador') return ventas;
+    // Only the 'Visualizador' role should see sanitized (redacted) financial fields.
+    if (rol !== 'Visualizador') return ventas;
 
     return (Array.isArray(ventas) ? ventas : []).map((v) => {
         const safe = { ...v };
@@ -874,7 +875,8 @@ function sanitizarVentasParaRol(ventas, req) {
 
 function resumenSeguroPorRol(resumen, req) {
     const rol = rolActual(req);
-    if (rol !== 'Editor' && rol !== 'Visualizador') return resumen;
+    // Only the 'Visualizador' role should see redacted KPI values.
+    if (rol !== 'Visualizador') return resumen;
     return {
         ingresos: 0,
         beneficio: 0,

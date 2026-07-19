@@ -1,0 +1,10 @@
+# Archivos secretos locales (NO SUBIR)
+.env
+client_secret_*.json
+
+# Dependencias de Node (se instalan solas en Render)
+node_modules/
+
+# Archivos temporales del sistema
+.DS_Store
+Thumbs.db

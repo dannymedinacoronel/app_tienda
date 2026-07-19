@@ -2705,6 +2705,23 @@ app.post('/api/ventas', exigeRol(['Admin', 'Editor']), bloquearMutacionVisualiza
     }
 });
 
+// Admin debug endpoint: reset KPI resumen to zeros and notify clients in the empresa room
+app.post('/api/debug/reset-kpis', exigeSoloAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const resumenZeros = { ingresos: 0, beneficio: 0, inversion: 0, prendasVendidas: 0, roi: 0, totalGastosOperativos: 0 };
+        setKpiResumenCache(empresa, resumenZeros);
+        try {
+            if (global && global.io) global.io.to(`empresa:${normalizarEmpresa(empresa)}`).emit('kpi_update', { resumen: resumenZeros });
+        } catch (e) { /* ignore */ }
+        try { await registrarLog(req.session.email, `Resetó KPIs a 0 para ${empresa}`); } catch (_) {}
+        return res.json({ ok: true, resumen: resumenZeros });
+    } catch (e) {
+        console.error('Error resetando KPIs:', e);
+        return res.status(500).json({ error: 'No se pudo resetear KPIs.' });
+    }
+});
+
 app.put('/api/ventas/:id', exigeSoloAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);

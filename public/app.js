@@ -969,15 +969,10 @@ function iniciarAnimacionCargaScraper(modo = 'vinted') {
 
     SCRAPER_PROGRESS_INTERVAL = setInterval(() => {
         const next = SCRAPER_PROGRESS_VALUE + (SCRAPER_PROGRESS_VALUE < 40 ? 8 : SCRAPER_PROGRESS_VALUE < 75 ? 5 : 2);
-        const capped = Math.min(92, next);
+        const capped = Math.min(99, next);
         const msg = SCRAPER_PROGRESS_MESSAGES[SCRAPER_PROGRESS_MSG_INDEX % SCRAPER_PROGRESS_MESSAGES.length];
         SCRAPER_PROGRESS_MSG_INDEX += 1;
         actualizarCargaScraper(capped, msg, 'En progreso');
-
-        if (capped >= 92) {
-            clearInterval(SCRAPER_PROGRESS_INTERVAL);
-            SCRAPER_PROGRESS_INTERVAL = null;
-        }
     }, 1600);
 }
 

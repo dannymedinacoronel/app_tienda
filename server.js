@@ -153,16 +153,83 @@ function setKpiResumenCache(empresa, value) {
     kpiResumenCache.set(key, { ts: Date.now(), value });
 }
 
-function invalidateKpiResumenCache(empresa) {
+async function invalidateKpiResumenCache(empresa) {
     const key = normalizarEmpresa(empresa);
     kpiResumenCache.delete(key);
     try {
+        // Attempt to compute the fresh resumen so we can push it to clients and avoid
+        // forcing every client to refetch the whole `/api/ventas` payload.
+        const estadosKanban = await EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean();
+        const nombresEstadosVenta = (estadosKanban || []).filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
+
+        const [summaryData] = await VentaRopa.aggregate([
+            { $match: { empresa } },
+            {
+                $group: {
+                    _id: null,
+                    totalInversion: { $sum: { $multiply: [{ $ifNull: ['$precioCompra', 0] }, { $ifNull: ['$cantidad', 1] }] } },
+                    totalGastosEnvio: { $sum: { $multiply: [{ $ifNull: ['$gastosEnvio', 0] }, { $ifNull: ['$cantidad', 1] }] } },
+                    ingresosNetos: {
+                        $sum: {
+                            $cond: [
+                                { $in: ['$estado', nombresEstadosVenta] },
+                                {
+                                    $multiply: [
+                                        {
+                                            $subtract: [
+                                                { $ifNull: ['$precioVenta', 0] },
+                                                {
+                                                    $cond: [
+                                                        { $in: ['$canalVenta', ['Vinted', 'Wallapop']] },
+                                                        { $multiply: [{ $ifNull: ['$precioVenta', 0] }, 0.05] },
+                                                        0
+                                                    ]
+                                                }
+                                            ]
+                                        },
+                                        { $ifNull: ['$cantidad', 1] }
+                                    ]
+                                },
+                                0
+                            ]
+                        }
+                    },
+                    prendasVendidas: {
+                        $sum: {
+                            $cond: [
+                                { $in: ['$estado', nombresEstadosVenta] },
+                                { $ifNull: ['$cantidad', 1] },
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        const [gastosAgg] = await Gasto.aggregate([
+            { $match: { empresa } },
+            { $group: { _id: null, totalGastosOperativos: { $sum: { $ifNull: ['$monto', 0] } } } }
+        ]);
+
+        const totalGastosOperativos = gastosAgg?.totalGastosOperativos || 0;
+        const ingresos = summaryData?.ingresosNetos || 0;
+        const prendasVendidas = summaryData?.prendasVendidas || 0;
+        const inversion = (summaryData?.totalInversion || 0) + (summaryData?.totalGastosEnvio || 0);
+        const beneficioNeto = ingresos - inversion - totalGastosOperativos;
+        const roi = (inversion + totalGastosOperativos) > 0 ? (beneficioNeto / (inversion + totalGastosOperativos)) * 100 : 0;
+
+        const resumen = { ingresos, beneficio: beneficioNeto, inversion: inversion + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };
+        setKpiResumenCache(empresa, resumen);
+
         if (global && global.io) {
-            // Notify connected clients in the empresa room to refresh KPIs
-            global.io.to(`empresa:${normalizarEmpresa(empresa)}`).emit('kpi_update');
+            global.io.to(`empresa:${normalizarEmpresa(empresa)}`).emit('kpi_update', { resumen });
         }
     } catch (e) {
-        console.warn('No se pudo emitir evento kpi_update:', e);
+        // Fallback: emit without payload so clients can refetch normally
+        try {
+            if (global && global.io) global.io.to(`empresa:${normalizarEmpresa(empresa)}`).emit('kpi_update');
+        } catch (err) { console.warn('No se pudo emitir evento kpi_update:', err); }
     }
 }
 

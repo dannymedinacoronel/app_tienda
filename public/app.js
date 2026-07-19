@@ -112,8 +112,30 @@ function animateNumberTo(el, targetText, opts = {}) {
 }
 
 // Listener para actualizaciones de KPIs desde el servidor
-socket.on('kpi_update', async () => {
+socket.on('kpi_update', async (data) => {
     try {
+        // If server sent the resumen payload, update KPIs locally for lower latency.
+        if (data && data.resumen && typeof data.resumen === 'object') {
+            const resumen = data.resumen;
+            const elIngresos = document.getElementById('kpi-ingresos');
+            const elBeneficio = document.getElementById('kpi-beneficio');
+            const elInversion = document.getElementById('kpi-inversion');
+            const elPrendas = document.getElementById('kpi-prendas');
+            const elRoi = document.getElementById('kpi-roi');
+
+            animateNumberTo(elIngresos, `${(Number(resumen.ingresos || 0)).toFixed(2)} €`);
+            animateNumberTo(elBeneficio, `${(Number(resumen.beneficio || 0)).toFixed(2)} €`);
+            animateNumberTo(elInversion, `${(Number(resumen.inversion || 0)).toFixed(2)} €`);
+            animateNumberTo(elPrendas, `${Number(resumen.prendasVendidas || 0)}`, { decimals: 0 });
+            animateNumberTo(elRoi, `${(Number(resumen.roi || 0)).toFixed(1)}%`, { decimals: 1 });
+
+            // Apply visual masking for Visualizador role and refresh analytic widgets
+            aplicarMascaraVisualizadorEnUI();
+            actualizarDashboardGananciasAdmin();
+            return;
+        }
+
+        // Fallback: ask for a full refresh when payload is not provided
         await forceRefreshDataManual();
     } catch (e) {
         console.warn('Error al refrescar datos tras kpi_update:', e);

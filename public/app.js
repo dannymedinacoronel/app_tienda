@@ -8328,7 +8328,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (data.autenticado) { 
             USUARIO_EMAIL_ACTUAL = (data.usuario || '').toLowerCase();
             USUARIO_ROL_ACTUAL = data.rol || 'Editor';
-            EMPRESA_CHAT_ACTUAL = (data.empresa || '').toLowerCase();
+            // Normalize company slug to match server normalization (lowercase, spaces -> '-', trimmed)
+            EMPRESA_CHAT_ACTUAL = String(data.empresa || '').trim().toLowerCase().replace(/\s+/g, '-').slice(0, 60) || '';
             if (EMPRESA_CHAT_ACTUAL) {
                 socket.emit('join_empresa', EMPRESA_CHAT_ACTUAL);
             }

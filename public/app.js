@@ -6416,7 +6416,9 @@ async function forceRefreshDataManual() {
     }
     LAST_FORCE_REFRESH_AT = now;
     cantarPorVoz("Sincronizando.");
-    FORCE_REFRESH_PROMISE = reloadCoreData(true).finally(() => {
+    // Use a full refresh (not the 'lightweight' path) so the server returns
+    // the complete KPI resumen instead of zeros.
+    FORCE_REFRESH_PROMISE = reloadCoreData(false).finally(() => {
         FORCE_REFRESH_PROMISE = null;
     });
     await FORCE_REFRESH_PROMISE;
@@ -8251,7 +8253,32 @@ async function confirmarVentaDesdeModal() {
             return fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ ...datosVenta, proveedor: payload.proveedor }) });
         });
         const results = await Promise.all(promesas);
-        if (results.every(res => res && res.ok)) { cerrarModalPostVenta(true); await forceRefreshDataManual(); limpiarSeleccionMasiva(); } 
+        if (results.every(res => res && res.ok)) {
+            // Optimistic UX: celebrate and update KPIs locally before server sync.
+            cerrarModalPostVenta(true);
+            try { tocarSonidoCajaRegistradora(); } catch (_) {}
+            try { lanzarConfetiVenta(); } catch (_) {}
+
+            // Compute optimistic gross total (sum of precioVenta * cantidad for affected items)
+            try {
+                let added = 0;
+                itemIds.forEach(id => {
+                    const original = BASE_DATOS.find(v => v._id === id);
+                    if (!original) return;
+                    const qty = Number(original.cantidad || 1) || 1;
+                    const pv = Number((itemIds.length === 1 && !isNaN(precioVentaSingle)) ? precioVentaSingle : original.precioVenta) || 0;
+                    added += pv * qty;
+                });
+                const elIngresos = document.getElementById('kpi-ingresos');
+                if (elIngresos) {
+                    const curr = String(elIngresos.innerText || '').replace(/[^0-9.,-]/g, '').replace(/,/g, '.');
+                    const currNum = parseFloat(curr) || 0;
+                    animateNumberTo(elIngresos, `${(currNum + added).toFixed(2)} €`);
+                }
+            } catch (_) {}
+
+            await forceRefreshDataManual(); limpiarSeleccionMasiva();
+        }
         else { throw new Error('Fallo al actualizar uno o más artículos.'); }
     } catch (err) {
         alert('Error: ' + err.message);

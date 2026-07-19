@@ -1,0 +1,79 @@
+name: Vinted Unified Scraper
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Modo de scraping: manual o monopolio'
+        required: true
+        default: 'manual'
+      target_url:
+        description: 'URL de perfil/seguidores de Vinted'
+        required: true
+      empresa:
+        description: 'Identificador de la empresa para el webhook'
+        required: false
+        default: 'seychelles'
+      alias:
+        description: 'Alias/proveedor para etiquetar resultados'
+        required: false
+        default: ''
+      webhook_path:
+        description: 'Ruta del webhook destino (opcional)'
+        required: false
+        default: ''
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate secrets
+        run: |
+          if [ -z "${{ secrets.MY_WEB_URL }}" ]; then echo "❌ MY_WEB_URL is missing"; exit 1; fi
+          if [ -z "${{ secrets.SCRAPER_TOKEN }}" ]; then echo "❌ SCRAPER_TOKEN is missing"; exit 1; fi
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install playwright
+          npx playwright install --with-deps chromium
+
+      - name: Execute Unified Scrape
+        env:
+          MY_WEB_URL: ${{ secrets.MY_WEB_URL }}
+          SCRAPER_TOKEN: ${{ secrets.SCRAPER_TOKEN }}
+          SCRAPER_LOCALE: "es-ES"
+          SCRAPER_TIMEZONE: "Europe/Madrid"
+          MONOPOLIO_MAX_ACCOUNTS: "260"
+          MONOPOLIO_MAX_CHAIN_DEPTH: "5"
+          MONOPOLIO_MAX_CHAIN_URLS: "220"
+          MONOPOLIO_CHAIN_BRANCH: "120"
+          MONOPOLIO_SCROLL_MAX: "24"
+          MONOPOLIO_API_REL_PAGES: "10"
+          SCRAPER_DEEP_MODE: "true"
+        run: |
+          MODE="${{ github.event.inputs.mode }}"
+          if [ "$MODE" = "monopolio" ]; then
+            export SCRAPER_PLAYWRIGHT_FIRST="true"
+            export SCRAPER_SCROLL_BURSTS="6"
+          else
+            export SCRAPER_PLAYWRIGHT_FIRST="false"
+            export SCRAPER_SCROLL_BURSTS="4"
+          fi
+
+          node scripts/unified-scrape.js \
+            "$MODE" \
+            "${{ github.event.inputs.target_url }}" \
+            "${{ github.event.inputs.empresa }}" \
+            "${{ github.event.inputs.alias }}" \
+            "${{ github.event.inputs.webhook_path }}"

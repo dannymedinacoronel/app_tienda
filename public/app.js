@@ -4427,7 +4427,7 @@ async function generarGuiaPDF() {
         const doc = new jsPDF();
         
         const imgLogo = new Image();
-        imgLogo.src = 'logo.svg';
+        imgLogo.src = 'logo.png';
         await new Promise((resolve) => {
             imgLogo.onload = resolve;
             imgLogo.onerror = resolve;

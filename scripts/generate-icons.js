@@ -3,13 +3,17 @@ const path = require('path');
 async function main() {
   const sharp = require('sharp');
   const svgPath = path.join(__dirname, '..', 'public', 'logo.svg');
+  const pngPath = path.join(__dirname, '..', 'public', 'logo.png');
   const outDir = path.join(__dirname, '..', 'public', 'icons');
-  if (!fs.existsSync(svgPath)) {
-    console.error('No existe public/logo.svg. Asegúrate de tener el SVG en su lugar.');
+  let inputPath = null;
+  if (fs.existsSync(svgPath)) inputPath = svgPath;
+  else if (fs.existsSync(pngPath)) inputPath = pngPath;
+  else {
+    console.error('No existe public/logo.svg ni public/logo.png. Añade uno de los dos y vuelve a ejecutar.');
     process.exit(1);
   }
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-  const svgBuffer = fs.readFileSync(svgPath);
+  const svgBuffer = fs.readFileSync(inputPath);
   try {
     console.log('Generando public/icons/logo-192.png ...');
     await sharp(svgBuffer).resize(192, 192, { fit: 'contain' }).png({ compressionLevel: 9 }).toFile(path.join(outDir, 'logo-192.png'));

@@ -156,6 +156,14 @@ function setKpiResumenCache(empresa, value) {
 function invalidateKpiResumenCache(empresa) {
     const key = normalizarEmpresa(empresa);
     kpiResumenCache.delete(key);
+    try {
+        if (global && global.io) {
+            // Notify connected clients in the empresa room to refresh KPIs
+            global.io.to(`empresa:${normalizarEmpresa(empresa)}`).emit('kpi_update');
+        }
+    } catch (e) {
+        console.warn('No se pudo emitir evento kpi_update:', e);
+    }
 }
 
 function getLogsResumenCache(empresa) {

@@ -86,6 +86,40 @@ socket.on('connect_error', (error) => {
     console.error('[SOCKET] Error de conexión:', error);
 });
 
+// Helper: animación numérica suave para KPIs
+function animateNumberTo(el, targetText, opts = {}) {
+    if (!el) return;
+    const duration = opts.duration || 500;
+    const decimals = typeof opts.decimals === 'number' ? opts.decimals : (String(targetText).includes('%') ? 1 : 2);
+    const currText = String(el.innerText || '').replace(/[^0-9.,-]/g, '').replace(/,/g, '.');
+    const currNum = parseFloat(currText) || 0;
+    const targetNum = parseFloat(String(targetText).replace(/[^0-9.,-]/g, '').replace(/,/g, '.')) || 0;
+    const start = performance.now();
+    function step(now) {
+        const t = Math.min(1, (now - start) / duration);
+        const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+        const val = currNum + (targetNum - currNum) * eased;
+        if (String(targetText).trim().endsWith('%')) {
+            el.innerText = `${val.toFixed(decimals)}%`;
+        } else if (String(targetText).trim().endsWith('€')) {
+            el.innerText = `${val.toFixed(decimals)} €`;
+        } else {
+            el.innerText = Number.isInteger(targetNum) ? Math.round(val) : val.toFixed(decimals);
+        }
+        if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+}
+
+// Listener para actualizaciones de KPIs desde el servidor
+socket.on('kpi_update', async () => {
+    try {
+        await forceRefreshDataManual();
+    } catch (e) {
+        console.warn('Error al refrescar datos tras kpi_update:', e);
+    }
+});
+
 function escapeHtmlSafe(value) {
     return String(value || '')
         .replace(/&/g, '&amp;')
@@ -2175,7 +2209,7 @@ function pintarReporteHigiene(reporte) {
 
     const setTxt = (id, value) => {
         const el = document.getElementById(id);
-        if (el) el.innerText = String(value || 0);
+        if (el) animateNumberTo(el, String(value || 0), { decimals: Number.isInteger(Number(value)) ? 0 : 2 });
     };
 
     setTxt('higiene-kpi-estados', resumen.estadosInvalidos || 0);
@@ -4393,7 +4427,7 @@ async function generarGuiaPDF() {
         const doc = new jsPDF();
         
         const imgLogo = new Image();
-        imgLogo.src = 'logo.png';
+        imgLogo.src = 'logo.svg';
         await new Promise((resolve) => {
             imgLogo.onload = resolve;
             imgLogo.onerror = resolve;
@@ -7327,11 +7361,17 @@ async function reloadCoreData(isInitialLoad = false) {
         TOTAL_PAGES = data.totalPages || 1;
         const resumen = (data && typeof data.resumen === 'object' && data.resumen) ? data.resumen : {};
 
-        document.getElementById('kpi-ingresos').innerText = `${(Number(resumen.ingresos || 0)).toFixed(2)} €`;
-        document.getElementById('kpi-beneficio').innerText = `${(Number(resumen.beneficio || 0)).toFixed(2)} €`;
-        document.getElementById('kpi-inversion').innerText = `${(Number(resumen.inversion || 0)).toFixed(2)} €`;
-        document.getElementById('kpi-prendas').innerText = Number(resumen.prendasVendidas || 0);
-        document.getElementById('kpi-roi').innerText = `${(Number(resumen.roi || 0)).toFixed(1)}%`;
+        const elIngresos = document.getElementById('kpi-ingresos');
+        const elBeneficio = document.getElementById('kpi-beneficio');
+        const elInversion = document.getElementById('kpi-inversion');
+        const elPrendas = document.getElementById('kpi-prendas');
+        const elRoi = document.getElementById('kpi-roi');
+
+        animateNumberTo(elIngresos, `${(Number(resumen.ingresos || 0)).toFixed(2)} €`);
+        animateNumberTo(elBeneficio, `${(Number(resumen.beneficio || 0)).toFixed(2)} €`);
+        animateNumberTo(elInversion, `${(Number(resumen.inversion || 0)).toFixed(2)} €`);
+        animateNumberTo(elPrendas, `${Number(resumen.prendasVendidas || 0)}` , { decimals: 0 });
+        animateNumberTo(elRoi, `${(Number(resumen.roi || 0)).toFixed(1)}%` , { decimals: 1 });
         aplicarMascaraVisualizadorEnUI();
 
         if (isInitialLoad) {

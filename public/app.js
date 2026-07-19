@@ -3889,6 +3889,25 @@ function aplicarRestriccionesRolUI() {
     const destinoInicial = (!activa || hidden.has(activa.id)) ? 'sec-inventario' : activa.id;
     // Fuerza la clase seccion-active para evitar panel inicial invisible hasta el primer click.
     navegarASeccion(destinoInicial);
+
+    // Mostrar/ocultar controles específicos por rol
+    try {
+        const btnReset = document.getElementById('btn-reset-kpis');
+        const isAdmin = String(USUARIO_ROL_ACTUAL || '').toLowerCase() === 'admin';
+        if (btnReset) btnReset.classList.toggle('hidden', !isAdmin);
+    } catch (_) {}
+}
+
+async function resetKpisFromUI() {
+    if (!confirm('¿Confirmas que quieres poner todos los KPIs a 0 para esta empresa?')) return;
+    try {
+        const res = await fetch('/api/debug/reset-kpis', { method: 'POST', credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Fallo al resetear.');
+        alert('KPIs reseteados a 0. Revisa el tablero.');
+    } catch (e) {
+        alert('Error al resetear KPIs: ' + (e.message || e));
+    }
 }
 
 function formatearFechaISO(dateObj) {

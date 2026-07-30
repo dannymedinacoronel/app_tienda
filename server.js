@@ -10,6 +10,7 @@ const cheerio = require('cheerio');
 const nodemailer = require('nodemailer');
 const http = require('http');
 const { Server } = require('socket.io');
+const vision = require('@google-cloud/vision');
 const { scrapeMonopolio } = require('./scripts/scraper-engine');
 
 const app = express();
@@ -22,6 +23,23 @@ if (!GOOGLE_CLIENT_ID) {
     console.error('\x1b[33m[WARN]\x1b[0m GOOGLE_CLIENT_ID no está definido. El login fallará.');
 }
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
+
+let visionClient;
+if (process.env.GOOGLE_API_KEY) {
+    visionClient = new vision.ImageAnnotatorClient({
+        key: process.env.GOOGLE_API_KEY.trim()
+    });
+    console.log('\x1b[32m[OK]\x1b[0m Cliente de Google Vision inicializado con API Key.');
+} else if (process.env.GOOGLE_CREDENTIALS_JSON) {
+    try {
+        const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+        visionClient = new vision.ImageAnnotatorClient({ credentials });
+        console.log('\x1b[32m[OK]\x1b[0m Cliente de Google Vision inicializado con Cuenta de Servicio.');
+    } catch (e) {
+        console.error('\x1b[31m[ERROR]\x1b[0m Fallo al parsear GOOGLE_CREDENTIALS_JSON:', e.message);
+    }
+}
+
 const isProd = process.env.NODE_ENV === 'production';
 const EMPRESA_DEFAULT = String(process.env.APP_EMPRESA_DEFAULT || 'seychelles').trim().toLowerCase();
 console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
@@ -1938,108 +1956,68 @@ app.get('/api/producto/lookup-codigo/:codigo', exigeAdmin, async (req, res) => {
 
 // Analisis de foto para generar sugerencias de producto sin modificar la base de datos.
 app.post('/api/producto/analizar-foto', exigeAdmin, async (req, res) => {
+    if (!visionClient) {
+        return res.status(503).json({ error: 'El servicio de análisis de imagen no está configurado en el servidor.' });
+    }
+
     try {
         const imagen = String(req.body?.imagen || '').trim();
-        const imagenesRaw = Array.isArray(req.body?.imagenes) ? req.body.imagenes : [];
-        const imagenes = [
-            imagen,
-            ...imagenesRaw.map((x) => String(x || '').trim())
-        ].filter(Boolean).slice(0, 3);
         const codigo = sanitizarCodigoProducto(req.body?.codigo || '');
-        if (!imagenes.length) return res.status(400).json({ error: 'Imagen vacia.' });
+        if (!imagen) return res.status(400).json({ error: 'Imagen vacía.' });
 
-        const apiKey = (process.env.TOGETHER_API_KEY || '').replace(/['"]/g, '').trim();
-        if (!apiKey) {
-            return res.json({
-                fuente: 'fallback-local',
-                producto: normalizarProductoIA({
-                    prenda: 'Articulo fotografiado',
-                    categoria: 'General',
-                    precioVenta: 0,
-                    descripcion: 'Configura TOGETHER_API_KEY para analisis visual avanzado.',
-                    skuSugerido: codigo || `AI-${Date.now().toString().slice(-6)}`
-                }, codigo)
-            });
+        // Google Vision necesita el base64 puro, sin el prefijo "data:image/jpeg;base64,"
+        const imageBase64 = imagen.split(';base64,').pop();
+
+        const request = {
+            image: { content: imageBase64 },
+            features: [{ type: 'LABEL_DETECTION', maxResults: 10 }, { type: 'TEXT_DETECTION' }],
+        };
+
+        const [result] = await visionClient.annotateImage(request);
+        const labels = result.labelAnnotations;
+        const textAnnotations = result.textAnnotations;
+
+        let productoSugerido = {};
+
+        if (labels && labels.length > 0) {
+            const traducciones = {
+                't-shirt': 'Camiseta', 'shirt': 'Camisa', 'jeans': 'Vaqueros', 'trousers': 'Pantalones',
+                'pants': 'Pantalones', 'dress': 'Vestido', 'skirt': 'Falda', 'jacket': 'Chaqueta',
+                'coat': 'Abrigo', 'sneakers': 'Zapatillas', 'shoes': 'Zapatos', 'footwear': 'Calzado',
+                'bag': 'Bolso', 'handbag': 'Bolso', 'hoodie': 'Sudadera', 'sweater': 'Jersey',
+                'clothing': 'Ropa', 'outerwear': 'Ropa de abrigo'
+            };
+
+            const topLabel = labels[0].description.toLowerCase();
+            const prendaSugerida = traducciones[topLabel] || labels[0].description;
+            
+            productoSugerido.prenda = prendaSugerida;
+            productoSugerido.categoria = inferirCategoriaPorTexto(prendaSugerida);
+            productoSugerido.descripcion = `Detectado: ${labels.slice(0, 5).map(l => l.description).join(', ')}.`;
+        } else {
+            productoSugerido.prenda = 'Artículo fotografiado';
+            productoSugerido.categoria = 'General';
         }
 
-        const prompt = `Analiza la imagen del producto y devuelve SOLO JSON valido, sin texto extra, con esta estructura:
-{
-  "prenda": "nombre comercial corto",
-  "categoria": "categoria sugerida",
-  "precioVenta": 0,
-  "marca": "marca si se ve",
-  "descripcion": "resumen breve para inventario",
-  "talla": "si se detecta",
-  "condicion": "Nueva|Muy buena|Buena|Usada",
-  "skuSugerido": "${codigo || 'SKU sugerido'}"
-}
-Usa precioVenta en EUR como numero. Si no estas seguro, usa 0.
-Si vienen varias imagenes, combina todas para una unica respuesta.`;
-
-        const modelos = [
-            'google/gemini-2.0-flash-lite-preview-02-05:free',
-            'meta-llama/llama-3.2-11b-vision-instruct:free',
-            'qwen/qwen-vl-plus:free'
-        ];
-
-        let parsed = null;
-        let lastError = 'No hubo respuesta de IA.';
-
-        for (const modelId of modelos) {
-            try {
-                const payload = {
-                    model: modelId,
-                    messages: [
-                        { role: 'system', content: 'Eres un analista de catalogo. Responde estrictamente con JSON valido.' },
-                        {
-                            role: 'user',
-                            content: [
-                                { type: 'text', text: prompt },
-                                ...imagenes.map((img) => ({ type: 'image_url', image_url: { url: img } }))
-                            ]
-                        }
-                    ],
-                    temperature: 0.2,
-                    max_tokens: 650
-                };
-
-                const r = await axios.post('https://openrouter.ai/api/v1/chat/completions', payload, {
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json',
-                        'HTTP-Referer': 'https://seychelles-shop.com',
-                        'X-Title': 'Seychelles Core'
-                    },
-                    timeout: 28000
-                });
-
-                const text = r?.data?.choices?.[0]?.message?.content || '';
-                parsed = extraerJsonDeTexto(text);
-                if (parsed) break;
-            } catch (e) {
-                lastError = e?.response?.data?.error?.message || e.message;
+        if (textAnnotations && textAnnotations.length > 0) {
+            const textoCompleto = textAnnotations[0].description.toLowerCase();
+            const marcasConocidas = ['nike', 'adidas', 'zara', 'levi\'s', 'puma', 'gucci', 'prada', 'mango', 'bershka', 'stradivarius'];
+            for (const marca of marcasConocidas) {
+                if (textoCompleto.includes(marca)) {
+                    productoSugerido.marca = marca.charAt(0).toUpperCase() + marca.slice(1);
+                    break;
+                }
             }
         }
 
-        if (!parsed) {
-            return res.json({
-                fuente: 'fallback-ia',
-                producto: normalizarProductoIA({
-                    prenda: codigo ? `Articulo ${codigo}` : 'Articulo fotografiado',
-                    categoria: 'General',
-                    precioVenta: 0,
-                    descripcion: `Analisis parcial: la IA no devolvio JSON parseable (${String(lastError || 'sin detalle').slice(0, 180)}).`,
-                    skuSugerido: codigo || `AI-${Date.now().toString().slice(-6)}`
-                }, codigo)
-            });
-        }
-
         return res.json({
-            fuente: 'ia-vision',
-            producto: normalizarProductoIA(parsed, codigo)
+            fuente: 'google-vision',
+            producto: normalizarProductoIA(productoSugerido, codigo)
         });
+
     } catch (error) {
-        res.status(500).json({ error: 'Error analizando la foto del producto.' });
+        console.error('[GOOGLE-VISION] Error analizando la foto:', error.message);
+        res.status(500).json({ error: 'Error analizando la foto con Google Vision.' });
     }
 });
 

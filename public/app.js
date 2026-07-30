@@ -1,4 +1,4 @@
-﻿// c:/Users/dannymedinacoronel/Desktop/APP RESTAURADA 280626/app_tienda-main/public/app.js
+﻿﻿// c:/Users/dannymedinacoronel/Desktop/APP RESTAURADA 280626/app_tienda-main/public/app.js
 
 // --- VARIABLES GLOBALES Y ESTADO DE LA APP ---
 const BACKEND_URL = '';
@@ -396,33 +396,8 @@ window.volverALanding = volverALanding;
 window.scrollToLandingSection = scrollToLandingSection;
 
 function setParticlesEnabled(enabled) {
-    try {
-        const isLowPower = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent || '') || ((navigator.deviceMemory || 8) <= 4);
-        const hasParticles = Array.isArray(window.pJSDom) && window.pJSDom.length > 0;
-        if (enabled) {
-            if (isLowPower) return;
-            if (!hasParticles && typeof window.particlesJS === 'function') {
-                particlesJS("particles-js", {
-                    "particles": {
-                        "number": { "value": 26, "density": { "enable": true, "value_area": 900 } },
-                        "color": { "value": ["#22d3ee", "#60a5fa", "#fbbf24"] },
-                        "shape": { "type": ["circle"] },
-                        "opacity": { "value": 0.45, "random": true },
-                        "size": { "value": 3.2, "random": true },
-                        "line_linked": { "enable": true, "distance": 110, "color": "#38bdf8", "opacity": 0.18, "width": 1 },
-                        "move": { "enable": true, "speed": 1.5, "direction": "none", "random": true, "out_mode": "out" }
-                    },
-                    "interactivity": { "events": { "onhover": { "enable": true, "mode": "grab" }, "resize": true } },
-                    "retina_detect": true
-                });
-            }
-        } else if (hasParticles) {
-            window.pJSDom.forEach(p => p?.pJS?.fn?.vendors?.destroypJS?.());
-            window.pJSDom = [];
-            const node = document.getElementById('particles-js');
-            if (node) node.innerHTML = '';
-        }
-    } catch (_) {}
+    // Particles disabled for performance.
+    // The library and its container have been removed from index.html
 }
 
 socket.on('mensaje_interno_nuevo', (data) => {
@@ -8396,10 +8371,3 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(err => {}); }); }
-
-if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(() => setParticlesEnabled(true), { timeout: 1500 });
-} else {
-    setTimeout(() => setParticlesEnabled(true), 800);
-}
-

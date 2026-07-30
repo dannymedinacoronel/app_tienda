@@ -2519,7 +2519,10 @@ async function sugerirNombreProducto(event) {
     }
 
     const res = await fetch(`${BACKEND_URL}/api/productos/sugerir-nombre?q=${encodeURIComponent(query)}`, { credentials: 'include' });
-    if (!res.ok) return;
+    if (!res.ok) {
+        console.error('Error al obtener sugerencias de producto:', res.status);
+        return;
+    }
     const sugerencias = await res.json();
     mostrarSugerenciasProducto(sugerencias, input);
 }
@@ -8420,6 +8423,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         prendaInput.addEventListener('input', debouncedSugerirNombreProducto);
         prendaInput.addEventListener('focus', (e) => {
             if (e.target.value.length >= 2) debouncedSugerirNombreProducto(e);
+        });
+        prendaInput.addEventListener('blur', () => {
+            // Ocultar con un pequeño retardo para permitir que el clic en las sugerencias se registre
+            setTimeout(() => {
+                const container = document.getElementById('sugerencias-producto-container');
+                if (container) container.classList.add('hidden');
+            }, 150);
         });
     }
         }

@@ -1,4 +1,4 @@
-﻿﻿// c:/Users/dannymedinacoronel/Desktop/APP RESTAURADA 280626/app_tienda-main/public/app.js
+﻿﻿﻿﻿// c:/Users/dannymedinacoronel/Desktop/APP RESTAURADA 280626/app_tienda-main/public/app.js
 
 // --- VARIABLES GLOBALES Y ESTADO DE LA APP ---
 const BACKEND_URL = '';
@@ -2476,6 +2476,53 @@ window.debouncedCambiarFiltroColumna = debounce(cambiarFiltroColumna, 300);
 window.debouncedFiltrarProductosMenu = debounce(filtrarProductosMenu, 250);
 window.filtrarMonopolioUrls = debounce(filtrarMonopolioUrls, 250);
 window.debouncedFiltrarCRM = debounce(filtrarCRM, 300);
+
+function mostrarSugerenciasProducto(sugerencias, inputElement) {
+    let container = document.getElementById('sugerencias-producto-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'sugerencias-producto-container';
+        container.className = 'absolute z-[201] w-full dropdown-bg border rounded-lg mt-1 shadow-lg max-h-48 overflow-y-auto custom-scrollbar';
+        if (inputElement.parentNode) {
+            inputElement.parentNode.style.position = 'relative';
+            inputElement.parentNode.insertBefore(container, inputElement.nextSibling);
+        }
+    }
+
+    if (!sugerencias || sugerencias.length === 0) {
+        container.classList.add('hidden');
+        return;
+    }
+
+    container.innerHTML = sugerencias.map(s => 
+        `<div class="p-2 text-xs hover:bg-blue-600 cursor-pointer">${escapeHtmlSafe(s)}</div>`
+    ).join('');
+    container.classList.remove('hidden');
+
+    container.querySelectorAll('div').forEach(div => {
+        div.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            inputElement.value = div.textContent;
+            container.classList.add('hidden');
+        });
+    });
+}
+
+async function sugerirNombreProducto(event) {
+    const input = event.target;
+    const query = input.value.trim();
+    const container = document.getElementById('sugerencias-producto-container');
+
+    if (query.length < 2) {
+        if (container) container.classList.add('hidden');
+        return;
+    }
+
+    const res = await fetch(`${BACKEND_URL}/api/productos/sugerir-nombre?q=${encodeURIComponent(query)}`, { credentials: 'include' });
+    if (!res.ok) return;
+    const sugerencias = await res.json();
+    mostrarSugerenciasProducto(sugerencias, input);
+}
 
 // --- LÓGICA DE LA APLICACIÓN PRINCIPAL ---
 let ITEM_FOTOS_ACTUAL = null;
@@ -8366,6 +8413,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
             window.addEventListener('focus', () => { reactivarCamaraSiHaceFalta(); });
+
+    const prendaInput = document.getElementById('prenda');
+    if (prendaInput) {
+        const debouncedSugerirNombreProducto = debounce(sugerirNombreProducto, 300);
+        prendaInput.addEventListener('input', debouncedSugerirNombreProducto);
+        prendaInput.addEventListener('focus', (e) => {
+            if (e.target.value.length >= 2) debouncedSugerirNombreProducto(e);
+        });
+    }
         }
     } catch(e){ console.error("Error en la inicialización:", e); }
 });

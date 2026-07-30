@@ -2021,6 +2021,29 @@ app.post('/api/producto/analizar-foto', exigeAdmin, async (req, res) => {
     }
 });
 
+// Autocompletado para nombres de producto
+app.get('/api/productos/sugerir-nombre', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const query = String(req.query.q || '').trim();
+
+        if (query.length < 2) {
+            return res.json([]);
+        }
+
+        const regex = new RegExp(escapeRegexSafe(query), 'i');
+
+        const sugerencias = await VentaRopa.distinct('prenda', {
+            empresa,
+            prenda: regex
+        }).limit(8);
+
+        res.json(sugerencias);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener sugerencias.' });
+    }
+});
+
 // --- Rutas de Ajustes del Tablero Kanban ---
 app.get('/api/estados-kanban', exigeAdmin, async (req, res) => {
     try {

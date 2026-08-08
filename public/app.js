@@ -100,6 +100,26 @@ function seccionVisible(id) {
     return Boolean(node && !node.classList.contains('hidden'));
 }
 
+function obtenerColorVisualTienda(nombreTienda) {
+    const base = String(nombreTienda || 'sin asignar').trim().toLowerCase();
+    const paleta = [
+        { a: '#38bdf8', b: '#0ea5e9' },
+        { a: '#34d399', b: '#10b981' },
+        { a: '#f59e0b', b: '#f97316' },
+        { a: '#f472b6', b: '#ec4899' },
+        { a: '#a78bfa', b: '#8b5cf6' },
+        { a: '#fb7185', b: '#f43f5e' },
+        { a: '#22d3ee', b: '#06b6d4' },
+        { a: '#84cc16', b: '#65a30d' }
+    ];
+    let hash = 0;
+    for (let i = 0; i < base.length; i += 1) {
+        hash = ((hash << 5) - hash) + base.charCodeAt(i);
+        hash |= 0;
+    }
+    return paleta[Math.abs(hash) % paleta.length];
+}
+
 function closeQuickMenus() {
     document.querySelectorAll('.quick-menu-panel').forEach((panel) => panel.classList.add('hidden'));
 }
@@ -8080,9 +8100,13 @@ function renderKanban(isFullRefresh = false) {
             
             const esStockCritico = est.rolFinanciero === 'Stock' && totalStockPorPrenda[v.prenda] < 2;
             const claseAlertaStock = esStockCritico ? 'alerta-stock-critico border-amber-500/70 bg-amber-500/5' : '';
+            const colorTienda = obtenerColorVisualTienda(v.proveedor || 'Sin asignar');
             card.className = `kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none ${claseAlertaStock} border-${est.color}-500/30`;
             card.style.contentVisibility = 'auto';
             card.style.containIntrinsicSize = '150px';
+            card.style.setProperty('--store-accent-a', colorTienda.a);
+            card.style.setProperty('--store-accent-b', colorTienda.b);
+            card.style.setProperty('--store-accent-soft', `${colorTienda.a}22`);
 
             const esScraping = (v.sku && v.sku.startsWith('VNT-')) || (v.comentariosProducto && v.comentariosProducto.includes('Importado'));
             const badgeScraping = esScraping ? `<div class="absolute -top-1.5 -right-1.5 bg-blue-600 rounded-full w-4 h-4 flex items-center justify-center text-[8px] shadow-lg border border-blue-300" title="Alojado en MongoDB (Vía Web/Scraping)">🌐</div>` : '';
@@ -8090,7 +8114,7 @@ function renderKanban(isFullRefresh = false) {
             const thumb = v.imagen ? `<div class="relative flex-shrink-0 cursor-pointer hover:scale-105 transition-transform group" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Ver Galería de Fotos"><img src="${v.imagen}" loading="lazy" decoding="async" class="card-img-mini border border-white/10 shadow-lg group-hover:border-indigo-400">${badgeScraping}${badgeGaleria}</div>` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20 cursor-pointer hover:bg-slate-700 transition-colors border border-dashed border-white/20" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Añadir Fotos">📸</div>`;
             const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
             const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
-            const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">🏬 ${v.proveedor.toUpperCase()}</span>` : '';
+            const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="px-1 py-0.5 rounded text-[8px] font-mono font-bold border" style="background:${colorTienda.a}1a;color:${colorTienda.a};border-color:${colorTienda.b}55">🏬 ${v.proveedor.toUpperCase()}</span>` : '';
             const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas); const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
             
             let badgeComentarios = '';

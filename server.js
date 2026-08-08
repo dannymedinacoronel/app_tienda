@@ -2486,7 +2486,17 @@ app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), 
         // Pipeline para obtener datos paginados y conteo total en una sola consulta
         const [ventasData] = await VentaRopa.aggregate([
             { $match: { empresa } },
-            { $sort: { _id: -1 } },
+            {
+                $addFields: {
+                    ordenReciente: {
+                        $ifNull: [
+                            '$fechaModificacion',
+                            { $ifNull: ['$fechaVenta', '$fecha'] }
+                        ]
+                    }
+                }
+            },
+            { $sort: { ordenReciente: -1, _id: -1 } },
             {
                 $facet: {
                     paginatedResults: [
@@ -2495,7 +2505,7 @@ app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), 
                         { $lookup: { from: 'tiendas', let: { tiendaId: '$tienda' }, pipeline: [ { $match: { $expr: { $and: [ { $eq: ['$_id', '$$tiendaId'] }, { $eq: ['$empresa', empresa] } ] } } } ], as: 'tiendaInfo' } },
                         { $unwind: { path: '$tiendaInfo', preserveNullAndEmptyArrays: true } },
                         { $addFields: { proveedor: '$tiendaInfo.nombre' } },
-                        { $project: { tiendaInfo: 0 } }
+                        { $project: { tiendaInfo: 0, ordenReciente: 0 } }
                     ],
                     totalCount: [{ $count: 'count' }]
                 }

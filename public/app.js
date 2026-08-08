@@ -6631,7 +6631,11 @@ async function forceRefreshDataManual() {
     }
     LAST_FORCE_REFRESH_AT = now;
     cantarPorVoz("Sincronizando.");
-    FORCE_REFRESH_PROMISE = reloadCoreData(true).finally(() => {
+    FORCE_REFRESH_PROMISE = reloadCoreData(false, {
+        resetPage: true,
+        useLightweight: false,
+        showLoader: false
+    }).finally(() => {
         FORCE_REFRESH_PROMISE = null;
     });
     await FORCE_REFRESH_PROMISE;
@@ -7550,14 +7554,20 @@ if (window.__pendingGoogleCredential) {
     window.handleCredentialResponse(pendingGoogleCredential);
 }
 
-async function reloadCoreData(isInitialLoad = false) {
+async function reloadCoreData(isInitialLoad = false, options = {}) {
     if (IS_LOADING_MORE && !isInitialLoad) return;
     IS_LOADING_MORE = true;
+
+    const resetPage = options?.resetPage !== false && isInitialLoad;
+    const useLightweight = options?.useLightweight ?? isInitialLoad;
+    const showLoader = options?.showLoader ?? isInitialLoad;
     
     const loaderContainer = document.getElementById('kanban-loader-container');
-    if (isInitialLoad) {
-        if (loaderContainer) loaderContainer.innerHTML = `<div class="text-white/50 animate-pulse py-4">Cargando inventario inicial...</div>`;
+    if (resetPage) {
         CURRENT_PAGE = 1;
+    }
+    if (showLoader) {
+        if (loaderContainer) loaderContainer.innerHTML = `<div class="text-white/50 animate-pulse py-4">Cargando inventario inicial...</div>`;
     }
 
     try {
@@ -7567,7 +7577,7 @@ async function reloadCoreData(isInitialLoad = false) {
             includeLogs: logsVisible ? '1' : '0'
         });
         // En el primer arranque pedimos payload ligero para acelerar el primer pintado.
-        if (isInitialLoad) params.set('lightweight', '1');
+        if (useLightweight) params.set('lightweight', '1');
         const res = await fetch(`${BACKEND_URL}/api/ventas?${params.toString()}`, { credentials: 'include' });
         if (!res.ok) throw new Error('Fallo de red al cargar datos.');
         const data = await res.json();
@@ -7605,7 +7615,13 @@ async function reloadCoreData(isInitialLoad = false) {
         document.getElementById('kpi-roi').innerText = `${(Number(resumen.roi || 0)).toFixed(1)}%`;
         aplicarMascaraVisualizadorEnUI();
 
-        if (isInitialLoad) {
+        if (!useLightweight) {
+            cachearInventarioInicial({
+                ventas: BASE_DATOS,
+                resumen,
+                estados: LISTA_ESTADOS_KANBAN
+            });
+        } else if (isInitialLoad) {
             cachearInventarioInicial({
                 ventas: BASE_DATOS,
                 resumen,

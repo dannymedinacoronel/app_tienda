@@ -1853,9 +1853,76 @@ function toggleSelectAllMissingItems(checked) {
     checkboxes.forEach(cb => cb.checked = checked);
 }
 
+function obtenerNombreEstadoStock() {
+    const estStock = (LISTA_ESTADOS_KANBAN || []).find(e => e.rolFinanciero === 'Stock');
+    return estStock?.nombre || 'No Vendido';
+}
+
 function obtenerNombreEstadoVenta() {
     const estVenta = (LISTA_ESTADOS_KANBAN || []).find(e => e.rolFinanciero === 'Venta');
     return estVenta?.nombre || 'Vendido';
+}
+
+function actualizarResumenSeleccionScraper() {
+    const totalMarcados = document.querySelectorAll('.check-new-scraper:checked').length;
+    const btnImportar = document.querySelector('#container-nuevos button[onclick="importarNuevosScraping()"]');
+    if (btnImportar) {
+        btnImportar.innerText = totalMarcados > 0
+            ? `Importar Seleccionados (${totalMarcados})`
+            : 'Importar Seleccionados';
+    }
+}
+
+function aplicarAccionesLoteScraper() {
+    const indices = Array.from(document.querySelectorAll('.check-new-scraper:checked'))
+        .map(cb => parseInt(cb.value, 10))
+        .filter(i => Number.isInteger(i));
+
+    if (indices.length === 0) {
+        alert('Selecciona al menos un producto nuevo para aplicar acciones en lote.');
+        return;
+    }
+
+    const status = document.getElementById('scraper-bulk-status')?.value || '';
+    const store = document.getElementById('scraper-bulk-store')?.value || '';
+    const category = document.getElementById('scraper-bulk-cat')?.value || '';
+    const size = document.getElementById('scraper-bulk-size')?.value || '';
+    const rawCost = document.getElementById('scraper-bulk-cost')?.value || '';
+    const rawQty = document.getElementById('scraper-bulk-qty')?.value || '';
+
+    if (![status, store, category, size, rawCost, rawQty].some(Boolean)) {
+        alert('Completa al menos un campo en la barra de acciones en lote.');
+        return;
+    }
+
+    indices.forEach((idx) => {
+        if (status) {
+            const node = document.getElementById(`new-item-status-${idx}`);
+            if (node) node.value = status;
+        }
+        if (store) {
+            const node = document.getElementById(`new-item-store-${idx}`);
+            if (node) node.value = store;
+        }
+        if (category) {
+            const node = document.getElementById(`new-item-cat-${idx}`);
+            if (node) node.value = category;
+        }
+        if (size) {
+            const node = document.getElementById(`new-item-talla-${idx}`);
+            if (node) node.value = size;
+        }
+        if (rawCost !== '') {
+            const node = document.getElementById(`new-item-cost-${idx}`);
+            if (node) node.value = rawCost;
+        }
+        if (rawQty !== '') {
+            const node = document.getElementById(`new-item-qty-${idx}`);
+            if (node) node.value = rawQty;
+        }
+    });
+
+    alert(`Acción en lote aplicada a ${indices.length} producto(s).`);
 }
 
 function marcarDesaparecidosComoVendidos() {
@@ -1909,9 +1976,28 @@ function renderizarResultadosScraping(data) {
     if (mNuevos) mNuevos.innerText = String(nuevoCount);
     if (mIdent) mIdent.innerText = String(identCount);
 
+    const bulkStatusNode = document.getElementById('scraper-bulk-status');
+    const bulkStoreNode = document.getElementById('scraper-bulk-store');
+    const bulkCatNode = document.getElementById('scraper-bulk-cat');
+
     const tiendasDisponibles = (LISTA_TIENDAS_GLOBAL || []).map(t => t.nombre);
     const tiendasUnicas = [...new Set(tiendasDisponibles)];
     const normalizarTxt = (v) => String(v || '').trim().toLowerCase();
+    const estadoStockNombre = obtenerNombreEstadoStock();
+    const estadoVentaNombre = obtenerNombreEstadoVenta();
+    const opcionesEstadoImportacion = [estadoStockNombre, estadoVentaNombre];
+    if (bulkStatusNode) {
+        bulkStatusNode.innerHTML = ['<option value="">Estado...</option>', ...opcionesEstadoImportacion.map(nombre => `<option value="${nombre}">${nombre}</option>`)].join('');
+        bulkStatusNode.value = '';
+    }
+    if (bulkStoreNode) {
+        bulkStoreNode.innerHTML = ['<option value="">Tienda...</option>', '<option value="Vinted">Vinted</option>', ...tiendasUnicas.map(nombre => `<option value="${nombre}">${nombre}</option>`)].join('');
+        bulkStoreNode.value = '';
+    }
+    if (bulkCatNode) {
+        bulkCatNode.innerHTML = ['<option value="">Categoría...</option>', '<option value="General">General</option>', ...LISTA_CATEGORIAS_GLOBAL.map(c => `<option value="${c.nombre}">${c.nombre}</option>`)].join('');
+        bulkCatNode.value = '';
+    }
     const resolverTiendaDefault = (item) => {
         const origen = String(item?.proveedor || item?.cuenta || item?.origenGrupo || '').trim();
         if (!origen) return 'Vinted';
@@ -1959,6 +2045,8 @@ function renderizarResultadosScraping(data) {
         data.nuevos.forEach((n, i) => {
             const tiendaSugerida = resolverTiendaDefault(n);
             const tiendaOptions = ['<option value="">🏬 Sin asignar</option>', ...tiendasUnicas.map(t => `<option value="${t}" ${t === tiendaSugerida ? 'selected' : ''}>🏬 ${t}</option>`)].join('');
+            const estadoActual = String(n.estado || estadoStockNombre).trim() || estadoStockNombre;
+            const estadoOptions = opcionesEstadoImportacion.map(nombre => `<option value="${nombre}" ${nombre === estadoActual ? 'selected' : ''}>${nombre}</option>`).join('');
             const badgeGaleriaInfo = n.galeria && n.galeria.length > 0 ? `<div class="absolute bottom-1 right-1 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${n.galeria.length}</div>` : '';
             
             // Pre-seleccionar talla
@@ -2014,6 +2102,11 @@ function renderizarResultadosScraping(data) {
                             ${tiendaOptions}
                         </select>
                     </div>
+                    <div class="grid grid-cols-1 gap-2 mt-1">
+                        <select id="new-item-status-${i}" class="bg-emerald-500/10 border border-emerald-500/20 text-[10px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-400 text-emerald-100 font-bold">
+                            ${estadoOptions}
+                        </select>
+                    </div>
                     <div class="grid grid-cols-3 gap-2 mt-1">
                         <div class="bg-black/40 border border-white/10 rounded-lg px-2 py-1">
                             <label class="block text-[8px] opacity-60 uppercase">Coste</label>
@@ -2030,6 +2123,9 @@ function renderizarResultadosScraping(data) {
                     </div>
                 </div>`;
         });
+
+        document.querySelectorAll('.check-new-scraper').forEach(cb => cb.addEventListener('change', actualizarResumenSeleccionScraper));
+        actualizarResumenSeleccionScraper();
     }
 
     if (identCount > 0) {
@@ -2125,6 +2221,7 @@ async function importarNuevosScraping() {
         const qtyEditada = parseInt(document.getElementById(`new-item-qty-${idx}`)?.value) || 1;
         const canalEditado = 'Vinted'; // Forzado a Vinted en scraper
         const tiendaEditada = document.getElementById(`new-item-store-${idx}`)?.value || itemOriginal.proveedor || itemOriginal.cuenta || 'Vinted';
+        const estadoEditado = document.getElementById(`new-item-status-${idx}`)?.value || itemOriginal.estado || obtenerNombreEstadoStock();
         const galeriaOriginal = itemOriginal.galeria || [];
         const descripcionOriginal = itemOriginal.descripcion || '';
 
@@ -2138,6 +2235,7 @@ async function importarNuevosScraping() {
             categoria: catEditada, talla: tallaEditada, precioCompra: costEditado, 
             cantidad: qtyEditada, canalVenta: canalEditado, galeria: galeriaOriginal, 
             proveedor: tiendaEditada,
+            estado: estadoEditado,
             // NEW
             marca: marcaEditada,
             condicion: condicionEditada,

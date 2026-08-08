@@ -2095,6 +2095,33 @@
                         <h3 class="text-[10px] font-bold text-emerald-500 uppercase">✨ Detectados en Web (No en Sistema)</h3>
                         <input type="checkbox" id="select-all-new-items" class="form-checkbox h-4 w-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500" onchange="toggleSelectAllNewItems(this.checked)"> <label for="select-all-new-items" class="text-[10px] text-emerald-400 ml-1 cursor-pointer">Seleccionar todo</label>
                     </div>
+                    <div class="mb-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+                        <div class="flex items-center justify-between gap-3 mb-2">
+                            <p class="text-[10px] font-bold uppercase tracking-widest text-emerald-300">Acciones en lote sobre seleccionados</p>
+                            <button onclick="aplicarAccionesLoteScraper()" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white px-3 py-1.5 rounded-xl text-[10px] font-bold border border-emerald-500/30 transition-all">Aplicar</button>
+                        </div>
+                        <div class="grid grid-cols-2 lg:grid-cols-6 gap-2">
+                            <select id="scraper-bulk-status" class="bg-black/40 border border-white/10 text-[10px] rounded-lg px-2 py-2 focus:outline-none focus:border-emerald-400 text-white">
+                                <option value="">Estado...</option>
+                            </select>
+                            <select id="scraper-bulk-store" class="bg-black/40 border border-white/10 text-[10px] rounded-lg px-2 py-2 focus:outline-none focus:border-indigo-400 text-white">
+                                <option value="">Tienda...</option>
+                            </select>
+                            <select id="scraper-bulk-cat" class="bg-black/40 border border-white/10 text-[10px] rounded-lg px-2 py-2 focus:outline-none focus:border-emerald-400 text-white">
+                                <option value="">Categoría...</option>
+                            </select>
+                            <select id="scraper-bulk-size" class="bg-black/40 border border-white/10 text-[10px] rounded-lg px-2 py-2 focus:outline-none focus:border-emerald-400 text-white">
+                                <option value="">Talla...</option>
+                                <option value="S">S</option>
+                                <option value="M">M</option>
+                                <option value="L">L</option>
+                                <option value="XL">XL</option>
+                                <option value="Única">Única</option>
+                            </select>
+                            <input type="number" id="scraper-bulk-cost" step="0.01" min="0" placeholder="Coste" class="bg-black/40 border border-white/10 text-[10px] rounded-lg px-2 py-2 focus:outline-none focus:border-emerald-400 text-white">
+                            <input type="number" id="scraper-bulk-qty" step="1" min="1" placeholder="Cantidad" class="bg-black/40 border border-white/10 text-[10px] rounded-lg px-2 py-2 focus:outline-none focus:border-emerald-400 text-white">
+                        </div>
+                    </div>
                     <div id="scraper-grid-nuevos" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
                     <div class="flex justify-end mt-4">
                         <button onclick="importarNuevosScraping()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-xs font-black shadow-lg transition-all active:scale-95">Importar Seleccionados</button>

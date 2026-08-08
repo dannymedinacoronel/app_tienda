@@ -2989,6 +2989,24 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
             existentesMismaEmpresa.map(v => firmaPorProveedor(v.prenda, v.proveedor))
         );
         const firmasLote = new Set();
+        const estadosKanban = await EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean();
+        const estadoStock = estadosKanban.find(e => e.rolFinanciero === 'Stock')?.nombre || 'No Vendido';
+        const estadoVenta = estadosKanban.find(e => e.rolFinanciero === 'Venta')?.nombre || 'Vendido';
+        const resolverEstadoImportacion = (rawEstado) => {
+            const valor = String(rawEstado || '').trim();
+            if (!valor) return estadoStock;
+
+            const valorNorm = valor
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+
+            const matchExacto = estadosKanban.find(e => String(e.nombre || '').trim().toLowerCase() === valor.toLowerCase());
+            if (matchExacto) return matchExacto.nombre;
+            if (valorNorm.includes('vendido') || valorNorm.includes('venta') || valorNorm.includes('sold')) return estadoVenta;
+            return estadoStock;
+        };
 
         const tiendasCache = new Map();
         const obtenerTiendaPorNombre = async (nombre) => {
@@ -3028,10 +3046,16 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
 
             const tiendaSeleccionada = await obtenerTiendaPorNombre(nombreTienda);
             resumenTiendas[nombreTienda] = (resumenTiendas[nombreTienda] || 0) + 1;
+            const estadoFinal = resolverEstadoImportacion(prod.estado);
+            const fechaVentaFinal = estadoFinal === estadoVenta
+                ? (prod.fechaVenta || new Date().toISOString().split('T')[0])
+                : '';
 
             const nuevaVenta = new VentaRopa({
                 ...prod,
                 empresa,
+                estado: estadoFinal,
+                fechaVenta: fechaVentaFinal,
                 // Guardar URL directamente en lugar de Base64
                 imagen: prod.imagen,
                 galeria: galeriaUrls,

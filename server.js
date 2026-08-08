@@ -2543,11 +2543,27 @@ app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), 
                                 ]
                             }
                         },
-                        ingresosBrutos: {
+                        ingresosNetos: {
                             $sum: {
                                 $cond: [
                                     { $in: ['$estado', nombresEstadosVenta] },
-                                    { $multiply: [{ $ifNull: ['$precioVenta', 0] }, { $ifNull: ['$cantidad', 1] }] },
+                                    {
+                                        $multiply: [
+                                            {
+                                                $subtract: [
+                                                    { $ifNull: ['$precioVenta', 0] },
+                                                    {
+                                                        $cond: [
+                                                            { $in: ['$canalVenta', ['Vinted', 'Wallapop']] },
+                                                            { $multiply: [{ $ifNull: ['$precioVenta', 0] }, 0.05] },
+                                                            0
+                                                        ]
+                                                    }
+                                                ]
+                                            },
+                                            { $ifNull: ['$cantidad', 1] }
+                                        ]
+                                    },
                                     0
                                 ]
                             }
@@ -2591,11 +2607,11 @@ app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), 
             ]);
 
             const totalGastosOperativos = gastosAgg?.totalGastosOperativos || 0;
-            const ingresos = summaryData?.ingresosBrutos || 0;
+            const ingresos = summaryData?.ingresosNetos || 0;
             const prendasVendidas = summaryData?.prendasVendidas || 0;
             const inversionVentas = (summaryData?.totalInversion || 0) + (summaryData?.totalGastosEnvio || 0);
             const comisionesVenta = summaryData?.comisionesVenta || 0;
-            const beneficioNeto = ingresos - comisionesVenta - inversionVentas - totalGastosOperativos;
+            const beneficioNeto = ingresos - inversionVentas - totalGastosOperativos;
             const roi = (inversionVentas + totalGastosOperativos) > 0 ? (beneficioNeto / (inversionVentas + totalGastosOperativos)) * 100 : 0;
 
             resumen = { ingresos, beneficio: beneficioNeto, inversion: inversionVentas + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };

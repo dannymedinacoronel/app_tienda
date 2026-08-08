@@ -2033,14 +2033,20 @@ app.get('/api/productos/sugerir-nombre', exigeAdmin, async (req, res) => {
 
         const regex = new RegExp(escapeRegexSafe(query), 'i');
 
-        const sugerencias = await VentaRopa.distinct('prenda', {
-            empresa,
-            prenda: regex
-        }).limit(8);
+        const pipeline = [
+            { $match: { empresa, prenda: regex } },
+            { $group: { _id: '$prenda' } },
+            { $sort: { _id: 1 } },
+            { $limit: 8 },
+            { $project: { prenda: '$_id', _id: 0 } }
+        ];
+        const resultados = await VentaRopa.aggregate(pipeline);
+        const sugerencias = resultados.map(item => item.prenda);
 
         res.json(sugerencias);
     } catch (error) {
-        res.status(500).json({ error: 'Error al obtener sugerencias.' });
+        console.error('[SUGERIR-NOMBRE] Error en autocompletado:', error);
+        res.status(500).json({ error: 'Error al obtener sugerencias de producto.' });
     }
 });
 

@@ -1596,75 +1596,216 @@ async function procesarArchivoManual(event) {
     document.getElementById('scraper-loader').classList.remove('hidden');
     iniciarAnimacionCargaScraper('archivo');
 
+    const normalizarClaveImportacion = (value) => String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+
+    const cabeceraCoincide = (claveNormalizada, candidatos = []) => candidatos.some(candidato => {
+        const candidatoNormalizado = normalizarClaveImportacion(candidato);
+        return claveNormalizada === candidatoNormalizado || claveNormalizada.includes(candidatoNormalizado);
+    });
+
+    const detectarSeparadorCsv = (text) => {
+        const muestra = String(text || '').split(/\r?\n/).slice(0, 5).join('\n');
+        const candidatos = [',', ';', '\t', '|'];
+        let mejor = ',';
+        let mejorPuntaje = -1;
+        candidatos.forEach(sep => {
+            const puntaje = muestra.split('\n').reduce((acc, line) => acc + Math.max(0, line.split(sep).length - 1), 0);
+            if (puntaje > mejorPuntaje) {
+                mejor = sep;
+                mejorPuntaje = puntaje;
+            }
+        });
+        return mejor;
+    };
+
+    const parsearCsvPlano = (text) => {
+        const separador = detectarSeparadorCsv(text);
+        const filas = [];
+        let celda = '';
+        let fila = [];
+        let enComillas = false;
+
+        for (let i = 0; i < text.length; i += 1) {
+            const char = text[i];
+            const next = text[i + 1];
+
+            if (char === '"') {
+                if (enComillas && next === '"') {
+                    celda += '"';
+                    i += 1;
+                } else {
+                    enComillas = !enComillas;
+                }
+                continue;
+            }
+
+            if (!enComillas && char === separador) {
+                fila.push(celda);
+                celda = '';
+                continue;
+            }
+
+            if (!enComillas && (char === '\n' || char === '\r')) {
+                if (char === '\r' && next === '\n') i += 1;
+                fila.push(celda);
+                filas.push(fila);
+                fila = [];
+                celda = '';
+                continue;
+            }
+
+            celda += char;
+        }
+
+        if (celda.length > 0 || fila.length > 0) {
+            fila.push(celda);
+            filas.push(fila);
+        }
+
+        const filasLimpias = filas.filter(cols => cols.some(col => String(col || '').trim()));
+        if (filasLimpias.length === 0) return [];
+
+        const headers = filasLimpias[0].map((header, index) => String(header || '').trim() || `columna_${index + 1}`);
+        return filasLimpias.slice(1).map(cols => {
+            const row = {};
+            headers.forEach((header, index) => {
+                row[header] = String(cols[index] || '').trim();
+            });
+            return row;
+        });
+    };
+
+    const extraerProductosImportacion = (jsonData) => {
+        const productosMapeados = [];
+
+        jsonData.forEach(row => {
+            let titulo = '';
+            let precio = '';
+            let proveedor = '';
+            let marca = '';
+            let talla = '';
+            let condicion = '';
+            let descripcion = '';
+            let favoritos = '';
+            const galeriaLocal = [];
+            const entries = Object.entries(row || {});
+
+            entries.forEach(([key, rawValue]) => {
+                const claveNormalizada = normalizarClaveImportacion(key);
+                const val = String(rawValue || '').trim();
+                if (!val) return;
+
+                const isUrl = /^https?:\/\//i.test(val);
+                const isImageUrl = isUrl && /(jpg|jpeg|png|webp|avif|gif)(\?|$)/i.test(val);
+                const isPrice = val.includes('€') || /^\d+[.,]?\d{0,2}$/.test(val) || cabeceraCoincide(claveNormalizada, ['price', 'precio', 'coste', 'costo', 'importe', 'eur', 'text 4']);
+
+                if (cabeceraCoincide(claveNormalizada, ['title', 'titulo', 'nombre', 'prenda', 'description', 'descripcion', 'item card description', 'text 2']) && !titulo) {
+                    titulo = val;
+                }
+                if (cabeceraCoincide(claveNormalizada, ['store', 'tienda', 'proveedor', 'seller', 'perfil', 'cuenta', 'alias', 'origen grupo']) && !proveedor) {
+                    proveedor = val;
+                }
+                if (cabeceraCoincide(claveNormalizada, ['brand', 'marca']) && !marca) {
+                    marca = val;
+                }
+                if (cabeceraCoincide(claveNormalizada, ['size', 'talla']) && !talla) {
+                    talla = val;
+                }
+                if (cabeceraCoincide(claveNormalizada, ['condition', 'condicion', 'estado']) && !condicion) {
+                    condicion = val;
+                }
+                if (cabeceraCoincide(claveNormalizada, ['likes', 'favoritos', 'favs', 'popularidad']) && !favoritos) {
+                    favoritos = val;
+                }
+                if (cabeceraCoincide(claveNormalizada, ['description', 'descripcion', 'details']) && !descripcion) {
+                    descripcion = val;
+                }
+
+                const parts = val.split(/[\s,;|]+/);
+                let foundUrlInParts = false;
+                parts.forEach(part => {
+                    const pUrl = part.trim();
+                    if (!/^https?:\/\//i.test(pUrl)) return;
+                    const pareceImagen = /(jpg|jpeg|png|webp|avif|gif)(\?|$)/i.test(pUrl) || pUrl.includes('image') || pUrl.includes('images') || cabeceraCoincide(claveNormalizada, ['img', 'image', 'imagen', 'foto', 'src', 'content src']);
+                    if (pareceImagen) {
+                        if (!galeriaLocal.includes(pUrl)) galeriaLocal.push(pUrl);
+                        foundUrlInParts = true;
+                    }
+                });
+
+                if (!precio && isPrice && !foundUrlInParts && !isImageUrl) {
+                    precio = val;
+                } else if (!titulo && !foundUrlInParts && !isPrice && !isUrl && val.length > 4 && isNaN(val)) {
+                    const vLower = val.toLowerCase();
+                    if (vLower !== 'novedad' && !vLower.includes('miembro') && !vLower.includes('ver todo')) titulo = val;
+                }
+            });
+
+            const valTitleStrict = row['web_ui__Text__text 2'] || row['web_ui__Text__text'] || row.description || row.title || row.titulo || row.nombre || row.prenda || row['item-card-description'];
+            if (valTitleStrict) titulo = String(valTitleStrict).trim();
+
+            const valUrlStrict = row['web_ui__Image__content src'] || row['image-src'] || row.image || row.foto || row.imagen || row['item-card-image-src'];
+            if (valUrlStrict) {
+                String(valUrlStrict).split(/[\s,;|]+/).reverse().forEach(u => {
+                    const uTrim = u.trim();
+                    if (/^https?:\/\//i.test(uTrim) && !galeriaLocal.includes(uTrim)) galeriaLocal.unshift(uTrim);
+                });
+            }
+
+            let cleanPrice = '';
+            if (precio) {
+                cleanPrice = String(precio).replace(/[^\d,.]/g, '').trim();
+                if (cleanPrice.includes(',') && cleanPrice.includes('.')) {
+                    cleanPrice = cleanPrice.replace(/\./g, '').replace(',', '.');
+                } else if (cleanPrice.includes(',')) {
+                    cleanPrice = cleanPrice.replace(',', '.');
+                }
+            }
+
+            if (titulo && cleanPrice) {
+                const imagen = galeriaLocal[0] || '';
+                const galeria = galeriaLocal.length > 1 ? galeriaLocal.slice(1) : [];
+                productosMapeados.push({
+                    titulo,
+                    precio: cleanPrice,
+                    imagen,
+                    galeria,
+                    proveedor: proveedor || 'Vinted',
+                    marca,
+                    talla,
+                    condicion,
+                    favoritos: parseInt(String(favoritos || '0').replace(/[^\d]/g, ''), 10) || 0,
+                    descripcion
+                });
+            }
+        });
+
+        return productosMapeados;
+    };
+
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+            const extension = (file.name.split('.').pop() || '').toLowerCase();
+            const arrayBuffer = e.target.result;
+            let jsonData = [];
 
-            const productosMapeados = [];
-            jsonData.forEach(row => {
-                let titulo = '', precio = '';
-                const galeriaLocal = [];
-                
-                for (const key in row) {
-                    const k = key.toLowerCase();
-                    const val = String(row[key] || '').trim();
-                    if (!val) continue;
+            if (extension === 'csv') {
+                const csvText = new TextDecoder('utf-8').decode(arrayBuffer);
+                jsonData = parsearCsvPlano(csvText.replace(/^\uFEFF/, ''));
+            } else {
+                const data = new Uint8Array(arrayBuffer);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                jsonData = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+            }
 
-                    const isUrl = val.startsWith('http');
-                    const isPrice = val.includes('€') || /^\d+[.,]\d{2}$/.test(val) || k.includes('price') || k.includes('precio') || k.includes('text 4');
-
-                    const parts = val.split(/[\s,;|]+/);
-                    let foundUrlInParts = false;
-                    
-                    parts.forEach(p => {
-                        const pUrl = p.trim();
-                        if (pUrl.startsWith('http') && (pUrl.match(/\.(jpg|jpeg|png|webp)/i) || pUrl.includes('image') || k.includes('img') || k.includes('src'))) {
-                            if (!galeriaLocal.includes(pUrl)) galeriaLocal.push(pUrl);
-                            foundUrlInParts = true;
-                        }
-                    });
-
-                    if (!precio && isPrice && !foundUrlInParts) {
-                        precio = val;
-                    } else if (!titulo && !foundUrlInParts && !isPrice && val.length > 4 && isNaN(val) && !val.startsWith('http')) {
-                        const vLower = val.toLowerCase();
-                        if (vLower !== 'novedad' && !vLower.includes('miembro') && !vLower.includes('ver todo')) titulo = val;
-                    }
-                }
-
-                const valTitleStrict = row['web_ui__Text__text 2'] || row['web_ui__Text__text'] || row.description || row.title || row.nombre || row.prenda || row['item-card-description'];
-                if (valTitleStrict) titulo = String(valTitleStrict);
-                
-                const valUrlStrict = row['web_ui__Image__content src'] || row['image-src'] || row.image || row.foto || row.imagen || row['item-card-image-src'];
-                if (valUrlStrict) {
-                    String(valUrlStrict).split(/[\s,;|]+/).reverse().forEach(u => {
-                        const uTrim = u.trim();
-                        if (uTrim.startsWith('http') && !galeriaLocal.includes(uTrim)) {
-                            galeriaLocal.unshift(uTrim);
-                        }
-                    });
-                }
-
-                let cleanPrice = '';
-                if (precio) {
-                    cleanPrice = precio.replace(/[^\d,.]/g, '').trim();
-                    if (cleanPrice.includes(',') && cleanPrice.includes('.')) { 
-                        cleanPrice = cleanPrice.replace(/\./g, '').replace(',', '.');
-                    } else if (cleanPrice.includes(',')) { 
-                        cleanPrice = cleanPrice.replace(',', '.');
-                    }
-                }
-
-                if (titulo && cleanPrice) {
-                    let imagen = galeriaLocal.length > 0 ? galeriaLocal[0] : '';
-                    let galeria = galeriaLocal.length > 1 ? galeriaLocal.slice(1) : [];
-                    productosMapeados.push({ titulo, precio: cleanPrice, imagen, galeria });
-                }
-            });
+            const productosMapeados = extraerProductosImportacion(jsonData);
 
             if (productosMapeados.length === 0) throw new Error("No se pudo extraer la información de los productos. Asegúrate de que el CSV tenga textos descriptivos, imágenes y un precio con euros.");
 
@@ -1695,6 +1836,8 @@ async function procesarArchivoManual(event) {
             detenerAnimacionCargaScraper(true);
             alert("❌ Error al leer el archivo: " + error.message);
             procesarScraperVinted();
+        } finally {
+            event.target.value = '';
         }
     };
     reader.readAsArrayBuffer(file);
@@ -7901,11 +8044,7 @@ function renderKanban(isFullRefresh = false) {
                 anexarLote(itemsToRender.slice(idx, end));
                 idx = end;
                 if (idx < itemsToRender.length) {
-                    if ('requestIdleCallback' in window) {
-                        window.requestIdleCallback(() => pintarSiguienteLote(), { timeout: 120 });
-                    } else {
-                        setTimeout(() => requestAnimationFrame(pintarSiguienteLote), 0);
-                    }
+                    setTimeout(() => requestAnimationFrame(pintarSiguienteLote), 16);
                 }
             };
 

@@ -2529,8 +2529,24 @@ app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), 
                     {
                         $group: {
                             _id: null,
-                            totalInversion: { $sum: { $multiply: [{ $ifNull: ['$precioCompra', 0] }, { $ifNull: ['$cantidad', 1] }] } },
-                            totalGastosEnvio: { $sum: { $multiply: [{ $ifNull: ['$gastosEnvio', 0] }, { $ifNull: ['$cantidad', 1] }] } },
+                            totalInversion: {
+                                $sum: {
+                                    $cond: [
+                                        { $in: ['$estado', nombresEstadosVenta] },
+                                        { $multiply: [{ $ifNull: ['$precioCompra', 0] }, { $ifNull: ['$cantidad', 1] }] },
+                                        0
+                                    ]
+                                }
+                            },
+                            totalGastosEnvio: {
+                                $sum: {
+                                    $cond: [
+                                        { $in: ['$estado', nombresEstadosVenta] },
+                                        { $multiply: [{ $ifNull: ['$gastosEnvio', 0] }, { $ifNull: ['$cantidad', 1] }] },
+                                        0
+                                    ]
+                                }
+                            },
                             ingresosNetos: {
                                 $sum: {
                                     $cond: [

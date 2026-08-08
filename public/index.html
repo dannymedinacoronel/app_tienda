@@ -1864,7 +1864,7 @@
             </div>
         </div>
 
-        <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-3xl w-[92%] transition-all backdrop-blur-md">
+        <div id="panel-masivo-flotante" class="hidden fixed bottom-14 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-700 text-white p-4 rounded-2xl shadow-2xl z-[80] flex flex-wrap items-center justify-center gap-4 max-w-6xl w-[96%] transition-all backdrop-blur-md">
             <div class="text-xs font-bold font-mono">💥 <span id="contador-masivo-seleccionado" class="text-amber-400 font-black">0</span> MARCADOS</div>
             <div class="h-4 w-[1px] bg-slate-700 hidden sm:block"></div>
             <div id="botones-estados-masivos" class="flex flex-wrap items-center gap-2">
@@ -1875,7 +1875,22 @@
                 <button onclick="ejecutarDuplicadoMasivo()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">👯 Duplicar Lote</button>
                 <button onclick="ejecutarAjustePrecioMasivo()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">💰 Ajustar Precio</button>
                 <button onclick="ejecutarAjusteCosteMasivo()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">📉 Ajustar Coste</button>
-                <button onclick="ejecutarAjustePromocionMasivo()" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">🚀 Ajustar Promoción</button>
+                <div class="flex items-center gap-1.5 bg-fuchsia-600/10 border border-fuchsia-500/20 rounded-xl px-2 py-1.5">
+                    <select id="promocion-masiva-modo" class="input-bg rounded-lg px-2 py-1 text-[10px] font-bold focus:outline-none dropdown-bg w-28">
+                        <option value="set">Fijar</option>
+                        <option value="delta">Sumar/Restar</option>
+                    </select>
+                    <input type="number" id="promocion-masiva" step="0.01" min="0" placeholder="Promoción / Destacado (€)" oninput="actualizarPreviewPanelMasivo()" class="input-bg rounded-lg px-2 py-1 text-[10px] font-bold focus:outline-none w-44">
+                    <button onclick="ejecutarAjustePromocionMasivo()" class="bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">🚀 Aplicar</button>
+                </div>
+                <div class="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-xl px-2 py-1.5">
+                    <select id="comentario-masivo-modo" class="input-bg rounded-lg px-2 py-1 text-[10px] font-bold focus:outline-none dropdown-bg w-24">
+                        <option value="replace">Reemplazar</option>
+                        <option value="append">Añadir</option>
+                    </select>
+                    <input type="text" id="comentario-masivo" placeholder="Comentario en masa" oninput="actualizarPreviewPanelMasivo()" class="input-bg rounded-lg px-2 py-1 text-[10px] font-bold focus:outline-none w-44">
+                    <button onclick="ejecutarComentarioMasivo()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">💬 Aplicar</button>
+                </div>
                 <select id="talla-masiva" onchange="ejecutarEdicionMasivaPropiedad('talla', this.value); this.value='';" class="input-bg rounded-xl p-1.5 text-[10px] font-bold focus:outline-none dropdown-bg">
                     <option value="">📐 Talla...</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="Única">Única</option>
                 </select>
@@ -1891,6 +1906,9 @@
                 </select>
                 <button onclick="ejecutarEliminacionMasiva()" class="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] uppercase px-2.5 py-2 rounded-xl transition-colors shadow-lg">🗑️ Eliminar</button>
                 <button onclick="limpiarSeleccionMasiva()" class="text-[10px] underline opacity-50 hover:opacity-100 px-1">Limpiar</button>
+            </div>
+            <div class="w-full border-t border-white/10 pt-3 mt-1">
+                <p id="preview-panel-masivo" class="text-[10px] font-mono text-cyan-200/80 text-center">Selecciona productos para ver el impacto estimado de promoción y comentarios.</p>
             </div>
         </div>
 

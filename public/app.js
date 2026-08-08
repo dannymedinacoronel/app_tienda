@@ -6632,22 +6632,95 @@ async function ejecutarAjusteCosteMasivo() {
 
 async function ejecutarAjustePromocionMasivo() {
     if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
-    const variacion = prompt("Indica cuánto quieres sumar o restar al coste de PROMOCIÓN/DESTACADO (ej: 2 para subir 2€, -1 para bajar 1€):");
+    const input = document.getElementById('promocion-masiva');
+    const modo = document.getElementById('promocion-masiva-modo')?.value || 'set';
+    const variacion = input ? input.value : '';
     const valorAjuste = parseFloat(variacion);
     if (isNaN(valorAjuste)) return;
 
-    if (confirm(`Se va a modificar el coste de promoción de ${ITEMS_SELECCIONADOS_MASIVOS.length} artículos en ${valorAjuste}€. ¿Continuar?`)) {
+    const labelModo = modo === 'delta' ? `ajustar en ${valorAjuste}€` : `fijar a ${valorAjuste}€`;
+    if (confirm(`Se va a ${labelModo} el coste de promoción de ${ITEMS_SELECCIONADOS_MASIVOS.length} artículos. ¿Continuar?`)) {
         const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => {
             const item = BASE_DATOS.find(v => v._id === id);
             if (!item) return Promise.resolve();
-            const nuevaPromocion = Math.max(0, (parseFloat(item.gastoPromocion) || 0) + valorAjuste);
+            const baseActual = parseFloat(item.gastoPromocion) || 0;
+            const nuevaPromocion = modo === 'delta'
+                ? Math.max(0, baseActual + valorAjuste)
+                : Math.max(0, valorAjuste);
             return fetch(`${BACKEND_URL}/api/ventas/${id}`, {
                 method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                 body: JSON.stringify({ ...item, gastoPromocion: nuevaPromocion, proveedor: item.proveedor })
             });
         });
-        await Promise.all(promesas); cantarPorVoz("Promoción actualizada."); limpiarSeleccionMasiva(); await forceRefreshDataManual();
+        await Promise.all(promesas); 
+        if (input) input.value = '';
+        actualizarPreviewPanelMasivo();
+        cantarPorVoz("Promoción actualizada."); limpiarSeleccionMasiva(); await forceRefreshDataManual();
     }
+}
+
+async function ejecutarComentarioMasivo() {
+    if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
+    const input = document.getElementById('comentario-masivo');
+    const modo = document.getElementById('comentario-masivo-modo')?.value || 'replace';
+    const comentario = String(input?.value || '').trim();
+    if (!comentario) return;
+
+    const labelModo = modo === 'append' ? 'añadir' : 'reemplazar';
+    if (confirm(`Se va a ${labelModo} este comentario en ${ITEMS_SELECCIONADOS_MASIVOS.length} artículos. ¿Continuar?`)) {
+        const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => {
+            const item = BASE_DATOS.find(v => v._id === id);
+            if (!item) return Promise.resolve();
+            const comentarioFinal = modo === 'append'
+                ? [String(item.comentariosProducto || '').trim(), comentario].filter(Boolean).join(' · ')
+                : comentario;
+            return fetch(`${BACKEND_URL}/api/ventas/${id}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                body: JSON.stringify({ ...item, comentariosProducto: comentarioFinal, proveedor: item.proveedor })
+            });
+        });
+        await Promise.all(promesas);
+        if (input) input.value = '';
+        actualizarPreviewPanelMasivo();
+        cantarPorVoz("Comentario aplicado."); limpiarSeleccionMasiva(); await forceRefreshDataManual();
+    }
+}
+
+function actualizarPreviewPanelMasivo() {
+    const preview = document.getElementById('preview-panel-masivo');
+    if (!preview) return;
+
+    const seleccionados = ITEMS_SELECCIONADOS_MASIVOS
+        .map(id => BASE_DATOS.find(v => v._id === id))
+        .filter(Boolean);
+
+    if (seleccionados.length === 0) {
+        preview.innerText = 'Selecciona productos para ver el impacto estimado de promoción y comentarios.';
+        return;
+    }
+
+    const promoInput = document.getElementById('promocion-masiva');
+    const promoModo = document.getElementById('promocion-masiva-modo')?.value || 'set';
+    const comentario = String(document.getElementById('comentario-masivo')?.value || '').trim();
+    const comentarioModo = document.getElementById('comentario-masivo-modo')?.value || 'replace';
+    const promoValor = parseFloat(promoInput?.value || '');
+
+    const promocionActualTotal = seleccionados.reduce((acc, item) => acc + (Number(item.gastoPromocion || 0) || 0), 0);
+    let promocionNuevaTotal = promocionActualTotal;
+    if (Number.isFinite(promoValor)) {
+        promocionNuevaTotal = seleccionados.reduce((acc, item) => {
+            const actual = Number(item.gastoPromocion || 0) || 0;
+            const siguiente = promoModo === 'delta' ? Math.max(0, actual + promoValor) : Math.max(0, promoValor);
+            return acc + siguiente;
+        }, 0);
+    }
+
+    const comentariosConTexto = seleccionados.filter(item => String(item.comentariosProducto || '').trim()).length;
+    const accionComentario = comentario
+        ? (comentarioModo === 'append' ? `añadir comentario a ${seleccionados.length} producto(s)` : `reemplazar comentario en ${seleccionados.length} producto(s)`)
+        : 'sin cambios en comentarios';
+
+    preview.innerText = `Seleccionados: ${seleccionados.length} · Promoción actual total: ${promocionActualTotal.toFixed(2)} € · Promoción estimada tras aplicar: ${promocionNuevaTotal.toFixed(2)} € · Comentarios actuales con texto: ${comentariosConTexto} · Acción comentario: ${accionComentario}.`;
 }
 
 function toggleMuteVolumenGlobal() {
@@ -6978,9 +7051,14 @@ function actualizarVisibilidadPanelMasivo() {
     const panel = document.getElementById('panel-masivo-flotante'); const contador = document.getElementById('contador-masivo-seleccionado');
     if(contador) contador.innerText = ITEMS_SELECCIONADOS_MASIVOS.length;
     if (ITEMS_SELECCIONADOS_MASIVOS.length > 0 && panel) panel.classList.remove('hidden'); else if(panel) panel.classList.add('hidden');
+    actualizarPreviewPanelMasivo();
 }
 
-function limpiarSeleccionMasiva() { ITEMS_SELECCIONADOS_MASIVOS = []; document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false); actualizarVisibilidadPanelMasivo(); }
+function limpiarSeleccionMasiva() {
+    ITEMS_SELECCIONADOS_MASIVOS = [];
+    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    actualizarVisibilidadPanelMasivo();
+}
 
 async function ejecutarAccionMasivaEstado(nuevoEstado) {
     if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;

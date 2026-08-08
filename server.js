@@ -2477,11 +2477,8 @@ app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), 
         const lightweight = String(req.query.lightweight || '').toLowerCase() === '1' || page > 1;
         const includeLogs = String(req.query.includeLogs || '').toLowerCase() === '1';
 
-        let nombresEstadosVenta = [];
-        if (!lightweight) {
-            const estadosKanban = await EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean();
-            nombresEstadosVenta = estadosKanban.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
-        }
+        const estadosKanban = await EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean();
+        const nombresEstadosVenta = estadosKanban.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
 
         // Pipeline para obtener datos paginados y conteo total en una sola consulta
         const [ventasData] = await VentaRopa.aggregate([
@@ -2518,90 +2515,94 @@ app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), 
         let resumen = { ingresos: 0, beneficio: 0, inversion: 0, prendasVendidas: 0, roi: 0, totalGastosOperativos: 0 };
         let logs = [];
 
-        if (!lightweight) {
-            const cachedResumen = getKpiResumenCache(empresa);
-            if (cachedResumen) {
-                resumen = cachedResumen;
-            } else {
-                // Cálculo financiero en aggregate sin cargar arrays grandes en memoria.
-                const [summaryData] = await VentaRopa.aggregate([
-                    { $match: { empresa } },
-                    {
-                        $group: {
-                            _id: null,
-                            totalInversion: {
-                                $sum: {
-                                    $cond: [
-                                        { $in: ['$estado', nombresEstadosVenta] },
-                                        { $multiply: [{ $ifNull: ['$precioCompra', 0] }, { $ifNull: ['$cantidad', 1] }] },
-                                        0
-                                    ]
-                                }
-                            },
-                            totalGastosEnvio: {
-                                $sum: {
-                                    $cond: [
-                                        { $in: ['$estado', nombresEstadosVenta] },
-                                        { $multiply: [{ $ifNull: ['$gastosEnvio', 0] }, { $ifNull: ['$cantidad', 1] }] },
-                                        0
-                                    ]
-                                }
-                            },
-                            ingresosNetos: {
-                                $sum: {
-                                    $cond: [
-                                        { $in: ['$estado', nombresEstadosVenta] },
-                                        {
-                                            $multiply: [
-                                                {
-                                                    $subtract: [
-                                                        { $ifNull: ['$precioVenta', 0] },
-                                                        {
-                                                            $cond: [
-                                                                { $in: ['$canalVenta', ['Vinted', 'Wallapop']] },
-                                                                { $multiply: [{ $ifNull: ['$precioVenta', 0] }, 0.05] },
-                                                                0
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                { $ifNull: ['$cantidad', 1] }
-                                            ]
-                                        },
-                                        0
-                                    ]
-                                }
-                            },
-                            prendasVendidas: {
-                                $sum: {
-                                    $cond: [
-                                        { $in: ['$estado', nombresEstadosVenta] },
-                                        { $ifNull: ['$cantidad', 1] },
-                                        0
-                                    ]
-                                }
+        const cachedResumen = getKpiResumenCache(empresa);
+        if (cachedResumen) {
+            resumen = cachedResumen;
+        } else {
+            // Cálculo financiero siempre basado en artículos cuyo estado pertenece a Venta.
+            const [summaryData] = await VentaRopa.aggregate([
+                { $match: { empresa } },
+                {
+                    $group: {
+                        _id: null,
+                        totalInversion: {
+                            $sum: {
+                                $cond: [
+                                    { $in: ['$estado', nombresEstadosVenta] },
+                                    { $multiply: [{ $ifNull: ['$precioCompra', 0] }, { $ifNull: ['$cantidad', 1] }] },
+                                    0
+                                ]
+                            }
+                        },
+                        totalGastosEnvio: {
+                            $sum: {
+                                $cond: [
+                                    { $in: ['$estado', nombresEstadosVenta] },
+                                    { $multiply: [{ $ifNull: ['$gastosEnvio', 0] }, { $ifNull: ['$cantidad', 1] }] },
+                                    0
+                                ]
+                            }
+                        },
+                        ingresosBrutos: {
+                            $sum: {
+                                $cond: [
+                                    { $in: ['$estado', nombresEstadosVenta] },
+                                    { $multiply: [{ $ifNull: ['$precioVenta', 0] }, { $ifNull: ['$cantidad', 1] }] },
+                                    0
+                                ]
+                            }
+                        },
+                        comisionesVenta: {
+                            $sum: {
+                                $cond: [
+                                    { $in: ['$estado', nombresEstadosVenta] },
+                                    {
+                                        $multiply: [
+                                            {
+                                                $cond: [
+                                                    { $in: ['$canalVenta', ['Vinted', 'Wallapop']] },
+                                                    { $multiply: [{ $ifNull: ['$precioVenta', 0] }, 0.05] },
+                                                    0
+                                                ]
+                                            },
+                                            { $ifNull: ['$cantidad', 1] }
+                                        ]
+                                    },
+                                    0
+                                ]
+                            }
+                        },
+                        prendasVendidas: {
+                            $sum: {
+                                $cond: [
+                                    { $in: ['$estado', nombresEstadosVenta] },
+                                    { $ifNull: ['$cantidad', 1] },
+                                    0
+                                ]
                             }
                         }
                     }
-                ]);
+                }
+            ]);
 
-                const [gastosAgg] = await Gasto.aggregate([
-                    { $match: { empresa } },
-                    { $group: { _id: null, totalGastosOperativos: { $sum: { $ifNull: ['$monto', 0] } } } }
-                ]);
+            const [gastosAgg] = await Gasto.aggregate([
+                { $match: { empresa } },
+                { $group: { _id: null, totalGastosOperativos: { $sum: { $ifNull: ['$monto', 0] } } } }
+            ]);
 
-                const totalGastosOperativos = gastosAgg?.totalGastosOperativos || 0;
-                const ingresos = summaryData?.ingresosNetos || 0;
-                const prendasVendidas = summaryData?.prendasVendidas || 0;
-                const inversion = (summaryData?.totalInversion || 0) + (summaryData?.totalGastosEnvio || 0);
-                const beneficioNeto = ingresos - inversion - totalGastosOperativos;
-                const roi = (inversion + totalGastosOperativos) > 0 ? (beneficioNeto / (inversion + totalGastosOperativos)) * 100 : 0;
+            const totalGastosOperativos = gastosAgg?.totalGastosOperativos || 0;
+            const ingresos = summaryData?.ingresosBrutos || 0;
+            const prendasVendidas = summaryData?.prendasVendidas || 0;
+            const inversionVentas = (summaryData?.totalInversion || 0) + (summaryData?.totalGastosEnvio || 0);
+            const comisionesVenta = summaryData?.comisionesVenta || 0;
+            const beneficioNeto = ingresos - comisionesVenta - inversionVentas - totalGastosOperativos;
+            const roi = (inversionVentas + totalGastosOperativos) > 0 ? (beneficioNeto / (inversionVentas + totalGastosOperativos)) * 100 : 0;
 
-                resumen = { ingresos, beneficio: beneficioNeto, inversion: inversion + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };
-                setKpiResumenCache(empresa, resumen);
-            }
+            resumen = { ingresos, beneficio: beneficioNeto, inversion: inversionVentas + totalGastosOperativos, prendasVendidas, roi, totalGastosOperativos };
+            setKpiResumenCache(empresa, resumen);
+        }
 
-            if (includeLogs) {
+        if (!lightweight && includeLogs) {
                 const cachedLogs = getLogsResumenCache(empresa);
                 if (cachedLogs) {
                     logs = cachedLogs;
@@ -2617,7 +2618,6 @@ app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), 
                         : [];
                     setLogsResumenCache(empresa, logs);
                 }
-            }
         }
 
         return res.json({

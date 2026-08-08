@@ -197,6 +197,7 @@ function setLogsResumenCache(empresa, value) {
 const TiendaSchema = new mongoose.Schema({
     nombre: { type: String, required: true, trim: true },
     empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
+    color: { type: String, default: '#38bdf8', trim: true },
     fechaCreacion: { type: Date, default: Date.now }
 });
 TiendaSchema.index({ empresa: 1, nombre: 1 }, { unique: true });
@@ -1120,14 +1121,40 @@ app.post('/api/tiendas', exigeAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const nombreLimpio = req.body.nombre ? req.body.nombre.trim() : "";
+        const colorLimpio = /^#[0-9a-f]{6}$/i.test(String(req.body.color || '').trim()) ? String(req.body.color).trim() : '#38bdf8';
         if (!nombreLimpio) return res.status(400).json({ error: 'El nombre es obligatorio.' });
 
-        const nuevaTienda = new Tienda({ nombre: nombreLimpio, empresa });
+        const nuevaTienda = new Tienda({ nombre: nombreLimpio, empresa, color: colorLimpio });
         await nuevaTienda.save();
         await registrarLog(req.session.email, `Creó la tienda en MongoDB: ${nuevaTienda.nombre}`);
         res.json({ status: 'success', tienda: nuevaTienda });
     } catch (e) {
         res.status(400).json({ error: 'La tienda ya existe o hay un error de validación.' });
+    }
+});
+
+app.put('/api/tiendas/:id', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const { id } = req.params;
+        const updateData = {};
+        const nombreLimpio = req.body.nombre ? String(req.body.nombre).trim() : '';
+        const colorLimpio = String(req.body.color || '').trim();
+
+        if (nombreLimpio) updateData.nombre = nombreLimpio;
+        if (colorLimpio) {
+            if (!/^#[0-9a-f]{6}$/i.test(colorLimpio)) return res.status(400).json({ error: 'Color no válido.' });
+            updateData.color = colorLimpio;
+        }
+        if (Object.keys(updateData).length === 0) return res.status(400).json({ error: 'Sin cambios para guardar.' });
+
+        const tiendaActualizada = await Tienda.findOneAndUpdate({ _id: id, empresa }, updateData, { new: true });
+        if (!tiendaActualizada) return res.status(404).json({ error: 'La tienda no existe.' });
+
+        await registrarLog(req.session.email, `Actualizó la tienda "${tiendaActualizada.nombre}".`);
+        res.json({ status: 'success', tienda: tiendaActualizada });
+    } catch (e) {
+        res.status(400).json({ error: 'No se pudo actualizar la tienda.' });
     }
 });
 

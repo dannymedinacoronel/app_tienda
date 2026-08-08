@@ -63,6 +63,7 @@ let SCRAPER_PROGRESS_VALUE = 0;
 let SCRAPER_PROGRESS_MSG_INDEX = 0;
 let SCRAPER_FAVORITOS_RECOVERY_DONE = false;
 let DRAG_PREVIEW_NODE = null;
+let KANBAN_TIENDAS_COLAPSADAS = {};
 
 const SCRAPER_PROGRESS_MESSAGES = [
     'Conectando con GitHub Actions...',
@@ -100,7 +101,37 @@ function seccionVisible(id) {
     return Boolean(node && !node.classList.contains('hidden'));
 }
 
+function claveColapsoTiendaKanban(estado, tienda) {
+    return `${String(estado || '').trim()}::${String(tienda || 'Sin asignar').trim()}`;
+}
+
+function obtenerClavePersistenciaTiendasKanban() {
+    const empresa = String(EMPRESA_CHAT_ACTUAL || 'default').trim().toLowerCase() || 'default';
+    return `seychelles-kanban-tiendas-colapsadas:${empresa}`;
+}
+
+function cargarEstadoTiendasKanban() {
+    try {
+        const raw = localStorage.getItem(obtenerClavePersistenciaTiendasKanban());
+        const parsed = raw ? JSON.parse(raw) : {};
+        KANBAN_TIENDAS_COLAPSADAS = parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (_) {
+        KANBAN_TIENDAS_COLAPSADAS = {};
+    }
+}
+
+function guardarEstadoTiendasKanban() {
+    try {
+        localStorage.setItem(obtenerClavePersistenciaTiendasKanban(), JSON.stringify(KANBAN_TIENDAS_COLAPSADAS || {}));
+    } catch (_) {}
+}
+
 function obtenerColorVisualTienda(nombreTienda) {
+    const tienda = (LISTA_TIENDAS_GLOBAL || []).find((t) => String(t?.nombre || '').trim().toLowerCase() === String(nombreTienda || '').trim().toLowerCase());
+    if (tienda?.color && /^#[0-9a-f]{6}$/i.test(String(tienda.color).trim())) {
+        const color = String(tienda.color).trim();
+        return { a: color, b: color };
+    }
     const base = String(nombreTienda || 'sin asignar').trim().toLowerCase();
     const paleta = [
         { a: '#38bdf8', b: '#0ea5e9' },
@@ -3916,6 +3947,7 @@ function establecerValoresPorDefecto() {
 
 async function refrescarYListarTiendasCloud() {
     const selectForm = document.getElementById('proveedor');
+    const colorInput = document.getElementById('proveedor-color');
     const selectFiltro = document.getElementById('an-filtro-tienda');
     const selectFiltroPrincipal = document.getElementById('filtro-tienda');
     const selectMasivo = document.getElementById('tienda-masiva');
@@ -3951,6 +3983,15 @@ async function refrescarYListarTiendasCloud() {
                 selectMasivo.appendChild(opt3);
             }
         });
+        if (selectForm) {
+            selectForm.onchange = () => {
+                const tienda = LISTA_TIENDAS_GLOBAL.find(t => t.nombre === selectForm.value);
+                if (colorInput) colorInput.value = tienda?.color || '#38bdf8';
+            };
+            const tiendaActual = LISTA_TIENDAS_GLOBAL.find(t => t.nombre === selectForm.value);
+            if (colorInput) colorInput.value = tiendaActual?.color || '#38bdf8';
+        }
+        renderPanelColoresTiendas();
         if (!document.getElementById('edit-id').value) establecerValoresPorDefecto();
     } catch (err) {
         console.error("Fallo de red cloud, cargando fallback...", err);
@@ -3960,12 +4001,13 @@ async function refrescarYListarTiendasCloud() {
 async function crearNuevaTiendaEnBaseDatos() {
     const nombreTienda = prompt("Nombre del nuevo proveedor/tienda:");
     if (!nombreTienda || nombreTienda.trim() === "") return;
+    const colorElegido = document.getElementById('proveedor-color')?.value || '#38bdf8';
     try {
         const res = await fetch(`${BACKEND_URL}/api/tiendas`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ nombre: nombreTienda.trim() })
+            body: JSON.stringify({ nombre: nombreTienda.trim(), color: colorElegido })
         });
         if (res.ok) {
             cantarPorVoz("Tienda guardada.");
@@ -3975,6 +4017,102 @@ async function crearNuevaTiendaEnBaseDatos() {
             const errData = await res.json(); alert(errData.error || "Error al inyectar tienda.");
         }
     } catch (err) { alert("Error crítico de comunicación."); }
+}
+
+function previsualizarColorTiendaSeleccionada(color) {
+    const selectTienda = document.getElementById('proveedor');
+    if (!selectTienda) return;
+    const nombreSeleccionado = selectTienda.value;
+    const tienda = LISTA_TIENDAS_GLOBAL.find(t => t.nombre === nombreSeleccionado);
+    if (tienda && /^#[0-9a-f]{6}$/i.test(String(color || '').trim())) {
+        tienda.color = String(color).trim();
+    }
+}
+
+async function guardarColorTiendaSeleccionada() {
+    const selectTienda = document.getElementById('proveedor');
+    const colorInput = document.getElementById('proveedor-color');
+    const nombreSeleccionado = selectTienda?.value || '';
+    const color = colorInput?.value || '';
+    if (!nombreSeleccionado) return alert('Selecciona una tienda para guardar su color.');
+    const tienda = LISTA_TIENDAS_GLOBAL.find(t => t.nombre === nombreSeleccionado);
+    if (!tienda?._id) return alert('No encontré la tienda seleccionada.');
+
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/tiendas/${tienda._id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ color })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'No se pudo guardar el color.');
+        cantarPorVoz('Color guardado');
+        await refrescarYListarTiendasCloud();
+        renderKanban(true);
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+function renderPanelColoresTiendas() {
+    const panel = document.getElementById('lista-tiendas-color-config');
+    if (!panel) return;
+
+    if (!Array.isArray(LISTA_TIENDAS_GLOBAL) || LISTA_TIENDAS_GLOBAL.length === 0) {
+        panel.innerHTML = '<p class="text-[10px] opacity-45 italic">Aún no hay tiendas cargadas.</p>';
+        return;
+    }
+
+    panel.innerHTML = LISTA_TIENDAS_GLOBAL.map((tienda) => {
+        const color = /^#[0-9a-f]{6}$/i.test(String(tienda?.color || '').trim()) ? String(tienda.color).trim() : '#38bdf8';
+        return `
+            <div class="rounded-2xl border border-white/10 bg-black/20 p-3 flex items-center gap-3">
+                <div class="w-4 h-14 rounded-full shadow-inner" style="background:${color}"></div>
+                <div class="min-w-0 flex-1">
+                    <p class="text-[10px] font-black uppercase tracking-widest truncate">${escapeHtmlSafe(tienda.nombre)}</p>
+                    <p class="text-[9px] opacity-50 font-mono truncate">${escapeHtmlSafe(tienda._id || '')}</p>
+                </div>
+                <input type="color" value="${color}" onchange="actualizarColorTiendaConfig('${tienda._id}', this.value)" class="w-10 h-10 rounded-xl border border-white/10 bg-transparent p-1 cursor-pointer">
+            </div>`;
+    }).join('');
+}
+
+async function actualizarColorTiendaConfig(tiendaId, color) {
+    if (!tiendaId || !/^#[0-9a-f]{6}$/i.test(String(color || '').trim())) return;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/tiendas/${tiendaId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ color })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'No se pudo actualizar el color.');
+        await refrescarYListarTiendasCloud();
+        renderKanban(true);
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+function alternarGrupoTiendaKanban(estado, tienda) {
+    const key = claveColapsoTiendaKanban(estado, tienda);
+    KANBAN_TIENDAS_COLAPSADAS[key] = !KANBAN_TIENDAS_COLAPSADAS[key];
+    guardarEstadoTiendasKanban();
+    renderKanban(true);
+}
+
+function setColapsoTiendasPorEstado(estado, colapsar) {
+    const tiendasEstado = BASE_DATOS
+        .filter((item) => String(item?.estado || '').trim() === String(estado || '').trim())
+        .map((item) => String(item?.proveedor || 'Sin asignar').trim() || 'Sin asignar');
+    [...new Set(tiendasEstado)].forEach((tienda) => {
+        const key = claveColapsoTiendaKanban(estado, tienda);
+        KANBAN_TIENDAS_COLAPSADAS[key] = Boolean(colapsar);
+    });
+    guardarEstadoTiendasKanban();
+    renderKanban(true);
 }
 
 async function eliminarTiendaSeleccionadaCloud() {
@@ -8128,7 +8266,11 @@ function renderKanban(isFullRefresh = false) {
                         <h3 class="text-[10px] font-black text-${est.color}-400 uppercase tracking-widest flex items-center gap-1.5">
                             ${est.icono} ${est.nombre} <span id="badge-kanban-${est._id}" class="bg-${est.color}-500/10 px-1.5 py-0.5 rounded">0</span>
                         </h3>
-                        <button onclick="alternarSeleccionColumna('${est.nombre}')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
+                        <div class="flex items-center gap-2">
+                            <button onclick="setColapsoTiendasPorEstado('${est.nombre}', false)" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Abrir</button>
+                            <button onclick="setColapsoTiendasPorEstado('${est.nombre}', true)" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Plegar</button>
+                            <button onclick="alternarSeleccionColumna('${est.nombre}')" class="text-[9px] opacity-40 hover:opacity-100 uppercase font-black">Marcar</button>
+                        </div>
                     </div>
                     <select onchange="cambiarOrdenColumna('${est.nombre}', this.value)" class="bg-black/20 border-none text-[9px] font-bold uppercase rounded-lg px-2 py-1 focus:outline-none text-${est.color}-300">
                         <option value="reciente" ${CONFIG_ORDEN_COLUMNAS[est.nombre] === 'reciente' ? 'selected' : ''}>🕒 Más Recientes</option>
@@ -8270,31 +8412,40 @@ function renderKanban(isFullRefresh = false) {
             return card;
         };
 
-        const anexarLote = (lote) => {
-            if (!Array.isArray(lote) || lote.length === 0) return;
+        const gruposTienda = new Map();
+        itemsToRender.forEach((item) => {
+            const key = String(item.proveedor || 'Sin asignar').trim() || 'Sin asignar';
+            if (!gruposTienda.has(key)) gruposTienda.set(key, []);
+            gruposTienda.get(key).push(item);
+        });
+
+        const renderGrupo = (nombreTienda, lote) => {
+            const colorTienda = obtenerColorVisualTienda(nombreTienda);
+            const collapseKey = claveColapsoTiendaKanban(est.nombre, nombreTienda);
+            const colapsado = Boolean(KANBAN_TIENDAS_COLAPSADAS[collapseKey]);
+            const group = document.createElement('div');
+            group.className = 'kanban-store-group rounded-2xl border border-white/10 bg-black/20 overflow-hidden';
+            group.innerHTML = `
+                <button type="button" class="kanban-store-toggle w-full flex items-center justify-between px-3 py-2 text-left" onclick="alternarGrupoTiendaKanban('${String(est.nombre).replace(/'/g, "\\'")}', '${String(nombreTienda).replace(/'/g, "\\'")}')">
+                    <span class="flex items-center gap-2 min-w-0">
+                        <span class="w-3 h-3 rounded-full border border-white/20 flex-shrink-0" style="background:${colorTienda.a}"></span>
+                        <span class="text-[10px] font-black uppercase tracking-widest truncate">${escapeHtmlSafe(nombreTienda)}</span>
+                        <span class="text-[9px] opacity-50 font-mono">${lote.length}</span>
+                    </span>
+                    <span class="text-[11px] opacity-60">${colapsado ? '▸' : '▾'}</span>
+                </button>
+                <div class="kanban-store-body ${colapsado ? 'hidden' : ''}"></div>
+            `;
+            const body = group.querySelector('.kanban-store-body');
             const fragment = document.createDocumentFragment();
             lote.forEach((v) => fragment.appendChild(crearCardNodo(v)));
-            colDom.appendChild(fragment);
+            body.appendChild(fragment);
+            colDom.appendChild(group);
         };
 
-        if (isFullRefresh && itemsToRender.length > 60) {
-            anexarLote(itemsToRender.slice(0, 18));
-
-            let idx = 18;
-            const pintarSiguienteLote = () => {
-                if (idx >= itemsToRender.length) return;
-                const end = Math.min(idx + 24, itemsToRender.length);
-                anexarLote(itemsToRender.slice(idx, end));
-                idx = end;
-                if (idx < itemsToRender.length) {
-                    setTimeout(() => requestAnimationFrame(pintarSiguienteLote), 16);
-                }
-            };
-
-            requestAnimationFrame(pintarSiguienteLote);
-        } else {
-            anexarLote(itemsToRender);
-        }
+        Array.from(gruposTienda.entries())
+            .sort((a, b) => a[0].localeCompare(b[0], 'es'))
+            .forEach(([nombreTienda, lote]) => renderGrupo(nombreTienda, lote));
         
         const badgeDom = document.getElementById(`badge-kanban-${est._id}`);
         if(badgeDom) badgeDom.innerText = filtrados.length;
@@ -8698,6 +8849,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             USUARIO_EMAIL_ACTUAL = (data.usuario || '').toLowerCase();
             USUARIO_ROL_ACTUAL = data.rol || 'Editor';
             EMPRESA_CHAT_ACTUAL = (data.empresa || '').toLowerCase();
+            cargarEstadoTiendasKanban();
             if (EMPRESA_CHAT_ACTUAL) {
                 socket.emit('join_empresa', EMPRESA_CHAT_ACTUAL);
             }

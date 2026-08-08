@@ -788,6 +788,26 @@ tr:hover td {
   background: linear-gradient(180deg, rgba(20, 34, 56, 0.75), rgba(12, 24, 41, 0.66));
 }
 
+.kanban-store-group {
+  backdrop-filter: blur(8px);
+}
+
+.kanban-store-toggle {
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.kanban-store-toggle:hover {
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+}
+
+.kanban-store-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
 #kpi-container-grid .kpi-3d-card p:first-child {
   opacity: 0.82;
 }

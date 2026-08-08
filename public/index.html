@@ -786,6 +786,8 @@
                                         <select id="proveedor" class="input-bg border w-full rounded-2xl px-4 py-3 text-sm font-black focus:outline-none flex-1 dropdown-bg shadow-sm appearance-none">
                                             <option value="">Sin tienda asignada</option>
                                         </select>
+                                        <input type="color" id="proveedor-color" value="#38bdf8" onchange="previsualizarColorTiendaSeleccionada(this.value)" class="w-11 h-11 rounded-2xl border border-white/10 bg-transparent p-1 cursor-pointer" title="Color de la tienda">
+                                        <button type="button" onclick="guardarColorTiendaSeleccionada()" class="bg-fuchsia-600/15 hover:bg-fuchsia-600 text-fuchsia-300 hover:text-white border border-fuchsia-500/25 w-11 h-11 rounded-2xl text-base shadow-sm transition-all flex items-center justify-center" title="Guardar color">🎨</button>
                                         <button type="button" onclick="crearNuevaTiendaEnBaseDatos()" class="bg-blue-600 hover:bg-blue-700 text-white w-11 h-11 rounded-2xl text-xl font-black shadow-md transition-all active:scale-90 flex items-center justify-center" title="Añadir">+</button>
                                         <button type="button" onclick="eliminarTiendaSeleccionadaCloud()" class="bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white border border-rose-500/20 w-11 h-11 rounded-2xl text-base shadow-sm transition-all flex items-center justify-center" title="Eliminar">🗑️</button>
                                     </div>
@@ -1556,6 +1558,15 @@
                     
                     <div class="lg:col-span-2 space-y-3" id="lista-estados-kanban-config"></div>
                 </div>
+            </div>
+
+            <div class="card-bg border p-6 rounded-3xl shadow-xl">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xs font-black text-fuchsia-300 uppercase tracking-widest flex items-center gap-2">
+                        <span class="bg-fuchsia-500/20 p-2 rounded-xl">🎨</span> Colores por Tienda
+                    </h3>
+                </div>
+                <div id="lista-tiendas-color-config" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3"></div>
             </div>
 
             <div class="card-bg border rounded-3xl p-6 flex flex-col gap-4">

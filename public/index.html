@@ -1849,6 +1849,14 @@
                     <textarea id="post-venta-comentarios" rows="3" placeholder="Añade notas sobre el estado final, el envío, el comprador..." class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none resize-none focus:border-emerald-500"></textarea>
                 </div>
 
+                <div id="post-venta-lote-box" class="hidden rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+                    <label class="flex items-center gap-2 text-[11px] font-bold text-emerald-200 cursor-pointer">
+                        <input id="post-venta-marcar-lote" type="checkbox" class="accent-emerald-500" checked>
+                        Marcar estos productos como lote vendido
+                    </label>
+                    <input id="post-venta-lote-etiqueta" type="text" value="Lote vendido" placeholder="Etiqueta visual del lote" class="mt-2 input-bg border w-full rounded-xl p-2 text-xs focus:outline-none focus:border-emerald-500">
+                </div>
+
                 <div class="flex gap-2 mt-2">
                     <button onclick="cerrarModalPostVenta(false)" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl text-xs uppercase transition-all">Cancelar</button>
                     <button onclick="confirmarVentaDesdeModal()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs uppercase transition-all shadow-lg">Confirmar Venta</button>

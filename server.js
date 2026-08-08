@@ -290,6 +290,8 @@ const VentaRopaSchema = new mongoose.Schema({
     imagen: { type: String, default: '' },
     galeria: { type: [String], default: [] },
     fechaVenta: { type: String, default: '' },
+    loteVendido: { type: Boolean, default: false },
+    loteVentaEtiqueta: { type: String, default: '', trim: true },
     facturado: { type: Boolean, default: false },
     cliente: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente' }
 });

@@ -8386,6 +8386,7 @@ function renderKanban(isFullRefresh = false) {
             const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
             const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
             const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="px-1 py-0.5 rounded text-[8px] font-mono font-bold border" style="background:${colorTienda.a}1a;color:${colorTienda.a};border-color:${colorTienda.b}55">🏬 ${v.proveedor.toUpperCase()}</span>` : '';
+            const badgeLote = v.loteVendido ? `<span class="bg-emerald-300 text-slate-950 border border-emerald-100 px-2 py-0.5 rounded-full text-[8px] font-black uppercase shadow-md">${escapeHtmlSafe(v.loteVentaEtiqueta || 'Lote vendido')}</span>` : '';
             const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas); const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
             
             let badgeComentarios = '';
@@ -8426,7 +8427,7 @@ function renderKanban(isFullRefresh = false) {
                 <div class="flex-1 min-w-0 ${soloLecturaVisual ? '' : 'cursor-pointer hover:opacity-80 transition-opacity'}" ${onClickEdicion} title="${soloLecturaVisual ? 'Modo visualizador: solo lectura' : 'Hacer clic para editar el artículo'}">
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
-                        ${badgeCanal} ${badgeTienda} ${badgeEst} ${badgeComentarios}
+                        ${badgeCanal} ${badgeTienda} ${badgeLote} ${badgeEst} ${badgeComentarios}
                     </div>
                     <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
                     <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
@@ -8726,6 +8727,9 @@ function abrirModalPostVenta(itemIds, nuevoEstado, opciones = {}) {
     const tituloEl = document.getElementById('post-venta-prenda-titulo');
     const precioContainerEl = document.getElementById('post-venta-precio-container');
     const envioContainerEl = document.getElementById('post-venta-envio-container');
+    const loteBox = document.getElementById('post-venta-lote-box');
+    const loteCheck = document.getElementById('post-venta-marcar-lote');
+    const loteEtiqueta = document.getElementById('post-venta-lote-etiqueta');
 
     if (itemIds.length === 1) {
         const item = BASE_DATOS.find(v => v._id === itemIds[0]);
@@ -8739,6 +8743,9 @@ function abrirModalPostVenta(itemIds, nuevoEstado, opciones = {}) {
         document.getElementById('post-venta-canal').value = opciones.canalSugerido || item.canalVenta || 'Vinted';
         document.getElementById('post-venta-comentarios').value = opciones.comentarioSugerido || item.comentariosProducto || '';
         setPostVentaRating(item.rating || 0);
+        if (loteBox) loteBox.classList.add('hidden');
+        if (loteCheck) loteCheck.checked = false;
+        if (loteEtiqueta) loteEtiqueta.value = item.loteVentaEtiqueta || 'Lote vendido';
     } else {
         tituloEl.innerHTML = `Registrando venta de <span class="font-black text-emerald-300">${itemIds.length}</span> artículos en lote.`;
         precioContainerEl.classList.add('hidden');
@@ -8747,6 +8754,9 @@ function abrirModalPostVenta(itemIds, nuevoEstado, opciones = {}) {
         document.getElementById('post-venta-canal').value = opciones.canalSugerido || 'Vinted';
         document.getElementById('post-venta-comentarios').value = opciones.comentarioSugerido || 'Venta en lote.';
         setPostVentaRating(0);
+        if (loteBox) loteBox.classList.remove('hidden');
+        if (loteCheck) loteCheck.checked = true;
+        if (loteEtiqueta) loteEtiqueta.value = 'Lote vendido';
     }
 
     document.getElementById('post-venta-fecha').value = opciones.fechaSugerida || new Date().toISOString().split('T')[0];
@@ -8769,11 +8779,22 @@ async function confirmarVentaDesdeModal() {
     const comentarios = document.getElementById('post-venta-comentarios').value.trim();
     const precioVentaSingle = parseFloat(document.getElementById('post-venta-precio').value);
     const gastosEnvioSingle = parseFloat(document.getElementById('post-venta-envio').value);
+    const marcarLote = document.getElementById('post-venta-marcar-lote')?.checked === true && itemIds.length > 1;
+    const etiquetaLote = String(document.getElementById('post-venta-lote-etiqueta')?.value || 'Lote vendido').trim() || 'Lote vendido';
 
     try {
         const promesas = itemIds.map(id => {
             const itemOriginal = BASE_DATOS.find(v => v._id === id); if (!itemOriginal) return Promise.resolve();
-            const payload = { ...itemOriginal, estado: nuevoEstado, fechaVenta: fechaVenta, canalVenta: canalVenta, rating: rating, comentariosProducto: comentarios };
+            const payload = {
+                ...itemOriginal,
+                estado: nuevoEstado,
+                fechaVenta: fechaVenta,
+                canalVenta: canalVenta,
+                rating: rating,
+                comentariosProducto: comentarios,
+                loteVendido: marcarLote,
+                loteVentaEtiqueta: marcarLote ? etiquetaLote : ''
+            };
             if (itemIds.length === 1) { payload.precioVenta = precioVentaSingle || itemOriginal.precioVenta; payload.gastosEnvio = gastosEnvioSingle || 0; }
             const { _id, proveedor, ...datosVenta } = payload;
             return fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ ...datosVenta, proveedor: payload.proveedor }) });

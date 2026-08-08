@@ -6630,6 +6630,26 @@ async function ejecutarAjusteCosteMasivo() {
     }
 }
 
+async function ejecutarAjustePromocionMasivo() {
+    if (ITEMS_SELECCIONADOS_MASIVOS.length === 0) return;
+    const variacion = prompt("Indica cuánto quieres sumar o restar al coste de PROMOCIÓN/DESTACADO (ej: 2 para subir 2€, -1 para bajar 1€):");
+    const valorAjuste = parseFloat(variacion);
+    if (isNaN(valorAjuste)) return;
+
+    if (confirm(`Se va a modificar el coste de promoción de ${ITEMS_SELECCIONADOS_MASIVOS.length} artículos en ${valorAjuste}€. ¿Continuar?`)) {
+        const promesas = ITEMS_SELECCIONADOS_MASIVOS.map(id => {
+            const item = BASE_DATOS.find(v => v._id === id);
+            if (!item) return Promise.resolve();
+            const nuevaPromocion = Math.max(0, (parseFloat(item.gastoPromocion) || 0) + valorAjuste);
+            return fetch(`${BACKEND_URL}/api/ventas/${id}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+                body: JSON.stringify({ ...item, gastoPromocion: nuevaPromocion, proveedor: item.proveedor })
+            });
+        });
+        await Promise.all(promesas); cantarPorVoz("Promoción actualizada."); limpiarSeleccionMasiva(); await forceRefreshDataManual();
+    }
+}
+
 function toggleMuteVolumenGlobal() {
     SOUND_MUTED_GLOBAL = !SOUND_MUTED_GLOBAL;
     const btn = document.getElementById('btn-mute-volumen'); const txt = document.getElementById('txt-mute-volumen');

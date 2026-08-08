@@ -468,6 +468,10 @@ function normalizarClaveTexto(valor) {
     return String(valor || '').trim().toLowerCase();
 }
 
+function pareceObjectIdTexto(valor) {
+    return /^[0-9a-f]{24}$/i.test(String(valor || '').trim());
+}
+
 async function obtenerProveedoresSinTienda(empresa) {
     const [proveedoresRaw, tiendasRaw] = await Promise.all([
         VentaRopa.distinct('proveedor', { empresa, proveedor: { $exists: true, $ne: '' } }),
@@ -1158,17 +1162,73 @@ app.put('/api/tiendas/:id', exigeAdmin, async (req, res) => {
     }
 });
 
+app.get('/api/tiendas/:id/inspeccion', exigeAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const { id } = req.params;
+        const tienda = await Tienda.findOne({ _id: id, empresa }).lean();
+        if (!tienda) return res.status(404).json({ error: 'La tienda no existe.' });
+
+        const nombreTienda = String(tienda.nombre || '').trim();
+        const pareceFantasma = pareceObjectIdTexto(nombreTienda);
+
+        const [asociadosPorRef, asociadosPorProveedor] = await Promise.all([
+            VentaRopa.countDocuments({ empresa, tienda: id }),
+            VentaRopa.countDocuments({ empresa, proveedor: { $in: [nombreTienda, id].filter(Boolean) } })
+        ]);
+
+        res.json({
+            tienda: {
+                _id: String(tienda._id),
+                nombre: nombreTienda,
+                color: tienda.color || '#38bdf8',
+                pareceFantasma
+            },
+            impacto: {
+                asociadosPorRef,
+                asociadosPorProveedor,
+                totalAfectados: Math.max(asociadosPorRef, asociadosPorProveedor)
+            }
+        });
+    } catch (e) {
+        res.status(500).json({ error: 'No se pudo inspeccionar la tienda.' });
+    }
+});
+
 // BAJA DE TIENDA
 app.delete('/api/tiendas/:id', exigeAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const { id } = req.params;
+        const force = String(req.query.force || '').toLowerCase() === '1';
         
         const tiendaPorBorrar = await Tienda.findOne({ _id: id, empresa });
         if (!tiendaPorBorrar) return res.status(404).json({ error: 'La tienda no existe.' });
 
-        // Desasignar tienda de los productos asociados
-        await VentaRopa.updateMany({ tienda: id, empresa }, { $unset: { tienda: 1 } });
+        const nombreTienda = String(tiendaPorBorrar.nombre || '').trim();
+        const candidatosProveedor = [nombreTienda, id].filter(Boolean);
+
+        // Desasignar tienda de los productos asociados por referencia y limpiar proveedores fantasma.
+        await VentaRopa.updateMany(
+            {
+                empresa,
+                $or: [
+                    { tienda: id },
+                    { proveedor: { $in: candidatosProveedor } }
+                ]
+            },
+            {
+                $unset: { tienda: 1, proveedor: 1 }
+            }
+        );
+
+        // Fuerza extra: si el nombre de la tienda ya era un ObjectId guardado como texto, límpialo también.
+        if (force && pareceObjectIdTexto(nombreTienda)) {
+            await VentaRopa.updateMany(
+                { empresa, proveedor: nombreTienda },
+                { $unset: { proveedor: 1 } }
+            );
+        }
         await Tienda.deleteOne({ _id: id, empresa });
 
         await registrarLog(req.session.email, `Eliminó la tienda "${tiendaPorBorrar.nombre}".`);

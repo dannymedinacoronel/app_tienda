@@ -4125,9 +4125,36 @@ async function eliminarTiendaSeleccionadaCloud() {
     const tiendaObjeto = LISTA_TIENDAS_GLOBAL.find(t => t.nombre === nombreSeleccionado);
     if (!tiendaObjeto) return;
 
-    if (confirm(`¿Seguro que deseas eliminar permanentemente la tienda "${nombreSeleccionado}"?\nLos artículos asignados a ella quedarán sin tienda asignada.`)) {
+    try {
+        const inspeccionRes = await fetch(`${BACKEND_URL}/api/tiendas/${tiendaObjeto._id}/inspeccion`, {
+            credentials: 'include'
+        });
+        const inspeccion = await inspeccionRes.json();
+        if (!inspeccionRes.ok) throw new Error(inspeccion?.error || 'No se pudo inspeccionar la tienda.');
+
+        const esNombreFantasma = Boolean(inspeccion?.tienda?.pareceFantasma);
+        const totalAfectados = Number(inspeccion?.impacto?.totalAfectados || 0);
+        const asociadosPorRef = Number(inspeccion?.impacto?.asociadosPorRef || 0);
+        const asociadosPorProveedor = Number(inspeccion?.impacto?.asociadosPorProveedor || 0);
+        const mensaje = [
+            `Tienda seleccionada: ${inspeccion?.tienda?.nombre || nombreSeleccionado}`,
+            `ID: ${inspeccion?.tienda?._id || tiendaObjeto._id}`,
+            `Parece fantasma: ${esNombreFantasma ? 'Sí' : 'No'}`,
+            `Productos por referencia de tienda: ${asociadosPorRef}`,
+            `Productos por proveedor/nombre: ${asociadosPorProveedor}`,
+            `Total afectado estimado: ${totalAfectados}`,
+            '',
+            'Si continúas, los productos asociados quedarán sin tienda asignada.',
+            esNombreFantasma ? 'Se aplicará limpieza forzada porque el nombre parece un ObjectId.' : '',
+            '',
+            '¿Quieres eliminarla?'
+        ].filter(Boolean).join('\n');
+
+        if (!confirm(mensaje)) return;
+
         try {
-            const res = await fetch(`${BACKEND_URL}/api/tiendas/${tiendaObjeto._id}`, {
+            const forceFlag = esNombreFantasma ? '?force=1' : '';
+            const res = await fetch(`${BACKEND_URL}/api/tiendas/${tiendaObjeto._id}${forceFlag}`, {
                 method: 'DELETE',
                 credentials: 'include'
             });
@@ -4139,6 +4166,8 @@ async function eliminarTiendaSeleccionadaCloud() {
                 alert("No se pudo eliminar el elemento.");
             }
         } catch(e) { alert("Error al procesar la baja."); }
+    } catch (err) {
+        alert(err.message);
     }
 }
 

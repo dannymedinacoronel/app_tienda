@@ -2804,6 +2804,10 @@ app.put('/api/ventas/:id', exigeSoloAdmin, async (req, res) => {
             if (!esVenta && datosVenta.fechaVenta) {
                 datosVenta.fechaVenta = '';
             }
+            if (!esVenta) {
+                datosVenta.loteVendido = false;
+                datosVenta.loteVentaEtiqueta = '';
+            }
         }
 
         const ventaActualizada = await VentaRopa.findOneAndUpdate(
@@ -2838,6 +2842,8 @@ app.put('/api/ventas/:id/estado', exigeSoloAdmin, async (req, res) => {
             }
         } else {
             updateData.fechaVenta = '';
+            updateData.loteVendido = false;
+            updateData.loteVentaEtiqueta = '';
         }
 
         const ventaActualizada = await VentaRopa.findOneAndUpdate({ _id: id, empresa }, updateData, { new: true });

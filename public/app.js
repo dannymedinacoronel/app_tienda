@@ -8743,8 +8743,8 @@ function abrirModalPostVenta(itemIds, nuevoEstado, opciones = {}) {
         document.getElementById('post-venta-canal').value = opciones.canalSugerido || item.canalVenta || 'Vinted';
         document.getElementById('post-venta-comentarios').value = opciones.comentarioSugerido || item.comentariosProducto || '';
         setPostVentaRating(item.rating || 0);
-        if (loteBox) loteBox.classList.add('hidden');
-        if (loteCheck) loteCheck.checked = false;
+        if (loteBox) loteBox.classList.remove('hidden');
+        if (loteCheck) loteCheck.checked = Boolean(item.loteVendido);
         if (loteEtiqueta) loteEtiqueta.value = item.loteVentaEtiqueta || 'Lote vendido';
     } else {
         tituloEl.innerHTML = `Registrando venta de <span class="font-black text-emerald-300">${itemIds.length}</span> artículos en lote.`;
@@ -8779,7 +8779,7 @@ async function confirmarVentaDesdeModal() {
     const comentarios = document.getElementById('post-venta-comentarios').value.trim();
     const precioVentaSingle = parseFloat(document.getElementById('post-venta-precio').value);
     const gastosEnvioSingle = parseFloat(document.getElementById('post-venta-envio').value);
-    const marcarLote = document.getElementById('post-venta-marcar-lote')?.checked === true && itemIds.length > 1;
+    const marcarLote = document.getElementById('post-venta-marcar-lote')?.checked === true;
     const etiquetaLote = String(document.getElementById('post-venta-lote-etiqueta')?.value || 'Lote vendido').trim() || 'Lote vendido';
 
     try {

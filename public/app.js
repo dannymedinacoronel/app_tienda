@@ -95,6 +95,11 @@ function escapeHtmlSafe(value) {
         .replace(/'/g, '&#039;');
 }
 
+function seccionVisible(id) {
+    const node = document.getElementById(id);
+    return Boolean(node && !node.classList.contains('hidden'));
+}
+
 function closeQuickMenus() {
     document.querySelectorAll('.quick-menu-panel').forEach((panel) => panel.classList.add('hidden'));
 }
@@ -7613,13 +7618,13 @@ async function reloadCoreData(isInitialLoad = false) {
             updateTickerWallStreet();
             ejecutarVerificacionAlertasStock();
             actualizarVisibilidadPanelMasivo();
-            renderCalendarioStock();
+            if (seccionVisible('sec-inventario')) renderCalendarioStock();
         });
         
-        if (!document.getElementById('sec-analitica').classList.contains('hidden')) {
+        if (seccionVisible('sec-analitica')) {
             actualizarTodoElBloqueGrafico();
+            actualizarDashboardGananciasAdmin();
         }
-        actualizarDashboardGananciasAdmin();
         
         const contenedorLogs = document.getElementById('contenedor-logs-auditoria');
         if (logsVisible && contenedorLogs && data.logs && data.logs.length > 0) {
@@ -8541,7 +8546,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('main-body')?.classList.remove('ui-booting');
         configurarForzadoHorizontal();
         iniciarCountdownTrial();
-        await cargarNegociosCitasLanding();
         document.getElementById('cita-negocio')?.addEventListener('change', cargarAsesoresCitaLanding);
         mostrarLandingPublica();
         const res = await fetch(`${BACKEND_URL}/api/auth/verificar`, { credentials: 'include' }); 
@@ -8669,6 +8673,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             }, 150);
         });
     }
+        } else {
+            const cargarLandingDiferido = () => {
+                cargarNegociosCitasLanding().catch(() => {});
+            };
+            if ('requestIdleCallback' in window) {
+                window.requestIdleCallback(() => cargarLandingDiferido(), { timeout: 600 });
+            } else {
+                setTimeout(() => cargarLandingDiferido(), 60);
+            }
         }
     } catch(e){ console.error("Error en la inicialización:", e); }
 });

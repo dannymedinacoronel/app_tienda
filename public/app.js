@@ -1709,7 +1709,7 @@ async function procesarArchivoManual(event) {
                 const isImageUrl = isUrl && /(jpg|jpeg|png|webp|avif|gif)(\?|$)/i.test(val);
                 const isPrice = val.includes('€') || /^\d+[.,]?\d{0,2}$/.test(val) || cabeceraCoincide(claveNormalizada, ['price', 'precio', 'coste', 'costo', 'importe', 'eur', 'text 4']);
 
-                if (cabeceraCoincide(claveNormalizada, ['title', 'titulo', 'nombre', 'prenda', 'description', 'descripcion', 'item card description', 'text 2']) && !titulo) {
+                if (cabeceraCoincide(claveNormalizada, ['title', 'titulo', 'nombre', 'prenda', 'description', 'descripcion', 'item card description', 'text 2', 'cell title']) && !titulo) {
                     titulo = val;
                 }
                 if (cabeceraCoincide(claveNormalizada, ['store', 'tienda', 'proveedor', 'seller', 'perfil', 'cuenta', 'alias', 'origen grupo']) && !proveedor) {
@@ -1751,7 +1751,7 @@ async function procesarArchivoManual(event) {
                 }
             });
 
-            const valTitleStrict = row['web_ui__Text__text 2'] || row['web_ui__Text__text'] || row.description || row.title || row.titulo || row.nombre || row.prenda || row['item-card-description'];
+            const valTitleStrict = row['web_ui__Cell__title'] || row['web_ui__Text__text 2'] || row['web_ui__Text__text'] || row.description || row.title || row.titulo || row.nombre || row.prenda || row['item-card-description'];
             if (valTitleStrict) titulo = String(valTitleStrict).trim();
 
             const valUrlStrict = row['web_ui__Image__content src'] || row['image-src'] || row.image || row.foto || row.imagen || row['item-card-image-src'];

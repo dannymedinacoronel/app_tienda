@@ -4276,12 +4276,13 @@ function calcularMetricasContables(lista, ivaPercent = 21) {
         const pv = Number(v.precioVenta || 0) || 0;
         const pc = Number(v.precioCompra || 0) || 0;
         const ge = Number(v.gastosEnvio || 0) || 0;
+        const gp = Number(v.gastoPromocion || 0) || 0;
         const canal = String(v.canalVenta || '').toLowerCase();
         const comision = (canal === 'vinted' || canal === 'wallapop') ? (pv * 0.05) : 0;
 
         const netoUnit = Math.max(0, pv - comision);
         const neto = netoUnit * qty;
-        const inv = (pc + ge) * qty;
+        const inv = (pc + ge + gp) * qty;
 
         out.ventasNetas += neto;
         out.inversion += inv;
@@ -4419,11 +4420,12 @@ function actualizarDashboardGananciasAdmin() {
         const pv = Number(v.precioVenta || 0) || 0;
         const pc = Number(v.precioCompra || 0) || 0;
         const ge = Number(v.gastosEnvio || 0) || 0;
+        const gp = Number(v.gastoPromocion || 0) || 0;
         const canal = String(v.canalVenta || '').toLowerCase();
         const comision = (canal === 'vinted' || canal === 'wallapop') ? (pv * 0.05) : 0;
 
         const neto = (pv - comision) * qty;
-        const inv = (pc + ge) * qty;
+        const inv = (pc + ge + gp) * qty;
         const ben = neto - inv;
         const fecha = String(v.fechaVenta || '').slice(0, 10) || 'Sin fecha';
         const canalTag = String(v.canalVenta || 'Sin canal');
@@ -8253,6 +8255,7 @@ async function manejarEnvioVenta(e) {
         precioCompra: parseFloat(document.getElementById('precioCompra').value) || 0, 
         precioVenta: parseFloat(document.getElementById('precioVenta').value) || 0, 
         gastosEnvio: parseFloat(document.getElementById('gastosEnvio').value) || 0, 
+        gastoPromocion: parseFloat(document.getElementById('gastoPromocion').value) || 0,
         canalVenta: document.getElementById('canalVenta').value, 
         imagen: FOTOS_FORMULARIO_TEMP.length > 0 ? FOTOS_FORMULARIO_TEMP[0] : "",
         galeria: FOTOS_FORMULARIO_TEMP.length > 1 ? FOTOS_FORMULARIO_TEMP.slice(1) : [],
@@ -8299,6 +8302,7 @@ function editItem(id) {
     document.getElementById('precioCompra').value = item.precioCompra || 0; 
     document.getElementById('precioVenta').value = item.precioVenta || 0; 
     document.getElementById('gastosEnvio').value = item.gastosEnvio || 0; 
+    document.getElementById('gastoPromocion').value = item.gastoPromocion || 0;
     document.getElementById('canalVenta').value = item.canalVenta || 'Vinted'; 
     document.getElementById('comentariosProducto').value = item.comentariosProducto || '';
     document.getElementById('proveedor').value = item.proveedor || 'Sin definir';
@@ -8320,6 +8324,7 @@ function cancelEdit() {
     document.getElementById('form-venta').reset(); document.getElementById('edit-id').value = ""; 
     establecerValoresPorDefecto();
     document.getElementById('gastosEnvio').value = 0; document.getElementById('cantidad').value = 1;
+    document.getElementById('gastoPromocion').value = 0;
     document.getElementById('canalVenta').value = "Vinted"; document.getElementById('comentariosProducto').value = "";
     document.getElementById('estado').value = "No Vendido";
     document.getElementById('proveedor').value = ""; setFormRating(0); calcularMargenComercialAlVuelo();

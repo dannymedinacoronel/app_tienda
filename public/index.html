@@ -767,6 +767,13 @@
                                 </div>
                             </div>
 
+                            <div class="grid grid-cols-1 gap-2">
+                                <div>
+                                    <label class="block text-[9px] font-bold uppercase opacity-60 mb-0.5">Promoción / Destacado (€)</label>
+                                    <input type="number" id="gastoPromocion" value="0" step="0.01" min="0" oninput="calcularMargenComercialAlVuelo()" class="input-bg border w-full rounded-xl p-2 text-xs focus:outline-none focus:border-fuchsia-500" placeholder="Ej: 2.00 si pagaste por destacar esta prenda">
+                                </div>
+                            </div>
+
                             <div class="text-[10px] font-mono flex justify-between bg-black/10 px-3 py-1.5 rounded-lg border border-current/5">
                                 <span class="opacity-60">Margen neto:</span>
                                 <span id="txt-margen-calculado" class="font-bold text-slate-400">0.00%</span>

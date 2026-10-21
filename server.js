@@ -5,6 +5,9 @@ const session = require('express-session');
 const MongoStore = require('connect-mongo').default; // Corregido para manejar el export por defecto
 const mongoose = require('mongoose');
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
+const compression = require('compression');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const nodemailer = require('nodemailer');
@@ -47,6 +50,8 @@ console.log(`[INIT] Modo: ${isProd ? 'PROD' : 'DEV'}`);
 // Es vital para que las sesiones funcionen en plataformas como Render/Heroku
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
+// gzip/brotli para HTML, JS, CSS y JSON: app.js e index.html pasan de ~640KB a ~120KB.
+app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -120,7 +125,8 @@ async function dispararWorkflowGithub({ workflowFile, inputs, logTag = 'SCRAPER'
             headers: {
                 'Authorization': `token ${GITHUB_PAT}`,
                 'Accept': 'application/vnd.github.v3+json'
-            }
+            },
+            timeout: 15000
         }
     );
 }
@@ -224,6 +230,7 @@ const ClienteSchema = new mongoose.Schema({
     }],
     fechaRegistro: { type: Date, default: Date.now }
 });
+ClienteSchema.index({ empresa: 1, nombre: 1 });
 const Cliente = mongoose.models.Cliente || mongoose.model('Cliente', ClienteSchema);
 
 const CitaSchema = new mongoose.Schema({
@@ -253,6 +260,7 @@ const GastoSchema = new mongoose.Schema({
     monto: { type: Number, required: true },
     categoria: { type: String, default: 'General' }
 });
+GastoSchema.index({ empresa: 1, fecha: -1 });
 const Gasto = mongoose.models.Gasto || mongoose.model('Gasto', GastoSchema);
 
 const EstadoKanbanSchema = new mongoose.Schema({
@@ -295,6 +303,11 @@ const VentaRopaSchema = new mongoose.Schema({
     facturado: { type: Boolean, default: false },
     cliente: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente' }
 });
+// Todas las consultas filtran por empresa: sin estos índices cada carga del panel recorría la colección entera.
+VentaRopaSchema.index({ empresa: 1, _id: -1 });
+VentaRopaSchema.index({ empresa: 1, canalVenta: 1 });
+VentaRopaSchema.index({ empresa: 1, sku: 1 });
+VentaRopaSchema.index({ empresa: 1, tienda: 1 });
 const VentaRopa = mongoose.models.VentaRopa || mongoose.model('VentaRopa', VentaRopaSchema);
 
 const LogAuditoriaSchema = new mongoose.Schema({
@@ -311,6 +324,7 @@ const LogAuditoriaSchema = new mongoose.Schema({
 LogAuditoriaSchema.index({ fechaHora: -1 });
 LogAuditoriaSchema.index({ usuario: 1, fechaHora: -1 });
 LogAuditoriaSchema.index({ lat: 1, lon: 1, fechaHora: -1 });
+LogAuditoriaSchema.index({ empresa: 1, fechaHora: -1 });
 const LogAuditoria = mongoose.models.LogAuditoria || mongoose.model('LogAuditoria', LogAuditoriaSchema);
 
 const TareaSchema = new mongoose.Schema({
@@ -322,6 +336,7 @@ const TareaSchema = new mongoose.Schema({
     fechaVencimiento: { type: String, default: '' },
     fechaCreacion: { type: Date, default: Date.now }
 });
+TareaSchema.index({ empresa: 1, fechaCreacion: -1 });
 const Tarea = mongoose.models.Tarea || mongoose.model('Tarea', TareaSchema);
 
 const FaqSchema = new mongoose.Schema({
@@ -330,6 +345,7 @@ const FaqSchema = new mongoose.Schema({
     respuesta: { type: String, required: true, trim: true },
     fechaCreacion: { type: Date, default: Date.now }
 });
+FaqSchema.index({ empresa: 1 });
 const Faq = mongoose.models.Faq || mongoose.model('Faq', FaqSchema);
 
 const NotaSchema = new mongoose.Schema({
@@ -343,6 +359,7 @@ const NotaSchema = new mongoose.Schema({
     usuario: String,
     fecha: { type: Date, default: Date.now }
 });
+NotaSchema.index({ empresa: 1 });
 const Nota = mongoose.models.Nota || mongoose.model('Nota', NotaSchema);
 
 const NegocioSchema = new mongoose.Schema({
@@ -693,10 +710,34 @@ async function generarReporteHigiene(empresa, sampleLimit = 25) {
     };
 }
 
+// --- Resultados recientes de scraping ---
+// Socket.IO solo entrega a quien está conectado en ese momento. Si el navegador se reconecta
+// (Render dormido, red móvil...) mientras GitHub trabaja, el resultado se perdía. Guardamos
+// los últimos eventos por empresa para que el panel los recupere al volver.
+const EVENTOS_SCRAPER = new Map();
+const EVENTOS_SCRAPER_LIMITES = {
+    scraper_update: { max: 3, ttlMs: 60 * 60 * 1000 },
+    monopolio_update: { max: 4, ttlMs: 30 * 60 * 1000 }
+};
+
+function emitirEventoScraper(empresa, tipo, data) {
+    const evento = { ...data, eventoId: crypto.randomUUID(), timestamp: data?.timestamp || new Date() };
+    const clave = `${empresa}|${tipo}`;
+    const cfg = EVENTOS_SCRAPER_LIMITES[tipo] || { max: 3, ttlMs: 30 * 60 * 1000 };
+    const ahora = Date.now();
+    const lista = (EVENTOS_SCRAPER.get(clave) || []).filter((e) => (ahora - e.ts) < cfg.ttlMs);
+    lista.push({ ts: ahora, evento });
+    EVENTOS_SCRAPER.set(clave, lista.slice(-cfg.max));
+    if (global.io) global.io.to(`empresa:${empresa}`).emit(tipo, evento);
+    return evento;
+}
+
 io.on('connection', (socket) => {
-    socket.on('join_empresa', (empresa) => {
-        const room = `empresa:${normalizarEmpresa(empresa)}`;
-        socket.join(room);
+    socket.on('join_empresa', () => {
+        // La sala sale de la sesión del servidor, no del cliente: así nadie puede escuchar otra empresa.
+        const sess = socket.request?.session;
+        if (!sess || !sess.esAdmin) return;
+        socket.join(`empresa:${normalizarEmpresa(sess.empresa || EMPRESA_DEFAULT)}`);
     });
 });
 
@@ -812,33 +853,74 @@ mongoose.connect(MONGO_URI_FINAL)
     })
     .catch(err => console.error('Fallo crítico en Atlas. Verifica tus variables en Render:', err));
 
-app.use(session({
-    name: 'seychelles.sid', 
+const sessionMiddleware = session({
+    name: 'seychelles.sid',
     secret: process.env.SESSION_SECRET || 'clave_maestra_seychelles_987654321',
-    resave: false, 
-    saveUninitialized: false, 
-    proxy: true, 
-    store: MONGO_URI_FINAL ? MongoStore.create({ 
-        mongoUrl: MONGO_URI_FINAL, 
-        collectionName: 'sesiones_activas', 
-        ttl: 14 * 24 * 60 * 60 
+    resave: false,
+    saveUninitialized: false,
+    proxy: true,
+    store: MONGO_URI_FINAL ? MongoStore.create({
+        mongoUrl: MONGO_URI_FINAL,
+        collectionName: 'sesiones_activas',
+        ttl: 14 * 24 * 60 * 60,
+        touchAfter: 12 * 60 * 60
     }) : undefined,
-    cookie: { 
-        secure: isProd, 
-        sameSite: isProd ? 'none' : 'lax', 
-        maxAge: 14 * 24 * 60 * 60 * 1000 
+    cookie: {
+        secure: isProd,
+        sameSite: isProd ? 'none' : 'lax',
+        maxAge: 14 * 24 * 60 * 60 * 1000
     }
-}));
+});
+app.use(sessionMiddleware);
+io.engine.use(sessionMiddleware);
 
-app.use(express.static(path.join(__dirname, 'public'), {
+// --- Frontend estático con versionado automático ---
+// index.html se sirve con el hash de app.js/CSS en la URL: los assets se cachean un año
+// y cada despliegue cambia el hash, así nadie se queda con un frontend viejo.
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const ASSETS_VERSIONADOS = ['app.js', 'styles.css', 'tailwind.generated.css'];
+
+function hashCorto(contenido) {
+    return crypto.createHash('md5').update(contenido).digest('hex').slice(0, 10);
+}
+
+function construirIndexHtml() {
+    let html = fs.readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8');
+    for (const asset of ASSETS_VERSIONADOS) {
+        let version = 'dev';
+        try { version = hashCorto(fs.readFileSync(path.join(PUBLIC_DIR, asset))); } catch (_) {}
+        const escaped = asset.replace(/\./g, '\\.');
+        html = html.replace(new RegExp(`(["'])${escaped}(?:\\?v=[^"']*)?\\1`, 'g'), `$1${asset}?v=${version}$1`);
+    }
+    return { html, etag: `"${hashCorto(html)}"` };
+}
+
+let INDEX_HTML_CACHE = null;
+function obtenerIndexHtml() {
+    if (!isProd || !INDEX_HTML_CACHE) INDEX_HTML_CACHE = construirIndexHtml();
+    return INDEX_HTML_CACHE;
+}
+
+function enviarIndexHtml(req, res) {
+    const { html, etag } = obtenerIndexHtml();
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('ETag', etag);
+    if (req.headers['if-none-match'] === etag) return res.status(304).end();
+    res.type('html').send(html);
+}
+
+app.get(['/', '/index.html'], enviarIndexHtml);
+
+app.use(express.static(PUBLIC_DIR, {
+    index: false,
     etag: true,
     lastModified: true,
-    maxAge: isProd ? '7d' : 0,
-    setHeaders: (res, filePath) => {
-        const f = String(filePath || '').replace(/\\/g, '/').toLowerCase();
-        // Evita quedarte con frontend viejo cuando hay fixes críticos en app.js/index.html
-        if (f.endsWith('/index.html') || f.endsWith('/app.js')) {
-            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    setHeaders: (res) => {
+        // Con ?v=hash el contenido es inmutable; sin él, el navegador revalida (304 si no cambió).
+        if (res.req?.query?.v) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+            res.setHeader('Cache-Control', isProd ? 'public, max-age=3600' : 'no-cache');
         }
     }
 }));
@@ -950,27 +1032,46 @@ app.use((req, res, next) => {
     return next();
 });
 
-async function registrarLog(usuario, accion, locationData = {}) {
+const EMPRESA_POR_EMAIL_CACHE = new Map();
+const EMPRESA_POR_EMAIL_TTL_MS = 5 * 60 * 1000;
+
+async function empresaDeUsuario(usuario) {
+    const email = String(usuario || '').toLowerCase().trim();
+    const hit = EMPRESA_POR_EMAIL_CACHE.get(email);
+    if (hit && (Date.now() - hit.ts) < EMPRESA_POR_EMAIL_TTL_MS) return hit.empresa;
+    const usuarioDoc = await UsuarioAutorizado.findOne({ email }).select('empresa').lean();
+    const empresa = normalizarEmpresa(usuarioDoc?.empresa || EMPRESA_DEFAULT);
+    EMPRESA_POR_EMAIL_CACHE.set(email, { empresa, ts: Date.now() });
+    return empresa;
+}
+
+async function guardarLog(usuario, accion, locationData = {}) {
     try {
-        const usuarioDoc = await UsuarioAutorizado.findOne({ email: String(usuario || '').toLowerCase().trim() }).select('empresa').lean();
-        const empresa = normalizarEmpresa(usuarioDoc?.empresa || EMPRESA_DEFAULT);
-        const nuevoLog = new LogAuditoria({ 
-            empresa,
-            usuario, 
-            accion,
-            ...locationData
-        });
-        await nuevoLog.save();
+        const empresa = await empresaDeUsuario(usuario);
+        await LogAuditoria.create({ empresa, usuario, accion, ...locationData });
     } catch (e) { console.error("Error al guardar log:", e); }
 }
 
+// El log de auditoría no debe retrasar la respuesta al usuario: se guarda en segundo plano.
+function registrarLog(usuario, accion, locationData = {}) {
+    guardarLog(usuario, accion, locationData);
+    return Promise.resolve();
+}
+
+// Geolocaliza y registra el evento sin bloquear la petición (login/logout).
+function registrarLogConUbicacion(req, usuario, accion, clientLocation) {
+    const ip = req.ip || req.headers['x-forwarded-for']?.split(',').shift() || req.socket?.remoteAddress;
+    obtenerUbicacionCompleta(ip, clientLocation)
+        .catch(() => ({ ip }))
+        .then((locationData) => guardarLog(usuario, accion, locationData));
+}
+
 // --- Motor de Geolocalización Precisa (IP + HTML5) ---
-async function obtenerUbicacionCompleta(req, clientLocation) {
-    const ip = req.ip || req.headers['x-forwarded-for']?.split(',').shift() || req.socket.remoteAddress;
+async function obtenerUbicacionCompleta(ip, clientLocation) {
     let locationData = { ip };
 
     try {
-        const geoRes = await axios.get(`http://ip-api.com/json/${ip}?fields=status,message,country,city,lat,lon`);
+        const geoRes = await axios.get(`http://ip-api.com/json/${encodeURIComponent(ip || '')}?fields=status,message,country,city,lat,lon`, { timeout: 4000 });
         if (geoRes.data && geoRes.data.status === 'success') {
             locationData.ciudad = geoRes.data.city; locationData.pais = geoRes.data.country;
             locationData.lat = geoRes.data.lat; locationData.lon = geoRes.data.lon;
@@ -978,12 +1079,14 @@ async function obtenerUbicacionCompleta(req, clientLocation) {
     } catch (e) { console.warn(`[GEO-IP] Fallo al obtener localización por IP:`, e.message); }
 
     // Si el navegador proporcionó coordenadas exactas GPS/HTML5, las usamos y buscamos la ciudad real
-    if (clientLocation && clientLocation.lat && clientLocation.lon) {
-        locationData.lat = clientLocation.lat;
-        locationData.lon = clientLocation.lon;
+    const latCliente = Number(clientLocation?.lat);
+    const lonCliente = Number(clientLocation?.lon);
+    if (Number.isFinite(latCliente) && Number.isFinite(lonCliente) && (latCliente || lonCliente)) {
+        locationData.lat = latCliente;
+        locationData.lon = lonCliente;
         try {
             // Búsqueda Inversa para saber a qué ciudad pertenecen las coordenadas HTML5
-            const reverseGeo = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${clientLocation.lat}&lon=${clientLocation.lon}`, { headers: { 'User-Agent': 'Seychelles-App/1.0' } });
+            const reverseGeo = await axios.get(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latCliente}&lon=${lonCliente}`, { headers: { 'User-Agent': 'Seychelles-App/1.0' }, timeout: 4000 });
             if (reverseGeo.data && reverseGeo.data.address) {
                 locationData.ciudad = reverseGeo.data.address.city || reverseGeo.data.address.town || reverseGeo.data.address.village || locationData.ciudad;
                 locationData.pais = reverseGeo.data.address.country || locationData.pais;
@@ -1012,6 +1115,147 @@ async function downloadAndConvertToBase64(url) {
     }
 }
 
+// --- Fotos servidas por URL en vez de incrustadas en el JSON ---
+// Las fotos se guardan como data URL base64 dentro de cada producto. Mandarlas en cada
+// listado hacía que /api/ventas pesara megas. Ahora el listado lleva URLs cortas
+// (/api/ventas/:id/foto/:n?v=firma) que el navegador descarga una vez y cachea.
+const REF_FOTO_VENTA_RE = /^\/api\/ventas\/([a-f0-9]{24})\/foto\/(\d+)(?:\?.*)?$/i;
+const REF_FOTO_USUARIO_RE = /^\/api\/usuarios\/([a-f0-9]{24})\/foto(?:\?.*)?$/i;
+
+// Metadatos baratos de una foto calculados en Mongo (sin traer el base64 completo).
+// Solo se aplica a data URLs base64 (ASCII), así $substrBytes nunca corta un carácter.
+function exprMetaFoto(campo) {
+    return {
+        $let: {
+            vars: { s: { $cond: [{ $eq: [{ $type: campo }, 'string'] }, campo, ''] } },
+            in: {
+                $cond: [
+                    {
+                        $and: [
+                            { $eq: [{ $substrCP: ['$$s', 0, 5] }, 'data:'] },
+                            { $gt: [{ $indexOfCP: ['$$s', ';base64,', 0, 120] }, -1] }
+                        ]
+                    },
+                    {
+                        len: { $strLenBytes: '$$s' },
+                        mid: { $substrBytes: ['$$s', { $floor: { $divide: [{ $strLenBytes: '$$s' }, 2] } }, 16] },
+                        tail: { $substrBytes: ['$$s', { $max: [0, { $subtract: [{ $strLenBytes: '$$s' }, 24] }] }, 24] }
+                    },
+                    '$$s'
+                ]
+            }
+        }
+    };
+}
+
+function firmaMetaFoto(meta) {
+    return hashCorto(`${meta.len}|${meta.mid}|${meta.tail}`);
+}
+
+function valorFotoDesdeMeta(meta, construirUrl) {
+    if (meta && typeof meta === 'object') return construirUrl(firmaMetaFoto(meta));
+    return typeof meta === 'string' ? meta : '';
+}
+
+function firmaFotoDesdeValor(valor) {
+    const s = String(valor || '');
+    const len = Buffer.byteLength(s);
+    const mitad = Math.floor(len / 2);
+    return firmaMetaFoto({ len, mid: s.slice(mitad, mitad + 16), tail: s.slice(Math.max(0, len - 24)) });
+}
+
+// Sustituye imagenMeta/galeriaMeta (calculados en la agregación) por URLs servibles.
+function adjuntarUrlsFotosVenta(venta) {
+    const id = String(venta._id);
+    venta.imagen = valorFotoDesdeMeta(venta.imagenMeta, (v) => `/api/ventas/${id}/foto/0?v=${v}`);
+    venta.galeria = (Array.isArray(venta.galeriaMeta) ? venta.galeriaMeta : [])
+        .map((meta, i) => valorFotoDesdeMeta(meta, (v) => `/api/ventas/${id}/foto/${i + 1}?v=${v}`))
+        .filter(Boolean);
+    delete venta.imagenMeta;
+    delete venta.galeriaMeta;
+    return venta;
+}
+
+function enviarFotoDataUrl(res, valor) {
+    const s = typeof valor === 'string' ? valor : '';
+    if (/^https?:\/\//i.test(s)) return res.redirect(302, s);
+    const m = s.match(/^data:([^;,]*)(;base64)?,/i);
+    if (!m || !/^image\//i.test(m[1] || '')) return res.sendStatus(404);
+    const contenido = s.slice(m[0].length);
+    const buffer = m[2] ? Buffer.from(contenido, 'base64') : Buffer.from(decodeURIComponent(contenido), 'utf8');
+    res.setHeader('Content-Type', m[1]);
+    res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+    return res.send(buffer);
+}
+
+// Convierte las URLs de foto que vuelve a mandar el cliente (editar, duplicar, reordenar
+// galería...) en los datos reales guardados, para no perder nunca una imagen.
+async function resolverFotosEntrantes(empresa, datos, idPropio = null) {
+    if (!datos || typeof datos !== 'object') return datos;
+    const tieneImagen = typeof datos.imagen === 'string';
+    const tieneGaleria = Array.isArray(datos.galeria);
+    if (!tieneImagen && !tieneGaleria) return datos;
+
+    const propio = idPropio ? String(idPropio).toLowerCase() : null;
+    const parsear = (valor) => {
+        if (typeof valor !== 'string') return null;
+        const m = valor.match(REF_FOTO_VENTA_RE);
+        return m ? { id: m[1].toLowerCase(), n: parseInt(m[2], 10) } : null;
+    };
+
+    const ids = new Set();
+    if (tieneImagen) { const r = parsear(datos.imagen); if (r) ids.add(r.id); }
+    if (tieneGaleria) datos.galeria.forEach((g) => { const r = parsear(g); if (r) ids.add(r.id); });
+    if (ids.size === 0) return datos;
+
+    const docs = await VentaRopa.find({ _id: { $in: [...ids] }, empresa }).select('imagen galeria').lean();
+    const porId = new Map(docs.map((d) => [String(d._id).toLowerCase(), d]));
+    const valorDe = (ref) => {
+        const doc = porId.get(ref.id);
+        if (!doc) return null;
+        const valor = ref.n === 0 ? doc.imagen : (Array.isArray(doc.galeria) ? doc.galeria[ref.n - 1] : null);
+        return typeof valor === 'string' && valor ? valor : null;
+    };
+
+    if (tieneImagen) {
+        const r = parsear(datos.imagen);
+        if (r) {
+            const valor = (propio && r.id === propio && r.n === 0) ? undefined : valorDe(r);
+            // Misma portada (o referencia rota): no tocamos la imagen guardada.
+            if (!valor) delete datos.imagen;
+            else datos.imagen = valor;
+        }
+    }
+
+    if (tieneGaleria) {
+        const galeriaActual = propio ? porId.get(propio)?.galeria : null;
+        const sinCambios = Array.isArray(galeriaActual)
+            && galeriaActual.length === datos.galeria.length
+            && datos.galeria.every((g, i) => { const r = parsear(g); return r && r.id === propio && r.n === i + 1; });
+        if (sinCambios) {
+            delete datos.galeria;
+        } else {
+            datos.galeria = datos.galeria
+                .map((g) => { const r = parsear(g); return r ? valorDe(r) : g; })
+                .filter((g) => typeof g === 'string' && g);
+        }
+    }
+    return datos;
+}
+
+// Campos que el cliente nunca puede fijar en un producto (evita mover productos entre empresas).
+function limpiarCamposProtegidosVenta(datos) {
+    if (!datos || typeof datos !== 'object') return {};
+    const limpio = { ...datos };
+    delete limpio._id;
+    delete limpio.__v;
+    delete limpio.empresa;
+    delete limpio.tienda;
+    return limpio;
+}
+
 // --- Sistema de Backup Automatizado por Email ---
 const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -1024,6 +1268,8 @@ const transporter = nodemailer.createTransport({
 });
 
 async function realizarBackupDiarioEmail() {
+    // Sin credenciales de correo no tiene sentido volcar toda la base de datos a memoria.
+    if (!process.env.BACKUP_EMAIL_USER || !process.env.BACKUP_EMAIL_PASS) return;
     try {
         // Extracción total de todas las colecciones de MongoDB
         const baseDatosCompleta = {
@@ -1459,31 +1705,27 @@ function lanzarFallbackMonopolioLocal(empresa, items = []) {
                 const alias = String(item.alias || sugerirAliasDesdeUrl(urlOrigen)).trim() || urlOrigen;
                 const resultado = await scrapeMonopolio(urlOrigen, alias);
 
-                if (global.io) {
-                    global.io.to(`empresa:${empresa}`).emit('monopolio_update', {
-                        mensaje: `Scraping local finalizado para ${alias}.`,
-                        productos: Array.isArray(resultado?.productos) ? resultado.productos : [],
-                        grupos: Array.isArray(resultado?.grupos) ? resultado.grupos : [],
-                        esModoSeguidos: Boolean(resultado?.esModoSeguidos),
-                        exploracion: resultado?.exploracion || null,
-                        urlOrigen,
-                        alias,
-                        empresa,
-                        origen: 'fallback-local',
-                        timestamp: new Date()
-                    });
-                }
+                emitirEventoScraper(empresa, 'monopolio_update', {
+                    mensaje: `Scraping local finalizado para ${alias}.`,
+                    productos: Array.isArray(resultado?.productos) ? resultado.productos : [],
+                    grupos: Array.isArray(resultado?.grupos) ? resultado.grupos : [],
+                    esModoSeguidos: Boolean(resultado?.esModoSeguidos),
+                    exploracion: resultado?.exploracion || null,
+                    urlOrigen,
+                    alias,
+                    empresa,
+                    origen: 'fallback-local',
+                    timestamp: new Date()
+                });
             } catch (err) {
-                if (global.io) {
-                    global.io.to(`empresa:${empresa}`).emit('monopolio_update', {
-                        error: err?.message || 'Fallo en fallback local de monopolio.',
-                        urlOrigen: item.url,
-                        alias: item.alias || item.url,
-                        empresa,
-                        origen: 'fallback-local',
-                        timestamp: new Date()
-                    });
-                }
+                emitirEventoScraper(empresa, 'monopolio_update', {
+                    error: err?.message || 'Fallo en fallback local de monopolio.',
+                    urlOrigen: item.url,
+                    alias: item.alias || item.url,
+                    empresa,
+                    origen: 'fallback-local',
+                    timestamp: new Date()
+                });
             }
 
             await esperar(350);
@@ -1524,10 +1766,10 @@ app.post('/api/auth/google', async (req, res) => {
             req.session.email = emailUsuario;
             req.session.rol = ADMIN_WHITELIST.includes(emailUsuario) ? 'Admin' : (autorizado.rol || 'Admin');
             req.session.empresa = autorizado.empresa || EMPRESA_DEFAULT;
-            
-            const locationData = await obtenerUbicacionCompleta(req, clientLocation);
-            await registrarLog(emailUsuario, "Inició sesión en el sistema", locationData);
-            
+            EMPRESA_POR_EMAIL_CACHE.delete(emailUsuario);
+
+            registrarLogConUbicacion(req, emailUsuario, "Inició sesión en el sistema", clientLocation);
+
             return req.session.save(err => {
                 if (err) return res.status(500).json({ error: 'Fallo al guardar sesión.' });
                 res.json({ status: 'success', usuario: emailUsuario });
@@ -1560,8 +1802,8 @@ app.get('/api/system/db-stats', exigeSoloAdmin, async (req, res) => {
 app.get('/api/usuarios-admin', exigeSoloAdmin, async (req, res) => {
     try { 
         const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
-        res.json(await UsuarioAutorizado.find({ empresa }).sort({ fechaAgregado: -1 })); 
-    } catch (e) { res.status(500).send(e); }
+        res.json(await obtenerUsuariosConAvatarUrl({ empresa }));
+    } catch (e) { res.status(500).json({ error: 'Error al cargar usuarios.' }); }
 });
 
 app.post('/api/usuarios-admin', exigeSoloAdmin, async (req, res) => {
@@ -1653,10 +1895,13 @@ app.put('/api/perfil', exigeAdmin, async (req, res) => {
         const email = (req.session?.email || '').toLowerCase().trim();
         const nombreVisible = String(req.body?.nombreVisible || '').trim().slice(0, 80);
         const fotoPerfil = String(req.body?.fotoPerfil || '').trim().slice(0, 2000000);
+        const cambios = { nombreVisible };
+        // Si llega la URL servida por /api/usuarios/:id/foto, la foto no ha cambiado.
+        if (!REF_FOTO_USUARIO_RE.test(fotoPerfil)) cambios.fotoPerfil = fotoPerfil;
 
         const actualizado = await UsuarioAutorizado.findOneAndUpdate(
             { email },
-            { nombreVisible, fotoPerfil },
+            cambios,
             { new: true }
         ).lean();
 
@@ -1668,42 +1913,70 @@ app.put('/api/perfil', exigeAdmin, async (req, res) => {
     }
 });
 
+// Usuarios con el avatar como URL cacheable en lugar del base64 completo.
+async function obtenerUsuariosConAvatarUrl(filtro) {
+    const usuarios = await UsuarioAutorizado.aggregate([
+        { $match: filtro },
+        { $sort: { fechaAgregado: -1 } },
+        { $addFields: { fotoMeta: exprMetaFoto('$fotoPerfil') } },
+        { $project: { fotoPerfil: 0 } }
+    ]);
+    return usuarios.map((u) => {
+        const id = String(u._id);
+        u.fotoPerfil = valorFotoDesdeMeta(u.fotoMeta, (v) => `/api/usuarios/${id}/foto?v=${v}`);
+        delete u.fotoMeta;
+        return u;
+    });
+}
+
+app.get('/api/usuarios/:id/foto', exigeAdmin, async (req, res) => {
+    try {
+        if (!mongoose.isValidObjectId(req.params.id)) return res.sendStatus(404);
+        const empresa = empresaActual(req);
+        const usuario = await UsuarioAutorizado.findOne({ _id: req.params.id, empresa }).select('fotoPerfil').lean();
+        return enviarFotoDataUrl(res, usuario?.fotoPerfil);
+    } catch (e) {
+        return res.sendStatus(500);
+    }
+});
+
 app.get('/api/mensajes/usuarios', exigeAdmin, async (req, res) => {
     try {
         const emailActual = (req.session?.email || '').toLowerCase().trim();
         const empresa = normalizarEmpresa(req.session?.empresa || EMPRESA_DEFAULT);
-        const usuarios = await UsuarioAutorizado.find({ empresa })
-            .sort({ fechaAgregado: -1 })
-            .lean();
 
-        const filtrados = [];
-        for (const u of usuarios) {
-            if (u.email === emailActual) continue;
+        // 3 consultas en total (antes eran 2 por cada usuario del equipo, cada 16 s de polling).
+        const [usuarios, noLeidosAgg, ultimosAgg] = await Promise.all([
+            obtenerUsuariosConAvatarUrl({ empresa, email: { $ne: emailActual } }),
+            MensajeInterno.aggregate([
+                { $match: { empresa, paraEmail: emailActual, leido: false } },
+                { $group: { _id: '$deEmail', total: { $sum: 1 } } }
+            ]),
+            MensajeInterno.aggregate([
+                { $match: { empresa, $or: [{ deEmail: emailActual }, { paraEmail: emailActual }] } },
+                { $sort: { creadoEn: -1 } },
+                { $project: { texto: 1, creadoEn: 1, deEmail: 1, otro: { $cond: [{ $eq: ['$deEmail', emailActual] }, '$paraEmail', '$deEmail'] } } },
+                { $group: { _id: '$otro', texto: { $first: '$texto' }, creadoEn: { $first: '$creadoEn' }, deEmail: { $first: '$deEmail' } } }
+            ])
+        ]);
+        const noLeidosPorEmail = new Map(noLeidosAgg.map((x) => [x._id, x.total]));
+        const ultimoPorEmail = new Map(ultimosAgg.map((x) => [x._id, x]));
 
-            const [noLeidos, ultimoMensaje] = await Promise.all([
-                MensajeInterno.countDocuments({ empresa, deEmail: u.email, paraEmail: emailActual, leido: false }),
-                MensajeInterno.findOne({
-                    empresa,
-                    $or: [
-                        { deEmail: emailActual, paraEmail: u.email },
-                        { deEmail: u.email, paraEmail: emailActual }
-                    ]
-                }).sort({ creadoEn: -1 }).select('texto creadoEn deEmail').lean()
-            ]);
-
-            filtrados.push({
+        const filtrados = usuarios.map((u) => {
+            const ultimoMensaje = ultimoPorEmail.get(u.email);
+            return {
                 email: u.email,
                 rol: u.rol || 'Editor',
                 empresa: normalizarEmpresa(u.empresa || EMPRESA_DEFAULT),
                 nombreVisible: u.nombreVisible || '',
                 fotoPerfil: u.fotoPerfil || '',
                 ultimaConexion: u.ultimaConexion || null,
-                unread: Number(noLeidos || 0),
+                unread: Number(noLeidosPorEmail.get(u.email) || 0),
                 ultimoMensaje: ultimoMensaje?.texto || '',
                 ultimoMensajeTs: ultimoMensaje?.creadoEn || null,
                 ultimoMensajeEsMio: ultimoMensaje?.deEmail === emailActual
-            });
-        }
+            };
+        });
 
         filtrados.sort((a, b) => {
             if (Number(b.unread || 0) !== Number(a.unread || 0)) {
@@ -2559,49 +2832,72 @@ app.delete('/api/gastos/:id', exigeSoloAdmin, async (req, res) => {
     } catch (e) { res.status(500).send(e); }
 });
 
+// Página de productos: ordena sobre una proyección mínima (sin fotos) y luego trae solo esa página.
+async function obtenerPaginaVentas(empresa, skip, limit) {
+    const ordenados = await VentaRopa.aggregate([
+        { $match: { empresa } },
+        { $project: { orden: { $max: ['$fechaModificacion', '$fechaVenta', '$fecha'] } } },
+        { $sort: { orden: -1, _id: -1 } },
+        { $skip: skip },
+        { $limit: limit }
+    ]);
+    const ids = ordenados.map((d) => d._id);
+    if (ids.length === 0) return [];
+
+    const pipelineDetalle = (conMetaFotos) => [
+        { $match: { _id: { $in: ids }, empresa } },
+        { $lookup: { from: 'tiendas', let: { tiendaId: '$tienda' }, pipeline: [ { $match: { $expr: { $and: [ { $eq: ['$_id', '$$tiendaId'] }, { $eq: ['$empresa', empresa] } ] } } }, { $project: { nombre: 1 } } ], as: 'tiendaInfo' } },
+        { $unwind: { path: '$tiendaInfo', preserveNullAndEmptyArrays: true } },
+        {
+            $addFields: {
+                proveedor: { $ifNull: ['$tiendaInfo.nombre', '$proveedor'] },
+                ...(conMetaFotos ? {
+                    imagenMeta: exprMetaFoto('$imagen'),
+                    galeriaMeta: { $map: { input: { $cond: [{ $isArray: '$galeria' }, '$galeria', []] }, as: 'g', in: exprMetaFoto('$$g') } }
+                } : {})
+            }
+        },
+        { $project: conMetaFotos ? { tiendaInfo: 0, imagen: 0, galeria: 0 } : { tiendaInfo: 0 } }
+    ];
+
+    let detalle;
+    try {
+        detalle = (await VentaRopa.aggregate(pipelineDetalle(true))).map(adjuntarUrlsFotosVenta);
+    } catch (errMeta) {
+        // Red de seguridad: si algún dato raro rompe el cálculo de metadatos, firmamos en Node.
+        console.warn('[VENTAS] Metadatos de foto en Mongo fallaron, usando fallback:', errMeta.message);
+        detalle = (await VentaRopa.aggregate(pipelineDetalle(false))).map((v) => {
+            const id = String(v._id);
+            const aUrl = (valor, n) => (typeof valor === 'string' && valor.startsWith('data:'))
+                ? `/api/ventas/${id}/foto/${n}?v=${firmaFotoDesdeValor(valor)}`
+                : (typeof valor === 'string' ? valor : '');
+            v.imagen = aUrl(v.imagen, 0);
+            v.galeria = (Array.isArray(v.galeria) ? v.galeria : []).map((g, i) => aUrl(g, i + 1)).filter(Boolean);
+            return v;
+        });
+    }
+
+    const porId = new Map(detalle.map((v) => [String(v._id), v]));
+    return ids.map((id) => porId.get(String(id))).filter(Boolean);
+}
+
 app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), async (req, res) => {
     try {
         const empresa = empresaActual(req);
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 40; // Lotes de 40 productos
-        const skip = (page - 1) * limit;
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 60, 500));
+        const offsetParam = parseInt(req.query.offset, 10);
+        const skip = Number.isFinite(offsetParam) && offsetParam >= 0 ? offsetParam : (page - 1) * limit;
         const lightweight = String(req.query.lightweight || '').toLowerCase() === '1' || page > 1;
         const includeLogs = String(req.query.includeLogs || '').toLowerCase() === '1';
 
         const estadosKanban = await EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean();
         const nombresEstadosVenta = estadosKanban.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
 
-        // Pipeline para obtener datos paginados y conteo total en una sola consulta
-        const [ventasData] = await VentaRopa.aggregate([
-            { $match: { empresa } },
-            {
-                $addFields: {
-                    ordenReciente: {
-                        $ifNull: [
-                            '$fechaModificacion',
-                            { $ifNull: ['$fechaVenta', '$fecha'] }
-                        ]
-                    }
-                }
-            },
-            { $sort: { ordenReciente: -1, _id: -1 } },
-            {
-                $facet: {
-                    paginatedResults: [
-                        { $skip: skip },
-                        { $limit: limit },
-                        { $lookup: { from: 'tiendas', let: { tiendaId: '$tienda' }, pipeline: [ { $match: { $expr: { $and: [ { $eq: ['$_id', '$$tiendaId'] }, { $eq: ['$empresa', empresa] } ] } } } ], as: 'tiendaInfo' } },
-                        { $unwind: { path: '$tiendaInfo', preserveNullAndEmptyArrays: true } },
-                        { $addFields: { proveedor: '$tiendaInfo.nombre' } },
-                        { $project: { tiendaInfo: 0, ordenReciente: 0 } }
-                    ],
-                    totalCount: [{ $count: 'count' }]
-                }
-            }
+        const [ventas, totalVentas] = await Promise.all([
+            obtenerPaginaVentas(empresa, skip, limit),
+            VentaRopa.countDocuments({ empresa })
         ]);
-
-        const ventas = ventasData.paginatedResults;
-        const totalVentas = ventasData.totalCount[0] ? ventasData.totalCount[0].count : 0;
 
         let resumen = { ingresos: 0, beneficio: 0, inversion: 0, prendasVendidas: 0, roi: 0, totalGastosOperativos: 0 };
         let logs = [];
@@ -2751,7 +3047,10 @@ app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), 
             ventas: sanitizarVentasParaRol(ventas, req),
             logs: logsSegurosPorRol(logs, req),
             totalPages: Math.ceil(totalVentas / limit),
-            currentPage: page
+            currentPage: page,
+            total: totalVentas,
+            offset: skip,
+            limit
         });
     } catch (error) {
         console.error('Fallo en API /ventas:', error);
@@ -2759,12 +3058,64 @@ app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), 
     }
 });
 
+// Foto n de un producto (0 = portada, 1..N = galería). Cacheable: la URL lleva la firma del contenido.
+app.get('/api/ventas/:id/foto/:n', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const n = parseInt(req.params.n, 10);
+        if (!mongoose.isValidObjectId(id) || !Number.isInteger(n) || n < 0 || n > 500) return res.sendStatus(404);
+        const empresa = empresaActual(req);
+        const [doc] = await VentaRopa.aggregate([
+            { $match: { _id: new mongoose.Types.ObjectId(id), empresa } },
+            { $project: { _id: 0, foto: n === 0 ? '$imagen' : { $arrayElemAt: [{ $cond: [{ $isArray: '$galeria' }, '$galeria', []] }, n - 1] } } }
+        ]);
+        return enviarFotoDataUrl(res, doc?.foto);
+    } catch (error) {
+        return res.sendStatus(500);
+    }
+});
+
+// Exportación completa (con fotos reales) para la copia de seguridad local.
+// Se envía producto a producto desde un cursor: con miles de fotos base64 cargarlo todo
+// en memoria podía tumbar una instancia pequeña de Render.
+app.get('/api/ventas/export', exigeSoloAdmin, async (req, res) => {
+    const empresa = empresaActual(req);
+    let empezado = false;
+    try {
+        const tiendas = await Tienda.find({ empresa }).select('nombre').lean();
+        const nombreTienda = new Map(tiendas.map((t) => [String(t._id), t.nombre]));
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="Backup_Seychelles_${new Date().toISOString().split('T')[0]}.json"`);
+        res.write('[');
+        empezado = true;
+        let primero = true;
+        for await (const v of VentaRopa.find({ empresa }).lean().cursor()) {
+            const fila = JSON.stringify({ ...v, proveedor: nombreTienda.get(String(v.tienda)) || v.proveedor || '' });
+            const puedeSeguir = res.write(primero ? fila : `,${fila}`);
+            primero = false;
+            if (!puedeSeguir) await new Promise((resolve) => res.once('drain', resolve));
+        }
+        return res.end(']');
+    } catch (error) {
+        console.error('[EXPORT] Error exportando inventario:', error.message);
+        if (empezado) return res.destroy(error);
+        return res.status(500).json({ error: 'No se pudo exportar el inventario.' });
+    }
+});
+
+async function buscarTiendaPorNombre(empresa, nombre) {
+    const limpio = String(nombre || '').trim();
+    if (!limpio) return null;
+    return Tienda.findOne({ nombre: limpio, empresa }).select('_id nombre').lean();
+}
+
 app.post('/api/ventas', exigeRol(['Admin', 'Editor']), bloquearMutacionVisualizador, async (req, res) => {
     try {
         const empresa = empresaActual(req);
-        const { proveedor, ...datosVenta } = req.body;
-        
-        const tiendaDoc = await Tienda.findOne({ nombre: proveedor, empresa });
+        const { proveedor, ...resto } = req.body || {};
+        const datosVenta = await resolverFotosEntrantes(empresa, limpiarCamposProtegidosVenta(resto));
+
+        const tiendaDoc = await buscarTiendaPorNombre(empresa, proveedor);
 
         if (datosVenta.estado) {
             const estadoCfg = await EstadoKanban.findOne({ nombre: datosVenta.estado, empresa }).lean();
@@ -2780,8 +3131,9 @@ app.post('/api/ventas', exigeRol(['Admin', 'Editor']), bloquearMutacionVisualiza
         const nuevaVenta = new VentaRopa({ ...datosVenta, empresa, tienda: tiendaDoc ? tiendaDoc._id : null });
         await nuevaVenta.save(); 
         invalidateKpiResumenCache(empresa);
-        await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor})`);
-        return res.json({ status: "success", venta: nuevaVenta });
+        await registrarLog(req.session.email, `Registró prenda en stock: ${nuevaVenta.prenda} (${proveedor || 'Sin tienda'})`);
+        const { imagen, galeria, ...ventaSinFotos } = nuevaVenta.toObject();
+        return res.json({ status: "success", venta: ventaSinFotos });
     } catch (error) { 
         return res.status(500).json({ error: 'Error al registrar artículo.' }); 
     }
@@ -2791,9 +3143,17 @@ app.put('/api/ventas/:id', exigeSoloAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
         const { id } = req.params;
-        const { proveedor, ...datosVenta } = req.body;
+        if (!mongoose.isValidObjectId(id)) return res.status(404).json({ error: 'Producto no encontrado en tu empresa.' });
+        const body = req.body || {};
+        const { proveedor, ...resto } = body;
+        const datosVenta = await resolverFotosEntrantes(empresa, limpiarCamposProtegidosVenta(resto), id);
 
-        const tiendaDoc = await Tienda.findOne({ nombre: proveedor, empresa });
+        // Solo cambiamos la tienda si el cliente la envía: añadir una foto o un comentario
+        // ya no deja el producto "Sin asignar".
+        if (Object.prototype.hasOwnProperty.call(body, 'proveedor')) {
+            const tiendaDoc = await buscarTiendaPorNombre(empresa, proveedor);
+            datosVenta.tienda = tiendaDoc ? tiendaDoc._id : null;
+        }
 
         if (datosVenta.estado) {
             const estadoCfg = await EstadoKanban.findOne({ nombre: datosVenta.estado, empresa }).lean();
@@ -2811,10 +3171,10 @@ app.put('/api/ventas/:id', exigeSoloAdmin, async (req, res) => {
         }
 
         const ventaActualizada = await VentaRopa.findOneAndUpdate(
-            { _id: id, empresa }, 
-            { ...datosVenta, tienda: tiendaDoc ? tiendaDoc._id : null, fechaModificacion: new Date().toISOString().slice(0, 10) }, 
-            { new: true }
-        );
+            { _id: id, empresa },
+            { ...datosVenta, fechaModificacion: new Date().toISOString().slice(0, 10) },
+            { new: true, projection: { imagen: 0, galeria: 0 } }
+        ).lean();
         if (!ventaActualizada) return res.status(404).json({ error: 'Producto no encontrado en tu empresa.' });
 
         invalidateKpiResumenCache(empresa);
@@ -2846,10 +3206,10 @@ app.put('/api/ventas/:id/estado', exigeSoloAdmin, async (req, res) => {
             updateData.loteVentaEtiqueta = '';
         }
 
-        const ventaActualizada = await VentaRopa.findOneAndUpdate({ _id: id, empresa }, updateData, { new: true });
+        const ventaActualizada = await VentaRopa.findOneAndUpdate({ _id: id, empresa }, updateData, { new: true, projection: { imagen: 0, galeria: 0 } }).lean();
         if (!ventaActualizada) return res.status(404).json({ error: 'Producto no encontrado en tu empresa.' });
         invalidateKpiResumenCache(empresa);
-        await registrarLog(req.session.email, `Transición de estado: [${ventaActualizada.prenda}] -> ${estado.toUpperCase()}`);
+        await registrarLog(req.session.email, `Transición de estado: [${ventaActualizada.prenda}] -> ${String(estado || '').toUpperCase()}`);
         return res.json({ status: "success", venta: ventaActualizada });
     } catch (error) {
         return res.status(500).json({ error: 'Error en la actualización de la columna Kanban.' });
@@ -2914,12 +3274,11 @@ app.delete('/api/ventas/:id', exigeSoloAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/logout', async (req, res) => { 
-    const { clientLocation } = req.body;
+app.post('/api/logout', async (req, res) => {
+    const { clientLocation } = req.body || {};
     if (req.session && req.session.email) {
         const emailUsuario = req.session.email;
-        const locationData = await obtenerUbicacionCompleta(req, clientLocation);
-        await registrarLog(emailUsuario, "Cerró sesión en el sistema", locationData);
+        registrarLogConUbicacion(req, emailUsuario, "Cerró sesión en el sistema", clientLocation);
         req.session.destroy(() => res.sendStatus(200));
     } else {
         res.sendStatus(200);
@@ -2929,8 +3288,9 @@ app.get('/api/logout', (req, res) => { req.session.destroy(() => res.sendStatus(
 
 // Fallback SPA solo para rutas no-API; evita romper endpoints GET registrados debajo.
 app.get(/^\/(?!api(?:\/|$)).*/, (req, res) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    // Un recurso con extensión que no existe (p. ej. /sw.js) es un 404, no la SPA en HTML.
+    if (path.extname(req.path)) return res.sendStatus(404);
+    return enviarIndexHtml(req, res);
 });
 
 const PORT = process.env.PORT || 3000;
@@ -2969,6 +3329,7 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
 
         res.json({ 
             success: true, 
+            serverTime: Date.now(),
             mensaje: 'GitHub está iniciando el escaneo sin bloqueos. Recibirás un aviso en esta pantalla en 1-2 minutos cuando termine.' 
         });
 
@@ -3013,23 +3374,66 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
         }
 
         const resultados = { discrepancias: [], nuevos: [], identicos: [], desaparecidos: [] };
-        const productosBD = await VentaRopa.find({ canalVenta: 'Vinted', empresa }).lean();
+        // Sin fotos: con cientos de productos base64 esta consulta pesaba decenas de MB.
+        const [productosBD, tiendasEmpresa] = await Promise.all([
+            VentaRopa.find({ canalVenta: 'Vinted', empresa })
+                .select('prenda precioVenta fecha fechaVenta proveedor tienda comentariosProducto')
+                .lean(),
+            Tienda.find({ empresa }).select('nombre').lean()
+        ]);
+        const nombreTiendaPorId = new Map(tiendasEmpresa.map((t) => [String(t._id), t.nombre]));
 
-        const cleanStr = str => String(str || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+        const cleanStr = str => String(str || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
         const normalizarProveedor = (v) => String(v || 'Vinted').trim().toLowerCase() || 'vinted';
         const hayCoincidenciaFlexible = (a, b) => {
             if (!a || !b) return false;
             if (a === b) return true;
             return (a.length > 4 && b.includes(a)) || (b.length > 4 && a.includes(b));
         };
+        // El esquema no guarda "proveedor": la tienda real sale de la referencia a Tienda.
+        const proveedorDeProducto = (p) => nombreTiendaPorId.get(String(p.tienda)) || p.proveedor || 'Vinted';
+
+        const bdPorProveedor = new Map();
+        const bdPorTituloExacto = new Map();
+        productosBD.forEach((p) => {
+            p._titulo = cleanStr(p.prenda);
+            p._proveedor = normalizarProveedor(proveedorDeProducto(p));
+            if (!bdPorProveedor.has(p._proveedor)) bdPorProveedor.set(p._proveedor, []);
+            bdPorProveedor.get(p._proveedor).push(p);
+            const claveExacta = `${p._proveedor}::${p._titulo}`;
+            if (!bdPorTituloExacto.has(claveExacta)) bdPorTituloExacto.set(claveExacta, p);
+        });
+
+        const buscarCoincidencia = (tituloLimpio, proveedorFuente) => {
+            const exacta = bdPorTituloExacto.get(`${proveedorFuente}::${tituloLimpio}`);
+            if (exacta) return exacta;
+            const mismaTienda = bdPorProveedor.get(proveedorFuente) || [];
+            const flexible = mismaTienda.find((p) => hayCoincidenciaFlexible(p._titulo, tituloLimpio));
+            if (flexible) return flexible;
+            // Escaneo genérico ("Vinted") o alias sin productos aún: buscamos en todas las tiendas
+            // para no duplicar artículos que ya están dados de alta con otra tienda.
+            if (proveedorFuente === 'vinted' || mismaTienda.length === 0) {
+                return productosBD.find((p) => p._titulo === tituloLimpio)
+                    || productosBD.find((p) => hayCoincidenciaFlexible(p._titulo, tituloLimpio))
+                    || null;
+            }
+            return null;
+        };
 
         const titulosWebPorProveedor = new Map();
+        const idsEmparejados = new Set();
 
         productosExtraidos.forEach(item => {
-            const titulo = item.titulo || item.prenda || '';
-            const precioWeb = parseFloat(item.precio);
+            const titulo = String(item.titulo || item.prenda || '').trim();
+            const precioWeb = parseFloat(String(item.precio ?? '').replace(',', '.'));
             const imagen = item.imagen || '';
-            const galeria = item.galeria || [];
+            const galeria = Array.isArray(item.galeria) ? item.galeria : [];
             const proveedorFuente = normalizarProveedor(
                 item.proveedor || item.cuenta || item.aliasFuente || item.origenGrupo || item.alias || 'Vinted'
             );
@@ -3040,14 +3444,10 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
                 const listaActual = titulosWebPorProveedor.get(proveedorFuente) || [];
                 listaActual.push(cleanItemTitle);
                 titulosWebPorProveedor.set(proveedorFuente, listaActual);
-                
-                // MODIFICACIÓN: Ahora la coincidencia requiere que el título y el proveedor (tienda) sean similares.
-                const coincidencia = productosBD.find(p => {
-                    const cleanP = cleanStr(p.prenda);
-                    const mismoTitulo = hayCoincidenciaFlexible(cleanP, cleanItemTitle);
-                    const mismoProveedor = normalizarProveedor(p.proveedor) === proveedorFuente;
-                    return mismoTitulo && mismoProveedor;
-                });
+
+                // La coincidencia exige título similar dentro de la misma tienda/proveedor.
+                const coincidencia = buscarCoincidencia(cleanItemTitle, proveedorFuente);
+                if (coincidencia) idsEmparejados.add(String(coincidencia._id));
 
                 if (coincidencia) {
                     if (Math.abs(coincidencia.precioVenta - precioWeb) > 0.01 || coincidencia.prenda !== titulo) {
@@ -3074,15 +3474,16 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
                         });
                     }
                 } else {
-                    resultados.nuevos.push({ 
-                        prenda: titulo, 
-                        precioVenta: precioWeb, 
-                        imagen, galeria, canalVenta: 'Vinted', 
+                    resultados.nuevos.push({
+                        prenda: titulo,
+                        precioVenta: precioWeb,
+                        imagen, galeria, canalVenta: 'Vinted',
                         proveedor: proveedorLabel,
                         estado: 'No Vendido',
                         marca: item.marca || '', talla: item.talla || '',
                         condicion: item.condicion || '', popularidad: item.favoritos || 0,
-                        descripcion: item.descripcion || '' });
+                        descripcion: item.descripcion || '',
+                        url: item.url || '' });
                 }
             }
         });
@@ -3090,26 +3491,38 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
         // Detectar artículos de Vinted en MongoDB que no aparecen en el scraping actual.
         const activosMongo = productosBD.filter(p => !p.fechaVenta);
         activosMongo.forEach(p => {
-            const cleanP = cleanStr(p.prenda || '');
-            if (!cleanP) return;
-            const proveedorMongo = normalizarProveedor(p.proveedor);
-            const titulosProveedor = titulosWebPorProveedor.get(proveedorMongo);
+            if (!p._titulo || idsEmparejados.has(String(p._id))) return;
+            const titulosProveedor = titulosWebPorProveedor.get(p._proveedor);
             // Si no se ha scrapeado ese proveedor concreto, no lo marcamos como desaparecido.
             if (!titulosProveedor || titulosProveedor.length === 0) return;
 
-            const existeEnWeb = titulosProveedor.some(t => hayCoincidenciaFlexible(cleanP, t));
+            const existeEnWeb = titulosProveedor.some(t => hayCoincidenciaFlexible(p._titulo, t));
             if (!existeEnWeb) {
                 resultados.desaparecidos.push({
                     idMongo: p._id,
                     prenda: p.prenda,
                     precio: p.precioVenta,
-                    proveedor: p.proveedor || 'Vinted',
-                    imagen: p.imagen || '',
+                    proveedor: proveedorDeProducto(p),
+                    imagen: '',
                     fechaRegistro: p.fecha || '',
                     comentariosProducto: p.comentariosProducto || ''
                 });
             }
         });
+
+        // Miniaturas por URL (la foto real se sirve desde /api/ventas/:id/foto/0).
+        const conImagenPropia = [...resultados.discrepancias, ...resultados.identicos, ...resultados.desaparecidos];
+        if (conImagenPropia.length) {
+            const metas = await VentaRopa.aggregate([
+                { $match: { empresa, _id: { $in: conImagenPropia.map((r) => r.idMongo) } } },
+                { $project: { meta: exprMetaFoto('$imagen') } }
+            ]);
+            const fotoPorId = new Map(metas.map((m) => [String(m._id), valorFotoDesdeMeta(m.meta, (v) => `/api/ventas/${m._id}/foto/0?v=${v}`)]));
+            resultados.desaparecidos.forEach((r) => { r.imagen = fotoPorId.get(String(r.idMongo)) || ''; });
+            [...resultados.discrepancias, ...resultados.identicos].forEach((r) => {
+                if (!r.imagen) r.imagen = fotoPorId.get(String(r.idMongo)) || '';
+            });
+        }
 
         res.json(resultados);
     } catch (error) {
@@ -3136,15 +3549,15 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
             .trim();
         const firmaPorProveedor = (titulo, proveedor) => `${normalizarTxt(proveedor || 'vinted')}::${normalizarTxt(titulo)}`;
 
-        const proveedoresLote = [...new Set(productos.map(p => String(p?.proveedor || 'Vinted').trim()).filter(Boolean))];
-        const existentesMismaEmpresa = await VentaRopa.find({
-            empresa,
-            canalVenta: 'Vinted',
-            proveedor: { $in: proveedoresLote }
-        }).select('prenda proveedor').lean();
+        const [existentesMismaEmpresa, tiendasEmpresa] = await Promise.all([
+            VentaRopa.find({ empresa, canalVenta: 'Vinted' }).select('prenda proveedor tienda').lean(),
+            Tienda.find({ empresa }).select('nombre').lean()
+        ]);
+        const nombreTiendaPorId = new Map(tiendasEmpresa.map((t) => [String(t._id), t.nombre]));
 
+        // La tienda real de cada producto sale de su referencia (el esquema no guarda "proveedor").
         const firmasExistentes = new Set(
-            existentesMismaEmpresa.map(v => firmaPorProveedor(v.prenda, v.proveedor))
+            existentesMismaEmpresa.map(v => firmaPorProveedor(v.prenda, nombreTiendaPorId.get(String(v.tienda)) || v.proveedor || 'Vinted'))
         );
         const firmasLote = new Set();
         const estadosKanban = await EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean();
@@ -3174,18 +3587,26 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
 
             let tiendaDoc = await Tienda.findOne({ nombre: limpio, empresa });
             if (!tiendaDoc) {
-                tiendaDoc = new Tienda({ nombre: limpio, empresa });
-                await tiendaDoc.save();
+                try {
+                    tiendaDoc = await Tienda.create({ nombre: limpio, empresa });
+                } catch (errTienda) {
+                    // Carrera con otra importación simultánea: la tienda ya existe.
+                    tiendaDoc = await Tienda.findOne({ nombre: limpio, empresa });
+                }
             }
             tiendasCache.set(limpio, tiendaDoc);
             return tiendaDoc;
         };
 
         const registrosCreados = [];
+        const documentosNuevos = [];
         const resumenTiendas = {};
         let omitidosDuplicados = 0;
-        for (const prod of productos) {
-            const nombreTienda = (prod.proveedor || '').trim() || 'Vinted';
+        const marcaImportacion = Date.now();
+        for (const [indice, prodRaw] of productos.entries()) {
+            const prod = limpiarCamposProtegidosVenta(prodRaw);
+            if (!String(prod.prenda || '').trim()) continue;
+            const nombreTienda = String(prod.proveedor || '').trim() || 'Vinted';
             const firmaActual = firmaPorProveedor(prod.prenda, nombreTienda);
             // Regla clave: solo consideramos duplicado dentro de la misma tienda/proveedor.
             if (firmasExistentes.has(firmaActual) || firmasLote.has(firmaActual)) {
@@ -3209,7 +3630,7 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
                 ? (prod.fechaVenta || new Date().toISOString().split('T')[0])
                 : '';
 
-            const nuevaVenta = new VentaRopa({
+            documentosNuevos.push({
                 ...prod,
                 empresa,
                 estado: estadoFinal,
@@ -3218,11 +3639,13 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
                 imagen: prod.imagen,
                 galeria: galeriaUrls,
                 tienda: tiendaSeleccionada ? tiendaSeleccionada._id : null,
-                sku: `VNT-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-                comentariosProducto: `${prod.comentariosProducto || ''}${prod.comentariosProducto ? ' · ' : ''}Importado por Scraper el ${new Date().toLocaleDateString()} (${nombreTienda})`
+                sku: `VNT-${marcaImportacion}-${indice}`,
+                comentariosProducto: `${prod.comentariosProducto || ''}${prod.comentariosProducto ? ' · ' : ''}Importado por Scraper el ${new Date().toLocaleDateString('es-ES')} (${nombreTienda})`
             });
-            await nuevaVenta.save();
-            registrosCreados.push(nuevaVenta.prenda);
+            registrosCreados.push(prod.prenda);
+        }
+        if (documentosNuevos.length) {
+            await VentaRopa.insertMany(documentosNuevos);
         }
         invalidateKpiResumenCache(empresa);
         notificarCambio(); // Notificar cambio para refrescar el panel principal
@@ -3245,19 +3668,23 @@ app.post('/api/ventas/bulk', exigeAdmin, async (req, res) => {
         if (!productos || !Array.isArray(productos)) return res.status(400).json({ error: 'Lista de productos no válida.' });
 
         // Mapeamos los productos para asegurar que tengan IDs de tienda válidos
-        const productosProcesados = await Promise.all(productos.map(async (p) => {
-            let tiendaId = null;
-            if (p.proveedor) {
-                const t = await Tienda.findOne({ nombre: p.proveedor, empresa });
-                if (t) tiendaId = t._id;
-            }
-            return {
+        const tiendas = await Tienda.find({ empresa }).select('nombre').lean();
+        const tiendaPorNombre = new Map(tiendas.map((t) => [String(t.nombre).trim(), t._id]));
+        const marca = Date.now();
+        const productosProcesados = [];
+        for (const [indice, original] of productos.entries()) {
+            if (!original || typeof original !== 'object') continue;
+            // Sin _id: así un backup se puede restaurar aunque los productos sigan existiendo.
+            const p = await resolverFotosEntrantes(empresa, limpiarCamposProtegidosVenta(original));
+            const nombreTienda = String(p.proveedor || '').trim();
+            delete p.proveedor;
+            productosProcesados.push({
                 ...p,
                 empresa,
-                tienda: tiendaId,
-                sku: p.sku || `BK-${Date.now()}-${Math.floor(Math.random() * 1000)}`
-            };
-        }));
+                tienda: tiendaPorNombre.get(nombreTienda) || null,
+                sku: p.sku || `BK-${marca}-${indice}`
+            });
+        }
 
         const insertados = await VentaRopa.insertMany(productosProcesados);
         invalidateKpiResumenCache(empresa);
@@ -3284,34 +3711,31 @@ app.post('/api/scraper/webhook-github', async (req, res) => {
     }
 
     try {
-        const { productos, urlOrigen, empresa: empresaBody, error: errorMsg } = req.body;
+        const { urlOrigen, empresa: empresaBody, error: errorMsg } = req.body || {};
+        const productos = Array.isArray(req.body?.productos) ? req.body.productos : [];
         const empresa = normalizarEmpresa(empresaBody || EMPRESA_DEFAULT);
 
         if (errorMsg) {
             console.error(`[GITHUB-WEBHOOK-ERROR] Recibido error de scraper: ${errorMsg}`);
-            if (global.io) {
-                global.io.to(`empresa:${empresa}`).emit('scraper_update', {
-                    error: errorMsg,
-                    empresa,
-                    urlOrigen: urlOrigen,
-                    timestamp: new Date()
-                });
-            }
+            emitirEventoScraper(empresa, 'scraper_update', {
+                error: errorMsg,
+                empresa,
+                urlOrigen: urlOrigen,
+                timestamp: new Date()
+            });
             return res.json({ success: true, status: 'error_received' });
         }
 
         console.log(`[GITHUB-WEBHOOK] Recibidos ${productos.length} productos de ${urlOrigen}`);
         
         // Notificar a los administradores conectados vía Socket.io
-        if (global.io) {
-            global.io.to(`empresa:${empresa}`).emit('scraper_update', { // Notificar al room correcto
-                mensaje: `GitHub ha terminado de escanear ${productos.length} productos.`,
-                productos: productos,
-                empresa,
-                urlOrigen: urlOrigen,
-                timestamp: new Date()
-            });
-        }
+        emitirEventoScraper(empresa, 'scraper_update', { // Notificar al room correcto
+            mensaje: `GitHub ha terminado de escanear ${productos.length} productos.`,
+            productos: productos,
+            empresa,
+            urlOrigen: urlOrigen,
+            timestamp: new Date()
+        });
 
         res.json({ success: true });
     } catch (error) {
@@ -3320,18 +3744,46 @@ app.post('/api/scraper/webhook-github', async (req, res) => {
 });
 
 /**
+ * Eventos de scraping recientes de la empresa (para recuperar los que llegaron sin socket).
+ */
+app.get('/api/scraper/eventos', exigeAdmin, (req, res) => {
+    const empresa = empresaActual(req);
+    const tipo = req.query.tipo === 'monopolio' ? 'monopolio_update' : 'scraper_update';
+    const desde = Number(req.query.desde) || 0;
+    const cfg = EVENTOS_SCRAPER_LIMITES[tipo];
+    const ahora = Date.now();
+    const eventos = (EVENTOS_SCRAPER.get(`${empresa}|${tipo}`) || [])
+        .filter((e) => e.ts > desde && (ahora - e.ts) < cfg.ttlMs)
+        .map((e) => e.evento);
+    res.json({ eventos });
+});
+
+/**
  * Aplica cambios de precio a productos existentes
  */
 app.post('/api/scraper/aplicar', exigeAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
-        const { cambios } = req.body;
-        for (const cambio of cambios) {
-            await VentaRopa.findOneAndUpdate({ _id: cambio.idMongo, empresa }, { precioVenta: cambio.valorNuevo, prenda: cambio.prenda, fechaModificacion: new Date().toISOString().slice(0, 10) });
-            await registrarLog(req.session.email, `Sincronización artículo: ${cambio.prenda} -> ${cambio.valorNuevo}€`);
-        }
+        const cambios = (Array.isArray(req.body?.cambios) ? req.body.cambios : [])
+            .filter((c) => c && mongoose.isValidObjectId(c.idMongo) && Number.isFinite(Number(c.valorNuevo)));
+        if (cambios.length === 0) return res.status(400).json({ error: 'No hay cambios válidos para aplicar.' });
+
+        const hoy = new Date().toISOString().slice(0, 10);
+        const resultado = await VentaRopa.bulkWrite(cambios.map((cambio) => ({
+            updateOne: {
+                filter: { _id: cambio.idMongo, empresa },
+                update: {
+                    $set: {
+                        precioVenta: Number(cambio.valorNuevo),
+                        ...(String(cambio.prenda || '').trim() ? { prenda: String(cambio.prenda).trim() } : {}),
+                        fechaModificacion: hoy
+                    }
+                }
+            }
+        })), { ordered: false });
+        cambios.forEach((cambio) => registrarLog(req.session.email, `Sincronización artículo: ${cambio.prenda} -> ${cambio.valorNuevo}€`));
         invalidateKpiResumenCache(empresa);
-        res.json({ success: true });
+        res.json({ success: true, modificados: resultado.modifiedCount });
     } catch (error) {
         res.status(500).json({ error: 'Error al actualizar precios.' });
     }
@@ -3798,7 +4250,7 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
                     detalle: errItem?.response?.data?.message || errItem?.response?.data?.error || errItem.message || 'error desconocido'
                 });
             }
-            await new Promise(resolve => setTimeout(resolve, 800));
+            await esperar(400);
         }
 
         const fallbackItems = errores.map((e) => ({ url: e.url, alias: e.alias || e.url }));
@@ -3809,6 +4261,7 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
         if (lanzadas === 0 && fallbackItems.length > 0) {
             return res.json({
                 success: true,
+                serverTime: Date.now(),
                 lanzadas: 0,
                 lanzadasLocal: fallbackItems.length,
                 fallidas: 0,
@@ -3826,6 +4279,7 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
 
         res.json({
             success: true,
+            serverTime: Date.now(),
             lanzadas,
             lanzadasLocal: fallbackItems.length,
             fallidas: errores.length,
@@ -3893,7 +4347,7 @@ app.post('/api/monopolio/scrape-selected', exigeAdmin, async (req, res) => {
                     detalle: errItem?.response?.data?.message || errItem?.response?.data?.error || errItem.message || 'error desconocido'
                 });
             }
-            await new Promise(resolve => setTimeout(resolve, 800));
+            await esperar(400);
         }
 
         const fallbackItems = errores.map((e) => ({ url: e.url, alias: e.alias || e.url }));
@@ -3904,6 +4358,7 @@ app.post('/api/monopolio/scrape-selected', exigeAdmin, async (req, res) => {
         if (lanzadas === 0 && fallbackItems.length > 0) {
             return res.json({
                 success: true,
+                serverTime: Date.now(),
                 lanzadas: 0,
                 lanzadasLocal: fallbackItems.length,
                 fallidas: 0,
@@ -3922,6 +4377,7 @@ app.post('/api/monopolio/scrape-selected', exigeAdmin, async (req, res) => {
 
         res.json({
             success: true,
+            serverTime: Date.now(),
             lanzadas,
             lanzadasLocal: fallbackItems.length,
             fallidas: errores.length,
@@ -3951,9 +4407,11 @@ app.post('/api/monopolio/discover-profiles', exigeAdmin, async (req, res) => {
             ? Math.max(1, Math.min(maxProfilesRaw, 600))
             : undefined;
 
+        // Presupuesto de tiempo: la petición HTTP no puede quedarse colgada minutos explorando.
         const resultado = await scrapeMonopolio(url, alias, {
             discoverOnly: true,
-            maxProfiles
+            maxProfiles,
+            timeBudgetMs: 70000
         });
 
         const perfilesCrudos = Array.isArray(resultado?.perfiles) ? resultado.perfiles : [];
@@ -4001,32 +4459,34 @@ app.post('/api/monopolio/webhook-github', async (req, res) => {
 
         if (errorMsg) {
             console.error(`[MONOPOLIO-WEBHOOK-ERROR] Recibido error de scraper: ${errorMsg}`);
-            if (global.io) {
-                global.io.to(`empresa:${empresaNormalizada}`).emit('monopolio_update', {
-                    error: errorMsg,
-                    empresa: empresaNormalizada,
-                    urlOrigen,
-                    alias,
-                    timestamp: new Date()
-                });
-            }
+            emitirEventoScraper(empresaNormalizada, 'monopolio_update', {
+                error: errorMsg,
+                empresa: empresaNormalizada,
+                urlOrigen,
+                alias,
+                timestamp: new Date()
+            });
             return res.json({ success: true, status: 'error_received' });
         }
 
         console.log(`[MONOPOLIO-WEBHOOK] Recibidos ${(productos || []).length} productos de ${alias || urlOrigen}`);
-        if (global.io) {
-            global.io.to(`empresa:${empresaNormalizada}`).emit('monopolio_update', {
-                mensaje: `Scraping finalizado para ${alias || urlOrigen}.`,
-                productos: productos || [],
-                grupos: Array.isArray(grupos) ? grupos : [],
-                esModoSeguidos: Boolean(esModoSeguidos),
-                exploracion: exploracion || null,
-                urlOrigen,
-                alias,
-                empresa: empresaNormalizada,
-                timestamp: new Date()
-            });
+        if (urlOrigen) {
+            MonopolioUrl.updateOne(
+                { empresa: empresaNormalizada, url: normalizarUrlObjetivo(urlOrigen) },
+                { $set: { lastScraped: new Date() } }
+            ).catch(() => {});
         }
+        emitirEventoScraper(empresaNormalizada, 'monopolio_update', {
+            mensaje: `Scraping finalizado para ${alias || urlOrigen}.`,
+            productos: productos || [],
+            grupos: Array.isArray(grupos) ? grupos : [],
+            esModoSeguidos: Boolean(esModoSeguidos),
+            exploracion: exploracion || null,
+            urlOrigen,
+            alias,
+            empresa: empresaNormalizada,
+            timestamp: new Date()
+        });
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Error procesando webhook de monopolio' });

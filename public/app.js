@@ -75,20 +75,29 @@ const SCRAPER_PROGRESS_MESSAGES = [
 ];
 
 // --- INICIALIZACIÓN DE SOCKET.IO ---
-const socket = io({
-    transports: ['websocket', 'polling']
-});
+// Si el cliente de Socket.IO no cargó, la app sigue funcionando (sin tiempo real).
+const socket = typeof io === 'function'
+    ? io({ transports: ['websocket', 'polling'] })
+    : { id: null, connected: false, on() {}, emit() {} };
 
 socket.on('connect', () => {
     console.log('[SOCKET] Conectado al servidor con ID:', socket.id);
+    // Las salas no sobreviven a una reconexión: hay que volver a unirse cada vez.
+    if (USUARIO_EMAIL_ACTUAL) {
+        socket.emit('join_empresa');
+        if (typeof recuperarEventosScraperPerdidos === 'function') recuperarEventosScraperPerdidos();
+    }
 });
 
 socket.on('connect_error', (error) => {
     console.error('[SOCKET] Error de conexión:', error);
 });
 
+// Miniatura neutra para imágenes que no cargan (usada en onerror de las tarjetas).
+const IMG_PLACEHOLDER = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' fill='%23111827'/%3E%3Cpath d='M15 40l10-12 8 9 6-7 11 10' fill='none' stroke='%239ca3af' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='22' cy='22' r='4' fill='%239ca3af'/%3E%3C/svg%3E";
+
 function escapeHtmlSafe(value) {
-    return String(value || '')
+    return (value == null ? '' : String(value))
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -502,8 +511,54 @@ socket.on('cita_actualizada', (data) => {
     }
 });
 
-socket.on('scraper_update', async (data) => {
+// --- Recepción de resultados de scraping (socket + recuperación si el socket se perdió) ---
+const EVENTOS_SCRAPER_PROCESADOS = new Set();
+let SCRAPER_ESPERA_DESDE = 0;      // ms: inicio del escaneo manual que estamos esperando
+let MONOPOLIO_ESPERA_DESDE = 0;    // ms: inicio del lote de Monopolio que estamos esperando
+let SCRAPER_RECUPERACION_TIMER = null;
+
+function eventoScraperYaProcesado(data) {
+    const id = data?.eventoId;
+    if (!id) return false;
+    if (EVENTOS_SCRAPER_PROCESADOS.has(id)) return true;
+    EVENTOS_SCRAPER_PROCESADOS.add(id);
+    return false;
+}
+
+async function recuperarEventosScraperPerdidos() {
+    if (!USUARIO_EMAIL_ACTUAL) return;
+    const pendientes = [];
+    if (SCRAPER_ESPERA_DESDE) pendientes.push(['manual', SCRAPER_ESPERA_DESDE, procesarEventoScraper]);
+    if (MONOPOLIO_ESPERA_DESDE && MONOPOLIO_PROGRESS_ACTIVE) pendientes.push(['monopolio', MONOPOLIO_ESPERA_DESDE, procesarEventoMonopolio]);
+    for (const [tipo, desde, procesar] of pendientes) {
+        try {
+            const res = await fetch(`/api/scraper/eventos?tipo=${tipo}&desde=${desde}`, { credentials: 'include' });
+            if (!res.ok) continue;
+            const { eventos } = await res.json();
+            for (const evento of (eventos || [])) await procesar(evento);
+        } catch (_) {}
+    }
+}
+
+// Mientras esperamos a GitHub, comprobamos cada 20 s por si el aviso en tiempo real no llegó.
+function programarRecuperacionScraper() {
+    clearInterval(SCRAPER_RECUPERACION_TIMER);
+    SCRAPER_RECUPERACION_TIMER = setInterval(() => {
+        if (!SCRAPER_ESPERA_DESDE && !(MONOPOLIO_ESPERA_DESDE && MONOPOLIO_PROGRESS_ACTIVE)) {
+            clearInterval(SCRAPER_RECUPERACION_TIMER);
+            SCRAPER_RECUPERACION_TIMER = null;
+            return;
+        }
+        recuperarEventosScraperPerdidos();
+    }, 20000);
+}
+
+socket.on('scraper_update', (data) => procesarEventoScraper(data));
+
+async function procesarEventoScraper(data) {
+    if (!data || eventoScraperYaProcesado(data)) return;
     console.log('[SOCKET] Datos recibidos de GitHub:', data);
+    SCRAPER_ESPERA_DESDE = 0;
 
     if (data.error) {
         console.error('[SCRAPER-ERROR]', data.error);
@@ -524,19 +579,25 @@ socket.on('scraper_update', async (data) => {
         const response = await fetch(`${BACKEND_URL}/api/scraper/analizar-manual`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ productosExtraidos: productos.map(p => ({
                 titulo: p.titulo,
                 precio: p.precio,
                 imagen: p.imagen,
+                galeria: Array.isArray(p.galeria) ? p.galeria : [],
                 descripcion: p.descripcion || '',
                 marca: p.marca || '',
                 talla: p.talla || '',
                 condicion: p.condicion || '',
-                favoritos: p.favoritos || 0
+                favoritos: p.favoritos || 0,
+                url: p.url || '',
+                // La tienda/alias del escaneo: sin esto todo se comparaba contra "Vinted".
+                proveedor: p.proveedor || p.cuenta || p.origenGrupo || ''
             })) })
         });
 
         const comparativa = await response.json();
+        if (!response.ok) throw new Error(comparativa?.error || 'Error al comparar resultados.');
         resultadosScraperActual = comparativa;
         renderizarResultadosScraping(resultadosScraperActual);
 
@@ -559,9 +620,23 @@ socket.on('scraper_update', async (data) => {
         document.getElementById('scraper-step-1').classList.remove('hidden');
         alert('No se pudieron procesar los resultados del scraper remoto. Revisa logs de Render/GitHub.');
     }
-});
+}
 
-socket.on('monopolio_update', (data) => {
+// Id de bloque estable para una URL (btoa fallaba con caracteres no latinos).
+function claveBloqueMonopolio(url) {
+    const txt = String(url || 'sin-url');
+    let hash = 0;
+    for (let i = 0; i < txt.length; i += 1) {
+        hash = ((hash << 5) - hash) + txt.charCodeAt(i);
+        hash |= 0;
+    }
+    return `monopolio-res-${Math.abs(hash).toString(36)}`;
+}
+
+socket.on('monopolio_update', (data) => procesarEventoMonopolio(data));
+
+function procesarEventoMonopolio(data) {
+    if (!data || eventoScraperYaProcesado(data)) return;
     console.log('[SOCKET] Datos de Monopolio recibidos:', data);
     const container = document.getElementById('resultados-monopolio-scraping');
     if (!container) return;
@@ -571,18 +646,19 @@ socket.on('monopolio_update', (data) => {
     upsertDiagnosticoMonopolio(data);
 
     const alias = data.alias || data.urlOrigen;
+    const idBloque = claveBloqueMonopolio(data.urlOrigen);
 
     if (data.error) {
         console.error(`[MONOPOLIO-ERROR] ${alias}:`, data.error);
-        let existingContainer = document.getElementById(`monopolio-res-${btoa(data.urlOrigen)}`);
+        let existingContainer = document.getElementById(idBloque);
         if (existingContainer) existingContainer.remove();
-        
+
         const errorBlock = document.createElement('div');
-        errorBlock.id = `monopolio-res-${btoa(data.urlOrigen)}`;
+        errorBlock.id = idBloque;
         errorBlock.className = 'p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl';
         errorBlock.innerHTML = `
-            <h5 class="font-bold text-rose-300 text-sm mb-2">${alias}</h5>
-            <p class="text-xs text-rose-200">Scraping fallido: ${data.error}</p>
+            <h5 class="font-bold text-rose-300 text-sm mb-2">${escapeHtmlSafe(alias)}</h5>
+            <p class="text-xs text-rose-200">Scraping fallido: ${escapeHtmlSafe(data.error)}</p>
         `;
         container.prepend(errorBlock);
         fijarBloqueProgresoMonopolioAlInicio();
@@ -600,13 +676,13 @@ socket.on('monopolio_update', (data) => {
     const exploracion = data?.exploracion && typeof data.exploracion === 'object' ? data.exploracion : null;
     const productos = productosPlano.length > 0 ? productosPlano : grupos.flatMap((g) => Array.isArray(g?.productos) ? g.productos : []);
 
-    let existingContainer = document.getElementById(`monopolio-res-${btoa(data.urlOrigen)}`);
+    let existingContainer = document.getElementById(idBloque);
     if (existingContainer) {
         existingContainer.remove();
     }
 
     const resultBlock = document.createElement('div');
-    resultBlock.id = `monopolio-res-${btoa(data.urlOrigen)}`;
+    resultBlock.id = idBloque;
     resultBlock.className = 'p-4 bg-black/20 border border-purple-500/20 rounded-2xl';
     const analyticsHtml = construirAnaliticaMonopolio(productos, grupos);
 
@@ -623,8 +699,8 @@ socket.on('monopolio_update', (data) => {
         : '';
 
     resultBlock.innerHTML = `
-        <h5 class="font-bold text-purple-300 text-sm mb-2">${alias}</h5>
-        <p class="text-[10px] opacity-60 mb-3">${productos.length} productos encontrados${grupos.length ? ` · ${grupos.length} cuentas analizadas` : ''}${(grupos.length > 0 && productosPlano.length === 0) ? ' · consolidado desde grupos' : ''}${exploracionTxt}.</p>
+        <h5 class="font-bold text-purple-300 text-sm mb-2">${escapeHtmlSafe(alias)}</h5>
+        <p class="text-[10px] opacity-60 mb-3">${productos.length} productos encontrados${grupos.length ? ` · ${grupos.length} cuentas analizadas` : ''}${exploracionTxt}.</p>
         ${analyticsHtml}
         <div class="grid grid-cols-1 gap-2">${productosHtml}</div>
     `;
@@ -632,7 +708,7 @@ socket.on('monopolio_update', (data) => {
     container.prepend(resultBlock);
     fijarBloqueProgresoMonopolioAlInicio();
     cantarPorVoz(`Scraping de ${alias} finalizado.`);
-});
+}
 
 function actualizarCargaScraper(percent, message, status) {
     const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
@@ -957,6 +1033,7 @@ function iniciarAnimacionCargaScraper(modo = 'vinted') {
 }
 
 function detenerAnimacionCargaScraper(silent = false) {
+    if (silent) SCRAPER_ESPERA_DESDE = 0;
     if (SCRAPER_PROGRESS_INTERVAL) {
         clearInterval(SCRAPER_PROGRESS_INTERVAL);
         SCRAPER_PROGRESS_INTERVAL = null;
@@ -1102,6 +1179,7 @@ function actualizarCargaMonopolio(percent, message, status) {
 
 function detenerAnimacionCargaMonopolio(completado = false, message = '') {
     MONOPOLIO_PROGRESS_ACTIVE = false;
+    MONOPOLIO_ESPERA_DESDE = 0;
     if (MONOPOLIO_PROGRESS_INTERVAL) {
         clearInterval(MONOPOLIO_PROGRESS_INTERVAL);
         MONOPOLIO_PROGRESS_INTERVAL = null;
@@ -1342,7 +1420,7 @@ function recolectarFavoritosLegacyScraper() {
         const merged = {
             ...prev,
             alias: normalized.alias || prev.alias || '',
-            createdAt: Math.max(Number(prev.createdAt) || 0, Number(normalized.createdAt) || 0, Date.now())
+            createdAt: Math.max(Number(prev.createdAt) || 0, Number(normalized.createdAt) || 0)
         };
         dedupe.set(key, merged);
     });
@@ -1350,8 +1428,23 @@ function recolectarFavoritosLegacyScraper() {
     return Array.from(dedupe.values());
 }
 
+const CLAVE_FAVORITOS_SCRAPER = 'seychelles-scraper-urls';
+const CLAVE_FAVORITOS_MIGRADOS = 'seychelles-scraper-urls-migrados-v3';
+
+function leerFavoritosCanonicos() {
+    try {
+        return extraerFavoritosDesdeValorStorage(localStorage.getItem(CLAVE_FAVORITOS_SCRAPER) || '');
+    } catch (_) {
+        return [];
+    }
+}
+
 function getSavedScraperUrls() {
-    const recuperados = recolectarFavoritosLegacyScraper();
+    let migrado = false;
+    try { migrado = localStorage.getItem(CLAVE_FAVORITOS_MIGRADOS) === '1'; } catch (_) {}
+    // Las claves antiguas solo se rescatan una vez; si no, un favorito borrado
+    // reaparecía al leerse otra vez desde alguna de ellas.
+    const recuperados = migrado ? leerFavoritosCanonicos() : recolectarFavoritosLegacyScraper();
     const dedupe = new Map();
 
     recuperados.forEach((item) => {
@@ -1367,7 +1460,7 @@ function getSavedScraperUrls() {
         dedupe.set(key, {
             ...prev,
             alias: n.alias || prev.alias || '',
-            createdAt: Math.max(Number(prev.createdAt) || 0, Number(n.createdAt) || 0, Date.now())
+            createdAt: Math.max(Number(prev.createdAt) || 0, Number(n.createdAt) || 0)
         });
     });
 
@@ -1375,9 +1468,9 @@ function getSavedScraperUrls() {
         .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
         .slice(0, 120);
 
-    // Migra silenciosamente cualquier formato legacy a claves actuales.
-    if (normalizadas.length) {
+    if (!migrado) {
         setSavedScraperUrls(normalizadas);
+        try { localStorage.setItem(CLAVE_FAVORITOS_MIGRADOS, '1'); } catch (_) {}
         SCRAPER_FAVORITOS_RECOVERY_DONE = true;
     }
 
@@ -1385,12 +1478,8 @@ function getSavedScraperUrls() {
 }
 
 function setSavedScraperUrls(items) {
-    const keys = ['seychelles-scraper-urls', 'seychelles-scraper-urls-v2', 'scraper-urls', 'vinted-scraper-urls'];
     const payload = JSON.stringify((items || []).slice(0, 120));
-    for (const key of keys) {
-        try { localStorage.setItem(key, payload); } catch (_) {}
-        try { sessionStorage.setItem(key, payload); } catch (_) {}
-    }
+    try { localStorage.setItem(CLAVE_FAVORITOS_SCRAPER, payload); } catch (_) {}
 }
 
 window.recuperarFavoritosScraperManual = function() {
@@ -1416,7 +1505,7 @@ window.recuperarFavoritosScraperManual = function() {
         mergedMap.set(key, {
             ...prevItem,
             alias: n.alias || prevItem.alias || '',
-            createdAt: Math.max(Number(prevItem.createdAt) || 0, Number(n.createdAt) || 0, Date.now())
+            createdAt: Math.max(Number(prevItem.createdAt) || 0, Number(n.createdAt) || 0)
         });
     });
 
@@ -1462,11 +1551,11 @@ function mostrarNotificacionScraping(data) {
             <span class="text-2xl">🤖</span>
             <div>
                 <p class="font-bold">Scraping de GitHub finalizado</p>
-                <p class="text-xs opacity-90">${data.mensaje}</p>
+                <p class="text-xs opacity-90">${escapeHtmlSafe(data.mensaje)}</p>
             </div>
             <button onclick="this.parentElement.parentElement.remove()" class="ml-4 hover:bg-white/10 p-1 rounded-full">✕</button>
         </div>
-        <button onclick="window.location.reload()" class="bg-white/20 hover:bg-white/30 text-xs py-2 rounded-lg font-bold transition-all">
+        <button onclick="forceRefreshDataManual(); this.parentElement.remove();" class="bg-white/20 hover:bg-white/30 text-xs py-2 rounded-lg font-bold transition-all">
             ACTUALIZAR VISTA AHORA
         </button>
     `;
@@ -1500,7 +1589,11 @@ function loadExternalScript(src) {
         script.src = src;
         script.defer = true;
         script.onload = () => resolve();
-        script.onerror = () => reject(new Error(`No se pudo cargar ${src}`));
+        script.onerror = () => {
+            // Quitamos el <script> fallido para que un reintento posterior lo vuelva a pedir.
+            script.remove();
+            reject(new Error(`No se pudo cargar ${src}`));
+        };
         document.head.appendChild(script);
     });
 }
@@ -1516,6 +1609,66 @@ async function loadScriptWithFallback(urls) {
         }
     }
     throw lastErr || new Error('No se pudo cargar script externo.');
+}
+
+// --- Librerías pesadas bajo demanda ---
+// Antes se descargaban ~3 MB en cada visita y retrasaban el arranque; ahora cada una se
+// pide la primera vez que hace falta (exportar, PDF, gráficas, escáner, fotos HEIC...).
+const LIBRERIAS_EXTERNAS = {
+    xlsx: {
+        listo: () => typeof window.XLSX !== 'undefined',
+        urls: [['https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js', 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js']]
+    },
+    jspdf: {
+        listo: () => Boolean(window.jspdf?.jsPDF?.API?.autoTable),
+        urls: [
+            ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'],
+            ['https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js', 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js']
+        ]
+    },
+    chart: {
+        listo: () => typeof window.Chart !== 'undefined',
+        urls: [['https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js']]
+    },
+    qr: {
+        listo: () => typeof window.Html5Qrcode !== 'undefined',
+        urls: [['https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js', 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js']]
+    },
+    heic: {
+        listo: () => typeof window.heic2any === 'function',
+        urls: [['https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js', 'https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js']]
+    },
+    confetti: {
+        listo: () => typeof window.confetti === 'function',
+        urls: [['https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js', 'https://unpkg.com/canvas-confetti@1.6.0/dist/confetti.browser.min.js']]
+    }
+};
+const LIBRERIAS_EN_CURSO = {};
+
+function cargarLibreria(nombre) {
+    const cfg = LIBRERIAS_EXTERNAS[nombre];
+    if (!cfg) return Promise.reject(new Error(`Librería desconocida: ${nombre}`));
+    if (cfg.listo()) return Promise.resolve();
+    if (!LIBRERIAS_EN_CURSO[nombre]) {
+        LIBRERIAS_EN_CURSO[nombre] = (async () => {
+            // En orden: el plugin de autotable necesita jsPDF ya cargado.
+            for (const alternativas of cfg.urls) await loadScriptWithFallback(alternativas);
+            if (!cfg.listo()) throw new Error(`La librería ${nombre} no se inicializó.`);
+        })().catch((err) => {
+            delete LIBRERIAS_EN_CURSO[nombre];
+            throw err;
+        });
+    }
+    return LIBRERIAS_EN_CURSO[nombre];
+}
+
+// Las gráficas se dibujan en cuanto Chart.js esté listo; mientras tanto no hacemos nada.
+function chartDisponibleORedibujar(redibujar) {
+    if (typeof window.Chart !== 'undefined') return true;
+    // Todas las gráficas están en Analítica: si no está abierta, se dibujan al entrar (navegarASeccion).
+    if (!seccionVisible('sec-analitica')) return false;
+    cargarLibreria('chart').then(() => redibujar()).catch((err) => console.warn('[CHART]', err.message));
+    return false;
 }
 
 async function ensureThreeStackLoaded() {
@@ -1547,6 +1700,13 @@ function valorNumeroSeguro(valor, fallback = 0) {
 // --- NUEVO ESTADO PARA PAGINACIÓN ---
 let CURRENT_PAGE = 1;
 let TOTAL_PAGES = 1;
+let TOTAL_VENTAS = 0;
+const KANBAN_PAGE_SIZE = 60;
+
+function hayMasProductosPorCargar() {
+    if (TOTAL_VENTAS > 0) return BASE_DATOS.length < TOTAL_VENTAS;
+    return CURRENT_PAGE < TOTAL_PAGES;
+}
 let IS_LOADING_MORE = false;
 
 // --- FUNCIONES DE UTILIDAD (DEBOUNCE & THROTTLE) ---
@@ -1619,6 +1779,8 @@ async function iniciarScraping() {
             document.getElementById('scraper-loader').classList.remove('hidden');
 
             actualizarCargaScraper(25, 'GitHub Actions ya está trabajando. Te aviso aquí en cuanto termine.', 'Esperando worker remoto');
+            SCRAPER_ESPERA_DESDE = Number(data.serverTime) || Date.now();
+            programarRecuperacionScraper();
 
             return;
         }
@@ -1748,6 +1910,9 @@ async function procesarArchivoManual(event) {
             let condicion = '';
             let descripcion = '';
             let favoritos = '';
+            let precioCabecera = '';
+            let precioConEuro = '';
+            let precioNumerico = '';
             const galeriaLocal = [];
             const entries = Object.entries(row || {});
 
@@ -1794,9 +1959,16 @@ async function procesarArchivoManual(event) {
                     }
                 });
 
-                if (!precio && isPrice && !foundUrlInParts && !isImageUrl) {
-                    precio = val;
-                } else if (!titulo && !foundUrlInParts && !isPrice && !isUrl && val.length > 4 && isNaN(val)) {
+                // Prioridad: columna con cabecera de precio > valor con "€" > número suelto
+                // (descartando columnas de likes o talla, que antes se colaban como precio).
+                if (!foundUrlInParts && !isImageUrl && !isUrl) {
+                    const cabeceraPrecio = cabeceraCoincide(claveNormalizada, ['price', 'precio', 'coste', 'costo', 'importe', 'eur', 'text 4']);
+                    const cabeceraNoPrecio = cabeceraCoincide(claveNormalizada, ['likes', 'favoritos', 'favs', 'popularidad', 'size', 'talla']);
+                    if (cabeceraPrecio && !precioCabecera && /\d/.test(val)) precioCabecera = val;
+                    else if (val.includes('€') && !precioConEuro) precioConEuro = val;
+                    else if (/^\d+[.,]?\d{0,2}$/.test(val) && !cabeceraNoPrecio && !precioNumerico) precioNumerico = val;
+                }
+                if (!titulo && !foundUrlInParts && !isPrice && !isUrl && val.length > 4 && isNaN(val)) {
                     const vLower = val.toLowerCase();
                     if (vLower !== 'novedad' && !vLower.includes('miembro') && !vLower.includes('ver todo')) titulo = val;
                 }
@@ -1813,6 +1985,7 @@ async function procesarArchivoManual(event) {
                 });
             }
 
+            precio = precioCabecera || precioConEuro || precioNumerico;
             let cleanPrice = '';
             if (precio) {
                 cleanPrice = String(precio).replace(/[^\d,.]/g, '').trim();
@@ -1855,6 +2028,7 @@ async function procesarArchivoManual(event) {
                 const csvText = new TextDecoder('utf-8').decode(arrayBuffer);
                 jsonData = parsearCsvPlano(csvText.replace(/^\uFEFF/, ''));
             } else {
+                await cargarLibreria('xlsx');
                 const data = new Uint8Array(arrayBuffer);
                 const workbook = XLSX.read(data, { type: 'array' });
                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -2014,11 +2188,8 @@ function renderizarResultadosScraping(data) {
 
     if (!data) return;
 
-    tbody.innerHTML = '';
-    gridNuevos.innerHTML = '';
-    gridExistentes.innerHTML = '';
     const gridDesap = document.getElementById('scraper-grid-desaparecidos');
-    if (gridDesap) gridDesap.innerHTML = '';
+    const esc = escapeHtmlSafe;
 
     const discCount = data.discrepancias?.length || 0;
     const nuevoCount = data.nuevos?.length || 0;
@@ -2042,18 +2213,21 @@ function renderizarResultadosScraping(data) {
     const estadoStockNombre = obtenerNombreEstadoStock();
     const estadoVentaNombre = obtenerNombreEstadoVenta();
     const opcionesEstadoImportacion = [estadoStockNombre, estadoVentaNombre];
+    const opcion = (valor, texto, seleccionado = false) => `<option value="${esc(valor)}" ${seleccionado ? 'selected' : ''}>${esc(texto)}</option>`;
+
     if (bulkStatusNode) {
-        bulkStatusNode.innerHTML = ['<option value="">Estado...</option>', ...opcionesEstadoImportacion.map(nombre => `<option value="${nombre}">${nombre}</option>`)].join('');
+        bulkStatusNode.innerHTML = ['<option value="">Estado...</option>', ...opcionesEstadoImportacion.map(nombre => opcion(nombre, nombre))].join('');
         bulkStatusNode.value = '';
     }
     if (bulkStoreNode) {
-        bulkStoreNode.innerHTML = ['<option value="">Tienda...</option>', '<option value="Vinted">Vinted</option>', ...tiendasUnicas.map(nombre => `<option value="${nombre}">${nombre}</option>`)].join('');
+        bulkStoreNode.innerHTML = ['<option value="">Tienda...</option>', '<option value="Vinted">Vinted</option>', ...tiendasUnicas.map(nombre => opcion(nombre, nombre))].join('');
         bulkStoreNode.value = '';
     }
     if (bulkCatNode) {
-        bulkCatNode.innerHTML = ['<option value="">Categoría...</option>', '<option value="General">General</option>', ...LISTA_CATEGORIAS_GLOBAL.map(c => `<option value="${c.nombre}">${c.nombre}</option>`)].join('');
+        bulkCatNode.innerHTML = ['<option value="">Categoría...</option>', '<option value="General">General</option>', ...LISTA_CATEGORIAS_GLOBAL.map(c => opcion(c.nombre, c.nombre))].join('');
         bulkCatNode.value = '';
     }
+    // Tienda sugerida: la del escaneo si ya existe; si no, el alias (se creará al importar).
     const resolverTiendaDefault = (item) => {
         const origen = String(item?.proveedor || item?.cuenta || item?.origenGrupo || '').trim();
         if (!origen) return 'Vinted';
@@ -2077,145 +2251,148 @@ function renderizarResultadosScraping(data) {
     }
     if (discCount === 0 && nuevoCount === 0 && identCount === 0 && missCount === 0) noRes.classList.remove('hidden'); else noRes.classList.add('hidden');
 
-    if (discCount > 0) {
-        data.discrepancias.forEach((d, i) => {
-            const tituloMostrado = d.prendaNueva || d.prenda;
-            tbody.innerHTML += `
-                <tr class="border-b border-white/5 align-middle hover:bg-white/5">
-                    <td class="py-3 pr-2 w-8"><input type="checkbox" class="check-disc-scraper form-checkbox h-4 w-4 rounded text-amber-500 bg-black/40 border-white/20" value="${i}" checked></td>
-                    <td class="py-3"><img src="${d.imagen || ''}" onclick="abrirVisorScraper('disc', ${i})" class="w-10 h-12 rounded-lg object-cover border border-white/10 cursor-pointer hover:scale-110 transition-transform" title="Ver foto" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 60 60\'%3E%3Crect width=\'60\' height=\'60\' fill=\'%23111827\'/%3E%3Cpath d=\'M15 40l10-12 8 9 6-7 11 10\' fill=\'none\' stroke=\'%239ca3af\' stroke-width=\'3\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3Ccircle cx=\'22\' cy=\'22\' r=\'4\' fill=\'%239ca3af\'/%3E%3C/svg%3E'"></td>
-                    <td class="py-3 px-2">
-                        <input type="text" id="disc-item-title-${i}" value="${tituloMostrado}" class="bg-transparent border-b border-white/10 text-xs font-bold uppercase w-full focus:outline-none focus:border-amber-400 px-1 py-0.5 text-white" placeholder="Título...">
-                        <div class="text-[9px] opacity-50 mt-1">En sistema: <span class="font-mono">${d.prenda}</span></div>
-                    </td>
-                    <td class="py-3 text-rose-400/60 line-through text-sm font-mono text-right">${d.valorAntiguo}€</td>
-                    <td class="py-3 text-emerald-400 font-black text-lg text-right">
-                        <input type="number" id="disc-item-price-${i}" value="${valorNumeroSeguro(d.valorNuevo)}" step="0.01" class="bg-transparent border-b border-white/10 text-base text-emerald-400 font-mono w-20 focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-right"> €
-                    </td>
-                </tr>`;
-        });
-    }
+    const imgFallback = 'onerror="this.onerror=null;this.src=IMG_PLACEHOLDER"';
 
-    if (nuevoCount > 0) {
-        let catOptions = LISTA_CATEGORIAS_GLOBAL.map(c => `<option value="${c.nombre}">${c.nombre}</option>`).join('');
-        data.nuevos.forEach((n, i) => {
-            const tiendaSugerida = resolverTiendaDefault(n);
-            const tiendaOptions = ['<option value="">🏬 Sin asignar</option>', ...tiendasUnicas.map(t => `<option value="${t}" ${t === tiendaSugerida ? 'selected' : ''}>🏬 ${t}</option>`)].join('');
-            const estadoActual = String(n.estado || estadoStockNombre).trim() || estadoStockNombre;
-            const estadoOptions = opcionesEstadoImportacion.map(nombre => `<option value="${nombre}" ${nombre === estadoActual ? 'selected' : ''}>${nombre}</option>`).join('');
-            const badgeGaleriaInfo = n.galeria && n.galeria.length > 0 ? `<div class="absolute bottom-1 right-1 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${n.galeria.length}</div>` : '';
-            
-            // Pre-seleccionar talla
-            const tallasDisponibles = ['S', 'M', 'L', 'XL', 'Única'];
-            let tallaScraped = (n.talla || '').toUpperCase();
-            if (!tallasDisponibles.includes(tallaScraped)) {
-                tallaScraped = 'Única';
-            }
-            const tallaOptions = tallasDisponibles.map(t => `<option value="${t}" ${t === tallaScraped ? 'selected' : ''}>${t}</option>`).join('');
+    // Se construye todo el HTML de golpe: con cientos de productos, "innerHTML +=" en bucle
+    // volvía a parsear la tabla entera en cada vuelta.
+    tbody.innerHTML = (data.discrepancias || []).map((d, i) => {
+        const tituloMostrado = d.prendaNueva || d.prenda;
+        return `
+            <tr class="border-b border-white/5 align-middle hover:bg-white/5">
+                <td class="py-3 pr-2 w-8"><input type="checkbox" class="check-disc-scraper form-checkbox h-4 w-4 rounded text-amber-500 bg-black/40 border-white/20" value="${i}" checked></td>
+                <td class="py-3"><img src="${esc(d.imagen || IMG_PLACEHOLDER)}" loading="lazy" onclick="abrirVisorScraper('disc', ${i})" class="w-10 h-12 rounded-lg object-cover border border-white/10 cursor-pointer hover:scale-110 transition-transform" title="Ver foto" ${imgFallback}></td>
+                <td class="py-3 px-2">
+                    <input type="text" id="disc-item-title-${i}" value="${esc(tituloMostrado)}" class="bg-transparent border-b border-white/10 text-xs font-bold uppercase w-full focus:outline-none focus:border-amber-400 px-1 py-0.5 text-white" placeholder="Título...">
+                    <div class="text-[9px] opacity-50 mt-1">En sistema: <span class="font-mono">${esc(d.prenda)}</span></div>
+                </td>
+                <td class="py-3 text-rose-400/60 line-through text-sm font-mono text-right">${esc(d.valorAntiguo)}€</td>
+                <td class="py-3 text-emerald-400 font-black text-lg text-right">
+                    <input type="number" id="disc-item-price-${i}" value="${valorNumeroSeguro(d.valorNuevo)}" step="0.01" class="bg-transparent border-b border-white/10 text-base text-emerald-400 font-mono w-20 focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-right"> €
+                </td>
+            </tr>`;
+    }).join('');
 
-            gridNuevos.innerHTML += `
-                <div class="flex flex-col gap-3 p-4 bg-black/20 border border-white/10 rounded-2xl hover:bg-white/5 transition-all shadow-inner relative">
-                    <div class="absolute top-3 right-3 z-10">
-                        <input type="checkbox" id="check-new-${i}" class="check-new-scraper w-5 h-5 rounded-md text-emerald-500 bg-black/40 border-white/20 cursor-pointer focus:ring-emerald-500" value="${i}" checked>
+    const catOptions = LISTA_CATEGORIAS_GLOBAL.map(c => opcion(c.nombre, c.nombre)).join('');
+    const tallasDisponibles = ['S', 'M', 'L', 'XL', 'Única']; // mismas opciones que el formulario principal
+    const detectarTalla = (raw) => {
+        // Vinted da tallas tipo "M / 38 / 10": nos quedamos con la talla de letra si existe.
+        const tokens = String(raw || '').toUpperCase().split(/[\s/|,]+/).filter(Boolean);
+        return tallasDisponibles.find((t) => tokens.includes(t.toUpperCase())) || 'Única';
+    };
+
+    gridNuevos.innerHTML = (data.nuevos || []).map((n, i) => {
+        const tiendaSugerida = resolverTiendaDefault(n);
+        const tiendaEsNueva = tiendaSugerida && !tiendasUnicas.includes(tiendaSugerida);
+        const tiendaOptions = [
+            '<option value="">🏬 Sin asignar</option>',
+            ...(tiendaEsNueva ? [opcion(tiendaSugerida, `🏬 ${tiendaSugerida} (nueva)`, true)] : []),
+            ...tiendasUnicas.map(t => opcion(t, `🏬 ${t}`, t === tiendaSugerida))
+        ].join('');
+        const estadoActual = String(n.estado || estadoStockNombre).trim() || estadoStockNombre;
+        const estadoOptions = opcionesEstadoImportacion.map(nombre => opcion(nombre, nombre, nombre === estadoActual)).join('');
+        const badgeGaleriaInfo = n.galeria && n.galeria.length > 0 ? `<div class="absolute bottom-1 right-1 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${n.galeria.length}</div>` : '';
+        const tallaScraped = detectarTalla(n.talla);
+        const tallaOptions = tallasDisponibles.map(t => opcion(t, t, t === tallaScraped)).join('');
+        const enlaceVinted = n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-cyan-300 underline">Ver en Vinted ↗</a>` : '';
+
+        return `
+            <div class="flex flex-col gap-3 p-4 bg-black/20 border border-white/10 rounded-2xl hover:bg-white/5 transition-all shadow-inner relative">
+                <div class="absolute top-3 right-3 z-10">
+                    <input type="checkbox" id="check-new-${i}" class="check-new-scraper w-5 h-5 rounded-md text-emerald-500 bg-black/40 border-white/20 cursor-pointer focus:ring-emerald-500" value="${i}" checked>
+                </div>
+                <div class="flex items-start gap-4">
+                    <div class="relative flex-shrink-0 cursor-pointer group" onclick="abrirVisorScraper('nuevo', ${i})" title="Ver Galería">
+                        <img src="${esc(n.imagen || IMG_PLACEHOLDER)}" loading="lazy" class="w-20 h-24 rounded-xl object-cover shadow-lg group-hover:scale-105 transition-transform" ${imgFallback}>
+                        ${badgeGaleriaInfo}
                     </div>
-                    <div class="flex items-start gap-4">
-                        <div class="relative flex-shrink-0 cursor-pointer group" onclick="abrirVisorScraper('nuevo', ${i})" title="Ver Galería">
-                            <img src="${n.imagen || ''}" class="w-20 h-24 rounded-xl object-cover shadow-lg group-hover:scale-105 transition-transform" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'80\\' height=\\'96\\' viewBox=\\'0 0 80 96\\'%3E%3Crect width=\\'80\\' height=\\'96\\' fill=\\'%23111827\\'/%3E%3Cpath d=\\'M20 60l15-18 12 14 9-10 14 15\\' fill=\\'none\\' stroke=\\'%239ca3af\\' stroke-width=\'3\\'/%3E%3C/svg%3E'">
-                                ${badgeGaleriaInfo}
-                        </div>
-                        <div class="min-w-0 flex-1 flex flex-col gap-2 pr-6">
-                            <input type="text" id="new-item-title-${i}" value="${n.prenda}" class="bg-transparent border-b-2 border-white/10 text-sm font-black uppercase w-full focus:outline-none focus:border-emerald-400 px-1 py-1 text-white transition-colors" placeholder="Título a guardar...">
-                            <p class="text-[10px] font-mono opacity-70">Origen: <span class="text-cyan-300">${n.proveedor || n.cuenta || 'Vinted'}</span></p>
-                            
-                            <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-[10px] mt-1">
-                                <div class="flex items-center gap-1.5" title="Marca">
-                                    <span class="opacity-60">🏷️</span>
-                                    <input type="text" id="new-item-brand-${i}" value="${n.marca || ''}" class="bg-transparent border-b border-white/10 w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white/80" placeholder="Marca...">
-                                </div>
-                                <div class="flex items-center gap-1.5" title="Talla">
-                                    <span class="opacity-60">📐</span>
-                                    <select id="new-item-talla-${i}" class="bg-transparent border-b border-white/10 w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white/80 appearance-none">
-                                        ${tallaOptions}
-                                    </select>
-                                </div>
-                                <div class="flex items-center gap-1.5" title="Condición">
-                                    <span class="opacity-60">✨</span>
-                                    <input type="text" id="new-item-condition-${i}" value="${n.condicion || ''}" class="bg-transparent border-b border-white/10 w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white/80" placeholder="Condición...">
-                                </div>
-                                <div class="flex items-center gap-1.5" title="Favoritos">
-                                    <span class="opacity-60">❤️</span>
-                                    <input type="number" id="new-item-favs-${i}" value="${n.favoritos || 0}" class="bg-transparent border-b border-white/10 w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white/80" placeholder="Favs...">
-                                </div>
+                    <div class="min-w-0 flex-1 flex flex-col gap-2 pr-6">
+                        <input type="text" id="new-item-title-${i}" value="${esc(n.prenda)}" class="bg-transparent border-b-2 border-white/10 text-sm font-black uppercase w-full focus:outline-none focus:border-emerald-400 px-1 py-1 text-white transition-colors" placeholder="Título a guardar...">
+                        <p class="text-[10px] font-mono opacity-70">Origen: <span class="text-cyan-300">${esc(n.proveedor || n.cuenta || 'Vinted')}</span> ${enlaceVinted}</p>
+
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-[10px] mt-1">
+                            <div class="flex items-center gap-1.5" title="Marca">
+                                <span class="opacity-60">🏷️</span>
+                                <input type="text" id="new-item-brand-${i}" value="${esc(n.marca || '')}" class="bg-transparent border-b border-white/10 w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white/80" placeholder="Marca...">
+                            </div>
+                            <div class="flex items-center gap-1.5" title="Talla${n.talla ? ` (Vinted: ${esc(n.talla)})` : ''}">
+                                <span class="opacity-60">📐</span>
+                                <select id="new-item-talla-${i}" class="bg-transparent border-b border-white/10 w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white/80 appearance-none">
+                                    ${tallaOptions}
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-1.5" title="Condición">
+                                <span class="opacity-60">✨</span>
+                                <input type="text" id="new-item-condition-${i}" value="${esc(n.condicion || '')}" class="bg-transparent border-b border-white/10 w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white/80" placeholder="Condición...">
+                            </div>
+                            <div class="flex items-center gap-1.5" title="Favoritos">
+                                <span class="opacity-60">❤️</span>
+                                <input type="number" id="new-item-favs-${i}" value="${Number(n.favoritos || n.popularidad || 0) || 0}" class="bg-transparent border-b border-white/10 w-full focus:outline-none focus:border-emerald-400 px-1 py-0.5 text-white/80" placeholder="Favs...">
                             </div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-2 mt-2">
-                        <select id="new-item-cat-${i}" class="bg-black/40 border border-white/10 text-[10px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-400 text-white">
-                            <option value="General">Categoría...</option>
-                            ${catOptions}
-                        </select>
-                        <select id="new-item-store-${i}" class="bg-indigo-500/10 border border-indigo-500/20 text-[10px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-indigo-400 text-indigo-100 font-bold">
-                            ${tiendaOptions}
-                        </select>
+                </div>
+                <div class="grid grid-cols-2 gap-2 mt-2">
+                    <select id="new-item-cat-${i}" class="bg-black/40 border border-white/10 text-[10px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-400 text-white">
+                        <option value="General">Categoría...</option>
+                        ${catOptions}
+                    </select>
+                    <select id="new-item-store-${i}" class="bg-indigo-500/10 border border-indigo-500/20 text-[10px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-indigo-400 text-indigo-100 font-bold">
+                        ${tiendaOptions}
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 gap-2 mt-1">
+                    <select id="new-item-status-${i}" class="bg-emerald-500/10 border border-emerald-500/20 text-[10px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-400 text-emerald-100 font-bold">
+                        ${estadoOptions}
+                    </select>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mt-1">
+                    <div class="bg-black/40 border border-white/10 rounded-lg px-2 py-1">
+                        <label class="block text-[8px] opacity-60 uppercase">Coste</label>
+                        <input type="number" id="new-item-cost-${i}" value="0" step="0.01" class="w-full bg-transparent text-xs py-0.5 focus:outline-none text-white">
                     </div>
-                    <div class="grid grid-cols-1 gap-2 mt-1">
-                        <select id="new-item-status-${i}" class="bg-emerald-500/10 border border-emerald-500/20 text-[10px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-400 text-emerald-100 font-bold">
-                            ${estadoOptions}
-                        </select>
+                    <div class="bg-black/40 border border-white/10 rounded-lg px-2 py-1">
+                        <label class="block text-[8px] opacity-60 uppercase">Precio Venta</label>
+                        <input type="number" id="new-item-price-${i}" value="${valorNumeroSeguro(n.precioVenta)}" step="0.01" class="w-full bg-transparent text-xs py-0.5 focus:outline-none text-emerald-400 font-bold">
                     </div>
-                    <div class="grid grid-cols-3 gap-2 mt-1">
-                        <div class="bg-black/40 border border-white/10 rounded-lg px-2 py-1">
-                            <label class="block text-[8px] opacity-60 uppercase">Coste</label>
-                            <input type="number" id="new-item-cost-${i}" value="0" step="0.01" class="w-full bg-transparent text-xs py-0.5 focus:outline-none text-white">
-                        </div>
-                        <div class="bg-black/40 border border-white/10 rounded-lg px-2 py-1">
-                            <label class="block text-[8px] opacity-60 uppercase">Precio Venta</label>
-                            <input type="number" id="new-item-price-${i}" value="${valorNumeroSeguro(n.precioVenta)}" step="0.01" class="w-full bg-transparent text-xs py-0.5 focus:outline-none text-emerald-400 font-bold">
-                        </div>
-                        <div class="bg-black/40 border border-white/10 rounded-lg px-2 py-1">
-                            <label class="block text-[8px] opacity-60 uppercase">Cantidad</label>
-                            <input type="number" id="new-item-qty-${i}" value="1" min="1" class="w-full bg-transparent text-xs py-0.5 focus:outline-none text-white">
-                        </div>
+                    <div class="bg-black/40 border border-white/10 rounded-lg px-2 py-1">
+                        <label class="block text-[8px] opacity-60 uppercase">Cantidad</label>
+                        <input type="number" id="new-item-qty-${i}" value="1" min="1" class="w-full bg-transparent text-xs py-0.5 focus:outline-none text-white">
                     </div>
-                </div>`;
-        });
+                </div>
+            </div>`;
+    }).join('');
 
+    if (nuevoCount > 0) {
         document.querySelectorAll('.check-new-scraper').forEach(cb => cb.addEventListener('change', actualizarResumenSeleccionScraper));
         actualizarResumenSeleccionScraper();
     }
 
-    if (identCount > 0) {
-        data.identicos.forEach((n, i) => {
-            gridExistentes.innerHTML += `
-                <div class="flex items-center gap-3 p-2 bg-white/5 border border-white/5 rounded-xl">
-                    <img src="${n.imagen || ''}" class="w-8 h-8 rounded object-cover grayscale" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 60 60\'%3E%3Crect width=\'60\' height=\'60\' fill=\'%23111827\'/%3E%3Cpath d=\'M15 40l10-12 8 9 6-7 11 10\' fill=\'none\' stroke=\'%239ca3af\' stroke-width=\'3\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3Ccircle cx=\'22\' cy=\'22\' r=\'4\' fill=\'%239ca3af\'/%3E%3C/svg%3E'">
-                    <div class="min-w-0 flex-1">
-                        <p class="text-[9px] font-bold uppercase truncate">${n.prenda}</p>
-                        <p class="text-[9px] opacity-50 font-mono">${n.precio}€</p>
-                        <p class="text-[8px] opacity-40 font-mono">Alta: ${n.fechaRegistro || 's/f'}${n.fechaVenta ? ` · Vendido: ${n.fechaVenta}` : ''}</p>
-                    </div>
-                    <div class="flex gap-1">
-                        <button onclick="cerrarModalScraper(); editItem('${n.idMongo}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
-                        <button onclick="deleteItemFromScraper('${n.idMongo}')" class="text-[10px] bg-rose-500/10 hover:bg-rose-600 text-rose-500 hover:text-white px-2 py-1 rounded-lg transition-all">🗑️</button>
-                    </div>
-                </div>`;
-        });
-    }
+    gridExistentes.innerHTML = (data.identicos || []).map((n) => `
+            <div class="flex items-center gap-3 p-2 bg-white/5 border border-white/5 rounded-xl">
+                <img src="${esc(n.imagen || IMG_PLACEHOLDER)}" loading="lazy" class="w-8 h-8 rounded object-cover grayscale" ${imgFallback}>
+                <div class="min-w-0 flex-1">
+                    <p class="text-[9px] font-bold uppercase truncate">${esc(n.prenda)}</p>
+                    <p class="text-[9px] opacity-50 font-mono">${esc(n.precio)}€</p>
+                    <p class="text-[8px] opacity-40 font-mono">Alta: ${esc(n.fechaRegistro || 's/f')}${n.fechaVenta ? ` · Vendido: ${esc(n.fechaVenta)}` : ''}</p>
+                </div>
+                <div class="flex gap-1">
+                    <button onclick="cerrarModalScraper(); editItem('${esc(n.idMongo)}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
+                    <button onclick="deleteItemFromScraper('${esc(n.idMongo)}')" class="text-[10px] bg-rose-500/10 hover:bg-rose-600 text-rose-500 hover:text-white px-2 py-1 rounded-lg transition-all">🗑️</button>
+                </div>
+            </div>`).join('');
 
-    if (missCount > 0 && gridDesap) {
-        data.desaparecidos.forEach((n, i) => {
-            gridDesap.innerHTML += `
-                <div class="flex items-center gap-3 p-2 bg-rose-500/5 border border-rose-500/20 rounded-xl">
-                    <input type="checkbox" class="check-miss-scraper w-4 h-4 rounded text-rose-500 bg-black/40 border-white/20 cursor-pointer" value="${i}" checked>
-                    <img src="${n.imagen || ''}" class="w-8 h-8 rounded object-cover" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'60\' height=\'60\' viewBox=\'0 0 60 60\'%3E%3Crect width=\'60\' height=\'60\' fill=\'%23111827\'/%3E%3Cpath d=\'M15 40l10-12 8 9 6-7 11 10\' fill=\'none\' stroke=\'%239ca3af\' stroke-width=\'3\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3Ccircle cx=\'22\' cy=\'22\' r=\'4\' fill=\'%239ca3af\'/%3E%3C/svg%3E'">
-                    <div class="min-w-0 flex-1">
-                        <p class="text-[9px] font-bold uppercase truncate">${n.prenda}</p>
-                        <p class="text-[8px] opacity-60 font-mono">${n.precio || 0}€ · Alta: ${n.fechaRegistro || 's/f'}</p>
-                        ${n.comentariosProducto ? `<p class="text-[8px] opacity-45 truncate">${n.comentariosProducto}</p>` : ''}
-                    </div>
-                    <button onclick="cerrarModalScraper(); editItem('${n.idMongo}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
-                </div>`;
-        });
+    if (gridDesap) {
+        gridDesap.innerHTML = (data.desaparecidos || []).map((n, i) => `
+            <div class="flex items-center gap-3 p-2 bg-rose-500/5 border border-rose-500/20 rounded-xl">
+                <input type="checkbox" class="check-miss-scraper w-4 h-4 rounded text-rose-500 bg-black/40 border-white/20 cursor-pointer" value="${i}" checked>
+                <img src="${esc(n.imagen || IMG_PLACEHOLDER)}" loading="lazy" class="w-8 h-8 rounded object-cover" ${imgFallback}>
+                <div class="min-w-0 flex-1">
+                    <p class="text-[9px] font-bold uppercase truncate">${esc(n.prenda)}</p>
+                    <p class="text-[8px] opacity-60 font-mono">${esc(n.precio || 0)}€ · Alta: ${esc(n.fechaRegistro || 's/f')}</p>
+                    ${n.comentariosProducto ? `<p class="text-[8px] opacity-45 truncate">${esc(n.comentariosProducto)}</p>` : ''}
+                </div>
+                <button onclick="cerrarModalScraper(); editItem('${esc(n.idMongo)}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
+            </div>`).join('');
     }
 }
 
@@ -2247,16 +2424,18 @@ async function autorizarCambiosScraping() {
         await forceRefreshDataManual();
         
         const indicesToRemove = checkNodes.map(cb => parseInt(cb.value));
+        const aplicados = new Map(selected.map((s) => [String(s.idMongo), s]));
+        resultadosScraperActual.discrepancias.forEach((d, i) => {
+            if (!indicesToRemove.includes(i)) return;
+            const cambio = aplicados.get(String(d.idMongo));
+            (resultadosScraperActual.identicos ||= []).unshift({ ...d, prenda: cambio?.prenda || d.prenda, precio: cambio?.valorNuevo ?? d.valorNuevo });
+        });
         resultadosScraperActual.discrepancias = resultadosScraperActual.discrepancias.filter((_, i) => !indicesToRemove.includes(i));
         
-        const url = document.getElementById('scraper-url').value;
-        if (url) {
-            iniciarScraping();
-        } else {
-            renderizarResultadosScraping(resultadosScraperActual);
-            if (resultadosScraperActual.nuevos?.length === 0 && resultadosScraperActual.discrepancias?.length === 0) {
-                cerrarModalScraper();
-            }
+        // Refrescamos la vista con lo pendiente; no hace falta relanzar el escaneo en GitHub.
+        renderizarResultadosScraping(resultadosScraperActual);
+        if (resultadosScraperActual.nuevos?.length === 0 && resultadosScraperActual.discrepancias?.length === 0) {
+            cerrarModalScraper();
         }
 
     } catch (error) {
@@ -2329,14 +2508,10 @@ async function importarNuevosScraping() {
         const indicesToRemove = checkNodes.map(cb => parseInt(cb.value));
         resultadosScraperActual.nuevos = resultadosScraperActual.nuevos.filter((_, i) => !indicesToRemove.includes(i));
         
-        const url = document.getElementById('scraper-url').value;
-        if (url) {
-            iniciarScraping(); 
-        } else {
-            renderizarResultadosScraping(resultadosScraperActual);
-            if (resultadosScraperActual.nuevos?.length === 0 && resultadosScraperActual.discrepancias?.length === 0) {
-                cerrarModalScraper();
-            }
+        // Refrescamos la vista con lo pendiente; no hace falta relanzar el escaneo en GitHub.
+        renderizarResultadosScraping(resultadosScraperActual);
+        if (resultadosScraperActual.nuevos?.length === 0 && resultadosScraperActual.discrepancias?.length === 0) {
+            cerrarModalScraper();
         }
 
     } catch (error) {
@@ -2346,9 +2521,17 @@ async function importarNuevosScraping() {
 
 async function deleteItemFromScraper(id) {
     if (confirm("¿Seguro que quieres eliminar este artículo del sistema?")) {
-        await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' });
+        const res = await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'DELETE', credentials: 'include' });
+        if (!res.ok) return alert('No se pudo eliminar el artículo.');
         cantarPorVoz("Artículo eliminado.");
-        iniciarScraping();
+        if (resultadosScraperActual) {
+            const distinto = (x) => String(x?.idMongo) !== String(id);
+            resultadosScraperActual.identicos = (resultadosScraperActual.identicos || []).filter(distinto);
+            resultadosScraperActual.discrepancias = (resultadosScraperActual.discrepancias || []).filter(distinto);
+            resultadosScraperActual.desaparecidos = (resultadosScraperActual.desaparecidos || []).filter(distinto);
+            renderizarResultadosScraping(resultadosScraperActual);
+        }
+        forceRefreshDataManual();
     }
 }
 
@@ -2408,8 +2591,8 @@ function renderSavedUrls() {
         html += `
             <div class="flex items-center justify-between gap-2 p-2 bg-black/20 rounded-xl group hover:bg-black/40 transition-colors border border-white/5">
                 <div class="min-w-0 flex-1 cursor-pointer" onclick="cargarFavoritoScraper(${idx})">
-                    <p class="text-[10px] font-bold uppercase tracking-wide text-indigo-300 truncate">${aliasSafe}</p>
-                    <p class="text-[9px] truncate opacity-70 font-mono">${item.url}</p>
+                    <p class="text-[10px] font-bold uppercase tracking-wide text-indigo-300 truncate">${escapeHtmlSafe(aliasSafe)}</p>
+                    <p class="text-[9px] truncate opacity-70 font-mono">${escapeHtmlSafe(item.url)}</p>
                 </div>
                 <div class="flex items-center gap-1">
                     <button onclick="cargarFavoritoScraper(${idx})" class="text-[9px] px-2 py-1 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/40 transition-colors">Usar</button>
@@ -2828,6 +3011,21 @@ async function sugerirNombreProducto(event) {
 let ITEM_FOTOS_ACTUAL = null;
 let IDX_FOTO_ACTUAL = -1; 
 
+// Tras cambiar fotos, recargamos el producto y reabrimos el visor (o lo cerramos si ya no está).
+async function refrescarItemVisor(id, seleccion = -1) {
+    await forceRefreshDataManual(true);
+    const actualizado = BASE_DATOS.find((v) => v._id === id);
+    if (!actualizado) { cerrarVisorFotos(); return; }
+    ITEM_FOTOS_ACTUAL = actualizado;
+    if (!ITEM_FOTOS_ACTUAL.galeria) ITEM_FOTOS_ACTUAL.galeria = [];
+    seleccionarFotoVisor(typeof seleccion === 'function' ? seleccion(actualizado) : seleccion);
+}
+
+async function guardarFotosItem(id, payload) {
+    const res = await fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error('Fallo al guardar las fotos.');
+}
+
 function abrirVisorFotos(id) {
 
     const item = BASE_DATOS.find(v => v._id === id);
@@ -2902,8 +3100,8 @@ function filtrarMonopolioUrls(query = '') {
                     ${MONOPOLIO_SELECTED_KEYS.has(String(u._id || u.url || '')) ? 'checked' : ''}
                     onchange="toggleMonopolioSeleccionGuardada('${escapeHtml(String(u._id || u.url || ''))}', this.checked)">
                 <div class="min-w-0 flex-1">
-                <p class="font-bold text-sm truncate text-purple-300">${u.alias || 'Sin Alias'}</p>
-                <p class="text-xs opacity-60 truncate font-mono">${u.url}</p>
+                <p class="font-bold text-sm truncate text-purple-300">${escapeHtml(u.alias || 'Sin Alias')}</p>
+                <p class="text-xs opacity-60 truncate font-mono">${escapeHtml(u.url)}</p>
                 </div>
             </div>
             <div class="flex gap-2">
@@ -3292,7 +3490,9 @@ window.iniciarScrapingMonopolio = async function() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al iniciar el scraping');
 
-        MONOPOLIO_PROGRESS_TOTAL = Math.max(0, Number(data?.lanzadas) || 0);
+        MONOPOLIO_PROGRESS_TOTAL = Math.max(0, Number(data?.lanzadas) || 0) + Math.max(0, Number(data?.lanzadasLocal) || 0);
+        MONOPOLIO_ESPERA_DESDE = Number(data.serverTime) || Date.now();
+        programarRecuperacionScraper();
         actualizarCargaMonopolio(8, `${data.message} Esperando resultados...`, 'Esperando workers');
 
         let detalleFallos = '';
@@ -3336,7 +3536,9 @@ async function lanzarScrapingMonopolioSeleccion(urlsSeleccionadas, introMsg = 'L
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al iniciar el scraping seleccionado');
 
-        MONOPOLIO_PROGRESS_TOTAL = Math.max(0, Number(data?.lanzadas) || 0);
+        MONOPOLIO_PROGRESS_TOTAL = Math.max(0, Number(data?.lanzadas) || 0) + Math.max(0, Number(data?.lanzadasLocal) || 0);
+        MONOPOLIO_ESPERA_DESDE = Number(data.serverTime) || Date.now();
+        programarRecuperacionScraper();
         actualizarCargaMonopolio(8, `${data.message} Esperando resultados...`, 'Esperando workers');
 
         let detalleFallos = '';
@@ -3532,7 +3734,7 @@ async function agregarFotoGaleria(event) {
     document.getElementById('visor-foto-acciones').classList.add('opacity-50', 'pointer-events-none');
     
     if (file.type === "image/heic" || file.type === "image/heif" || file.name.toLowerCase().endsWith(".heic")) {
-        try { const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.8 }); file = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob; } 
+        try { await cargarLibreria('heic'); const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.8 }); file = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob; } 
         catch (err) { alert("Error al procesar foto."); document.getElementById('visor-foto-acciones').classList.remove('opacity-50', 'pointer-events-none'); return; }
     }
 
@@ -3551,7 +3753,8 @@ async function agregarFotoGaleria(event) {
             if (!ITEM_FOTOS_ACTUAL.imagen) { ITEM_FOTOS_ACTUAL.imagen = base64; payload = { imagen: base64 }; } 
             else { ITEM_FOTOS_ACTUAL.galeria.push(base64); payload = { galeria: ITEM_FOTOS_ACTUAL.galeria }; }
 
-            try { await fetch(`${BACKEND_URL}/api/ventas/${ITEM_FOTOS_ACTUAL._id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) }); await forceRefreshDataManual(); ITEM_FOTOS_ACTUAL = BASE_DATOS.find(v => v._id === ITEM_FOTOS_ACTUAL._id); if (!ITEM_FOTOS_ACTUAL.galeria) ITEM_FOTOS_ACTUAL.galeria = []; seleccionarFotoVisor(payload.imagen ? -1 : ITEM_FOTOS_ACTUAL.galeria.length - 1); } 
+            const idItem = ITEM_FOTOS_ACTUAL._id;
+            try { await guardarFotosItem(idItem, payload); await refrescarItemVisor(idItem, (item) => payload.imagen ? -1 : item.galeria.length - 1); } 
             catch(e) { alert("Error al guardar."); }
             document.getElementById('input-nueva-foto-galeria').value = ""; document.getElementById('visor-foto-acciones').classList.remove('opacity-50', 'pointer-events-none');
         };
@@ -3568,7 +3771,8 @@ async function eliminarFotoActual() {
     if (IDX_FOTO_ACTUAL === -1) { if (ITEM_FOTOS_ACTUAL.galeria && ITEM_FOTOS_ACTUAL.galeria.length > 0) { ITEM_FOTOS_ACTUAL.imagen = ITEM_FOTOS_ACTUAL.galeria.shift(); } else { ITEM_FOTOS_ACTUAL.imagen = ''; } payload = { imagen: ITEM_FOTOS_ACTUAL.imagen, galeria: ITEM_FOTOS_ACTUAL.galeria }; } 
     else { ITEM_FOTOS_ACTUAL.galeria.splice(IDX_FOTO_ACTUAL, 1); payload = { galeria: ITEM_FOTOS_ACTUAL.galeria }; }
 
-    try { await fetch(`${BACKEND_URL}/api/ventas/${ITEM_FOTOS_ACTUAL._id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload) }); await forceRefreshDataManual(); ITEM_FOTOS_ACTUAL = BASE_DATOS.find(v => v._id === ITEM_FOTOS_ACTUAL._id); if (!ITEM_FOTOS_ACTUAL.galeria) ITEM_FOTOS_ACTUAL.galeria = []; seleccionarFotoVisor(ITEM_FOTOS_ACTUAL.imagen ? -1 : -1); } 
+    const idItem = ITEM_FOTOS_ACTUAL._id;
+    try { await guardarFotosItem(idItem, payload); await refrescarItemVisor(idItem, -1); } 
     catch(e) { alert("Error al eliminar."); }
 }
 
@@ -3576,7 +3780,8 @@ async function establecerComoPortada() {
     if (IDX_FOTO_ACTUAL === -1) return;
     const fotoSeleccionada = ITEM_FOTOS_ACTUAL.galeria[IDX_FOTO_ACTUAL]; const fotoPrincipalAntigua = ITEM_FOTOS_ACTUAL.imagen;
     ITEM_FOTOS_ACTUAL.imagen = fotoSeleccionada; ITEM_FOTOS_ACTUAL.galeria.splice(IDX_FOTO_ACTUAL, 1); if (fotoPrincipalAntigua) { ITEM_FOTOS_ACTUAL.galeria.unshift(fotoPrincipalAntigua); }
-    try { await fetch(`${BACKEND_URL}/api/ventas/${ITEM_FOTOS_ACTUAL._id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ imagen: ITEM_FOTOS_ACTUAL.imagen, galeria: ITEM_FOTOS_ACTUAL.galeria }) }); await forceRefreshDataManual(); ITEM_FOTOS_ACTUAL = BASE_DATOS.find(v => v._id === ITEM_FOTOS_ACTUAL._id); if (!ITEM_FOTOS_ACTUAL.galeria) ITEM_FOTOS_ACTUAL.galeria = []; seleccionarFotoVisor(-1); } 
+    const idItem = ITEM_FOTOS_ACTUAL._id;
+    try { await guardarFotosItem(idItem, { imagen: ITEM_FOTOS_ACTUAL.imagen, galeria: ITEM_FOTOS_ACTUAL.galeria }); await refrescarItemVisor(idItem, -1); } 
     catch(e) { alert("Error al cambiar portada."); }
 }
 
@@ -3845,7 +4050,7 @@ function renderizarNotas() {
         
         div.innerHTML = `
             <div class="flex justify-between items-center mb-1 border-b border-black/10 pb-1.5 cursor-grab active:cursor-grabbing" onmousedown="window.iniciarArrastreNota(event, this.parentElement, '${nota._id}')">
-                <span class="text-[8px] opacity-60 font-mono font-bold uppercase pointer-events-none tracking-widest">${nota.usuario.split('@')[0]}</span>
+                <span class="text-[8px] opacity-60 font-mono font-bold uppercase pointer-events-none tracking-widest">${escapeHtmlSafe(String(nota.usuario || 'equipo').split('@')[0])}</span>
                 <div class="flex gap-1.5 items-center bg-white/40 px-2 py-0.5 rounded border border-white/20 shadow-sm">
                     <button onclick="document.execCommand('bold', false, null)" class="text-[10px] hover:text-black/60 font-black px-1 transition-colors" title="Negrita">B</button>
                     <button onclick="document.execCommand('insertUnorderedList', false, null)" class="text-[10px] hover:text-black/60 font-black px-1 transition-colors" title="Lista">•≡</button>
@@ -3862,12 +4067,16 @@ function renderizarNotas() {
             </div>
         `;
         
+        // Guardamos el tamaño al terminar de redimensionar, no en cada fotograma.
+        const guardarTamano = debounce((w, h) => {
+            nota.width = w;
+            nota.height = h;
+            actualizarNotaDimensiones(nota._id, w, h);
+        }, 600);
         new ResizeObserver(() => {
             const w = parseInt(div.style.width);
             const h = parseInt(div.style.height);
-            if(w !== nota.width || h !== nota.height) {
-                actualizarNotaDimensiones(nota._id, w, h);
-            }
+            if(w !== nota.width || h !== nota.height) guardarTamano(w, h);
         }).observe(div);
 
         canvas.appendChild(div);
@@ -4222,6 +4431,9 @@ window.navegarASeccion = function(idSeccion) {
     if (idSeccion === 'sec-gestion') {
         setTimeout(() => { renderGestionFacturas(); }, 50);
     }
+    if (idSeccion === 'sec-gastos') {
+        setTimeout(() => { refrescarGastosNegocio(); }, 50);
+    }
     if (idSeccion === 'sec-crm') {
         setTimeout(() => { refrescarClientesCRM(); }, 50);
     }
@@ -4267,10 +4479,10 @@ function aplicarRestriccionesRolUI() {
     const bloqueadasPorRol = (() => {
         const rol = String(USUARIO_ROL_ACTUAL || 'Editor');
         if (rol === 'Editor') {
-            return ['sec-analitica', 'sec-auditoria', 'sec-gestion', 'sec-ajustes', 'sec-usuarios'];
+            return ['sec-analitica', 'sec-auditoria', 'sec-gestion', 'sec-gastos', 'sec-ajustes', 'sec-usuarios'];
         }
         if (rol === 'Visualizador') {
-            return ['sec-analitica', 'sec-auditoria', 'sec-monopolio', 'sec-tareas', 'sec-notas', 'sec-crm', 'sec-citas', 'sec-usuarios', 'sec-gestion', 'sec-ajustes', 'sec-faqs'];
+            return ['sec-analitica', 'sec-auditoria', 'sec-monopolio', 'sec-tareas', 'sec-notas', 'sec-crm', 'sec-citas', 'sec-usuarios', 'sec-gestion', 'sec-gastos', 'sec-ajustes', 'sec-faqs'];
         }
         return [];
     })();
@@ -4637,7 +4849,7 @@ function actualizarDashboardGananciasAdmin() {
     if (kRango) kRango.innerText = `Rango: ${inicio} -> ${fin} · Registros vendidos: ${vendidos.length} · Margen medio: ${resumen.margenMedio.toFixed(1)}%`;
 
     const canvas = document.getElementById('admin-profit-chart');
-    if (canvas) {
+    if (canvas && chartDisponibleORedibujar(actualizarDashboardGananciasAdmin)) {
         const ctx = canvas.getContext('2d');
         if (INSTANCIA_ADMIN_PROFIT_CHART) INSTANCIA_ADMIN_PROFIT_CHART.destroy();
 
@@ -4849,6 +5061,7 @@ async function generarGuiaPDF() {
     if (btn) { btn.innerHTML = "Generando PDF... ⏳"; btn.disabled = true; }
     
     try {
+        await cargarLibreria('jspdf');
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
         
@@ -4914,9 +5127,10 @@ async function generarGuiaPDF() {
 }
 
 async function generarFacturaPDF() {
-    const { jsPDF } = window.jspdf;
     const checks = document.querySelectorAll('.fac-check-item:checked');
     if(checks.length === 0) return alert("Por favor, selecciona al menos un artículo para facturar.");
+    try { await cargarLibreria('jspdf'); } catch (_) { return alert('No se pudo cargar el generador de PDF. Revisa tu conexión e inténtalo de nuevo.'); }
+    const { jsPDF } = window.jspdf;
 
     const doc = new jsPDF();
     const vendedor = {
@@ -5294,10 +5508,10 @@ async function refrescarUsuariosAdmin() {
             <tr class="hover:bg-white/5 transition-colors">
                 <td class="py-4 px-2">
                     <div class="flex items-center gap-2">
-                        <img src="${construirAvatarUsuario(u)}" class="w-8 h-8 rounded-lg object-cover border border-white/10" onerror="this.src='${construirAvatarUsuario({ email: u.email })}'">
+                        <img src="${escapeHtmlSafe(construirAvatarUsuario(u))}" loading="lazy" data-email="${escapeHtmlSafe(u.email)}" class="w-8 h-8 rounded-lg object-cover border border-white/10" onerror="avatarPorDefecto(this)">
                         <div class="min-w-0">
-                            <p class="font-black lowercase truncate">${u.email}</p>
-                            <p class="text-[9px] opacity-55 truncate">${u.nombreVisible || 'Sin nombre visible'}</p>
+                            <p class="font-black lowercase truncate">${escapeHtmlSafe(u.email)}</p>
+                            <p class="text-[9px] opacity-55 truncate">${escapeHtmlSafe(u.nombreVisible || 'Sin nombre visible')}</p>
                         </div>
                     </div>
                 </td>
@@ -5352,6 +5566,12 @@ async function actualizarRolUsuarioAdmin(id, rolActual) {
         refrescarUsuariosAdmin();
     }
 }
+
+// onerror de avatares: vuelve a la inicial si la foto no carga.
+window.avatarPorDefecto = function(img) {
+    img.onerror = null;
+    img.src = construirAvatarUsuario({ email: img.dataset.email || '' });
+};
 
 function construirAvatarUsuario(usuario) {
     const inicial = (usuario?.nombreVisible || usuario?.email || '?').trim().charAt(0).toUpperCase();
@@ -5447,7 +5667,7 @@ async function refrescarUsuariosChat() {
             return `
                 <button onclick="seleccionarUsuarioChat('${u.email.replace(/'/g, "\\'")}')" class="w-full text-left p-2 rounded-xl border transition-all ${activo ? 'bg-blue-500/20 border-blue-500/40' : 'bg-black/20 border-white/10 hover:bg-white/10'}">
                     <div class="flex items-center gap-2">
-                        <img src="${construirAvatarUsuario(u)}" class="w-8 h-8 rounded-lg object-cover border border-white/10" onerror="this.src='${construirAvatarUsuario({ email: u.email })}'">
+                        <img src="${escapeHtmlSafe(construirAvatarUsuario(u))}" loading="lazy" data-email="${escapeHtmlSafe(u.email)}" class="w-8 h-8 rounded-lg object-cover border border-white/10" onerror="avatarPorDefecto(this)">
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center justify-between gap-2">
                                 <p class="text-[10px] font-bold uppercase truncate">${escapeHtmlSafe(nombre)}</p>
@@ -6354,6 +6574,7 @@ async function generarInformePDF() {
     btn.disabled = true;
 
     try {
+        await cargarLibreria('jspdf');
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
         let y = 10;
@@ -6499,6 +6720,7 @@ async function generarInformeContablePDF() {
     }
 
     try {
+        await cargarLibreria('jspdf');
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF('p', 'mm', 'a4');
         const datos = obtenerDatosFiltradosParaAnalitica();
@@ -6900,10 +7122,15 @@ function toggleMuteVolumenGlobal() {
     }
 }
 
-async function forceRefreshDataManual() { 
+async function forceRefreshDataManual(forzar = false) { 
+    // forzar = true: tras guardar algo necesitamos datos posteriores a ese guardado,
+    // así que esperamos al refresco en curso (si lo hay) y lanzamos otro.
+    if (FORCE_REFRESH_PROMISE) {
+        if (!forzar) return FORCE_REFRESH_PROMISE;
+        await FORCE_REFRESH_PROMISE.catch(() => {});
+    }
     const now = Date.now();
-    if (FORCE_REFRESH_PROMISE) return FORCE_REFRESH_PROMISE;
-    if ((now - LAST_FORCE_REFRESH_AT) < 900) return;
+    if (!forzar && (now - LAST_FORCE_REFRESH_AT) < 900) return;
 
     const icono = document.getElementById('icon-refresh');
     if (icono) {
@@ -6965,8 +7192,9 @@ function setTheme(theme) {
     if(BASE_DATOS.length > 0) { actualizarTodoElBloqueGrafico(); }
 }
 
-function exportarExcel() {
+async function exportarExcel() {
     if (BASE_DATOS.length === 0) return alert("Sin datos.");
+    try { await cargarLibreria('xlsx'); } catch (_) { return alert('No se pudo cargar el exportador de Excel. Revisa tu conexión.'); }
     const formateado = BASE_DATOS.map(v => ({
         Fecha: v.fecha,
         SKU: v.sku || 'N/A',
@@ -7003,12 +7231,22 @@ function autocompletarNombreLocalRapido() {
     document.getElementById('prenda').value = `Nueva ${singular} - Talla ${talla}`; cantarPorVoz("Asignado.");
 }
 
-function descargarBackupSeguridadLocal() {
-    if (BASE_DATOS.length === 0) return alert("Sin datos.");
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(BASE_DATOS, null, 2));
-    const downloadAnchor = document.createElement('a'); downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `Backup_Seychelles_${new Date().toISOString().split('T')[0]}.json`);
-    document.body.appendChild(downloadAnchor); downloadAnchor.click(); downloadAnchor.remove();
+async function descargarBackupSeguridadLocal() {
+    // El servidor exporta todo el inventario con las fotos reales (BASE_DATOS solo tiene
+    // las páginas cargadas y las fotos como URL).
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/ventas/export`, { credentials: 'include' });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'No se pudo exportar.');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.href = url;
+        downloadAnchor.download = `Backup_Seychelles_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(downloadAnchor); downloadAnchor.click(); downloadAnchor.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+        alert(`Error al generar el backup: ${err.message}`);
+    }
 }
 
 function importarBackupJSON(event) {
@@ -7097,15 +7335,15 @@ function reproducirSonidoMensaje(tipo = 'send') {
 }
 
 function lanzarConfetiVenta() {
-    if (typeof confetti === 'function') {
-        confetti({
+    cargarLibreria('confetti').then(() => {
+        window.confetti({
             particleCount: 150,
             spread: 80,
             origin: { y: 0.6 },
             colors: ['#10b981', '#3b82f6', '#fbbf24', '#f472b6', '#a855f7'],
             zIndex: 9999
         });
-    }
+    }).catch(() => {});
 }
 
 function procesarMultiplicadorCombo() {
@@ -7172,7 +7410,7 @@ async function duplicarPrendaIndividual(idItem) {
                 precioCompra: original.precioCompra || 0, precioVenta: original.precioVenta || 0,
                 gastosEnvio: original.gastosEnvio || 0, canalVenta: original.canalVenta || 'Vinted', rating: original.rating || 0, estado: 'No Vendido',
                 comentariosProducto: original.comentariosProducto || '', proveedor: original.proveedor || 'Sin definir',
-                imagen: original.imagen || ''
+                imagen: original.imagen || '', galeria: Array.isArray(original.galeria) ? original.galeria : []
             })
         });
         cantarPorVoz("Duplicado."); await forceRefreshDataManual();
@@ -7191,7 +7429,7 @@ async function ejecutarDuplicadoMasivo() {
                 precioCompra: original.precioCompra || 0, precioVenta: original.precioVenta || 0,
                 gastosEnvio: original.gastosEnvio || 0, canalVenta: original.canalVenta || 'Vinted', rating: original.rating || 0, estado: 'No Vendido',
                 comentariosProducto: original.comentariosProducto || '', proveedor: original.proveedor || 'Sin definir',
-                imagen: original.imagen || ''
+                imagen: original.imagen || '', galeria: Array.isArray(original.galeria) ? original.galeria : []
             })
         });
     });
@@ -7471,7 +7709,9 @@ async function procesarCodigoEscaneadoDesdeCamara(rawCode) {
 
 async function cargarCamarasDisponibles() {
     const select = document.getElementById('select-camara-dispositivo');
-    if (!select || typeof Html5Qrcode === 'undefined' || typeof Html5Qrcode.getCameras !== 'function') return;
+    if (!select) return;
+    try { await cargarLibreria('qr'); } catch (_) { return; }
+    if (typeof Html5Qrcode.getCameras !== 'function') return;
 
     try {
         const cams = await Html5Qrcode.getCameras();
@@ -7495,8 +7735,10 @@ async function cargarCamarasDisponibles() {
 }
 
 async function iniciarEscanerCamara(cameraId = '') {
-    if (typeof Html5Qrcode === 'undefined') {
-        alert('El modulo de escaneo no cargo. Recarga la pagina e intenta de nuevo.');
+    try {
+        await cargarLibreria('qr');
+    } catch (_) {
+        alert('El modulo de escaneo no cargo. Revisa tu conexion e intenta de nuevo.');
         return;
     }
 
@@ -7830,7 +8072,8 @@ window.__handleCredentialResponseImpl = async function(response) {
         navigator.geolocation.getCurrentPosition(
             (pos) => { clientLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude }; sendLogin(); },
             (err) => { console.warn("Localización HTML5 denegada", err); sendLogin(); },
-            { timeout: 6000, enableHighAccuracy: true }
+            // Posición aproximada o reciente: basta para el mapa de accesos y no retrasa el login.
+            { timeout: 3500, enableHighAccuracy: false, maximumAge: 10 * 60 * 1000 }
         );
     } else { sendLogin(); }
 };
@@ -7839,6 +8082,72 @@ if (window.__pendingGoogleCredential) {
     const pendingGoogleCredential = window.__pendingGoogleCredential;
     window.__pendingGoogleCredential = null;
     window.handleCredentialResponse(pendingGoogleCredential);
+}
+
+// --- Gastos operativos (OpEx) ---
+let LISTA_GASTOS = [];
+
+async function refrescarGastosNegocio() {
+    const lista = document.getElementById('lista-gastos-negocio');
+    const totalEl = document.getElementById('txt-total-gastos-opex');
+    const fechaEl = document.getElementById('gas-fecha');
+    if (fechaEl && !fechaEl.value) fechaEl.value = new Date().toISOString().split('T')[0];
+    if (!lista) return;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/gastos`, { credentials: 'include' });
+        if (!res.ok) throw new Error('No se pudieron cargar los gastos.');
+        LISTA_GASTOS = await res.json();
+        const total = LISTA_GASTOS.reduce((acc, g) => acc + (Number(g.monto) || 0), 0);
+        if (totalEl) totalEl.innerText = `${total.toFixed(2)} €`;
+        lista.innerHTML = LISTA_GASTOS.length ? LISTA_GASTOS.map((g) => `
+            <div class="flex items-center justify-between gap-3 p-3 bg-black/20 border border-white/5 rounded-xl">
+                <div class="min-w-0">
+                    <p class="font-bold truncate">${escapeHtmlSafe(g.concepto)}</p>
+                    <p class="text-[10px] opacity-50 font-mono">${escapeHtmlSafe(g.fecha || '')} · ${escapeHtmlSafe(g.categoria || 'General')}</p>
+                </div>
+                <div class="flex items-center gap-3 flex-shrink-0">
+                    <span class="font-black text-rose-300 font-mono">${(Number(g.monto) || 0).toFixed(2)} €</span>
+                    <button onclick="borrarGastoNegocio('${escapeHtmlSafe(g._id)}')" class="text-rose-500 hover:text-rose-300 text-xs px-1" title="Eliminar gasto">✕</button>
+                </div>
+            </div>`).join('') : '<p class="text-[11px] opacity-50 italic">Aún no hay gastos registrados.</p>';
+    } catch (e) {
+        lista.innerHTML = `<p class="text-[11px] text-rose-300">${escapeHtmlSafe(e.message)}</p>`;
+    }
+}
+
+async function registrarGastoDB() {
+    const conceptoEl = document.getElementById('gas-concepto');
+    const montoEl = document.getElementById('gas-monto');
+    const concepto = (conceptoEl?.value || '').trim();
+    const monto = parseFloat(String(montoEl?.value || '').replace(',', '.'));
+    const categoria = document.getElementById('gas-categoria')?.value || 'Otros';
+    const fecha = document.getElementById('gas-fecha')?.value || new Date().toISOString().split('T')[0];
+    if (!concepto) return alert('Indica el concepto del gasto.');
+    if (!Number.isFinite(monto) || monto <= 0) return alert('Indica un importe mayor que 0.');
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/gastos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ concepto, monto, categoria, fecha })
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'No se pudo registrar el gasto.');
+        if (conceptoEl) conceptoEl.value = '';
+        if (montoEl) montoEl.value = '';
+        cantarPorVoz('Gasto registrado.');
+        await refrescarGastosNegocio();
+        forceRefreshDataManual(true); // el beneficio neto descuenta los gastos
+    } catch (e) {
+        alert(`Error: ${e.message}`);
+    }
+}
+
+async function borrarGastoNegocio(id) {
+    if (!confirm('¿Eliminar este gasto?')) return;
+    const res = await fetch(`${BACKEND_URL}/api/gastos/${id}`, { method: 'DELETE', credentials: 'include' });
+    if (!res.ok) return alert('No se pudo eliminar el gasto.');
+    await refrescarGastosNegocio();
+    forceRefreshDataManual(true);
 }
 
 async function reloadCoreData(isInitialLoad = false, options = {}) {
@@ -7859,8 +8168,11 @@ async function reloadCoreData(isInitialLoad = false, options = {}) {
 
     try {
         const logsVisible = !document.getElementById('sec-auditoria')?.classList.contains('hidden');
+        // Al refrescar tras una edición mantenemos todo lo ya cargado con "Cargar más".
+        const limite = resetPage ? KANBAN_PAGE_SIZE : Math.min(500, Math.max(KANBAN_PAGE_SIZE, BASE_DATOS.length));
         const params = new URLSearchParams({
             page: '1',
+            limit: String(limite),
             includeLogs: logsVisible ? '1' : '0'
         });
         // En el primer arranque pedimos payload ligero para acelerar el primer pintado.
@@ -7893,6 +8205,7 @@ async function reloadCoreData(isInitialLoad = false, options = {}) {
 
         CURRENT_PAGE = data.currentPage || 1;
         TOTAL_PAGES = data.totalPages || 1;
+        TOTAL_VENTAS = Number(data.total) || 0;
         const resumen = (data && typeof data.resumen === 'object' && data.resumen) ? data.resumen : {};
 
         document.getElementById('kpi-ingresos').innerText = `${(Number(resumen.ingresos || 0)).toFixed(2)} €`;
@@ -8013,9 +8326,8 @@ function pintarInventarioDesdeCacheInicial() {
 }
 
 async function loadMoreData() {
-    if (IS_LOADING_MORE || CURRENT_PAGE >= TOTAL_PAGES) return;
+    if (IS_LOADING_MORE || !hayMasProductosPorCargar()) return;
     IS_LOADING_MORE = true;
-    CURRENT_PAGE++;
 
     const loaderContainer = document.getElementById('kanban-loader-container');
     const btn = loaderContainer ? loaderContainer.querySelector('button') : null;
@@ -8025,20 +8337,21 @@ async function loadMoreData() {
     }
 
     try {
-        const res = await fetch(`${BACKEND_URL}/api/ventas?page=${CURRENT_PAGE}&lightweight=1`, { credentials: 'include' });
+        const res = await fetch(`${BACKEND_URL}/api/ventas?offset=${BASE_DATOS.length}&limit=${KANBAN_PAGE_SIZE}&lightweight=1`, { credentials: 'include' });
         if (!res.ok) throw new Error('Fallo al cargar más datos');
         const data = await res.json();
 
-        BASE_DATOS.push(...(data.ventas || []));
-        CURRENT_PAGE = data.currentPage || CURRENT_PAGE;
-        TOTAL_PAGES = data.totalPages || TOTAL_PAGES;
+        // Si algo cambió de posición entre cargas, evitamos tarjetas duplicadas.
+        const yaCargados = new Set(BASE_DATOS.map((v) => v._id));
+        BASE_DATOS.push(...(data.ventas || []).filter((v) => !yaCargados.has(v._id)));
+        CURRENT_PAGE += 1;
+        TOTAL_VENTAS = Number(data.total) || TOTAL_VENTAS;
 
         renderKanban(false);
 
     } catch (e) {
         console.error("Error en loadMoreData:", e);
-        if (loaderContainer) loaderContainer.innerHTML = `<div class="text-rose-400 py-4">Error al cargar más productos.</div>`;
-        CURRENT_PAGE--;
+        if (loaderContainer) loaderContainer.innerHTML = `<div class="text-rose-400 py-4">Error al cargar más productos. <button onclick="loadMoreData()" class="underline">Reintentar</button></div>`;
     } finally {
         IS_LOADING_MORE = false;
     }
@@ -8055,6 +8368,7 @@ function actualizarTodoElBloqueGrafico() {
 
 function dibujarGrafica() {
     const contenedor = document.getElementById('contenedor-canvas-grafica'); if(!contenedor) return;
+    if (!chartDisponibleORedibujar(dibujarGrafica)) return;
     if (INSTANCIA_CHARTS) { INSTANCIA_CHARTS.destroy(); }
     
     contenedor.innerHTML = '<canvas id="graficaTendencias"></canvas>'; const ctx = document.getElementById('graficaTendencias').getContext('2d');
@@ -8082,6 +8396,7 @@ function dibujarGrafica() {
 
 function dibujarGraficaTarta() {
     const contenedor = document.getElementById('contenedor-canvas-tarta'); if(!contenedor) return;
+    if (!chartDisponibleORedibujar(dibujarGraficaTarta)) return;
     if (INSTANCIA_TARTA) { INSTANCIA_TARTA.destroy(); }
     
     contenedor.innerHTML = '<canvas id="graficaTartaCategorias"></canvas>'; const ctx = document.getElementById('graficaTartaCategorias').getContext('2d');
@@ -8109,6 +8424,7 @@ function dibujarGraficaTarta() {
 
 function dibujarGraficaBarrasTiendas() {
     const contenedor = document.getElementById('contenedor-canvas-barras'); if(!contenedor) return;
+    if (!chartDisponibleORedibujar(dibujarGraficaBarrasTiendas)) return;
     if (INSTANCIA_BARRAS) { INSTANCIA_BARRAS.destroy(); }
     
     contenedor.innerHTML = '<canvas id="graficaBarrasTiendas"></canvas>'; const ctx = document.getElementById('graficaBarrasTiendas').getContext('2d');
@@ -8150,6 +8466,7 @@ function dibujarGraficaBarrasTiendas() {
 
 function dibujarMapaCalor() {
     const canvasContenedor = document.querySelector('#graficaMapaCalor'); if (!canvasContenedor) return;
+    if (!chartDisponibleORedibujar(dibujarMapaCalor)) return;
     const ctx = canvasContenedor.getContext('2d'); if (INSTANCIA_MAPA_CALOR) { INSTANCIA_MAPA_CALOR.destroy(); }
 
     const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -8382,10 +8699,10 @@ function renderKanban(isFullRefresh = false) {
             const esScraping = (v.sku && v.sku.startsWith('VNT-')) || (v.comentariosProducto && v.comentariosProducto.includes('Importado'));
             const badgeScraping = esScraping ? `<div class="absolute -top-1.5 -right-1.5 bg-blue-600 rounded-full w-4 h-4 flex items-center justify-center text-[8px] shadow-lg border border-blue-300" title="Alojado en MongoDB (Vía Web/Scraping)">🌐</div>` : '';
             const badgeGaleria = v.galeria && v.galeria.length > 0 ? `<div class="absolute bottom-0 right-0 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${v.galeria.length}</div>` : '';
-            const thumb = v.imagen ? `<div class="relative flex-shrink-0 cursor-pointer hover:scale-105 transition-transform group" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Ver Galería de Fotos"><img src="${v.imagen}" loading="lazy" decoding="async" class="card-img-mini border border-white/10 shadow-lg group-hover:border-indigo-400">${badgeScraping}${badgeGaleria}</div>` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20 cursor-pointer hover:bg-slate-700 transition-colors border border-dashed border-white/20" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Añadir Fotos">📸</div>`;
+            const thumb = v.imagen ? `<div class="relative flex-shrink-0 cursor-pointer hover:scale-105 transition-transform group" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Ver Galería de Fotos"><img src="${escapeHtmlSafe(v.imagen)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" class="card-img-mini border border-white/10 shadow-lg group-hover:border-indigo-400">${badgeScraping}${badgeGaleria}</div>` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20 cursor-pointer hover:bg-slate-700 transition-colors border border-dashed border-white/20" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Añadir Fotos">📸</div>`;
             const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
-            const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${v.canalVenta.toUpperCase()}</span>` : '';
-            const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="px-1 py-0.5 rounded text-[8px] font-mono font-bold border" style="background:${colorTienda.a}1a;color:${colorTienda.a};border-color:${colorTienda.b}55">🏬 ${v.proveedor.toUpperCase()}</span>` : '';
+            const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${escapeHtmlSafe(String(v.canalVenta).toUpperCase())}</span>` : '';
+            const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="px-1 py-0.5 rounded text-[8px] font-mono font-bold border" style="background:${colorTienda.a}1a;color:${colorTienda.a};border-color:${colorTienda.b}55">🏬 ${escapeHtmlSafe(String(v.proveedor).toUpperCase())}</span>` : '';
             const badgeLote = v.loteVendido ? `<span class="bg-emerald-300 text-slate-950 border border-emerald-100 px-2 py-0.5 rounded-full text-[8px] font-black uppercase shadow-md">${escapeHtmlSafe(v.loteVentaEtiqueta || 'Lote vendido')}</span>` : '';
             const numEstrellas = parseInt(v.rating || 0, 10); const stringEstrellas = "★".repeat(numEstrellas) + "☆".repeat(5 - numEstrellas); const colorEstrellas = numEstrellas > 0 ? "text-amber-400" : "text-slate-600 opacity-40";
             
@@ -8400,10 +8717,10 @@ function renderKanban(isFullRefresh = false) {
 
             const badgeEst = `<span class="bg-${est.color}-500/10 text-${est.color}-400 border border-${est.color}-500/20 px-1 py-0.5 rounded text-[8px] font-black uppercase">${est.nombre}</span>`;
 
-            const fechaAlta = v.fecha ? `<span class="text-blue-400/80">📦 ${v.fecha}</span>` : '';
-            const fechaVenta = v.fechaVenta ? `<span class="text-emerald-400/80">💰 ${v.fechaVenta}</span>` : '';
+            const fechaAlta = v.fecha ? `<span class="text-blue-400/80">📦 ${escapeHtmlSafe(v.fecha)}</span>` : '';
+            const fechaVenta = v.fechaVenta ? `<span class="text-emerald-400/80">💰 ${escapeHtmlSafe(v.fechaVenta)}</span>` : '';
             const fechasHtml = (fechaAlta || fechaVenta) ? `<div class="text-[8px] font-mono opacity-80 mt-1.5 flex flex-wrap gap-x-3">${fechaAlta} ${fechaVenta}</div>` : '';
-            const miniComentario = v.comentariosProducto ? `<div class="text-[9px] italic opacity-60 mt-1.5 border-l-2 border-white/10 pl-2 truncate" title="${v.comentariosProducto}">${v.comentariosProducto.replace(/!importante/gi, '').replace(/^\*/, '').trim()}</div>` : '';
+            const miniComentario = v.comentariosProducto ? `<div class="text-[9px] italic opacity-60 mt-1.5 border-l-2 border-white/10 pl-2 truncate" title="${escapeHtmlSafe(v.comentariosProducto)}">${escapeHtmlSafe(String(v.comentariosProducto).replace(/!importante/gi, '').replace(/^\*/, '').trim())}</div>` : '';
             const btnAjustarVenta = (!soloLecturaVisual && est.rolFinanciero === 'Venta')
                 ? `<button onclick="abrirModalPostVenta(['${v._id}'], '${est.nombre}', { fechaSugerida: '${v.fechaVenta || ''}', comentarioSugerido: ${JSON.stringify(String(v.comentariosProducto || '')).replace(/"/g, '&quot;')}, canalSugerido: '${v.canalVenta || 'Vinted'}' }); event.stopPropagation();" class="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded hover:bg-emerald-500/20" title="Ajustar fecha/comentarios de venta">Ajustar venta</button>`
                 : '';
@@ -8426,10 +8743,10 @@ function renderKanban(isFullRefresh = false) {
                 ${thumb}
                 <div class="flex-1 min-w-0 ${soloLecturaVisual ? '' : 'cursor-pointer hover:opacity-80 transition-opacity'}" ${onClickEdicion} title="${soloLecturaVisual ? 'Modo visualizador: solo lectura' : 'Hacer clic para editar el artículo'}">
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <h4 class="font-bold text-xs uppercase tracking-wide truncate">${v.prenda}</h4> 
+                        <h4 class="font-bold text-xs uppercase tracking-wide truncate">${escapeHtmlSafe(v.prenda)}</h4> 
                         ${badgeCanal} ${badgeTienda} ${badgeLote} ${badgeEst} ${badgeComentarios}
                     </div>
-                    <span class="text-[9px] font-mono opacity-50 block mt-0.5">${v.categoria} • Talla ${v.talla} ${v.sku ? `• 🆔 ${v.sku}` : ''}</span>
+                    <span class="text-[9px] font-mono opacity-50 block mt-0.5">${escapeHtmlSafe(v.categoria)} • Talla ${escapeHtmlSafe(v.talla)} ${v.sku ? `• 🆔 ${escapeHtmlSafe(v.sku)}` : ''}</span>
                     <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
                     
                     ${fechasHtml}
@@ -8450,17 +8767,28 @@ function renderKanban(isFullRefresh = false) {
         });
 
         const renderGrupo = (nombreTienda, lote) => {
+            const existente = isFullRefresh ? null : Array.from(colDom.children).find((g) => g.dataset?.tiendaKey === nombreTienda);
+            if (existente) {
+                const cuerpo = existente.querySelector('.kanban-store-body');
+                const fragmentoExtra = document.createDocumentFragment();
+                lote.forEach((v) => fragmentoExtra.appendChild(crearCardNodo(v)));
+                cuerpo.appendChild(fragmentoExtra);
+                const contador = existente.querySelector('[data-store-count]');
+                if (contador) contador.textContent = String(cuerpo.children.length);
+                return;
+            }
             const colorTienda = obtenerColorVisualTienda(nombreTienda);
             const collapseKey = claveColapsoTiendaKanban(est.nombre, nombreTienda);
             const colapsado = Boolean(KANBAN_TIENDAS_COLAPSADAS[collapseKey]);
             const group = document.createElement('div');
             group.className = 'kanban-store-group rounded-2xl border border-white/10 bg-black/20 overflow-hidden';
+            group.dataset.tiendaKey = nombreTienda;
             group.innerHTML = `
                 <button type="button" class="kanban-store-toggle w-full flex items-center justify-between px-3 py-2 text-left" onclick="alternarGrupoTiendaKanban('${String(est.nombre).replace(/'/g, "\\'")}', '${String(nombreTienda).replace(/'/g, "\\'")}')">
                     <span class="flex items-center gap-2 min-w-0">
                         <span class="w-3 h-3 rounded-full border border-white/20 flex-shrink-0" style="background:${colorTienda.a}"></span>
                         <span class="text-[10px] font-black uppercase tracking-widest truncate">${escapeHtmlSafe(nombreTienda)}</span>
-                        <span class="text-[9px] opacity-50 font-mono">${lote.length}</span>
+                        <span class="text-[9px] opacity-50 font-mono" data-store-count>${lote.length}</span>
                     </span>
                     <span class="text-[11px] opacity-60">${colapsado ? '▸' : '▾'}</span>
                 </button>
@@ -8483,7 +8811,7 @@ function renderKanban(isFullRefresh = false) {
 
     const loaderContainer = document.getElementById('kanban-loader-container');
     if (loaderContainer) {
-        if (CURRENT_PAGE >= TOTAL_PAGES) {
+        if (!hayMasProductosPorCargar()) {
             loaderContainer.innerHTML = `<p class="text-white/40 text-xs font-mono py-4">-- Fin del inventario --</p>`;
         } else {
             loaderContainer.innerHTML = `<button onclick="loadMoreData()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl text-xs uppercase tracking-widest shadow-lg transition-all active:scale-95">Cargar más productos</button>`;
@@ -8498,19 +8826,19 @@ function updateTickerWallStreet() {
     tareasActivas.forEach(t => {
         const icon = t.estado === 'En Proceso' ? '⚙️' : '📌';
         const colorTexto = t.prioridad === 'Alta' ? 'text-rose-400' : (t.estado === 'En Proceso' ? 'text-blue-400' : 'text-amber-400');
-        txt += `<span onclick="navegarASeccion('sec-tareas'); setTimeout(() => editarTarea('${t._id}'), 100)" class="text-white font-mono uppercase cursor-pointer hover:bg-white/10 transition-colors mx-3 border border-white/20 bg-black/40 px-2 py-0.5 rounded-full inline-flex items-center gap-1 text-[9px] leading-none"><span class="${colorTexto} font-black">${icon} TAREA ${t.estado.toUpperCase()}:</span> ${t.titulo}</span>`;
+        txt += `<span onclick="navegarASeccion('sec-tareas'); setTimeout(() => editarTarea('${t._id}'), 100)" class="text-white font-mono uppercase cursor-pointer hover:bg-white/10 transition-colors mx-3 border border-white/20 bg-black/40 px-2 py-0.5 rounded-full inline-flex items-center gap-1 text-[9px] leading-none"><span class="${colorTexto} font-black">${icon} TAREA ${escapeHtmlSafe(String(t.estado || '').toUpperCase())}:</span> ${escapeHtmlSafe(t.titulo)}</span>`;
     });
 
     const nombresEstadosReserva = LISTA_ESTADOS_KANBAN.filter(e => e.nombre.toLowerCase().includes('reserva') || e.icono.includes('🤝')).map(e => e.nombre);
     const reservas = BASE_DATOS.filter(v => nombresEstadosReserva.includes(v.estado) || v.estado === 'Reservado');
     reservas.forEach(v => {
-        txt += `<span onclick="navegarASeccion('sec-inventario'); setTimeout(() => editItem('${v._id}'), 100)" class="text-white font-mono uppercase cursor-pointer hover:bg-indigo-500/20 transition-colors mx-3 border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1 text-[9px] leading-none"><span class="text-indigo-400 font-black">🤝 RESERVA:</span> ${v.prenda} [${v.talla}]</span>`;
+        txt += `<span onclick="navegarASeccion('sec-inventario'); setTimeout(() => editItem('${v._id}'), 100)" class="text-white font-mono uppercase cursor-pointer hover:bg-indigo-500/20 transition-colors mx-3 border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 rounded-full inline-flex items-center gap-1 text-[9px] leading-none"><span class="text-indigo-400 font-black">🤝 RESERVA:</span> ${escapeHtmlSafe(v.prenda)} [${escapeHtmlSafe(v.talla)}]</span>`;
     });
 
     const nombresEstadosVenta = LISTA_ESTADOS_KANBAN.filter(e => e.rolFinanciero === 'Venta').map(e => e.nombre);
     BASE_DATOS.slice(0, 10).forEach(v => { 
         const symbol = nombresEstadosVenta.includes(v.estado) ? '<span class="text-emerald-400">▲</span>' : '<span class="text-amber-400">●</span>'; 
-        txt += `<span class="text-white font-mono uppercase mx-3 inline-flex items-center gap-1 text-[9px] leading-none">${symbol} ${v.prenda} [${v.talla}] <b class="text-slate-400 ml-1">${parseFloat(v.precioVenta || 0).toFixed(2)}€</b></span>`; 
+        txt += `<span class="text-white font-mono uppercase mx-3 inline-flex items-center gap-1 text-[9px] leading-none">${symbol} ${escapeHtmlSafe(v.prenda)} [${escapeHtmlSafe(v.talla)}] <b class="text-slate-400 ml-1">${parseFloat(v.precioVenta || 0).toFixed(2)}€</b></span>`; 
     });
     
     ticker.innerHTML = txt + txt;
@@ -8617,6 +8945,7 @@ function cancelEdit() {
 async function procesarUnArchivo(file) {
     if (file.type === "image/heic" || file.type === "image/heif" || file.name.toLowerCase().endsWith(".heic")) {
         try {
+            await cargarLibreria('heic');
             const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.8 });
             file = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
         } catch (err) {
@@ -8900,9 +9229,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             USUARIO_ROL_ACTUAL = data.rol || 'Editor';
             EMPRESA_CHAT_ACTUAL = (data.empresa || '').toLowerCase();
             cargarEstadoTiendasKanban();
-            if (EMPRESA_CHAT_ACTUAL) {
-                socket.emit('join_empresa', EMPRESA_CHAT_ACTUAL);
-            }
+            // El servidor decide la sala con la sesión; si el socket aún no conectó, lo hará en 'connect'.
+            if (socket.connected) socket.emit('join_empresa');
             setTheme(localStorage.getItem('seychelles-theme-multi') || 'dark');
             setParticlesEnabled(false);
             document.getElementById('landing-page')?.classList.add('hidden');
@@ -9031,4 +9359,3 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch(e){ console.error("Error en la inicialización:", e); }
 });
 
-if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(err => {}); }); }

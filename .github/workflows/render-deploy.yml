@@ -15,15 +15,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci --no-audit --no-fund
 
       - name: Build Check
-        run: node --check server.js
+        run: |
+          node --check server.js
+          node --check public/app.js
+          node --check scripts/scraper-engine.js
+          node --check scripts/unified-scrape.js
 
       - name: Trigger Render Deploy
-        if: success() && env.RENDER_DEPLOY_HOOK_URL != ''
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-        run: curl -X GET "$RENDER_DEPLOY_HOOK_URL"
+        run: |
+          if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
+            curl -fsS -X GET "$RENDER_DEPLOY_HOOK_URL"
+          else
+            echo "RENDER_DEPLOY_HOOK_URL no configurado: se omite el deploy hook."
+          fi

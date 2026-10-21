@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 
 const DEFAULT_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36';
+const VINTED_BASE_DEFAULT = 'https://www.vinted.es';
+const VINTED_PER_PAGE = 96;
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -16,10 +18,17 @@ function randomBetween(min, max) {
     return Math.floor(a + Math.random() * Math.max(1, b - a + 1));
 }
 
+// Reintenta solo errores transitorios (red, 429, 5xx): un 404 o 401 no mejora reintentando.
+function esErrorTransitorio(error) {
+    const status = error?.response?.status;
+    return !status || status === 429 || status >= 500;
+}
+
 async function withRetry(task, options = {}) {
     const retries = Number.isFinite(options.retries) ? options.retries : 2;
     const baseDelay = Number.isFinite(options.baseDelay) ? options.baseDelay : 600;
     const factor = Number.isFinite(options.factor) ? options.factor : 2;
+    const shouldRetry = typeof options.shouldRetry === 'function' ? options.shouldRetry : esErrorTransitorio;
     let lastError = null;
 
     for (let attempt = 0; attempt <= retries; attempt++) {
@@ -27,12 +36,38 @@ async function withRetry(task, options = {}) {
             return await task(attempt);
         } catch (error) {
             lastError = error;
-            if (attempt >= retries) break;
+            if (attempt >= retries || !shouldRetry(error)) break;
             const delay = Math.round(baseDelay * Math.pow(factor, attempt));
             await sleep(delay);
         }
     }
     throw lastError;
+}
+
+function parseIntEnv(name, fallback, min, max) {
+    const n = parseInt(process.env[name] || '', 10);
+    const valor = Number.isFinite(n) ? n : fallback;
+    return Math.max(min, Math.min(valor, max));
+}
+
+// Ejecuta tareas con un máximo de N en paralelo, conservando el orden de resultados.
+async function ejecutarConConcurrencia(items, limite, tarea) {
+    const lista = Array.isArray(items) ? items : [];
+    const resultados = new Array(lista.length).fill(null);
+    let siguiente = 0;
+    const trabajadores = Array.from({ length: Math.max(1, Math.min(limite, lista.length)) }, async () => {
+        while (siguiente < lista.length) {
+            const indice = siguiente++;
+            try {
+                resultados[indice] = await tarea(lista[indice], indice);
+            } catch (error) {
+                console.warn(`[SCRAPER] Tarea ${indice + 1}/${lista.length} falló: ${error.message}`);
+                resultados[indice] = null;
+            }
+        }
+    });
+    await Promise.all(trabajadores);
+    return resultados;
 }
 
 function normalizarEmpresa(empresa) {
@@ -102,6 +137,19 @@ function firmaProducto(p) {
     return `${t}__${precio}`;
 }
 
+// Id estable del anuncio (id de la API o el número de /items/123-slug).
+function claveIdProducto(p) {
+    if (p?.id) return `id:${p.id}`;
+    const m = String(p?.url || '').match(/\/items\/(\d+)/);
+    return m ? `id:${m[1]}` : '';
+}
+
+function textoPlano(valor) {
+    if (valor == null) return '';
+    if (typeof valor === 'object') return String(valor.title || valor.name || valor.label || '').trim();
+    return String(valor).trim();
+}
+
 function limpiarProducto(input, fuente = '') {
     if (!input || typeof input !== 'object') return null;
 
@@ -109,31 +157,52 @@ function limpiarProducto(input, fuente = '') {
     const precio = normalizarPrecio(input.precio ?? input.price ?? input.amount);
     if (!titulo || !Number.isFinite(precio)) return null;
 
-    return {
+    const galeria = (Array.isArray(input.galeria) ? input.galeria : [])
+        .map((g) => String(g || '').trim())
+        .filter((g) => /^https?:\/\//i.test(g))
+        .slice(0, 12);
+
+    const producto = {
         titulo,
         precio,
         imagen: String(input.imagen || input.image || '').trim(),
+        galeria,
         descripcion: String(input.descripcion || input.description || '').trim(),
-        marca: String(input.marca || input.brand || '').trim(),
-        talla: String(input.talla || input.size || '').trim(),
-        condicion: String(input.condicion || input.status || '').trim(),
+        marca: textoPlano(input.marca || input.brand),
+        talla: textoPlano(input.talla || input.size),
+        condicion: textoPlano(input.condicion || input.status),
         favoritos: Number.isFinite(Number(input.favoritos)) ? Number(input.favoritos) : 0,
+        url: String(input.url || '').trim(),
         fuente
     };
+    if (input.id) producto.id = String(input.id);
+    return producto;
 }
 
+// Deduplica por id de anuncio; lo que no tiene id se agrupa por título+precio,
+// y se descarta si ya hay un anuncio con id que coincide (misma prenda vista por DOM y por API).
 function deduplicarProductos(list) {
-    const map = new Map();
+    const conId = new Map();
+    const sinId = new Map();
+    const firmasConId = new Set();
     for (const raw of list || []) {
         const p = limpiarProducto(raw, raw?.fuente || 'unknown');
         if (!p) continue;
-        const key = firmaProducto(p);
-        const prev = map.get(key);
+        const idKey = claveIdProducto(p);
+        const firma = firmaProducto(p);
+        const destino = idKey ? conId : sinId;
+        const key = idKey || firma;
+        if (idKey) firmasConId.add(firma);
+        const prev = destino.get(key);
         if (!prev || scoreProducto(p) > scoreProducto(prev)) {
-            map.set(key, p);
+            destino.set(key, p);
         }
     }
-    return Array.from(map.values());
+    const resultado = Array.from(conId.values());
+    for (const [firma, p] of sinId) {
+        if (!firmasConId.has(firma)) resultado.push(p);
+    }
+    return resultado;
 }
 
 function deduplicarProductosMonopolio(list) {
@@ -143,7 +212,7 @@ function deduplicarProductosMonopolio(list) {
         if (!p) continue;
 
         const cuentaKey = normalizarTexto(raw?.cuenta || raw?.proveedor || raw?.urlCuenta || 'sin-cuenta') || 'sin-cuenta';
-        const key = `${cuentaKey}__${firmaProducto(p)}`;
+        const key = `${cuentaKey}__${claveIdProducto(p) || firmaProducto(p)}`;
         const prev = map.get(key);
 
         const candidate = {
@@ -158,27 +227,38 @@ function deduplicarProductosMonopolio(list) {
     return Array.from(map.values());
 }
 
-function mapearProductoVinted(item, fuente = 'api') {
-    if (!item) return null;
+function mapearProductoVinted(item, fuente = 'api', base = VINTED_BASE_DEFAULT) {
+    if (!item || typeof item !== 'object') return null;
     const precio = normalizarPrecio(
         item?.price?.amount ??
         item?.price_numeric ??
         item?.total_item_price?.amount ??
         item?.total_item_price ??
-        item?.price
+        (typeof item?.price === 'object' ? null : item?.price)
     );
     const titulo = String(item.title || item.name || item.item_title || '').trim();
     if (!titulo || !Number.isFinite(precio)) return null;
 
+    const fotos = (Array.isArray(item.photos) && item.photos.length ? item.photos : (item.photo ? [item.photo] : []))
+        .map((f) => (typeof f === 'string' ? f : (f?.url || f?.full_size_url || '')))
+        .filter(Boolean);
+    const rutaItem = String(item.url || item.path || '').trim();
+    const urlItem = rutaItem
+        ? (/^https?:\/\//i.test(rutaItem) ? rutaItem : `${base}${rutaItem.startsWith('/') ? '' : '/'}${rutaItem}`)
+        : (item.id ? `${base}/items/${item.id}` : '');
+
     const producto = {
+        id: item.id || '',
         titulo,
         precio,
-        imagen: item?.photo?.url || item?.photo?.full_size_url || item?.photos?.[0]?.url || item?.image_url || '',
+        imagen: fotos[0] || item?.image_url || '',
+        galeria: fotos.slice(1),
         descripcion: item.description || '',
-        marca: item.brand_title || '',
-        talla: item.size_title || '',
-        condicion: item.status || '',
-        favoritos: Number(item.favourite_count || 0),
+        marca: textoPlano(item.brand_title || item.brand),
+        talla: textoPlano(item.size_title || item.size),
+        condicion: textoPlano(item.status_title || item.status),
+        favoritos: Number(item.favourite_count ?? item.favorites_count ?? 0) || 0,
+        url: urlItem,
         fuente
     };
     return limpiarProducto(producto, fuente);
@@ -224,6 +304,99 @@ function normalizarUrlVinted(inputUrl) {
     if (!raw) return '';
     if (/^https?:\/\//i.test(raw)) return raw;
     return `https://${raw}`;
+}
+
+// Dominio de Vinted de la URL (vinted.fr, vinted.it...) o vinted.es por defecto.
+function baseVintedDesdeUrl(inputUrl) {
+    try {
+        const u = new URL(normalizarUrlVinted(inputUrl));
+        if (/(^|\.)vinted\.[a-z.]+$/i.test(u.hostname)) return `https://${u.hostname}`;
+    } catch (_) {}
+    return VINTED_BASE_DEFAULT;
+}
+
+// --- Sesión anónima para la API de Vinted ---
+// La API devuelve 401 sin la cookie de sesión que Vinted da al visitar la portada.
+// La pedimos una vez por dominio y la reutilizamos (se renueva ante un 401/403).
+const COOKIES_VINTED = new Map();
+const COOKIES_VINTED_TTL_MS = 10 * 60 * 1000;
+
+// Vinted manda algunas cookies dos veces (primero vacía para borrarla y luego la buena):
+// nos quedamos con el último valor no vacío de cada nombre.
+function cookiesDeRespuesta(response) {
+    const setCookie = response?.headers?.['set-cookie'];
+    const lista = Array.isArray(setCookie) ? setCookie : (setCookie ? [setCookie] : []);
+    const jar = new Map();
+    for (const linea of lista) {
+        const par = String(linea).split(';')[0];
+        const igual = par.indexOf('=');
+        if (igual <= 0) continue;
+        const nombre = par.slice(0, igual).trim();
+        const valor = par.slice(igual + 1).trim();
+        if (valor) jar.set(nombre, valor);
+    }
+    return [...jar].map(([nombre, valor]) => `${nombre}=${valor}`);
+}
+
+async function obtenerCookiesVinted(base, forzar = false) {
+    const hit = COOKIES_VINTED.get(base);
+    if (!forzar && hit && (Date.now() - hit.ts) < COOKIES_VINTED_TTL_MS) return hit.cookie;
+    try {
+        const response = await axios.get(`${base}/`, {
+            timeout: 15000,
+            maxRedirects: 5,
+            validateStatus: () => true,
+            headers: {
+                'User-Agent': DEFAULT_UA,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
+            }
+        });
+        const cookie = cookiesDeRespuesta(response).join('; ');
+        COOKIES_VINTED.set(base, { cookie, ts: Date.now() });
+        return cookie;
+    } catch (error) {
+        console.warn(`[SCRAPER] No se pudo abrir sesión en ${base}: ${error.message}`);
+        return hit?.cookie || '';
+    }
+}
+
+async function getApiVinted(base, ruta, params = {}, referer = '') {
+    const pedir = (cookie) => axios.get(`${base}${ruta}`, {
+        params,
+        timeout: 18000,
+        headers: {
+            'User-Agent': DEFAULT_UA,
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+            'Referer': referer || `${base}/`,
+            ...(cookie ? { Cookie: cookie } : {})
+        }
+    });
+
+    const cookie = await obtenerCookiesVinted(base);
+    try {
+        return await pedir(cookie);
+    } catch (error) {
+        const status = error?.response?.status;
+        if (status !== 401 && status !== 403) throw error;
+        // Cookie caducada o rechazada: pedimos una nueva y reintentamos una vez.
+        return pedir(await obtenerCookiesVinted(base, true));
+    }
+}
+
+function extraerItemsDePayload(data) {
+    if (!data || typeof data !== 'object') return [];
+    if (Array.isArray(data.items)) return data.items;
+    if (Array.isArray(data.catalog_items)) return data.catalog_items;
+    if (Array.isArray(data?.data?.items)) return data.data.items;
+    if (Array.isArray(data?.data?.catalog_items)) return data.data.catalog_items;
+    return [];
+}
+
+function itemPerteneceAUsuario(item, userId) {
+    const propietario = item?.user?.id ?? item?.user_id ?? item?.owner_id;
+    return propietario == null ? false : String(propietario) === String(userId);
 }
 
 function extraerIdPerfilDesdePath(pathOnly) {
@@ -412,15 +585,22 @@ async function crearSesionNavegador(tag = 'scraper') {
     const timezoneId = String(process.env.SCRAPER_TIMEZONE || 'Europe/Madrid');
     const userDataDir = path.join(os.tmpdir(), `seychelles-${tag}-${Date.now()}-${randomBetween(100, 999)}`);
 
-    const browser = await chromium.launch({
-        headless,
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-blink-features=AutomationControlled'
-        ]
-    });
+    let browser;
+    try {
+        browser = await chromium.launch({
+            headless,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-blink-features=AutomationControlled'
+            ]
+        });
+    } catch (error) {
+        // Playwright instalado pero sin Chromium (p. ej. en Render): seguimos sin navegador.
+        console.warn(`[SCRAPER] No se pudo arrancar Chromium: ${error.message.split('\n')[0]}`);
+        return null;
+    }
 
     const context = await browser.newContext({
         locale,
@@ -429,6 +609,15 @@ async function crearSesionNavegador(tag = 'scraper') {
         viewport: { width: 1366, height: 900 },
         storageState: storageState || undefined
     });
+
+    // Las URLs de las fotos ya están en el DOM/JSON: no hace falta descargarlas.
+    if (parseBoolEnv('SCRAPER_BLOCK_MEDIA', true)) {
+        await context.route('**/*', (route) => {
+            const tipo = route.request().resourceType();
+            if (tipo === 'image' || tipo === 'media' || tipo === 'font') return route.abort();
+            return route.continue();
+        });
+    }
 
     // Reducimos señales automáticas sin alterar funcionalidad de la web.
     await context.addInitScript(() => {
@@ -451,16 +640,60 @@ async function cerrarSesionNavegador(session) {
     } catch (_) {}
 }
 
-async function navegarComoNavegadorReal(page, urlObjetivo) {
+async function abrirPaginaVinted(page, urlObjetivo) {
     await page.goto(urlObjetivo, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(randomBetween(900, 1700));
+    await page.waitForTimeout(randomBetween(700, 1300));
+    // Banner de cookies (OneTrust): si tapa la página, el feed no termina de cargar.
+    try {
+        const aceptar = page.locator('#onetrust-accept-btn-handler');
+        if (await aceptar.isVisible({ timeout: 1500 })) await aceptar.click({ timeout: 2000 });
+    } catch (_) {}
     await page.mouse.move(randomBetween(80, 420), randomBetween(60, 260), { steps: randomBetween(6, 14) });
+}
 
-    const scrollBursts = Math.max(2, Math.min(parseInt(process.env.SCRAPER_SCROLL_BURSTS || '4', 10), 10));
-    for (let i = 0; i < scrollBursts; i++) {
+async function scrollHumano(page, bursts) {
+    for (let i = 0; i < bursts; i++) {
         await page.mouse.wheel(0, randomBetween(1400, 3200));
-        await page.waitForTimeout(randomBetween(700, 1400));
+        await page.waitForTimeout(randomBetween(600, 1200));
     }
+}
+
+async function navegarComoNavegadorReal(page, urlObjetivo) {
+    await abrirPaginaVinted(page, urlObjetivo);
+    await scrollHumano(page, parseIntEnv('SCRAPER_SCROLL_BURSTS', 4, 2, 10));
+}
+
+// Pagina la API del armario desde dentro de la página: la petición sale del navegador
+// real (con sus cookies y cabeceras), así que pasa los controles anti-bot y trae todo
+// el armario sin depender del scroll infinito.
+async function extraerArmarioDesdeNavegador(page, memberId, maxPages) {
+    return page.evaluate(async ({ memberId, maxPages, perPage }) => {
+        const rutas = [`/api/v2/wardrobe/${memberId}/items`, `/api/v2/users/${memberId}/items`];
+        for (const ruta of rutas) {
+            const items = [];
+            for (let p = 1; p <= maxPages; p += 1) {
+                let data = null;
+                try {
+                    const r = await fetch(`${ruta}?page=${p}&per_page=${perPage}&order=newest_first`, {
+                        credentials: 'include',
+                        headers: { accept: 'application/json, text/plain, */*' }
+                    });
+                    if (!r.ok) break;
+                    data = await r.json();
+                } catch (_) {
+                    break;
+                }
+                const lote = Array.isArray(data?.items) ? data.items : [];
+                if (!lote.length) break;
+                items.push(...lote);
+                const totalPages = Number(data?.pagination?.total_pages || 0);
+                if ((totalPages && p >= totalPages) || lote.length < perPage) break;
+                await new Promise((res) => setTimeout(res, 250 + Math.random() * 350));
+            }
+            if (items.length) return items;
+        }
+        return [];
+    }, { memberId, maxPages, perPage: VINTED_PER_PAGE });
 }
 
 function extraerProductosDesdeLdJson($) {
@@ -602,67 +835,45 @@ async function extraerPorApiVinted(urlObjetivo) {
     const userId = extraerMemberId(urlObjetivo);
     if (!userId) return [];
 
-    const headers = {
-        'User-Agent': DEFAULT_UA,
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-        'Referer': `https://www.vinted.es/member/${userId}`
-    };
+    const base = baseVintedDesdeUrl(urlObjetivo);
+    const referer = `${base}/member/${userId}`;
+    const maxPages = parseIntEnv('SCRAPER_MAX_PAGES', 12, 1, 25);
 
-    const maxPages = Math.max(2, Math.min(parseInt(process.env.SCRAPER_MAX_PAGES || '12', 10), 20));
-    const out = [];
+    // /wardrobe/:id/items es el endpoint vigente (verificado oct-2026; /users/:id/items ya da 404).
+    // Filtramos por propietario por si algún endpoint mezcla prendas de otros vendedores.
+    const endpoints = [
+        { ruta: `/api/v2/wardrobe/${userId}/items`, params: { order: 'newest_first' }, filtrarPropietario: true },
+        { ruta: `/api/v2/users/${userId}/items`, params: {}, filtrarPropietario: true }
+    ];
 
-    const extractItems = (data) => {
-        if (!data || typeof data !== 'object') return [];
-        if (Array.isArray(data.items)) return data.items;
-        if (Array.isArray(data.catalog_items)) return data.catalog_items;
-        if (Array.isArray(data?.data?.items)) return data.data.items;
-        if (Array.isArray(data?.data?.catalog_items)) return data.data.catalog_items;
-        return [];
-    };
-
-    const callEndpoint = async (requestConfig) => {
-        for (let page = 1; page <= maxPages; page++) {
-            const response = await withRetry(
-                () => axios.request({
-                    ...requestConfig,
-                    params: { ...(requestConfig.params || {}), page, per_page: 96 },
-                    timeout: 18000,
-                    headers
-                }),
-                { retries: 2, baseDelay: 500, factor: 2 }
-            );
-
-            const items = extractItems(response.data);
-            if (!items.length) break;
-            out.push(...items.map((it) => mapearProductoVinted(it, 'api')).filter(Boolean));
-
-            if (items.length < 96) break;
-        }
-    };
-
-    try {
-        await callEndpoint({
-            method: 'GET',
-            url: `https://www.vinted.es/api/v2/users/${userId}/items`
-        });
-    } catch (_) {
-        // Seguimos a fallback.
-    }
-
-    if (out.length === 0) {
+    for (const ep of endpoints) {
+        const out = [];
         try {
-            await callEndpoint({
-                method: 'GET',
-                url: 'https://www.vinted.es/api/v2/catalog/items',
-                params: { user_id: userId, order: 'newest_first' }
-            });
-        } catch (_) {
-            // Sin resultados por API.
+            for (let page = 1; page <= maxPages; page++) {
+                const response = await withRetry(
+                    () => getApiVinted(base, ep.ruta, { ...ep.params, page, per_page: VINTED_PER_PAGE }, referer),
+                    { retries: 2, baseDelay: 700, factor: 2 }
+                );
+
+                const brutos = extraerItemsDePayload(response.data);
+                if (!brutos.length) break;
+                // Si la API no indica propietario no descartamos nada (el endpoint ya es del usuario).
+                const conPropietario = brutos.some((it) => (it?.user?.id ?? it?.user_id) != null);
+                const items = ep.filtrarPropietario && conPropietario ? brutos.filter((it) => itemPerteneceAUsuario(it, userId)) : brutos;
+                out.push(...items.map((it) => mapearProductoVinted(it, 'api', base)).filter(Boolean));
+
+                const totalPages = Number(response.data?.pagination?.total_pages || 0);
+                if ((totalPages && page >= totalPages) || brutos.length < VINTED_PER_PAGE) break;
+                await sleep(randomBetween(250, 600));
+            }
+        } catch (error) {
+            const status = error?.response?.status || error.code || 'sin-status';
+            console.log(`[SCRAPER] API ${ep.ruta} sin datos (${status}).`);
         }
+        if (out.length) return deduplicarProductos(out);
     }
 
-    return deduplicarProductos(out);
+    return [];
 }
 
 async function extraerConPlaywright(urlObjetivo, session = null) {
@@ -673,6 +884,8 @@ async function extraerConPlaywright(urlObjetivo, session = null) {
         return [];
     }
 
+    const base = baseVintedDesdeUrl(urlObjetivo);
+    const memberId = extraerMemberId(urlObjetivo);
     const page = await internalSession.context.newPage();
     const capturedApi = [];
 
@@ -680,20 +893,33 @@ async function extraerConPlaywright(urlObjetivo, session = null) {
         try {
             const rUrl = response.url();
             if (!rUrl.includes('/api/v2/')) return;
+            // Solo el armario de este perfil: la página también carga recomendaciones de otros vendedores.
+            if (memberId && !rUrl.includes(`/wardrobe/${memberId}/`) && !rUrl.includes(`/users/${memberId}/items`)) return;
             const ctype = String(response.headers()['content-type'] || '').toLowerCase();
             if (!ctype.includes('application/json')) return;
 
             const body = await response.json();
-            const items = body?.items || body?.catalog_items || body?.data?.items || body?.data?.catalog_items || [];
-            if (!Array.isArray(items) || items.length === 0) return;
-            capturedApi.push(...items.map((it) => mapearProductoVinted(it, 'playwright-api')).filter(Boolean));
+            const items = extraerItemsDePayload(body);
+            if (!items.length) return;
+            capturedApi.push(...items.map((it) => mapearProductoVinted(it, 'playwright-api', base)).filter(Boolean));
         } catch (_) {
             // Ignorar respuestas no parseables.
         }
     });
 
     try {
-        await navegarComoNavegadorReal(page, urlObjetivo);
+        await abrirPaginaVinted(page, urlObjetivo);
+
+        if (memberId) {
+            const itemsArmario = await extraerArmarioDesdeNavegador(page, memberId, parseIntEnv('SCRAPER_MAX_PAGES', 12, 1, 25)).catch(() => []);
+            const desdeArmario = (itemsArmario || []).map((it) => mapearProductoVinted(it, 'playwright-api', base)).filter(Boolean);
+            if (desdeArmario.length) {
+                return deduplicarProductos([...desdeArmario, ...capturedApi]);
+            }
+        }
+
+        // Último recurso: scroll y lectura del DOM.
+        await scrollHumano(page, parseIntEnv('SCRAPER_SCROLL_BURSTS', 4, 2, 10));
 
         const domProducts = await page.evaluate(() => {
             const normalizePrice = (value) => {
@@ -719,11 +945,13 @@ async function extraerConPlaywright(urlObjetivo, session = null) {
                 const titleEl = card.querySelector('[data-testid$="--title"], h3, h4, a[title]');
                 const priceEl = card.querySelector('[data-testid$="--price-text"], [class*="price"], h2, h3');
                 const imgEl = card.querySelector('img');
+                const linkEl = card.querySelector('a[href*="/items/"]');
                 const titulo = (titleEl?.textContent || titleEl?.getAttribute('title') || '').trim();
                 const precio = normalizePrice(priceEl?.textContent || '');
                 const imagen = (imgEl?.getAttribute('src') || imgEl?.getAttribute('data-src') || '').trim();
+                const url = linkEl ? linkEl.href.split('?')[0] : '';
                 if (titulo && Number.isFinite(precio)) {
-                    out.push({ titulo, precio, imagen, fuente: 'playwright-dom' });
+                    out.push({ titulo, precio, imagen, url, fuente: 'playwright-dom' });
                 }
             }
             return out;
@@ -741,7 +969,30 @@ async function extraerConPlaywright(urlObjetivo, session = null) {
     }
 }
 
+function usuarioDesdeObjeto(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    const u = obj.user && typeof obj.user === 'object' ? obj.user : obj;
+    const id = u.id ?? u.user_id ?? u.member_id;
+    const login = u.login ?? u.username ?? u.nick_name ?? u.nickname;
+    // Exigimos login o profile_url: así un objeto cualquiera con "id" (foto, marca...) no se toma por perfil.
+    if (!login && !u.profile_url) return null;
+    const url = normalizarUrlPerfilVinted(u.profile_url || (id ? `https://www.vinted.es/member/${id}` : ''));
+    if (!url) return null;
+    return { url, alias: sanitizarAlias(login || extraerAliasDesdeUrlPerfil(url), extraerAliasDesdeUrlPerfil(url)) };
+}
+
 function extraerUsuariosCandidatosDesdePayload(payload) {
+    // Formato habitual de la API: una lista explícita de usuarios.
+    const listaDirecta = [payload?.users, payload?.followers, payload?.followings, payload?.following, payload?.items]
+        .find((v) => Array.isArray(v) && v.length);
+    if (listaDirecta) {
+        const dedupeDirecto = new Map();
+        listaDirecta.map(usuarioDesdeObjeto).filter(Boolean).forEach((c) => {
+            if (!dedupeDirecto.has(c.url)) dedupeDirecto.set(c.url, c);
+        });
+        if (dedupeDirecto.size) return Array.from(dedupeDirecto.values());
+    }
+
     const out = [];
     const queue = [payload];
     const seen = new Set();
@@ -794,36 +1045,29 @@ async function extraerCuentasDesdeApiRelaciones(urlObjetivo) {
     const memberId = extraerMemberId(urlObjetivo);
     if (!memberId) return [];
 
-    const perPage = 96;
-    const maxPages = Math.max(1, Math.min(parseInt(process.env.MONOPOLIO_API_REL_PAGES || '6', 10), 14));
-    const headers = {
-        'User-Agent': DEFAULT_UA,
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-        'Referer': `https://www.vinted.es/member/${memberId}/following`
-    };
-
-    const endpoints = [
-        `https://www.vinted.es/api/v2/users/${memberId}/followings`,
-        `https://www.vinted.es/api/v2/users/${memberId}/followers`,
-        `https://www.vinted.es/api/v2/users/${memberId}/relations/following`
-    ];
+    const perPage = VINTED_PER_PAGE;
+    const maxPages = parseIntEnv('MONOPOLIO_API_REL_PAGES', 6, 1, 14);
+    const base = baseVintedDesdeUrl(urlObjetivo);
+    // Respetamos el tipo de relación pedido: una URL de seguidos no debe traer también los seguidores.
+    const tipo = /\/followers\b/i.test(String(urlObjetivo || '')) ? 'followers' : 'following';
+    const referer = `${base}/member/${memberId}/${tipo}`;
+    // Vigentes (oct-2026): /followed_users (seguidos) y /followers (seguidores).
+    const endpoints = tipo === 'followers'
+        ? [`/api/v2/users/${memberId}/followers`]
+        : [`/api/v2/users/${memberId}/followed_users`, `/api/v2/users/${memberId}/followings`];
 
     const dedupe = new Map();
 
-    for (const endpoint of endpoints) {
+    for (const ruta of endpoints) {
         for (let page = 1; page <= maxPages; page += 1) {
             try {
                 const response = await withRetry(
-                    () => axios.get(endpoint, {
-                        timeout: 17000,
-                        headers,
-                        params: { page, per_page: perPage }
-                    }),
-                    { retries: 1, baseDelay: 420, factor: 2 }
+                    () => getApiVinted(base, ruta, { page, per_page: perPage }, referer),
+                    { retries: 1, baseDelay: 500, factor: 2 }
                 );
 
-                const candidatos = extraerUsuariosCandidatosDesdePayload(response.data);
+                const candidatos = extraerUsuariosCandidatosDesdePayload(response.data)
+                    .filter((c) => extraerMemberId(c.url) !== String(memberId));
                 if (!candidatos.length) break;
 
                 let nuevos = 0;
@@ -834,11 +1078,14 @@ async function extraerCuentasDesdeApiRelaciones(urlObjetivo) {
                     nuevos += 1;
                 }
 
-                if (candidatos.length < perPage || nuevos === 0) break;
+                const totalPages = Number(response.data?.pagination?.total_pages || 0);
+                if ((totalPages && page >= totalPages) || candidatos.length < perPage || nuevos === 0) break;
             } catch (_) {
                 break;
             }
         }
+        // El primer endpoint que responde ya es la relación completa.
+        if (dedupe.size) break;
     }
 
     return Array.from(dedupe.values());
@@ -1005,6 +1252,8 @@ async function scrapeMonopolio(url, aliasBase = '', options = {}) {
     const aliasPrincipal = sanitizarAlias(aliasBase || extraerAliasDesdeUrlPerfil(urlNormalizada), 'Competidor');
     const discoverOnly = Boolean(options?.discoverOnly);
     const maxProfilesOverride = Number.parseInt(options?.maxProfiles, 10);
+    const timeBudgetMs = Number(options?.timeBudgetMs);
+    const fechaLimite = Number.isFinite(timeBudgetMs) && timeBudgetMs > 0 ? Date.now() + timeBudgetMs : Infinity;
     const grupos = [];
     const session = await crearSesionNavegador('monopolio');
     const semillaRelacion = obtenerSemillaRelacionMonopolio(urlNormalizada);
@@ -1057,6 +1306,10 @@ async function scrapeMonopolio(url, aliasBase = '', options = {}) {
             };
 
             while (cola.length > 0 && visitadas.size < maxChainUrls) {
+                if (Date.now() > fechaLimite) {
+                    console.warn(`[MONOPOLIO] Presupuesto de tiempo agotado tras ${visitadas.size} relaciones.`);
+                    break;
+                }
                 const actual = cola.shift();
                 const relUrl = normalizarUrlRelacionVinted(actual?.url || '');
                 if (!relUrl || visitadas.has(relUrl)) continue;
@@ -1064,8 +1317,9 @@ async function scrapeMonopolio(url, aliasBase = '', options = {}) {
 
                 const perfilOrigen = normalizarUrlPerfilVinted(relUrl);
                 if (perfilOrigen) {
+                    const esSemilla = Number(actual?.depth || 0) === 0;
                     registrarPerfil(perfilOrigen, {
-                        alias: actual?.parentAlias || extraerAliasDesdeUrlPerfil(perfilOrigen),
+                        alias: esSemilla ? aliasPrincipal : (actual?.parentAlias || extraerAliasDesdeUrlPerfil(perfilOrigen)),
                         depth: Number.isFinite(Number(actual?.depth)) ? Number(actual.depth) : 0,
                         parentProfileUrl: actual?.parentProfileUrl || '',
                         parentAlias: actual?.parentAlias || '',
@@ -1073,17 +1327,16 @@ async function scrapeMonopolio(url, aliasBase = '', options = {}) {
                     });
                 }
 
-                const resultado = await extraerCuentasDesdeSeguidores(relUrl, session);
-                const cuentas = Array.isArray(resultado?.cuentas) ? resultado.cuentas : [];
-                const relaciones = Array.isArray(resultado?.relaciones) ? resultado.relaciones : [];
-                const items = Array.isArray(resultado?.items) ? resultado.items : [];
-
-                let cuentasExpandidas = [...cuentas];
+                // Primero la API (segundos y con paginación completa); el navegador solo si no basta.
+                let cuentasExpandidas = await extraerCuentasDesdeApiRelaciones(relUrl).catch(() => []);
+                let relaciones = [];
+                let items = [];
                 if (cuentasExpandidas.length < 4) {
-                    const desdeApiRel = await extraerCuentasDesdeApiRelaciones(relUrl);
-                    if (desdeApiRel.length > 0) {
-                        cuentasExpandidas = [...cuentasExpandidas, ...desdeApiRel];
-                    }
+                    const resultado = await extraerCuentasDesdeSeguidores(relUrl, session);
+                    const cuentas = Array.isArray(resultado?.cuentas) ? resultado.cuentas : [];
+                    relaciones = Array.isArray(resultado?.relaciones) ? resultado.relaciones : [];
+                    items = Array.isArray(resultado?.items) ? resultado.items : [];
+                    cuentasExpandidas = [...cuentasExpandidas, ...cuentas];
                 }
                 if (cuentasExpandidas.length < 2 && items.length > 0) {
                     const desdeItems = await extraerPerfilesDesdeItemsVinted(items, session);
@@ -1195,8 +1448,17 @@ async function scrapeMonopolio(url, aliasBase = '', options = {}) {
                 };
             }
 
-            for (const cuenta of objetivosFinales) {
-                const { productos } = await scrapeVinted(cuenta.url, { playwrightFirst: true, session, deepMode: true });
+            // Varias cuentas en paralelo (pestañas del mismo navegador); el orden se conserva.
+            const concurrencia = parseIntEnv('MONOPOLIO_CONCURRENCY', 3, 1, 8);
+            const resultadosCuentas = await ejecutarConConcurrencia(objetivosFinales, concurrencia, async (cuenta, indice) => {
+                const { productos } = await scrapeVinted(cuenta.url, { session, deepMode: true });
+                console.log(`[MONOPOLIO] ${indice + 1}/${objetivosFinales.length} ${cuenta.url} -> ${(productos || []).length} productos`);
+                return { cuenta, productos };
+            });
+
+            for (const resultadoCuenta of resultadosCuentas) {
+                if (!resultadoCuenta) continue;
+                const { cuenta, productos } = resultadoCuenta;
                 const aliasCuenta = sanitizarAlias(cuenta.alias, extraerAliasDesdeUrlPerfil(cuenta.url));
                 const enriquecidos = (productos || []).map((p) => enriquecerProductoMonopolio(p, {
                     cuenta: aliasCuenta,
@@ -1223,7 +1485,7 @@ async function scrapeMonopolio(url, aliasBase = '', options = {}) {
             if (totalProductos === 0) {
                 const perfilOrigen = normalizarUrlPerfilVinted(urlNormalizada);
                 if (perfilOrigen) {
-                    const { productos } = await scrapeVinted(perfilOrigen, { playwrightFirst: true, session, deepMode: true });
+                    const { productos } = await scrapeVinted(perfilOrigen, { session, deepMode: true });
                     const aliasCuenta = sanitizarAlias(aliasPrincipal, extraerAliasDesdeUrlPerfil(perfilOrigen));
                     grupos.push({
                         cuenta: aliasCuenta,
@@ -1270,7 +1532,7 @@ async function scrapeMonopolio(url, aliasBase = '', options = {}) {
                 };
             }
 
-            const { productos } = await scrapeVinted(urlNormalizada, { playwrightFirst: true, session, deepMode: true });
+            const { productos } = await scrapeVinted(urlNormalizada, { session, deepMode: true });
             const aliasCuenta = sanitizarAlias(aliasPrincipal, extraerAliasDesdeUrlPerfil(urlNormalizada));
             const enriquecidos = (productos || []).map((p) => enriquecerProductoMonopolio(p, {
                 cuenta: aliasCuenta,
@@ -1399,54 +1661,45 @@ async function enviarWebhook(payload, options) {
 }
 
 async function scrapeVinted(url, options = {}) {
-    const playwrightFirst = Boolean(options.playwrightFirst || parseBoolEnv('SCRAPER_PLAYWRIGHT_FIRST', false));
     const sharedSession = options.session || null;
     const deepMode = Boolean(options.deepMode || parseBoolEnv('SCRAPER_DEEP_MODE', false));
+    const resumen = { scripts: 0, ldjson: 0, dom: 0, api: 0, playwright: 0 };
 
-    if (playwrightFirst && !deepMode) {
-        const porPlaywright = await extraerConPlaywright(url, sharedSession);
-        if (porPlaywright.length >= 3) {
-            return {
-                productos: deduplicarProductos(porPlaywright),
-                resumen: { scripts: 0, ldjson: 0, dom: 0, api: 0, playwright: porPlaywright.length }
-            };
-        }
+    // 1) API con sesión anónima: segundos por perfil y el armario completo paginado.
+    const porApi = await extraerPorApiVinted(url).catch(() => []);
+    resumen.api = porApi.length;
+    if (porApi.length > 0) return { productos: porApi, resumen };
+
+    // 2) HTML estático (JSON incrustado, ld+json o DOM). Si Vinted lo bloquea, seguimos.
+    let productos = [];
+    try {
+        const htmlResponse = await withRetry(
+            () => axios.get(url, {
+                timeout: 20000,
+                headers: {
+                    'User-Agent': DEFAULT_UA,
+                    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Cache-Control': 'no-cache'
+                }
+            }),
+            { retries: 1, baseDelay: 700, factor: 2 }
+        );
+
+        const $ = cheerio.load(htmlResponse.data || '');
+        const desdeScripts = extraerDesdeScripts($);
+        const desdeLdJson = extraerProductosDesdeLdJson($);
+        const desdeDom = extraerDesdeDomCheerio($);
+        resumen.scripts = desdeScripts.length;
+        resumen.ldjson = desdeLdJson.length;
+        resumen.dom = desdeDom.length;
+        productos = deduplicarProductos([...desdeScripts, ...desdeLdJson, ...desdeDom]);
+    } catch (error) {
+        console.log(`[SCRAPER] HTML no disponible para ${url} (${error?.response?.status || error.code || error.message}).`);
     }
 
-    const htmlResponse = await withRetry(
-        () => axios.get(url, {
-            timeout: 20000,
-            headers: {
-                'User-Agent': DEFAULT_UA,
-                'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Cache-Control': 'no-cache'
-            }
-        }),
-        { retries: 2, baseDelay: 700, factor: 2 }
-    );
-
-    const $ = cheerio.load(htmlResponse.data || '');
-
-    const desdeScripts = extraerDesdeScripts($);
-    const desdeLdJson = extraerProductosDesdeLdJson($);
-    const desdeDom = extraerDesdeDomCheerio($);
-
-    let productos = deduplicarProductos([...desdeScripts, ...desdeLdJson, ...desdeDom]);
-    const resumen = {
-        scripts: desdeScripts.length,
-        ldjson: desdeLdJson.length,
-        dom: desdeDom.length,
-        api: 0,
-        playwright: 0
-    };
-
-    if (deepMode || productos.length < 3) {
-        const porApi = await extraerPorApiVinted(url);
-        resumen.api = porApi.length;
-        productos = deduplicarProductos([...productos, ...porApi]);
-    }
-
+    // 3) Navegador real: el HTML solo trae la primera tanda, así que en modo profundo
+    //    también se usa aunque haya encontrado algo.
     if (deepMode || productos.length < 3) {
         const porPlaywright = await extraerConPlaywright(url, sharedSession);
         resumen.playwright = porPlaywright.length;
@@ -1514,6 +1767,11 @@ async function ejecutarScraper(params) {
         payload.grupos = grupos || [];
         payload.esModoSeguidos = esModoSeguidos;
         payload.exploracion = resumen?.exploracion || null;
+        // Los grupos ya llevan todos los productos: no enviamos la lista plana duplicada
+        // (el panel la reconstruye desde los grupos) y el webhook pesa la mitad.
+        if (payload.grupos.some((g) => Array.isArray(g?.productos) && g.productos.length)) {
+            payload.productos = [];
+        }
     }
 
     await enviarWebhook(payload, {
@@ -1525,9 +1783,33 @@ async function ejecutarScraper(params) {
     return { productosCount: productos.length, resumen, esModoSeguidos, gruposCount: Array.isArray(grupos) ? grupos.length : 0 };
 }
 
+// Si el scraper revienta, avisamos al panel para que no se quede esperando para siempre.
+async function notificarErrorScraper(params, error) {
+    const url = String(params?.url || '').trim();
+    const payload = {
+        error: String(error?.message || error || 'Fallo desconocido en el scraper.').slice(0, 500),
+        urlOrigen: url,
+        empresa: normalizarEmpresa(params?.empresa),
+        alias: String(params?.alias || url).trim()
+    };
+    try {
+        await enviarWebhook(payload, {
+            webUrl: process.env.MY_WEB_URL,
+            secretToken: process.env.SCRAPER_TOKEN,
+            webhookPath: String(params?.webhookPath || '/api/scraper/webhook-github').trim()
+        });
+    } catch (errWebhook) {
+        console.error(`[WEBHOOK] No se pudo notificar el error: ${errWebhook.message}`);
+    }
+}
+
 module.exports = {
     ejecutarScraper,
+    notificarErrorScraper,
     scrapeMonopolio,
+    scrapeVinted,
     normalizarPrecio,
-    deduplicarProductos
+    deduplicarProductos,
+    mapearProductoVinted,
+    extraerUsuariosCandidatosDesdePayload
 };

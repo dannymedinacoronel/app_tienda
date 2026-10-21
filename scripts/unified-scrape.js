@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { ejecutarScraper } = require('./scraper-engine');
+const { ejecutarScraper, notificarErrorScraper } = require('./scraper-engine');
 
 function webhookPorModo(mode) {
     return mode === 'monopolio'
@@ -21,17 +21,14 @@ async function run() {
         process.exit(1);
     }
 
+    const params = { mode, url, empresa, alias, webhookPath };
+
     try {
-        await ejecutarScraper({
-            mode,
-            url,
-            empresa,
-            alias,
-            webhookPath
-        });
+        await ejecutarScraper(params);
         process.exit(0);
     } catch (error) {
         console.error(`Error durante el scraping (${mode}): ${error.message}`);
+        await notificarErrorScraper(params, error);
         process.exit(1);
     }
 }

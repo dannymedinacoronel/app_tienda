@@ -26,6 +26,9 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      PLAYWRIGHT_VERSION: '1.48.2'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -34,24 +37,48 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
 
       - name: Validate secrets
+        env:
+          MY_WEB_URL: ${{ secrets.MY_WEB_URL }}
+          SCRAPER_TOKEN: ${{ secrets.SCRAPER_TOKEN }}
         run: |
-          if [ -z "${{ secrets.MY_WEB_URL }}" ]; then echo "❌ MY_WEB_URL is missing"; exit 1; fi
-          if [ -z "${{ secrets.SCRAPER_TOKEN }}" ]; then echo "❌ SCRAPER_TOKEN is missing"; exit 1; fi
+          if [ -z "$MY_WEB_URL" ]; then echo "❌ MY_WEB_URL is missing"; exit 1; fi
+          if [ -z "$SCRAPER_TOKEN" ]; then echo "❌ SCRAPER_TOKEN is missing"; exit 1; fi
 
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm ci --omit=dev --no-audit --no-fund
+          npm install --no-save --omit=dev --no-audit --no-fund "playwright@${PLAYWRIGHT_VERSION}"
+
+      # Chromium solo se usa si la API de Vinted falla; lo cacheamos para no bajarlo en cada ejecución.
+      - name: Cache Playwright Chromium
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
 
       - name: Install Playwright Chromium
-        run: |
-          npm install playwright
-          npx playwright install --with-deps chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
 
+      - name: Install Playwright system deps
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # Los inputs llegan por variables de entorno (nunca interpolados en el script)
+      # para que una URL o alias con $(...) o comillas no pueda ejecutar comandos.
       - name: Execute Unified Scrape
         env:
           MY_WEB_URL: ${{ secrets.MY_WEB_URL }}
           SCRAPER_TOKEN: ${{ secrets.SCRAPER_TOKEN }}
+          INPUT_MODE: ${{ github.event.inputs.mode }}
+          INPUT_TARGET_URL: ${{ github.event.inputs.target_url }}
+          INPUT_EMPRESA: ${{ github.event.inputs.empresa }}
+          INPUT_ALIAS: ${{ github.event.inputs.alias }}
+          INPUT_WEBHOOK_PATH: ${{ github.event.inputs.webhook_path }}
           SCRAPER_LOCALE: "es-ES"
           SCRAPER_TIMEZONE: "Europe/Madrid"
           MONOPOLIO_MAX_ACCOUNTS: "260"
@@ -60,20 +87,18 @@ jobs:
           MONOPOLIO_CHAIN_BRANCH: "120"
           MONOPOLIO_SCROLL_MAX: "24"
           MONOPOLIO_API_REL_PAGES: "10"
+          MONOPOLIO_CONCURRENCY: "3"
           SCRAPER_DEEP_MODE: "true"
         run: |
-          MODE="${{ github.event.inputs.mode }}"
-          if [ "$MODE" = "monopolio" ]; then
-            export SCRAPER_PLAYWRIGHT_FIRST="true"
+          if [ "$INPUT_MODE" = "monopolio" ]; then
             export SCRAPER_SCROLL_BURSTS="6"
           else
-            export SCRAPER_PLAYWRIGHT_FIRST="false"
             export SCRAPER_SCROLL_BURSTS="4"
           fi
 
           node scripts/unified-scrape.js \
-            "$MODE" \
-            "${{ github.event.inputs.target_url }}" \
-            "${{ github.event.inputs.empresa }}" \
-            "${{ github.event.inputs.alias }}" \
-            "${{ github.event.inputs.webhook_path }}"
+            "$INPUT_MODE" \
+            "$INPUT_TARGET_URL" \
+            "$INPUT_EMPRESA" \
+            "$INPUT_ALIAS" \
+            "$INPUT_WEBHOOK_PATH"

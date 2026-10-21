@@ -176,6 +176,10 @@ function limpiarProducto(input, fuente = '') {
         fuente
     };
     if (input.id) producto.id = String(input.id);
+    if (input.vendedorId) producto.vendedorId = String(input.vendedorId);
+    if (/^https?:\/\//i.test(String(input.miniatura || ''))) producto.miniatura = String(input.miniatura).trim();
+    if (input.reservado) producto.reservado = true;
+    if (input.vendido) producto.vendido = true;
     return producto;
 }
 
@@ -239,9 +243,13 @@ function mapearProductoVinted(item, fuente = 'api', base = VINTED_BASE_DEFAULT) 
     const titulo = String(item.title || item.name || item.item_title || '').trim();
     if (!titulo || !Number.isFinite(precio)) return null;
 
-    const fotos = (Array.isArray(item.photos) && item.photos.length ? item.photos : (item.photo ? [item.photo] : []))
+    const fotosBrutas = Array.isArray(item.photos) && item.photos.length ? item.photos : (item.photo ? [item.photo] : []);
+    const fotos = fotosBrutas
         .map((f) => (typeof f === 'string' ? f : (f?.url || f?.full_size_url || '')))
         .filter(Boolean);
+    // Miniatura ligera (150x210, ~15 KB) para tarjetas; cada tamaño lleva su propia firma.
+    const thumbs = Array.isArray(fotosBrutas[0]?.thumbnails) ? fotosBrutas[0].thumbnails : [];
+    const miniatura = (thumbs.find((t) => t?.type === 'thumb150x210') || thumbs.find((t) => t?.type === 'thumb310x430') || {}).url || '';
     const rutaItem = String(item.url || item.path || '').trim();
     const urlItem = rutaItem
         ? (/^https?:\/\//i.test(rutaItem) ? rutaItem : `${base}${rutaItem.startsWith('/') ? '' : '/'}${rutaItem}`)
@@ -259,6 +267,10 @@ function mapearProductoVinted(item, fuente = 'api', base = VINTED_BASE_DEFAULT) 
         condicion: textoPlano(item.status_title || item.status),
         favoritos: Number(item.favourite_count ?? item.favorites_count ?? 0) || 0,
         url: urlItem,
+        vendedorId: item.user_id ?? item.user?.id ?? '',
+        miniatura,
+        reservado: Boolean(item.is_reserved),
+        vendido: Boolean(item.is_closed && (item.item_closing_action === 'sold' || !item.item_closing_action)),
         fuente
     };
     return limpiarProducto(producto, fuente);
@@ -400,6 +412,176 @@ function extraerItemsDePayload(data) {
 function itemPerteneceAUsuario(item, userId) {
     const propietario = item?.user?.id ?? item?.user_id ?? item?.owner_id;
     return propietario == null ? false : String(propietario) === String(userId);
+}
+
+// --- Ficha completa de una prenda (página /items/:id) ---
+// Sin login la API no da la ficha, y el armario público solo lista lo que está a la venta.
+// La página de la prenda sí trae sus datos incrustados (payload de Next.js, al final del HTML):
+// sirve para confirmar si se vendió y para completar la importación (descripción, color...).
+const BARRA = String.fromCharCode(92);
+
+// Lee un literal de cadena JSON que empieza en texto[inicio] === '"'. Devuelve [valor, fin].
+function leerCadenaJson(texto, inicio) {
+    let i = inicio + 1;
+    while (i < texto.length) {
+        const c = texto[i];
+        if (c === BARRA) { i += 2; continue; }
+        if (c === '"') break;
+        i += 1;
+    }
+    const literal = texto.slice(inicio, i + 1);
+    try {
+        return [JSON.parse(literal), i + 1];
+    } catch (_) {
+        return [literal.slice(1, -1), i + 1];
+    }
+}
+
+// Une los fragmentos self.__next_f.push([1,"..."]) ya decodificados (JSON legible).
+function payloadNextDesdeHtml(html) {
+    const marca = 'self.__next_f.push([1,';
+    const partes = [];
+    let pos = html.indexOf(marca);
+    while (pos >= 0) {
+        const ini = pos + marca.length;
+        if (html[ini] === '"') {
+            const [texto, fin] = leerCadenaJson(html, ini);
+            partes.push(texto);
+            pos = html.indexOf(marca, fin);
+        } else {
+            pos = html.indexOf(marca, ini);
+        }
+    }
+    return partes.join('');
+}
+
+// Lee el array/objeto JSON que empieza en texto[inicio] ('[' o '{'), respetando cadenas.
+function leerJsonEstructurado(texto, inicio) {
+    const apertura = texto[inicio];
+    if (apertura !== '[' && apertura !== '{') return null;
+    let profundidad = 0;
+    let i = inicio;
+    while (i < texto.length) {
+        const c = texto[i];
+        if (c === '"') { i = leerCadenaJson(texto, i)[1]; continue; }
+        if (c === '[' || c === '{') profundidad += 1;
+        else if (c === ']' || c === '}') {
+            profundidad -= 1;
+            if (profundidad === 0) {
+                try { return JSON.parse(texto.slice(inicio, i + 1)); } catch (_) { return null; }
+            }
+        }
+        i += 1;
+    }
+    return null;
+}
+
+function cadenaTras(texto, clave, desde = 0, hasta = Infinity) {
+    const i = texto.indexOf(clave, desde);
+    if (i < 0 || i > hasta) return '';
+    const j = i + clave.length;
+    return texto[j] === '"' ? String(leerCadenaJson(texto, j)[0] || '') : '';
+}
+
+function atributoFicha(texto, codigo) {
+    const i = texto.indexOf(`"code":"${codigo}","data":{`);
+    if (i < 0) return '';
+    return cadenaTras(texto, '"value":', i, i + 800);
+}
+
+function booleanoEnBloque(bloque, clave) {
+    const i = bloque.indexOf(clave);
+    if (i < 0) return null;
+    return bloque.startsWith('true', i + clave.length);
+}
+
+function extraerFichaDesdeHtml(html, itemId) {
+    const texto = payloadNextDesdeHtml(String(html || ''));
+    const id = String(itemId || '');
+
+    // Estado de compra de ESTA prenda (la página también trae prendas recomendadas).
+    let bloqueCompra = '';
+    const anclaId = id ? texto.indexOf(`"item_id":"${id}"`) : -1;
+    const anclaCompra = texto.indexOf('"can_buy":');
+    if (anclaId >= 0) {
+        const previo = texto.lastIndexOf('"can_buy":', anclaId);
+        if (previo >= 0 && anclaId - previo < 400) bloqueCompra = texto.slice(previo, anclaId + 60);
+    }
+    if (!bloqueCompra && anclaCompra >= 0) bloqueCompra = texto.slice(anclaCompra, anclaCompra + 300);
+
+    const puedeComprar = booleanoEnBloque(bloqueCompra, '"can_buy":');
+    const oculta = booleanoEnBloque(bloqueCompra, '"is_hidden":');
+    const reservada = booleanoEnBloque(bloqueCompra, '"is_reserved":');
+    const selloVendido = /Cell__body">\s*(Vendido|Sold|Vendu|Venduto|Verkauft)\s*</.test(html);
+
+    let estado = 'desconocido';
+    if (oculta === true) estado = 'oculto';
+    else if (reservada === true) estado = 'reservado';
+    else if (selloVendido || puedeComprar === false) estado = 'vendido';
+    else if (puedeComprar === true) estado = 'activo';
+
+    // Ruta de categoría desde las migas de pan (Mujer › Ropa › Vestidos...).
+    const iMigas = texto.indexOf('"name":"breadcrumbs"');
+    const zonaMigas = iMigas >= 0 ? texto.slice(Math.max(0, iMigas - 2500), iMigas) : '';
+    const categoria = [...zonaMigas.matchAll(/"title":"([^"]{1,60})","url":"\/catalog\/\d+[^"\/]*"/g)]
+        .map((m) => m[1])
+        .join(' › ');
+
+    // Fotos de la prenda: el primer "photos":[ es el de la propia ficha (empieza por la principal).
+    const iFotos = texto.indexOf('"photos":[');
+    const fotosJson = iFotos >= 0 ? leerJsonEstructurado(texto, iFotos + '"photos":'.length) : null;
+    const fotos = (Array.isArray(fotosJson) ? fotosJson : [])
+        .map((f) => f?.url || f?.full_size_url || '')
+        .filter((u) => /^https?:\/\//i.test(u));
+    const thumbsPrincipal = Array.isArray(fotosJson?.[0]?.thumbnails) ? fotosJson[0].thumbnails : [];
+    const miniatura = (thumbsPrincipal.find((t) => t?.type === 'thumb150x210') || {}).url || '';
+
+    return {
+        estado,
+        fotos,
+        miniatura,
+        descripcion: cadenaTras(texto, '"description":').trim(),
+        color: atributoFicha(texto, 'color'),
+        talla: atributoFicha(texto, 'size'),
+        condicion: atributoFicha(texto, 'status'),
+        marca: atributoFicha(texto, 'brand'),
+        categoria
+    };
+}
+
+// Consulta la ficha de una prenda. estado: activo | reservado | vendido | oculto | eliminado | desconocido
+async function obtenerFichaItemVinted(idOUrl, baseOpcional) {
+    const id = String(idOUrl || '').match(/(\d{5,})/)?.[1] || '';
+    if (!id) return { estado: 'desconocido' };
+    const base = baseOpcional || baseVintedDesdeUrl(idOUrl);
+    const cookie = await obtenerCookiesVinted(base);
+    let ultimoFallo = {};
+    // Un reintento corto si Vinted limita (429), falla (5xx) o la red corta; 404/403 son respuestas reales.
+    for (let intento = 0; intento < 2; intento++) {
+        if (intento > 0) await new Promise((resolve) => setTimeout(resolve, 1500 + Math.floor(Math.random() * 1500)));
+        try {
+            const respuesta = await axios.get(`${base}/items/${id}`, {
+                timeout: 20000,
+                maxRedirects: 5,
+                validateStatus: () => true,
+                headers: {
+                    'User-Agent': DEFAULT_UA,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+                    ...(cookie ? { Cookie: cookie } : {})
+                }
+            });
+            if (respuesta.status === 404 || respuesta.status === 410) return { estado: 'eliminado' };
+            const urlFinal = String(respuesta.request?.res?.responseUrl || '');
+            if (urlFinal && !/\/items\/\d+/.test(urlFinal)) return { estado: 'eliminado' };
+            if (respuesta.status === 200) return extraerFichaDesdeHtml(String(respuesta.data || ''), id);
+            ultimoFallo = { status: respuesta.status };
+            if (respuesta.status !== 429 && respuesta.status < 500) break;
+        } catch (error) {
+            ultimoFallo = { error: error.message };
+        }
+    }
+    return { estado: 'desconocido', ...ultimoFallo };
 }
 
 function extraerIdPerfilDesdePath(pathOnly) {
@@ -1825,5 +2007,8 @@ module.exports = {
     normalizarPrecio,
     deduplicarProductos,
     mapearProductoVinted,
-    extraerUsuariosCandidatosDesdePayload
+    extraerUsuariosCandidatosDesdePayload,
+    extraerFichaDesdeHtml,
+    obtenerFichaItemVinted,
+    ejecutarConConcurrencia
 };

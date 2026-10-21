@@ -14,7 +14,7 @@ const nodemailer = require('nodemailer');
 const http = require('http');
 const { Server } = require('socket.io');
 const vision = require('@google-cloud/vision');
-const { scrapeMonopolio, scrapeVinted } = require('./scripts/scraper-engine');
+const { scrapeMonopolio, scrapeVinted, obtenerFichaItemVinted, ejecutarConConcurrencia } = require('./scripts/scraper-engine');
 
 const app = express();
 const server = http.createServer(app);
@@ -258,6 +258,8 @@ const TiendaSchema = new mongoose.Schema({
     nombre: { type: String, required: true, trim: true },
     empresa: { type: String, default: EMPRESA_DEFAULT, trim: true, lowercase: true },
     color: { type: String, default: '#38bdf8', trim: true },
+    // Perfil de Vinted de esta tienda: permite comprobar ventas sin volver a escanear a mano.
+    vintedPerfilUrl: { type: String, default: '', trim: true },
     fechaCreacion: { type: Date, default: Date.now }
 });
 TiendaSchema.index({ empresa: 1, nombre: 1 }, { unique: true });
@@ -355,13 +357,30 @@ const VentaRopaSchema = new mongoose.Schema({
     loteVendido: { type: Boolean, default: false },
     loteVentaEtiqueta: { type: String, default: '', trim: true },
     facturado: { type: Boolean, default: false },
-    cliente: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente' }
+    cliente: { type: mongoose.Schema.Types.ObjectId, ref: 'Cliente' },
+    // Ficha completa traída de Vinted. Las fotos se guardan como URL de su CDN (no ocupan espacio).
+    descripcion: { type: String, default: '', trim: true },
+    color: { type: String, default: '', trim: true },
+    categoriaVinted: { type: String, default: '', trim: true },
+    imagenMiniatura: { type: String, default: '' },
+    // Enlace con el anuncio de Vinted y estado detectado por el scraper.
+    vintedId: { type: String, default: '', trim: true },
+    vintedUrl: { type: String, default: '', trim: true },
+    vintedVendedorId: { type: String, default: '', trim: true },
+    vintedEstado: { type: String, default: '' },       // activo | reservado | vendido | eliminado | oculto | no_visible
+    vintedRevisadoEn: { type: Date },
+    vintedAviso: { type: String, default: '' },        // vendido | no_visible | eliminado (pendiente de revisar)
+    vintedAvisoEn: { type: Date },
+    vintedAvisoIgnorado: { type: String, default: '' } // aviso que el usuario descartó (no se repite)
 });
 // Todas las consultas filtran por empresa: sin estos índices cada carga del panel recorría la colección entera.
 VentaRopaSchema.index({ empresa: 1, _id: -1 });
 VentaRopaSchema.index({ empresa: 1, canalVenta: 1 });
 VentaRopaSchema.index({ empresa: 1, sku: 1 });
 VentaRopaSchema.index({ empresa: 1, tienda: 1 });
+VentaRopaSchema.index({ empresa: 1, vintedId: 1 });
+VentaRopaSchema.index({ empresa: 1, vintedVendedorId: 1 });
+VentaRopaSchema.index({ empresa: 1, vintedAviso: 1 });
 const VentaRopa = mongoose.models.VentaRopa || mongoose.model('VentaRopa', VentaRopaSchema);
 
 const LogAuditoriaSchema = new mongoose.Schema({
@@ -1307,6 +1326,12 @@ function limpiarCamposProtegidosVenta(datos) {
     delete limpio.__v;
     delete limpio.empresa;
     delete limpio.tienda;
+    // El estado detectado en Vinted lo gestiona el servidor (el cliente podría mandarlo desfasado).
+    delete limpio.vintedEstado;
+    delete limpio.vintedRevisadoEn;
+    delete limpio.vintedAviso;
+    delete limpio.vintedAvisoEn;
+    delete limpio.vintedAvisoIgnorado;
     return limpio;
 }
 
@@ -2946,9 +2971,12 @@ async function obtenerPaginaVentas(empresa, skip, limit) {
         { $skip: skip },
         { $limit: limit }
     ]);
-    const ids = ordenados.map((d) => d._id);
-    if (ids.length === 0) return [];
+    return obtenerDetalleVentas(empresa, ordenados.map((d) => d._id));
+}
 
+// Productos listos para el cliente (fotos como URL cacheable y nombre de tienda), en el orden de `ids`.
+async function obtenerDetalleVentas(empresa, ids) {
+    if (!ids.length) return [];
     const pipelineDetalle = (conMetaFotos) => [
         { $match: { _id: { $in: ids }, empresa } },
         { $lookup: { from: 'tiendas', let: { tiendaId: '$tienda' }, pipeline: [ { $match: { $expr: { $and: [ { $eq: ['$_id', '$$tiendaId'] }, { $eq: ['$empresa', empresa] } ] } } }, { $project: { nombre: 1 } } ], as: 'tiendaInfo' } },
@@ -3163,6 +3191,23 @@ app.get('/api/ventas', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), 
     }
 });
 
+// Productos concretos por id (p. ej. para registrar la venta de uno que no está en la página cargada).
+app.get('/api/ventas/por-ids', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const ids = String(req.query.ids || '')
+            .split(',')
+            .map((id) => id.trim())
+            .filter((id) => mongoose.isValidObjectId(id))
+            .slice(0, 300)
+            .map((id) => new mongoose.Types.ObjectId(id));
+        const ventas = await obtenerDetalleVentas(empresa, ids);
+        res.json({ ventas: sanitizarVentasParaRol(ventas, req) });
+    } catch (error) {
+        res.status(500).json({ error: 'No se pudieron cargar los productos.' });
+    }
+});
+
 // Foto n de un producto (0 = portada, 1..N = galería). Cacheable: la URL lleva la firma del contenido.
 app.get('/api/ventas/:id/foto/:n', exigeRol(['Admin', 'Editor', 'Visualizador', 'Lector']), async (req, res) => {
     try {
@@ -3272,6 +3317,8 @@ app.put('/api/ventas/:id', exigeSoloAdmin, async (req, res) => {
             if (!esVenta) {
                 datosVenta.loteVendido = false;
                 datosVenta.loteVentaEtiqueta = '';
+            } else {
+                datosVenta.vintedAviso = ''; // venta registrada: el aviso de Vinted queda resuelto
             }
         }
 
@@ -3302,6 +3349,7 @@ app.put('/api/ventas/:id/estado', exigeSoloAdmin, async (req, res) => {
         
         if (estadoConfig && estadoConfig.rolFinanciero === 'Venta') {
             updateData.fechaVenta = fechaVenta || new Date().toISOString().split('T')[0];
+            updateData.vintedAviso = '';
             if (typeof comentariosProducto === 'string') {
                 updateData.comentariosProducto = comentariosProducto.trim();
             }
@@ -3503,173 +3551,527 @@ app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
     }
 });
 
+// --- Detección de ventas en Vinted ---
+// El armario público de Vinted solo lista lo que sigue a la venta. Una prenda nuestra que
+// deja de aparecer se ha vendido, reservado, ocultado o borrado: lo confirmamos en su ficha
+// (/items/:id) y lo dejamos como aviso en el producto para revisarlo desde el panel.
+const RE_DIACRITICOS = new RegExp(`[${String.fromCharCode(0x300)}-${String.fromCharCode(0x36f)}]`, 'g');
+
+function tituloComparable(texto) {
+    return String(texto || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(RE_DIACRITICOS, '')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function coincidenciaFlexibleTitulos(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    return (a.length > 4 && b.includes(a)) || (b.length > 4 && a.includes(b));
+}
+
+function idVintedDeUrl(valor) {
+    const m = String(valor || '').match(/\/items\/(\d+)/);
+    return m ? m[1] : '';
+}
+
+function idMiembroDeUrl(valor) {
+    const m = String(valor || '').match(/\/member\/(?:general\/)?(\d+)/);
+    return m ? m[1] : '';
+}
+
+async function estadosPorRol(empresa) {
+    const estados = await EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean();
+    return {
+        venta: estados.filter((e) => e.rolFinanciero === 'Venta').map((e) => e.nombre),
+        stock: estados.filter((e) => e.rolFinanciero === 'Stock').map((e) => e.nombre)
+    };
+}
+
+// Consulta la ficha de Vinted de los productos enlazados que ya no salen en el armario.
+async function confirmarEstadoEnVinted(productos, { limite = 40, presupuestoMs = 35000 } = {}) {
+    const fechaLimite = Date.now() + presupuestoMs;
+    const enlazados = productos.filter((p) => p.vintedId || idVintedDeUrl(p.vintedUrl)).slice(0, limite);
+    const fichas = new Map();
+    await ejecutarConConcurrencia(enlazados, 4, async (p) => {
+        if (Date.now() > fechaLimite) return;
+        fichas.set(String(p._id), await obtenerFichaItemVinted(p.vintedId || p.vintedUrl));
+    });
+    return fichas;
+}
+
+// Guarda en una sola escritura lo detectado: enlaces con anuncios, estado visto y avisos.
+async function guardarDeteccionVinted(empresa, deteccion) {
+    const ahora = new Date();
+    const ops = [];
+    for (const e of deteccion.enlaces || []) {
+        ops.push({
+            updateOne: {
+                filter: { _id: e.id, empresa, $or: [{ vintedId: '' }, { vintedId: { $exists: false } }] },
+                update: { $set: { vintedId: e.vintedId, vintedUrl: e.vintedUrl || '', ...(e.vintedVendedorId ? { vintedVendedorId: String(e.vintedVendedorId) } : {}) } }
+            }
+        });
+    }
+    for (const v of deteccion.vistos || []) {
+        // Si vuelve a estar a la venta, cualquier aviso anterior deja de tener sentido.
+        ops.push({ updateOne: { filter: { _id: v.id, empresa }, update: { $set: { vintedEstado: v.estado, vintedRevisadoEn: ahora, vintedAviso: '', vintedAvisoIgnorado: '' } } } });
+    }
+    const avisar = (id, aviso, estado) => {
+        ops.push({ updateOne: { filter: { _id: id, empresa }, update: { $set: { vintedEstado: estado, vintedRevisadoEn: ahora } } } });
+        // La fecha del aviso es la de la primera detección.
+        // No repetimos un aviso que el usuario ya ignoró para este producto.
+        ops.push({ updateOne: { filter: { _id: id, empresa, vintedAviso: { $ne: aviso }, vintedAvisoIgnorado: { $ne: aviso } }, update: { $set: { vintedAviso: aviso, vintedAvisoEn: ahora } } } });
+    };
+    (deteccion.vendidos || []).forEach((id) => avisar(id, 'vendido', 'vendido'));
+    (deteccion.noVisibles || []).forEach((id) => avisar(id, 'no_visible', 'no_visible'));
+    (deteccion.eliminados || []).forEach(({ id, estado }) => avisar(id, 'eliminado', estado));
+    if (ops.length) await VentaRopa.bulkWrite(ops, { ordered: false });
+}
+
+// Recuerda qué perfil de Vinted corresponde a cada tienda (para "Comprobar ventas").
+async function enlazarTiendasConPerfiles(empresa, perfilesPorTienda) {
+    for (const [nombreTienda, perfilUrl] of perfilesPorTienda) {
+        const idMiembro = idMiembroDeUrl(perfilUrl);
+        if (!idMiembro || !String(nombreTienda || '').trim()) continue;
+        await Tienda.updateOne(
+            { empresa, nombre: { $regex: new RegExp(`^${escapeRegexSafe(String(nombreTienda).trim())}$`, 'i') } },
+            { $set: { vintedPerfilUrl: `https://www.vinted.es/member/${idMiembro}` } }
+        );
+    }
+}
+
+// Completa en segundo plano la ficha (descripción, color, categoría y todas las fotos como URL)
+// de productos enlazados con Vinted a los que les falte.
+const FICHAS_EN_CURSO = new Set();
+function completarFichasVinted(empresa, productos, { limite = 200 } = {}) {
+    const lista = (productos || [])
+        .filter((p) => p && p.vintedId && !FICHAS_EN_CURSO.has(String(p._id)))
+        .slice(0, limite);
+    if (!lista.length) return 0;
+    lista.forEach((p) => FICHAS_EN_CURSO.add(String(p._id)));
+
+    setTimeout(async () => {
+        let completados = 0;
+        await ejecutarConConcurrencia(lista, 3, async (p) => {
+            try {
+                const ficha = await obtenerFichaItemVinted(p.vintedId);
+                if (!ficha || ficha.estado === 'desconocido' || ficha.estado === 'eliminado') return;
+                const actual = await VentaRopa.findOne({ _id: p._id, empresa }).select('descripcion marca condicion color categoriaVinted galeria imagen imagenMiniatura').lean();
+                if (!actual) return;
+                const cambios = { vintedRevisadoEn: new Date() };
+                if (!actual.descripcion && ficha.descripcion) cambios.descripcion = ficha.descripcion.slice(0, 3000);
+                if (!actual.marca && ficha.marca) cambios.marca = ficha.marca;
+                if (!actual.condicion && ficha.condicion) cambios.condicion = ficha.condicion;
+                if (!actual.color && ficha.color) cambios.color = ficha.color;
+                if (!actual.categoriaVinted && ficha.categoria) cambios.categoriaVinted = ficha.categoria;
+                if (!actual.imagenMiniatura && ficha.miniatura) cambios.imagenMiniatura = ficha.miniatura;
+                // Si solo teníamos una foto (p. ej. desde CSV), guardamos todas las del anuncio (como URL).
+                const fotosActuales = (actual.imagen ? 1 : 0) + (Array.isArray(actual.galeria) ? actual.galeria.length : 0);
+                const imagenEsDato = String(actual.imagen || '').startsWith('data:');
+                if (!imagenEsDato && ficha.fotos?.length > fotosActuales) {
+                    cambios.imagen = ficha.fotos[0];
+                    cambios.galeria = ficha.fotos.slice(1, 20);
+                }
+                await VentaRopa.updateOne({ _id: p._id, empresa }, { $set: cambios });
+                completados += 1;
+            } catch (error) {
+                console.warn(`[VINTED-FICHA] ${p.vintedId}: ${error.message}`);
+            } finally {
+                FICHAS_EN_CURSO.delete(String(p._id));
+            }
+        });
+        console.log(`[VINTED-FICHA] Fichas completadas: ${completados}/${lista.length} (${empresa})`);
+        if (completados && global.io) {
+            global.io.to(`empresa:${empresa}`).emit('inventario_actualizado', { motivo: 'fichas-vinted', total: completados });
+        }
+    }, 50);
+    return lista.length;
+}
+
 /**
- * Analiza datos subidos manualmente (ej. desde un Excel de Instant Data Scraper)
+ * Analiza datos del scraper o de un CSV/Excel (p. ej. Instant Data Scraper) contra el inventario.
+ * Además de nuevos / cambios de precio / sin cambios, detecta prendas vendidas en Vinted.
  */
 app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
-        const { productosExtraidos } = req.body;
+        const { productosExtraidos } = req.body || {};
         console.log(`[SCRAPER MANUAL] Recibidos ${productosExtraidos?.length || 0} productos para comparar.`);
         if (!productosExtraidos || !Array.isArray(productosExtraidos)) {
             return res.status(400).json({ error: 'Datos no válidos.' });
         }
 
-        const resultados = { discrepancias: [], nuevos: [], identicos: [], desaparecidos: [] };
+        const resultados = { discrepancias: [], nuevos: [], identicos: [], desaparecidos: [], vendidos: [] };
         // Sin fotos: con cientos de productos base64 esta consulta pesaba decenas de MB.
-        const [productosBD, tiendasEmpresa] = await Promise.all([
-            VentaRopa.find({ canalVenta: 'Vinted', empresa })
-                .select('prenda precioVenta fecha fechaVenta proveedor tienda comentariosProducto')
+        const [productosBD, tiendasEmpresa, roles] = await Promise.all([
+            VentaRopa.find({ empresa, $or: [{ canalVenta: 'Vinted' }, { vintedId: { $nin: ['', null] } }] })
+                .select('prenda precioVenta fecha fechaVenta proveedor tienda comentariosProducto estado vintedId vintedUrl vintedVendedorId')
                 .lean(),
-            Tienda.find({ empresa }).select('nombre').lean()
+            Tienda.find({ empresa }).select('nombre').lean(),
+            estadosPorRol(empresa)
         ]);
         const nombreTiendaPorId = new Map(tiendasEmpresa.map((t) => [String(t._id), t.nombre]));
+        const yaVendidoEnBD = (p) => Boolean(p.fechaVenta) || roles.venta.includes(p.estado);
 
-        const cleanStr = str => String(str || '')
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^a-z0-9\s]/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
         const normalizarProveedor = (v) => String(v || 'Vinted').trim().toLowerCase() || 'vinted';
-        const hayCoincidenciaFlexible = (a, b) => {
-            if (!a || !b) return false;
-            if (a === b) return true;
-            return (a.length > 4 && b.includes(a)) || (b.length > 4 && a.includes(b));
-        };
         // El esquema no guarda "proveedor": la tienda real sale de la referencia a Tienda.
         const proveedorDeProducto = (p) => nombreTiendaPorId.get(String(p.tienda)) || p.proveedor || 'Vinted';
 
         const bdPorProveedor = new Map();
         const bdPorTituloExacto = new Map();
+        const bdPorVintedId = new Map();
         productosBD.forEach((p) => {
-            p._titulo = cleanStr(p.prenda);
+            p._titulo = tituloComparable(p.prenda);
             p._proveedor = normalizarProveedor(proveedorDeProducto(p));
             if (!bdPorProveedor.has(p._proveedor)) bdPorProveedor.set(p._proveedor, []);
             bdPorProveedor.get(p._proveedor).push(p);
             const claveExacta = `${p._proveedor}::${p._titulo}`;
             if (!bdPorTituloExacto.has(claveExacta)) bdPorTituloExacto.set(claveExacta, p);
+            const idV = p.vintedId || idVintedDeUrl(p.vintedUrl);
+            if (idV) bdPorVintedId.set(idV, p);
         });
 
-        const buscarCoincidencia = (tituloLimpio, proveedorFuente) => {
+        // Primero por id de anuncio (exacto); si no, por título dentro de la misma tienda.
+        const buscarCoincidencia = (vintedId, tituloLimpio, proveedorFuente) => {
+            if (vintedId && bdPorVintedId.has(vintedId)) return { producto: bdPorVintedId.get(vintedId), tipo: 'id' };
             const exacta = bdPorTituloExacto.get(`${proveedorFuente}::${tituloLimpio}`);
-            if (exacta) return exacta;
+            if (exacta) return { producto: exacta, tipo: 'exacto' };
             const mismaTienda = bdPorProveedor.get(proveedorFuente) || [];
-            const flexible = mismaTienda.find((p) => hayCoincidenciaFlexible(p._titulo, tituloLimpio));
-            if (flexible) return flexible;
+            const flexible = mismaTienda.find((p) => coincidenciaFlexibleTitulos(p._titulo, tituloLimpio));
+            if (flexible) return { producto: flexible, tipo: 'flexible' };
             // Escaneo genérico ("Vinted") o alias sin productos aún: buscamos en todas las tiendas
             // para no duplicar artículos que ya están dados de alta con otra tienda.
             if (proveedorFuente === 'vinted' || mismaTienda.length === 0) {
-                return productosBD.find((p) => p._titulo === tituloLimpio)
-                    || productosBD.find((p) => hayCoincidenciaFlexible(p._titulo, tituloLimpio))
-                    || null;
+                const global = productosBD.find((p) => p._titulo === tituloLimpio)
+                    || productosBD.find((p) => coincidenciaFlexibleTitulos(p._titulo, tituloLimpio));
+                if (global) return { producto: global, tipo: 'flexible' };
             }
-            return null;
+            return { producto: null, tipo: '' };
         };
+
+        const filaProducto = (p, extra = {}) => ({
+            idMongo: p._id,
+            prenda: p.prenda,
+            precio: p.precioVenta,
+            proveedor: proveedorDeProducto(p),
+            imagen: '',
+            fechaRegistro: p.fecha || '',
+            comentariosProducto: p.comentariosProducto || '',
+            vintedUrl: p.vintedUrl || (p.vintedId ? `https://www.vinted.es/items/${p.vintedId}` : ''),
+            ...extra
+        });
 
         const titulosWebPorProveedor = new Map();
         const idsEmparejados = new Set();
+        const idsVintedEscaneados = new Set();
+        const vendedoresEscaneados = new Set();
+        const perfilesPorTienda = new Map();
+        const deteccion = { enlaces: [], vistos: [], vendidos: [], noVisibles: [], eliminados: [] };
 
         productosExtraidos.forEach(item => {
             const titulo = String(item.titulo || item.prenda || '').trim();
             const precioWeb = parseFloat(String(item.precio ?? '').replace(',', '.'));
             const imagen = item.imagen || '';
             const galeria = Array.isArray(item.galeria) ? item.galeria : [];
-            const proveedorFuente = normalizarProveedor(
-                item.proveedor || item.cuenta || item.aliasFuente || item.origenGrupo || item.alias || 'Vinted'
-            );
             const proveedorLabel = String(item.proveedor || item.cuenta || item.aliasFuente || item.origenGrupo || item.alias || 'Vinted').trim() || 'Vinted';
+            const proveedorFuente = normalizarProveedor(proveedorLabel);
+            const vintedId = String(item.vintedId || item.id || '').replace(/\D/g, '') || idVintedDeUrl(item.url);
+            const vendidoEnVinted = Boolean(item.vendido);
+            if (vintedId && !vendidoEnVinted) idsVintedEscaneados.add(vintedId);
+            if (item.vendedorId) vendedoresEscaneados.add(String(item.vendedorId));
+            if (item.perfilUrl) perfilesPorTienda.set(proveedorLabel, item.perfilUrl);
 
-            if (titulo && !isNaN(precioWeb)) {
-                const cleanItemTitle = cleanStr(titulo);
+            if (!titulo || isNaN(precioWeb)) return;
+            const cleanItemTitle = tituloComparable(titulo);
+            if (!vendidoEnVinted) {
                 const listaActual = titulosWebPorProveedor.get(proveedorFuente) || [];
                 listaActual.push(cleanItemTitle);
                 titulosWebPorProveedor.set(proveedorFuente, listaActual);
-
-                // La coincidencia exige título similar dentro de la misma tienda/proveedor.
-                const coincidencia = buscarCoincidencia(cleanItemTitle, proveedorFuente);
-                if (coincidencia) idsEmparejados.add(String(coincidencia._id));
-
-                if (coincidencia) {
-                    if (Math.abs(coincidencia.precioVenta - precioWeb) > 0.01 || coincidencia.prenda !== titulo) {
-                        resultados.discrepancias.push({
-                            idMongo: coincidencia._id,
-                            prenda: coincidencia.prenda,
-                            prendaNueva: titulo,
-                            valorAntiguo: coincidencia.precioVenta,
-                            valorNuevo: precioWeb,
-                            proveedor: proveedorLabel,
-                            imagen,
-                            fechaRegistro: coincidencia.fecha || '',
-                            fechaVenta: coincidencia.fechaVenta || ''
-                        });
-                    } else {
-                        resultados.identicos.push({
-                            idMongo: coincidencia._id,
-                            prenda: coincidencia.prenda,
-                            precio: coincidencia.precioVenta,
-                            proveedor: proveedorLabel,
-                            imagen,
-                            fechaRegistro: coincidencia.fecha || '',
-                            fechaVenta: coincidencia.fechaVenta || ''
-                        });
-                    }
-                } else {
-                    resultados.nuevos.push({
-                        prenda: titulo,
-                        precioVenta: precioWeb,
-                        imagen, galeria, canalVenta: 'Vinted',
-                        proveedor: proveedorLabel,
-                        estado: 'No Vendido',
-                        marca: item.marca || '', talla: item.talla || '',
-                        condicion: item.condicion || '', popularidad: item.favoritos || 0,
-                        descripcion: item.descripcion || '',
-                        url: item.url || '' });
-                }
             }
-        });
 
-        // Detectar artículos de Vinted en MongoDB que no aparecen en el scraping actual.
-        const activosMongo = productosBD.filter(p => !p.fechaVenta);
-        activosMongo.forEach(p => {
-            if (!p._titulo || idsEmparejados.has(String(p._id))) return;
-            const titulosProveedor = titulosWebPorProveedor.get(p._proveedor);
-            // Si no se ha scrapeado ese proveedor concreto, no lo marcamos como desaparecido.
-            if (!titulosProveedor || titulosProveedor.length === 0) return;
+            const { producto: coincidencia, tipo } = buscarCoincidencia(vintedId, cleanItemTitle, proveedorFuente);
+            if (!coincidencia) {
+                resultados.nuevos.push({
+                    prenda: titulo,
+                    precioVenta: precioWeb,
+                    imagen, galeria, canalVenta: 'Vinted',
+                    proveedor: proveedorLabel,
+                    estado: 'No Vendido',
+                    marca: item.marca || '', talla: item.talla || '',
+                    condicion: item.condicion || '', popularidad: item.favoritos || 0,
+                    descripcion: item.descripcion || '',
+                    url: item.url || (vintedId ? `https://www.vinted.es/items/${vintedId}` : ''),
+                    vintedId,
+                    vendedorId: item.vendedorId || '',
+                    miniatura: item.miniatura || '',
+                    perfilUrl: item.perfilUrl || '',
+                    reservado: Boolean(item.reservado),
+                    vendido: vendidoEnVinted
+                });
+                return;
+            }
 
-            const existeEnWeb = titulosProveedor.some(t => hayCoincidenciaFlexible(p._titulo, t));
-            if (!existeEnWeb) {
-                resultados.desaparecidos.push({
-                    idMongo: p._id,
-                    prenda: p.prenda,
-                    precio: p.precioVenta,
-                    proveedor: proveedorDeProducto(p),
-                    imagen: '',
-                    fechaRegistro: p.fecha || '',
-                    comentariosProducto: p.comentariosProducto || ''
+            idsEmparejados.add(String(coincidencia._id));
+            // Solo enlazamos con el anuncio si la coincidencia es segura (id o título exacto).
+            if (vintedId && !coincidencia.vintedId && (tipo === 'id' || tipo === 'exacto')) {
+                deteccion.enlaces.push({ id: coincidencia._id, vintedId, vintedUrl: item.url || `https://www.vinted.es/items/${vintedId}`, vintedVendedorId: item.vendedorId || '' });
+            }
+
+            // El CSV o el anuncio dicen que está vendida y en el inventario sigue en stock.
+            if (vendidoEnVinted && !yaVendidoEnBD(coincidencia)) {
+                resultados.vendidos.push(filaProducto(coincidencia, { imagen, fuente: 'scraper' }));
+                deteccion.vendidos.push(coincidencia._id);
+                return;
+            }
+            if (!vendidoEnVinted) deteccion.vistos.push({ id: coincidencia._id, estado: item.reservado ? 'reservado' : 'activo' });
+
+            if (Math.abs(coincidencia.precioVenta - precioWeb) > 0.01 || coincidencia.prenda !== titulo) {
+                resultados.discrepancias.push({
+                    idMongo: coincidencia._id,
+                    prenda: coincidencia.prenda,
+                    prendaNueva: titulo,
+                    valorAntiguo: coincidencia.precioVenta,
+                    valorNuevo: precioWeb,
+                    proveedor: proveedorLabel,
+                    imagen,
+                    reservado: Boolean(item.reservado),
+                    fechaRegistro: coincidencia.fecha || '',
+                    fechaVenta: coincidencia.fechaVenta || ''
+                });
+            } else {
+                resultados.identicos.push({
+                    idMongo: coincidencia._id,
+                    prenda: coincidencia.prenda,
+                    precio: coincidencia.precioVenta,
+                    proveedor: proveedorLabel,
+                    imagen,
+                    reservado: Boolean(item.reservado),
+                    fechaRegistro: coincidencia.fecha || '',
+                    fechaVenta: coincidencia.fechaVenta || ''
                 });
             }
         });
 
+        // Prendas en stock de las tiendas/perfiles escaneados que ya no salen en Vinted.
+        const noVistos = productosBD.filter((p) => {
+            if (yaVendidoEnBD(p) || !p._titulo || idsEmparejados.has(String(p._id))) return false;
+            const titulosProveedor = titulosWebPorProveedor.get(p._proveedor);
+            const enAlcance = Boolean(titulosProveedor?.length) || (p.vintedVendedorId && vendedoresEscaneados.has(String(p.vintedVendedorId)));
+            // Si no se ha escaneado esa tienda/perfil, no podemos decir nada de ella.
+            if (!enAlcance) return false;
+            if (p.vintedId && idsVintedEscaneados.has(p.vintedId)) return false;
+            return !(titulosProveedor || []).some((t) => coincidenciaFlexibleTitulos(p._titulo, t));
+        });
+
+        // Los enlazados con su anuncio se confirman en la ficha: vendida, borrada, oculta...
+        const fichas = await confirmarEstadoEnVinted(noVistos);
+        noVistos.forEach((p) => {
+            const estado = fichas.get(String(p._id))?.estado;
+            if (estado === 'activo' || estado === 'reservado') {
+                deteccion.vistos.push({ id: p._id, estado });
+                return;
+            }
+            if (estado === 'vendido') {
+                resultados.vendidos.push(filaProducto(p, { fuente: 'vinted' }));
+                deteccion.vendidos.push(p._id);
+                return;
+            }
+            const motivo = (estado === 'eliminado' || estado === 'oculto') ? estado : 'no_visible';
+            resultados.desaparecidos.push(filaProducto(p, { motivo }));
+            if (motivo === 'no_visible') deteccion.noVisibles.push(p._id);
+            else deteccion.eliminados.push({ id: p._id, estado: motivo });
+        });
+
         // Miniaturas por URL (la foto real se sirve desde /api/ventas/:id/foto/0).
-        const conImagenPropia = [...resultados.discrepancias, ...resultados.identicos, ...resultados.desaparecidos];
+        const conImagenPropia = [...resultados.discrepancias, ...resultados.identicos, ...resultados.desaparecidos, ...resultados.vendidos];
         if (conImagenPropia.length) {
             const metas = await VentaRopa.aggregate([
                 { $match: { empresa, _id: { $in: conImagenPropia.map((r) => r.idMongo) } } },
-                { $project: { meta: exprMetaFoto('$imagen') } }
+                { $project: { meta: exprMetaFoto('$imagen'), mini: '$imagenMiniatura' } }
             ]);
-            const fotoPorId = new Map(metas.map((m) => [String(m._id), valorFotoDesdeMeta(m.meta, (v) => `/api/ventas/${m._id}/foto/0?v=${v}`)]));
-            resultados.desaparecidos.forEach((r) => { r.imagen = fotoPorId.get(String(r.idMongo)) || ''; });
-            [...resultados.discrepancias, ...resultados.identicos].forEach((r) => {
+            const fotoPorId = new Map(metas.map((m) => [String(m._id), m.mini || valorFotoDesdeMeta(m.meta, (v) => `/api/ventas/${m._id}/foto/0?v=${v}`)]));
+            conImagenPropia.forEach((r) => {
                 if (!r.imagen) r.imagen = fotoPorId.get(String(r.idMongo)) || '';
             });
         }
+
+        await guardarDeteccionVinted(empresa, deteccion);
+        if (perfilesPorTienda.size) await enlazarTiendasConPerfiles(empresa, perfilesPorTienda);
 
         res.json(resultados);
     } catch (error) {
         console.error('Error en Scraper Manual:', error);
         res.status(500).json({ error: 'Error al procesar los datos manuales.' });
+    }
+});
+
+// --- Panel de ventas detectadas en Vinted ---
+app.get('/api/vinted/avisos', exigeSoloAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const roles = await estadosPorRol(empresa);
+        const filas = await VentaRopa.aggregate([
+            { $match: { empresa, vintedAviso: { $in: ['vendido', 'no_visible', 'eliminado'] }, estado: { $nin: roles.venta } } },
+            { $sort: { vintedAvisoEn: -1, _id: -1 } },
+            { $limit: 300 },
+            { $lookup: { from: 'tiendas', localField: 'tienda', foreignField: '_id', as: 'tiendaInfo' } },
+            {
+                $project: {
+                    prenda: 1, sku: 1, precioVenta: 1, estado: 1, fecha: 1, vintedAviso: 1, vintedAvisoEn: 1,
+                    vintedUrl: 1, vintedId: 1, imagenMiniatura: 1, proveedorLegado: '$proveedor',
+                    tiendaNombre: { $arrayElemAt: ['$tiendaInfo.nombre', 0] },
+                    meta: exprMetaFoto('$imagen')
+                }
+            }
+        ]);
+        const avisos = filas.map((f) => ({
+            _id: f._id,
+            prenda: f.prenda,
+            sku: f.sku || '',
+            precioVenta: f.precioVenta || 0,
+            estado: f.estado,
+            fecha: f.fecha || '',
+            aviso: f.vintedAviso,
+            avisoEn: f.vintedAvisoEn || null,
+            vintedUrl: f.vintedUrl || (f.vintedId ? `https://www.vinted.es/items/${f.vintedId}` : ''),
+            proveedor: f.tiendaNombre || f.proveedorLegado || '',
+            imagen: f.imagenMiniatura || valorFotoDesdeMeta(f.meta, (v) => `/api/ventas/${f._id}/foto/0?v=${v}`)
+        }));
+        const [tiendasEnlazadas, productosEnlazados] = await Promise.all([
+            Tienda.countDocuments({ empresa, vintedPerfilUrl: { $nin: ['', null] } }),
+            VentaRopa.countDocuments({ empresa, vintedId: { $nin: ['', null] }, estado: { $nin: roles.venta } })
+        ]);
+        res.json({ avisos, total: avisos.length, tiendasEnlazadas, productosEnlazados });
+    } catch (error) {
+        console.error('[VINTED-AVISOS]', error.message);
+        res.status(500).json({ error: 'No se pudieron cargar los avisos de Vinted.' });
+    }
+});
+
+app.post('/api/vinted/avisos/descartar', exigeSoloAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const ids = (Array.isArray(req.body?.ids) ? req.body.ids : []).filter((id) => mongoose.isValidObjectId(id)).slice(0, 500);
+        if (!ids.length) return res.status(400).json({ error: 'No hay avisos seleccionados.' });
+        // Pipeline con el driver nativo: guarda qué aviso se ignoró y lo limpia en una sola operación.
+        const r = await VentaRopa.collection.updateMany(
+            { _id: { $in: ids.map((id) => new mongoose.Types.ObjectId(id)) }, empresa },
+            [{ $set: { vintedAvisoIgnorado: '$vintedAviso', vintedAviso: '' } }]
+        );
+        res.json({ success: true, descartados: r.modifiedCount });
+    } catch (error) {
+        res.status(500).json({ error: 'No se pudieron descartar los avisos.' });
+    }
+});
+
+// Revisa en Vinted todos los perfiles enlazados y detecta qué productos en stock se han vendido.
+const COMPROBACIONES_VENTAS_EN_CURSO = new Set();
+app.post('/api/vinted/comprobar-ventas', exigeSoloAdmin, async (req, res) => {
+    const empresa = empresaActual(req);
+    if (COMPROBACIONES_VENTAS_EN_CURSO.has(empresa)) {
+        return res.status(409).json({ error: 'Ya hay una comprobación en marcha. Espera unos segundos.' });
+    }
+    COMPROBACIONES_VENTAS_EN_CURSO.add(empresa);
+    const inicio = Date.now();
+    try {
+        const roles = await estadosPorRol(empresa);
+        const [productos, tiendas] = await Promise.all([
+            VentaRopa.find({ empresa, estado: { $nin: roles.venta }, fechaVenta: { $in: ['', null] }, $or: [{ canalVenta: 'Vinted' }, { vintedId: { $nin: ['', null] } }] })
+                .select('prenda estado tienda vintedId vintedUrl vintedVendedorId descripcion')
+                .lean(),
+            Tienda.find({ empresa }).select('nombre vintedPerfilUrl').lean()
+        ]);
+
+        // Perfiles a revisar: vendedores de productos enlazados + tiendas con perfil guardado.
+        const vendedorPorTienda = new Map();
+        tiendas.forEach((t) => {
+            const idMiembro = idMiembroDeUrl(t.vintedPerfilUrl);
+            if (idMiembro) vendedorPorTienda.set(String(t._id), idMiembro);
+        });
+        const vendedores = new Set(vendedorPorTienda.values());
+        productos.forEach((p) => { if (p.vintedVendedorId) vendedores.add(String(p.vintedVendedorId)); });
+
+        const resumen = { perfilesRevisados: 0, perfilesConError: 0, productosRevisados: 0, activos: 0, reservados: 0, vendidos: 0, noVisibles: 0, eliminados: 0, sinEnlace: 0, fichasPendientes: 0 };
+        if (!vendedores.size) {
+            resumen.sinEnlace = productos.length;
+            return res.json({ success: true, resumen, mensaje: 'Ninguna tienda está enlazada todavía con su perfil de Vinted.' });
+        }
+
+        const armarios = new Map();
+        await ejecutarConConcurrencia([...vendedores].slice(0, 30), 2, async (vendedorId) => {
+            const { productos: activos, resumen: r } = await scrapeVinted(`https://www.vinted.es/member/${vendedorId}`, { sinNavegador: true });
+            if (!r.apiRespondio) { resumen.perfilesConError += 1; return; }
+            resumen.perfilesRevisados += 1;
+            armarios.set(vendedorId, {
+                porId: new Map(activos.map((a) => [String(a.id), a])),
+                titulos: activos.map((a) => ({ titulo: tituloComparable(a.titulo), item: a }))
+            });
+        });
+
+        const deteccion = { enlaces: [], vistos: [], vendidos: [], noVisibles: [], eliminados: [] };
+        const noVistos = [];
+        for (const p of productos) {
+            const vendedorId = p.vintedVendedorId ? String(p.vintedVendedorId) : vendedorPorTienda.get(String(p.tienda));
+            if (!vendedorId) { resumen.sinEnlace += 1; continue; }
+            const armario = armarios.get(vendedorId);
+            if (!armario) continue;
+            resumen.productosRevisados += 1;
+
+            let visto = p.vintedId ? armario.porId.get(String(p.vintedId)) : null;
+            if (!visto && !p.vintedId) {
+                const titulo = tituloComparable(p.prenda);
+                const exacto = armario.titulos.find((t) => t.titulo === titulo);
+                if (exacto) {
+                    visto = exacto.item;
+                    deteccion.enlaces.push({ id: p._id, vintedId: String(exacto.item.id), vintedUrl: exacto.item.url, vintedVendedorId: vendedorId });
+                } else {
+                    visto = armario.titulos.find((t) => coincidenciaFlexibleTitulos(t.titulo, titulo))?.item || null;
+                }
+            }
+            if (visto) {
+                deteccion.vistos.push({ id: p._id, estado: visto.reservado ? 'reservado' : 'activo' });
+                if (visto.reservado) resumen.reservados += 1; else resumen.activos += 1;
+            } else {
+                noVistos.push(p);
+            }
+        }
+
+        const fichas = await confirmarEstadoEnVinted(noVistos, { limite: 80, presupuestoMs: 45000 });
+        noVistos.forEach((p) => {
+            const estado = fichas.get(String(p._id))?.estado;
+            if (estado === 'activo' || estado === 'reservado') {
+                deteccion.vistos.push({ id: p._id, estado });
+                resumen[estado === 'activo' ? 'activos' : 'reservados'] += 1;
+            } else if (estado === 'vendido') {
+                deteccion.vendidos.push(p._id);
+                resumen.vendidos += 1;
+            } else if (estado === 'eliminado' || estado === 'oculto') {
+                deteccion.eliminados.push({ id: p._id, estado });
+                resumen.eliminados += 1;
+            } else {
+                deteccion.noVisibles.push(p._id);
+                resumen.noVisibles += 1;
+            }
+        });
+
+        await guardarDeteccionVinted(empresa, deteccion);
+        // De paso, completa la ficha de los enlazados a los que les falte la descripción.
+        const sinFicha = productos
+            .filter((p) => !p.descripcion && (p.vintedId || deteccion.enlaces.some((e) => String(e.id) === String(p._id))))
+            .map((p) => ({ _id: p._id, vintedId: p.vintedId || deteccion.enlaces.find((e) => String(e.id) === String(p._id))?.vintedId }));
+        resumen.fichasPendientes = completarFichasVinted(empresa, sinFicha, { limite: 60 });
+
+        resumen.segundos = Math.round((Date.now() - inicio) / 1000);
+        await registrarLog(req.session.email, `Comprobó ventas en Vinted: ${resumen.vendidos} vendidos, ${resumen.noVisibles} no visibles, ${resumen.eliminados} retirados.`);
+        res.json({ success: true, resumen });
+    } catch (error) {
+        console.error('[VINTED-VENTAS]', error);
+        res.status(500).json({ error: 'No se pudo comprobar las ventas en Vinted.' });
+    } finally {
+        COMPROBACIONES_VENTAS_EN_CURSO.delete(empresa);
     }
 });
 
@@ -3692,7 +4094,7 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
         const firmaPorProveedor = (titulo, proveedor) => `${normalizarTxt(proveedor || 'vinted')}::${normalizarTxt(titulo)}`;
 
         const [existentesMismaEmpresa, tiendasEmpresa] = await Promise.all([
-            VentaRopa.find({ empresa, canalVenta: 'Vinted' }).select('prenda proveedor tienda').lean(),
+            VentaRopa.find({ empresa, $or: [{ canalVenta: 'Vinted' }, { vintedId: { $nin: ['', null] } }] }).select('prenda proveedor tienda vintedId').lean(),
             Tienda.find({ empresa }).select('nombre').lean()
         ]);
         const nombreTiendaPorId = new Map(tiendasEmpresa.map((t) => [String(t._id), t.nombre]));
@@ -3701,6 +4103,10 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
         const firmasExistentes = new Set(
             existentesMismaEmpresa.map(v => firmaPorProveedor(v.prenda, nombreTiendaPorId.get(String(v.tienda)) || v.proveedor || 'Vinted'))
         );
+        // Un mismo anuncio de Vinted nunca se importa dos veces, aunque cambie de título.
+        const vintedIdsExistentes = new Set(existentesMismaEmpresa.map((v) => String(v.vintedId || '')).filter(Boolean));
+        const vintedIdsLote = new Set();
+        const perfilesPorTienda = new Map();
         const firmasLote = new Set();
         const estadosKanban = await EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean();
         const estadoStock = estadosKanban.find(e => e.rolFinanciero === 'Stock')?.nombre || 'No Vendido';
@@ -3750,20 +4156,21 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
             if (!String(prod.prenda || '').trim()) continue;
             const nombreTienda = String(prod.proveedor || '').trim() || 'Vinted';
             const firmaActual = firmaPorProveedor(prod.prenda, nombreTienda);
-            // Regla clave: solo consideramos duplicado dentro de la misma tienda/proveedor.
-            if (firmasExistentes.has(firmaActual) || firmasLote.has(firmaActual)) {
+            const vintedId = String(prod.vintedId || '').replace(/\D/g, '') || idVintedDeUrl(prod.url);
+            // Regla clave: solo consideramos duplicado dentro de la misma tienda/proveedor
+            // (o si es el mismo anuncio de Vinted).
+            if (firmasExistentes.has(firmaActual) || firmasLote.has(firmaActual)
+                || (vintedId && (vintedIdsExistentes.has(vintedId) || vintedIdsLote.has(vintedId)))) {
                 omitidosDuplicados += 1;
                 continue;
             }
             firmasLote.add(firmaActual);
+            if (vintedId) vintedIdsLote.add(vintedId);
+            if (prod.perfilUrl) perfilesPorTienda.set(nombreTienda, prod.perfilUrl);
 
-            // OPTIMIZACIÓN: No convertir a Base64, guardar URL directamente.
-            const galeriaUrls = [];
-            if (prod.galeria && Array.isArray(prod.galeria)) {
-                for (const gUrl of prod.galeria.slice(0, 12)) {
-                    galeriaUrls.push(gUrl);
-                }
-            }
+            // Fotos como URL del CDN de Vinted: cero bytes de imagen en Mongo.
+            const esUrl = (u) => /^https?:\/\//i.test(String(u || ''));
+            const galeriaUrls = (Array.isArray(prod.galeria) ? prod.galeria : []).filter(esUrl).slice(0, 20);
 
             const tiendaSeleccionada = await obtenerTiendaPorNombre(nombreTienda);
             resumenTiendas[nombreTienda] = (resumenTiendas[nombreTienda] || 0) + 1;
@@ -3778,22 +4185,34 @@ app.post('/api/scraper/importar', exigeAdmin, async (req, res) => {
                 estado: estadoFinal,
                 fechaVenta: fechaVentaFinal,
                 // Guardar URL directamente en lugar de Base64
-                imagen: prod.imagen,
-                galeria: galeriaUrls,
+                imagen: esUrl(prod.imagen) ? prod.imagen : (galeriaUrls[0] || ''),
+                galeria: esUrl(prod.imagen) ? galeriaUrls : galeriaUrls.slice(1),
+                imagenMiniatura: esUrl(prod.miniatura) ? prod.miniatura : '',
+                descripcion: String(prod.descripcion || '').slice(0, 3000),
+                vintedId,
+                vintedUrl: esUrl(prod.url) ? prod.url : (vintedId ? `https://www.vinted.es/items/${vintedId}` : ''),
+                vintedVendedorId: String(prod.vendedorId || '').replace(/\D/g, ''),
+                vintedEstado: vintedId ? (prod.vendido ? 'vendido' : (prod.reservado ? 'reservado' : 'activo')) : '',
+                vintedRevisadoEn: vintedId ? new Date() : undefined,
+                vintedAviso: '',
                 tienda: tiendaSeleccionada ? tiendaSeleccionada._id : null,
                 sku: `VNT-${marcaImportacion}-${indice}`,
                 comentariosProducto: `${prod.comentariosProducto || ''}${prod.comentariosProducto ? ' · ' : ''}Importado por Scraper el ${new Date().toLocaleDateString('es-ES')} (${nombreTienda})`
             });
             registrosCreados.push(prod.prenda);
         }
+        let fichasEnCurso = 0;
         if (documentosNuevos.length) {
-            await VentaRopa.insertMany(documentosNuevos);
+            const insertados = await VentaRopa.insertMany(documentosNuevos);
+            // Descripción, color, categoría y todas las fotos se completan en segundo plano.
+            fichasEnCurso = completarFichasVinted(empresa, insertados.filter((d) => d.vintedId).map((d) => ({ _id: d._id, vintedId: d.vintedId })));
         }
+        if (perfilesPorTienda.size) await enlazarTiendasConPerfiles(empresa, perfilesPorTienda);
         invalidateKpiResumenCache(empresa);
         notificarCambio(); // Notificar cambio para refrescar el panel principal
 
         await registrarLog(req.session.email, `Importó ${registrosCreados.length} productos desde Vinted (omitidos duplicados misma tienda: ${omitidosDuplicados}): ${registrosCreados.join(', ')}`);
-        res.json({ success: true, count: registrosCreados.length, duplicadosOmitidos: omitidosDuplicados, tiendas: resumenTiendas });
+        res.json({ success: true, count: registrosCreados.length, duplicadosOmitidos: omitidosDuplicados, tiendas: resumenTiendas, fichasEnCurso });
     } catch (error) {
         console.error('Error en importación:', error);
         res.status(500).json({ error: 'Fallo al guardar los nuevos productos.' });

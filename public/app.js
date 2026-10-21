@@ -555,6 +555,15 @@ function programarRecuperacionScraper() {
 
 socket.on('scraper_update', (data) => procesarEventoScraper(data));
 
+// El servidor terminó de completar fichas de Vinted (descripción, fotos...): refrescamos.
+let REFRESCO_INVENTARIO_TIMER = null;
+socket.on('inventario_actualizado', () => {
+    clearTimeout(REFRESCO_INVENTARIO_TIMER);
+    REFRESCO_INVENTARIO_TIMER = setTimeout(() => {
+        if (USUARIO_EMAIL_ACTUAL && typeof forceRefreshDataManual === 'function') forceRefreshDataManual(true, true);
+    }, 800);
+});
+
 async function procesarEventoScraper(data) {
     if (!data || eventoScraperYaProcesado(data)) return;
     console.log('[SOCKET] Datos recibidos de GitHub:', data);
@@ -591,6 +600,13 @@ async function procesarEventoScraper(data) {
                 condicion: p.condicion || '',
                 favoritos: p.favoritos || 0,
                 url: p.url || '',
+                vintedId: p.id || '',
+                vendedorId: p.vendedorId || '',
+                miniatura: p.miniatura || '',
+                reservado: Boolean(p.reservado),
+                vendido: Boolean(p.vendido),
+                // Perfil escaneado: enlaza la tienda con Vinted para "Comprobar ventas".
+                perfilUrl: p.perfilUrl || data.urlOrigen || '',
                 // La tienda/alias del escaneo: sin esto todo se comparaba contra "Vinted".
                 proveedor: p.proveedor || p.cuenta || p.origenGrupo || ''
             })) })
@@ -1982,6 +1998,23 @@ async function procesarArchivoManual(event) {
                 }
             });
 
+            // Enlace al anuncio (da su id de Vinted), perfil del vendedor y celdas de estado
+            // ("Vendido" / "Reservado") que Instant Data Scraper suele copiar de las tarjetas.
+            let urlItem = '';
+            let perfilUrl = '';
+            let vendido = false;
+            let reservado = false;
+            entries.forEach(([, rawValue]) => {
+                String(rawValue || '').split(/[\s,;|]+/).forEach((parte) => {
+                    const p = parte.trim();
+                    if (!urlItem && /^https?:\/\/[^/]*vinted\.[a-z.]+\/items\/\d+/i.test(p)) urlItem = p.split('?')[0];
+                    if (!perfilUrl && /^https?:\/\/[^/]*vinted\.[a-z.]+\/member\/\d+/i.test(p)) perfilUrl = p.split('?')[0];
+                });
+                const estadoCelda = normalizarClaveImportacion(rawValue);
+                if (['vendido', 'vendida', 'sold', 'vendu', 'venduto', 'verkauft'].includes(estadoCelda)) vendido = true;
+                if (['reservado', 'reservada', 'reserved', 'reserve'].includes(estadoCelda)) reservado = true;
+            });
+
             const valTitleStrict = row['web_ui__Cell__title'] || row['web_ui__Text__text 2'] || row['web_ui__Text__text'] || row.description || row.title || row.titulo || row.nombre || row.prenda || row['item-card-description'];
             if (valTitleStrict) titulo = String(valTitleStrict).trim();
 
@@ -2017,7 +2050,12 @@ async function procesarArchivoManual(event) {
                     talla,
                     condicion,
                     favoritos: parseInt(String(favoritos || '0').replace(/[^\d]/g, ''), 10) || 0,
-                    descripcion
+                    descripcion,
+                    url: urlItem,
+                    vintedId: (urlItem.match(/\/items\/(\d+)/) || [])[1] || '',
+                    perfilUrl,
+                    vendido,
+                    reservado
                 });
             }
         });
@@ -2163,7 +2201,35 @@ function aplicarAccionesLoteScraper() {
     alert(`Acción en lote aplicada a ${indices.length} producto(s).`);
 }
 
-function marcarDesaparecidosComoVendidos() {
+// El modal de venta trabaja con BASE_DATOS: si el producto no está en las páginas cargadas
+// (p. ej. uno antiguo detectado como vendido), lo traemos antes de abrirlo.
+async function asegurarProductosCargados(ids) {
+    const faltan = (ids || []).map(String).filter((id) => !BASE_DATOS.some((v) => v._id === id));
+    if (!faltan.length) return true;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/ventas/por-ids?ids=${encodeURIComponent(faltan.join(','))}`, { credentials: 'include' });
+        if (!res.ok) throw new Error();
+        const { ventas } = await res.json();
+        (ventas || []).forEach((v) => { if (!BASE_DATOS.some((x) => x._id === v._id)) BASE_DATOS.push(v); });
+    } catch (_) {}
+    return (ids || []).every((id) => BASE_DATOS.some((v) => v._id === String(id)));
+}
+
+async function editarProductoAsegurado(id) {
+    if (await asegurarProductosCargados([id])) editItem(id);
+    else alert('No se encontró el producto.');
+}
+
+async function registrarVentaDeProductos(ids, comentarioSugerido) {
+    if (!ids.length) return;
+    if (!(await asegurarProductosCargados(ids))) {
+        alert('Algunos productos ya no existen en el inventario. Actualiza los resultados e inténtalo de nuevo.');
+        return;
+    }
+    abrirModalPostVenta(ids, obtenerNombreEstadoVenta(), { comentarioSugerido, canalSugerido: 'Vinted' });
+}
+
+async function marcarDesaparecidosComoVendidos() {
     if (!resultadosScraperActual?.desaparecidos?.length) return;
 
     const ids = Array.from(document.querySelectorAll('.check-miss-scraper:checked'))
@@ -2177,10 +2243,38 @@ function marcarDesaparecidosComoVendidos() {
         return;
     }
 
-    abrirModalPostVenta(ids, obtenerNombreEstadoVenta(), {
-        comentarioSugerido: 'Marcado desde Scraper: el artículo ya no aparece en Vinted.',
-        canalSugerido: 'Vinted'
+    await registrarVentaDeProductos(ids, 'Marcado desde Scraper: el artículo ya no aparece en Vinted.');
+}
+
+async function marcarVendidosScraperComoVendidos() {
+    const ids = Array.from(document.querySelectorAll('.check-vendido-scraper:checked'))
+        .map((cb) => resultadosScraperActual?.vendidos?.[parseInt(cb.value, 10)]?.idMongo)
+        .filter(Boolean);
+    if (ids.length === 0) return alert('Selecciona al menos un artículo vendido.');
+    await registrarVentaDeProductos(ids, 'Vendido en Vinted (detectado automáticamente).');
+}
+
+// Sugiere una de tus categorías a partir del título (o de la categoría de Vinted si el título no basta).
+function sugerirCategoriaImportacion(titulo, categoriaVinted = '') {
+    const preparar = (txt) => ` ${normalizarTextoCategoria(txt).replace(/[^a-z0-9]+/g, ' ').trim()} `;
+    const categorias = (LISTA_CATEGORIAS_GLOBAL || []).map((c) => {
+        const base = normalizarTextoCategoria(c.nombre).replace(/[^a-z0-9]+/g, ' ').trim();
+        // "Camisetas" -> "camiseta", "Pantalones" -> "pantalon"
+        const raiz = base.replace(/(es|s)$/, '');
+        return { nombre: c.nombre, base, claves: [base, raiz].filter((x) => x.length >= 4) };
     });
+    const buscar = (texto) => {
+        let mejor = null;
+        categorias.forEach((c) => {
+            if (c.claves.some((k) => texto.includes(` ${k}`)) && (!mejor || c.base.length > mejor.base.length)) mejor = c;
+        });
+        return mejor?.nombre || '';
+    };
+    const segmentos = String(categoriaVinted || '').split('›').map((s) => s.trim()).filter(Boolean);
+    return buscar(preparar(titulo))
+        || buscar(preparar(segmentos[segmentos.length - 1] || ''))
+        || buscar(preparar(categoriaVinted))
+        || 'General';
 }
 
 function renderizarResultadosScraping(data) {
@@ -2244,22 +2338,41 @@ function renderizarResultadosScraping(data) {
     };
     const defaultImportStore = 'Vinted';
 
+    const vendidosCount = data.vendidos?.length || 0;
     summaryText.innerHTML = `Análisis completado. He comparado Vinted con tu inventario de MongoDB:<br>
+        ${vendidosCount ? `• <span class="text-emerald-300 font-black">${vendidosCount} vendidos en Vinted</span>: siguen en stock aquí; regístralos como vendidos.<br>` : ''}
         • <span class="text-amber-400 font-bold">${discCount} cambios de precio</span>: Se han detectado modificaciones en Vinted que no tienes en el sistema.<br>
         • <span class="text-emerald-400 font-bold">${nuevoCount} productos nuevos</span>: Artículos en la web que no están registrados en Mongo.<br>
         • <span class="text-slate-400 font-bold">${identCount} artículos sin cambios</span>: Productos que ya están perfectamente sincronizados.<br>
         • <span class="text-rose-400 font-bold">${missCount} no visibles en Vinted</span>: Posibles vendidos o retirados de tu perfil.<br>
         • <span class="text-indigo-300 font-bold">Tienda de importación por defecto:</span> ${defaultImportStore}`;
 
+    const contVendidos = document.getElementById('container-vendidos-vinted');
+    if (contVendidos) contVendidos.classList.toggle('hidden', vendidosCount === 0);
     if (discCount > 0) contDisc.classList.remove('hidden'); else contDisc.classList.add('hidden');
     if (nuevoCount > 0) contNuev.classList.remove('hidden'); else contNuev.classList.add('hidden');
     if (identCount > 0) contExist.classList.remove('hidden'); else contExist.classList.add('hidden');
     if (contDesap) {
         if (missCount > 0) contDesap.classList.remove('hidden'); else contDesap.classList.add('hidden');
     }
-    if (discCount === 0 && nuevoCount === 0 && identCount === 0 && missCount === 0) noRes.classList.remove('hidden'); else noRes.classList.add('hidden');
+    if (discCount === 0 && nuevoCount === 0 && identCount === 0 && missCount === 0 && vendidosCount === 0) noRes.classList.remove('hidden'); else noRes.classList.add('hidden');
 
     const imgFallback = 'onerror="this.onerror=null;this.src=IMG_PLACEHOLDER"';
+    const enlaceAnuncio = (url) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" class="text-[9px] text-cyan-300 underline">Ver en Vinted ↗</a>` : '';
+
+    const gridVendidos = document.getElementById('scraper-grid-vendidos');
+    if (gridVendidos) {
+        gridVendidos.innerHTML = (data.vendidos || []).map((n, i) => `
+            <div class="flex items-center gap-3 p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+                <input type="checkbox" class="check-vendido-scraper w-4 h-4 rounded text-emerald-500 bg-black/40 border-white/20 cursor-pointer" value="${i}" checked>
+                <img src="${esc(n.imagen || IMG_PLACEHOLDER)}" loading="lazy" class="w-10 h-10 rounded-lg object-cover" ${imgFallback}>
+                <div class="min-w-0 flex-1">
+                    <p class="text-[10px] font-bold uppercase truncate">${esc(n.prenda)}</p>
+                    <p class="text-[9px] opacity-70 font-mono">${esc(n.precio || 0)}€ · ${esc(n.proveedor || '')}</p>
+                    <p class="text-[9px] ${n.fuente === 'vinted' ? 'text-emerald-300' : 'text-amber-200'}">${n.fuente === 'vinted' ? '✔ Confirmado en su anuncio de Vinted' : '✔ Marcado como vendido en el escaneo'} ${enlaceAnuncio(n.vintedUrl)}</p>
+                </div>
+            </div>`).join('');
+    }
 
     // Se construye todo el HTML de golpe: con cientos de productos, "innerHTML +=" en bucle
     // volvía a parsear la tabla entera en cada vuelta.
@@ -2280,7 +2393,6 @@ function renderizarResultadosScraping(data) {
             </tr>`;
     }).join('');
 
-    const catOptions = LISTA_CATEGORIAS_GLOBAL.map(c => opcion(c.nombre, c.nombre)).join('');
     const tallasDisponibles = ['S', 'M', 'L', 'XL', 'Única']; // mismas opciones que el formulario principal
     const detectarTalla = (raw) => {
         // Vinted da tallas tipo "M / 38 / 10": nos quedamos con la talla de letra si existe.
@@ -2296,12 +2408,22 @@ function renderizarResultadosScraping(data) {
             ...(tiendaEsNueva ? [opcion(tiendaSugerida, `🏬 ${tiendaSugerida} (nueva)`, true)] : []),
             ...tiendasUnicas.map(t => opcion(t, `🏬 ${t}`, t === tiendaSugerida))
         ].join('');
-        const estadoActual = String(n.estado || estadoStockNombre).trim() || estadoStockNombre;
+        // Si en Vinted ya está vendida, se propone darla de alta directamente como venta.
+        const estadoActual = n.vendido ? estadoVentaNombre : (String(n.estado || estadoStockNombre).trim() || estadoStockNombre);
         const estadoOptions = opcionesEstadoImportacion.map(nombre => opcion(nombre, nombre, nombre === estadoActual)).join('');
         const badgeGaleriaInfo = n.galeria && n.galeria.length > 0 ? `<div class="absolute bottom-1 right-1 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${n.galeria.length}</div>` : '';
         const tallaScraped = detectarTalla(n.talla);
         const tallaOptions = tallasDisponibles.map(t => opcion(t, t, t === tallaScraped)).join('');
         const enlaceVinted = n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-cyan-300 underline">Ver en Vinted ↗</a>` : '';
+        const categoriaSugerida = sugerirCategoriaImportacion(n.prenda, n.categoriaVinted);
+        const catOptionsItem = LISTA_CATEGORIAS_GLOBAL.map(c => opcion(c.nombre, c.nombre, c.nombre === categoriaSugerida)).join('');
+        const totalFotos = (n.imagen ? 1 : 0) + (Array.isArray(n.galeria) ? n.galeria.length : 0);
+        const insignias = [
+            n.vendido ? '<span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">💰 Vendido en Vinted</span>' : '',
+            n.reservado ? '<span class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-400/30">🤝 Reservado</span>' : '',
+            totalFotos ? `<span class="px-1.5 py-0.5 rounded bg-white/10 border border-white/10">📷 ${totalFotos} foto${totalFotos === 1 ? '' : 's'} (solo enlace, 0 KB)</span>` : '',
+            n.vintedId ? '<span class="px-1.5 py-0.5 rounded bg-white/10 border border-white/10">📝 Descripción y color se completan al importar</span>' : ''
+        ].filter(Boolean).join(' ');
 
         return `
             <div class="flex flex-col gap-3 p-4 bg-black/20 border border-white/10 rounded-2xl hover:bg-white/5 transition-all shadow-inner relative">
@@ -2316,6 +2438,7 @@ function renderizarResultadosScraping(data) {
                     <div class="min-w-0 flex-1 flex flex-col gap-2 pr-6">
                         <input type="text" id="new-item-title-${i}" value="${esc(n.prenda)}" class="bg-transparent border-b-2 border-white/10 text-sm font-black uppercase w-full focus:outline-none focus:border-emerald-400 px-1 py-1 text-white transition-colors" placeholder="Título a guardar...">
                         <p class="text-[10px] font-mono opacity-70">Origen: <span class="text-cyan-300">${esc(n.proveedor || n.cuenta || 'Vinted')}</span> ${enlaceVinted}</p>
+                        ${insignias ? `<div class="flex flex-wrap gap-1 text-[8px] font-bold">${insignias}</div>` : ''}
 
                         <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-[10px] mt-1">
                             <div class="flex items-center gap-1.5" title="Marca">
@@ -2342,7 +2465,7 @@ function renderizarResultadosScraping(data) {
                 <div class="grid grid-cols-2 gap-2 mt-2">
                     <select id="new-item-cat-${i}" class="bg-black/40 border border-white/10 text-[10px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-emerald-400 text-white">
                         <option value="General">Categoría...</option>
-                        ${catOptions}
+                        ${catOptionsItem}
                     </select>
                     <select id="new-item-store-${i}" class="bg-indigo-500/10 border border-indigo-500/20 text-[10px] rounded-lg px-2 py-1.5 focus:outline-none focus:border-indigo-400 text-indigo-100 font-bold">
                         ${tiendaOptions}
@@ -2384,7 +2507,7 @@ function renderizarResultadosScraping(data) {
                     <p class="text-[8px] opacity-40 font-mono">Alta: ${esc(n.fechaRegistro || 's/f')}${n.fechaVenta ? ` · Vendido: ${esc(n.fechaVenta)}` : ''}</p>
                 </div>
                 <div class="flex gap-1">
-                    <button onclick="cerrarModalScraper(); editItem('${esc(n.idMongo)}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
+                    <button onclick="cerrarModalScraper(); editarProductoAsegurado('${esc(n.idMongo)}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
                     <button onclick="deleteItemFromScraper('${esc(n.idMongo)}')" class="text-[10px] bg-rose-500/10 hover:bg-rose-600 text-rose-500 hover:text-white px-2 py-1 rounded-lg transition-all">🗑️</button>
                 </div>
             </div>`).join('');
@@ -2397,9 +2520,10 @@ function renderizarResultadosScraping(data) {
                 <div class="min-w-0 flex-1">
                     <p class="text-[9px] font-bold uppercase truncate">${esc(n.prenda)}</p>
                     <p class="text-[8px] opacity-60 font-mono">${esc(n.precio || 0)}€ · Alta: ${esc(n.fechaRegistro || 's/f')}</p>
+                    <p class="text-[8px] ${n.motivo === 'no_visible' ? 'text-amber-300' : 'text-rose-300'}">${n.motivo === 'eliminado' ? '🗑️ Retirado de Vinted' : n.motivo === 'oculto' ? '🙈 Oculto en Vinted' : '👀 Ya no aparece (posible venta)'} ${enlaceAnuncio(n.vintedUrl)}</p>
                     ${n.comentariosProducto ? `<p class="text-[8px] opacity-45 truncate">${esc(n.comentariosProducto)}</p>` : ''}
                 </div>
-                <button onclick="cerrarModalScraper(); editItem('${esc(n.idMongo)}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
+                <button onclick="cerrarModalScraper(); editarProductoAsegurado('${esc(n.idMongo)}')" class="text-[10px] bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white px-2 py-1 rounded-lg transition-all">Editar</button>
             </div>`).join('');
     }
 }
@@ -2508,7 +2632,7 @@ async function importarNuevosScraping() {
         const detalleDuplicados = Number(res.duplicadosOmitidos || 0) > 0
             ? `\n\nDuplicados omitidos (misma tienda): ${res.duplicadosOmitidos}`
             : '';
-        alert(`✅ Se han importado ${res.count} productos exitosamente con sus fotografías a la base de datos.\n\nDistribución por tienda:\n${resumenTiendas || '• Sin detalle'}${detalleDuplicados}\n\nYa puedes verificarlos en tu inventario usando el filtro de tienda.`);
+        alert(`✅ Se han importado ${res.count} productos exitosamente con sus fotografías a la base de datos.\n\nDistribución por tienda:\n${resumenTiendas || '• Sin detalle'}${detalleDuplicados}${Number(res.fichasEnCurso || 0) > 0 ? `\n\nCompletando descripción, color y fotos de ${res.fichasEnCurso} producto(s) en segundo plano (las fotos se guardan como enlace: no ocupan espacio).` : ''}\n\nYa puedes verificarlos en tu inventario usando el filtro de tienda.`);
         cantarPorVoz("Importación completada.");
 
         await forceRefreshDataManual();
@@ -4498,6 +4622,7 @@ function aplicarRestriccionesRolUI() {
     const hidden = new Set([...bloqueadasPorRol]);
 
     SECCIONES_INHABILITADAS = hidden;
+    document.getElementById('btn-ventas-vinted')?.classList.toggle('hidden', String(USUARIO_ROL_ACTUAL || '') !== 'Admin');
 
     document.querySelectorAll('.seccion-app').forEach((sec) => {
         const secId = sec.id;
@@ -7130,7 +7255,7 @@ function toggleMuteVolumenGlobal() {
     }
 }
 
-async function forceRefreshDataManual(forzar = false) { 
+async function forceRefreshDataManual(forzar = false, silencioso = false) { 
     // forzar = true: tras guardar algo necesitamos datos posteriores a ese guardado,
     // así que esperamos al refresco en curso (si lo hay) y lanzamos otro.
     if (FORCE_REFRESH_PROMISE) {
@@ -7147,7 +7272,7 @@ async function forceRefreshDataManual(forzar = false) {
         icono.classList.add('animate-spin-once');
     }
     LAST_FORCE_REFRESH_AT = now;
-    cantarPorVoz("Sincronizando.");
+    if (!silencioso) cantarPorVoz("Sincronizando.");
     FORCE_REFRESH_PROMISE = reloadCoreData(false, {
         resetPage: true,
         useLightweight: false,
@@ -8092,6 +8217,207 @@ if (window.__pendingGoogleCredential) {
     window.handleCredentialResponse(pendingGoogleCredential);
 }
 
+// --- Panel "Ventas detectadas en Vinted" ---
+// Lista los productos en stock que en Vinted ya no están a la venta (vendidos, retirados o que
+// ya no aparecen) para registrar la venta con un clic.
+let AVISOS_VINTED = [];
+
+function panelVentasVintedAbierto() {
+    return !document.getElementById('modal-ventas-vinted')?.classList.contains('hidden');
+}
+
+function actualizarBadgeVentasVinted(total) {
+    const badge = document.getElementById('badge-ventas-vinted');
+    if (!badge) return;
+    badge.textContent = total > 99 ? '99+' : String(total);
+    badge.classList.toggle('hidden', !total);
+}
+
+async function actualizarContadorAvisosVinted() {
+    if (String(USUARIO_ROL_ACTUAL || '') !== 'Admin') return null;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/vinted/avisos`, { credentials: 'include' });
+        if (!res.ok) return null;
+        const data = await res.json();
+        AVISOS_VINTED = Array.isArray(data.avisos) ? data.avisos : [];
+        actualizarBadgeVentasVinted(AVISOS_VINTED.length);
+        return data;
+    } catch (_) {
+        return null;
+    }
+}
+
+function abrirPanelVentasVinted() {
+    document.getElementById('modal-ventas-vinted')?.classList.remove('hidden');
+    cargarAvisosVinted();
+}
+
+function cerrarPanelVentasVinted() {
+    document.getElementById('modal-ventas-vinted')?.classList.add('hidden');
+}
+
+async function cargarAvisosVinted() {
+    const cont = document.getElementById('ventas-vinted-contenido');
+    if (!cont) return;
+    if (!AVISOS_VINTED.length) cont.innerHTML = '<p class="text-xs opacity-60 animate-pulse">Cargando avisos...</p>';
+    const data = await actualizarContadorAvisosVinted();
+    if (!data) {
+        cont.innerHTML = '<p class="text-xs text-rose-300">No se pudieron cargar los avisos de Vinted.</p>';
+        return;
+    }
+    renderPanelVentasVinted(data);
+}
+
+function haceCuantoTexto(fecha) {
+    const ms = Date.now() - new Date(fecha).getTime();
+    if (!Number.isFinite(ms) || ms < 0) return '';
+    const min = Math.round(ms / 60000);
+    if (min < 60) return `hace ${Math.max(1, min)} min`;
+    const horas = Math.round(min / 60);
+    if (horas < 48) return `hace ${horas} h`;
+    return `hace ${Math.round(horas / 24)} días`;
+}
+
+const GRUPOS_AVISO_VINTED = [
+    { clave: 'vendido', titulo: '💰 Vendidos en Vinted', ayuda: 'Confirmado en su anuncio: ya no se puede comprar en Vinted.', color: 'emerald', comentario: 'Vendido en Vinted (detectado automáticamente).' },
+    { clave: 'no_visible', titulo: '👀 Ya no aparecen en tu perfil', ayuda: 'Posible venta: no están enlazados con su anuncio, así que no se pudo confirmar.', color: 'amber', comentario: 'Ya no aparece en Vinted: venta registrada.' },
+    { clave: 'eliminado', titulo: '🗑️ Retirados u ocultos en Vinted', ayuda: 'El anuncio se borró u ocultó. Revisa si se vendió por otro canal.', color: 'rose', comentario: 'Retirado de Vinted: venta registrada.' }
+];
+
+function renderPanelVentasVinted(data) {
+    const cont = document.getElementById('ventas-vinted-contenido');
+    if (!cont) return;
+    const esc = escapeHtmlSafe;
+    const avisos = Array.isArray(data?.avisos) ? data.avisos : [];
+
+    if (!avisos.length) {
+        const sinEnlace = !data?.tiendasEnlazadas && !data?.productosEnlazados;
+        cont.innerHTML = `
+            <div class="text-center py-8 space-y-2">
+                <p class="text-3xl">✅</p>
+                <p class="text-sm font-bold">No hay ventas pendientes de registrar.</p>
+                ${sinEnlace
+                    ? '<p class="text-[11px] opacity-75 max-w-md mx-auto">Para empezar, escanea una vez el perfil de Vinted de cada tienda en <b>Acciones → Scraper / CSV</b> (pega la URL del perfil y pon como alias el nombre de la tienda). A partir de ahí basta con pulsar «Comprobar ahora».</p>'
+                    : `<p class="text-[11px] opacity-60">${Number(data.tiendasEnlazadas || 0)} tienda(s) y ${Number(data.productosEnlazados || 0)} producto(s) en stock enlazados con Vinted.</p>`}
+            </div>`;
+        return;
+    }
+
+    cont.innerHTML = GRUPOS_AVISO_VINTED.map((g) => {
+        const lista = avisos.filter((a) => a.aviso === g.clave);
+        if (!lista.length) return '';
+        const filas = lista.map((a) => `
+            <div class="flex items-center gap-3 p-2 rounded-xl border border-white/10 bg-black/20">
+                <input type="checkbox" data-check-aviso="${g.clave}" value="${esc(a._id)}" checked class="w-4 h-4 cursor-pointer">
+                <img src="${esc(a.imagen || IMG_PLACEHOLDER)}" loading="lazy" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" class="w-11 h-11 rounded-lg object-cover border border-white/10">
+                <div class="min-w-0 flex-1">
+                    <p class="text-[11px] font-bold uppercase truncate">${esc(a.prenda)}</p>
+                    <p class="text-[10px] opacity-70 font-mono">${(Number(a.precioVenta) || 0).toFixed(2)} € · ${esc(a.proveedor || 'Sin tienda')} · ${esc(a.estado || '')}${a.sku ? ` · ${esc(a.sku)}` : ''}</p>
+                    <p class="text-[9px] opacity-60">Detectado ${esc(haceCuantoTexto(a.avisoEn))} ${a.vintedUrl ? `· <a href="${esc(a.vintedUrl)}" target="_blank" rel="noopener noreferrer" class="text-cyan-300 underline">ver anuncio ↗</a>` : ''}</p>
+                </div>
+                <div class="flex flex-col gap-1 flex-shrink-0">
+                    <button onclick="registrarVentaAvisosVinted('${g.clave}', '${esc(a._id)}')" class="text-[10px] font-bold bg-emerald-600/80 hover:bg-emerald-600 text-white px-2 py-1 rounded-lg">✓ Vendido</button>
+                    <button onclick="descartarAvisosVinted('${g.clave}', '${esc(a._id)}')" class="text-[10px] font-bold bg-white/10 hover:bg-white/20 px-2 py-1 rounded-lg">Ignorar</button>
+                </div>
+            </div>`).join('');
+        return `
+            <section class="space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                        <h3 class="text-[11px] font-black uppercase tracking-widest text-${g.color}-300">${g.titulo} (${lista.length})</h3>
+                        <p class="text-[10px] opacity-60">${g.ayuda}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-[10px] flex items-center gap-1 cursor-pointer"><input type="checkbox" checked onchange="marcarTodosAvisosVinted('${g.clave}', this.checked)"> Todos</label>
+                        <button onclick="registrarVentaAvisosVinted('${g.clave}')" class="text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl">Registrar venta</button>
+                        <button onclick="descartarAvisosVinted('${g.clave}')" class="text-[10px] font-bold bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-xl">Ignorar</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 gap-2">${filas}</div>
+            </section>`;
+    }).join('');
+}
+
+function marcarTodosAvisosVinted(clave, marcado) {
+    document.querySelectorAll(`[data-check-aviso="${clave}"]`).forEach((cb) => { cb.checked = marcado; });
+}
+
+function idsAvisosMarcados(clave) {
+    return Array.from(document.querySelectorAll(`[data-check-aviso="${clave}"]:checked`)).map((cb) => cb.value);
+}
+
+async function registrarVentaAvisosVinted(clave, idUnico = '') {
+    const ids = idUnico ? [idUnico] : idsAvisosMarcados(clave);
+    if (!ids.length) return alert('Selecciona al menos un producto.');
+    const grupo = GRUPOS_AVISO_VINTED.find((g) => g.clave === clave);
+    await registrarVentaDeProductos(ids, grupo?.comentario || 'Vendido en Vinted.');
+}
+
+async function descartarAvisosVinted(clave, idUnico = '') {
+    const ids = idUnico ? [idUnico] : idsAvisosMarcados(clave);
+    if (!ids.length) return alert('Selecciona al menos un producto.');
+    if (!idUnico && !confirm(`¿Ignorar ${ids.length} aviso(s)? Los productos seguirán en stock y este aviso no se repetirá.`)) return;
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/vinted/avisos/descartar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ ids })
+        });
+        if (!res.ok) throw new Error();
+        await cargarAvisosVinted();
+        forceRefreshDataManual(true, true);
+    } catch (_) {
+        alert('No se pudieron ignorar los avisos.');
+    }
+}
+
+async function comprobarVentasVinted() {
+    const btn = document.getElementById('btn-comprobar-ventas-vinted');
+    const estado = document.getElementById('ventas-vinted-estado');
+    if (btn) { btn.disabled = true; btn.classList.add('opacity-60'); btn.textContent = '⏳ Comprobando...'; }
+    if (estado) estado.textContent = 'Revisando tus perfiles de Vinted y los anuncios que ya no aparecen...';
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/vinted/comprobar-ventas`, { method: 'POST', credentials: 'include' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'No se pudo comprobar.');
+        const r = data.resumen || {};
+        if (estado) {
+            estado.textContent = data.mensaje || [
+                `${r.perfilesRevisados || 0} perfil(es) revisados en ${r.segundos || 0} s`,
+                `${r.vendidos || 0} vendidos`,
+                `${r.noVisibles || 0} no visibles`,
+                `${r.eliminados || 0} retirados`,
+                `${(r.activos || 0) + (r.reservados || 0)} siguen a la venta`,
+                r.sinEnlace ? `${r.sinEnlace} sin enlazar con Vinted` : '',
+                r.perfilesConError ? `${r.perfilesConError} perfil(es) sin respuesta` : '',
+                r.fichasPendientes ? `completando ${r.fichasPendientes} ficha(s) en segundo plano` : ''
+            ].filter(Boolean).join(' · ');
+        }
+        cantarPorVoz(r.vendidos ? `${r.vendidos} ventas detectadas en Vinted.` : 'Comprobación terminada.');
+        await cargarAvisosVinted();
+        forceRefreshDataManual(true, true);
+    } catch (e) {
+        if (estado) estado.textContent = `Error: ${e.message}`;
+    } finally {
+        if (btn) { btn.disabled = false; btn.classList.remove('opacity-60'); btn.textContent = '🔎 Comprobar ahora'; }
+    }
+}
+
+// Tras registrar ventas, se quitan de las listas de avisos que estén abiertas.
+function alRegistrarVentas(ids) {
+    const vendidos = new Set((ids || []).map(String));
+    if (resultadosScraperActual) {
+        const pendiente = (x) => !vendidos.has(String(x?.idMongo));
+        ['vendidos', 'desaparecidos'].forEach((k) => {
+            if (Array.isArray(resultadosScraperActual[k])) resultadosScraperActual[k] = resultadosScraperActual[k].filter(pendiente);
+        });
+        if (!document.getElementById('modal-scraper')?.classList.contains('hidden')) renderizarResultadosScraping(resultadosScraperActual);
+    }
+    if (panelVentasVintedAbierto()) cargarAvisosVinted();
+    else actualizarContadorAvisosVinted();
+}
+
 // --- Gastos operativos (OpEx) ---
 let LISTA_GASTOS = [];
 
@@ -8707,7 +9033,7 @@ function renderKanban(isFullRefresh = false) {
             const esScraping = (v.sku && v.sku.startsWith('VNT-')) || (v.comentariosProducto && v.comentariosProducto.includes('Importado'));
             const badgeScraping = esScraping ? `<div class="absolute -top-1.5 -right-1.5 bg-blue-600 rounded-full w-4 h-4 flex items-center justify-center text-[8px] shadow-lg border border-blue-300" title="Alojado en MongoDB (Vía Web/Scraping)">🌐</div>` : '';
             const badgeGaleria = v.galeria && v.galeria.length > 0 ? `<div class="absolute bottom-0 right-0 bg-black/80 rounded px-1 text-[8px] font-bold border border-white/20 shadow-md">+${v.galeria.length}</div>` : '';
-            const thumb = v.imagen ? `<div class="relative flex-shrink-0 cursor-pointer hover:scale-105 transition-transform group" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Ver Galería de Fotos"><img src="${escapeHtmlSafe(v.imagen)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" class="card-img-mini border border-white/10 shadow-lg group-hover:border-indigo-400">${badgeScraping}${badgeGaleria}</div>` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20 cursor-pointer hover:bg-slate-700 transition-colors border border-dashed border-white/20" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Añadir Fotos">📸</div>`;
+            const thumb = v.imagen ? `<div class="relative flex-shrink-0 cursor-pointer hover:scale-105 transition-transform group" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Ver Galería de Fotos"><img src="${escapeHtmlSafe(v.imagenMiniatura || v.imagen)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=IMG_PLACEHOLDER" class="card-img-mini border border-white/10 shadow-lg group-hover:border-indigo-400">${badgeScraping}${badgeGaleria}</div>` : `<div class="card-img-mini flex-shrink-0 bg-slate-800 flex items-center justify-center text-[10px] opacity-20 cursor-pointer hover:bg-slate-700 transition-colors border border-dashed border-white/20" onclick="abrirVisorFotos('${v._id}'); event.stopPropagation();" title="Añadir Fotos">📸</div>`;
             const pVentaFormateado = parseFloat(v.precioVenta || 0); const estaMarcado = ITEMS_SELECCIONADOS_MASIVOS.includes(v._id);
             const badgeCanal = v.canalVenta ? `<span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1 py-0.5 rounded text-[8px] font-mono font-bold">${escapeHtmlSafe(String(v.canalVenta).toUpperCase())}</span>` : '';
             const badgeTienda = v.proveedor && v.proveedor !== 'Sin definir' ? `<span class="px-1 py-0.5 rounded text-[8px] font-mono font-bold border" style="background:${colorTienda.a}1a;color:${colorTienda.a};border-color:${colorTienda.b}55">🏬 ${escapeHtmlSafe(String(v.proveedor).toUpperCase())}</span>` : '';
@@ -8724,6 +9050,11 @@ function renderKanban(isFullRefresh = false) {
             }
 
             const badgeEst = `<span class="bg-${est.color}-500/10 text-${est.color}-400 border border-${est.color}-500/20 px-1 py-0.5 rounded text-[8px] font-black uppercase">${est.nombre}</span>`;
+            // Aviso de Vinted pendiente (solo tiene sentido mientras no figure como vendido aquí).
+            const avisoVinted = (USUARIO_ROL_ACTUAL === 'Admin' && est.rolFinanciero !== 'Venta') ? String(v.vintedAviso || '') : '';
+            const badgeVinted = avisoVinted
+                ? `<button onclick="abrirPanelVentasVinted(); event.stopPropagation();" class="${avisoVinted === 'vendido' ? 'bg-emerald-500 text-slate-950 animate-pulse' : avisoVinted === 'eliminado' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'bg-amber-500/20 text-amber-200 border border-amber-500/30'} px-1.5 py-0.5 rounded text-[8px] font-black uppercase" title="Ver ventas detectadas en Vinted">${avisoVinted === 'vendido' ? '🔔 Vendido en Vinted' : avisoVinted === 'eliminado' ? '🗑️ Retirado de Vinted' : '👀 No está en Vinted'}</button>`
+                : '';
 
             const fechaAlta = v.fecha ? `<span class="text-blue-400/80">📦 ${escapeHtmlSafe(v.fecha)}</span>` : '';
             const fechaVenta = v.fechaVenta ? `<span class="text-emerald-400/80">💰 ${escapeHtmlSafe(v.fechaVenta)}</span>` : '';
@@ -8752,7 +9083,7 @@ function renderKanban(isFullRefresh = false) {
                 <div class="flex-1 min-w-0 ${soloLecturaVisual ? '' : 'cursor-pointer hover:opacity-80 transition-opacity'}" ${onClickEdicion} title="${soloLecturaVisual ? 'Modo visualizador: solo lectura' : 'Hacer clic para editar el artículo'}">
                     <div class="flex items-center gap-1.5 flex-wrap">
                         <h4 class="font-bold text-xs uppercase tracking-wide truncate">${escapeHtmlSafe(v.prenda)}</h4> 
-                        ${badgeCanal} ${badgeTienda} ${badgeLote} ${badgeEst} ${badgeComentarios}
+                        ${badgeVinted} ${badgeCanal} ${badgeTienda} ${badgeLote} ${badgeEst} ${badgeComentarios}
                     </div>
                     <span class="text-[9px] font-mono opacity-50 block mt-0.5">${escapeHtmlSafe(v.categoria)} • Talla ${escapeHtmlSafe(v.talla)} ${v.sku ? `• 🆔 ${escapeHtmlSafe(v.sku)}` : ''}</span>
                     <div class="text-[11px] mt-0.5 ${colorEstrellas} tracking-tight">${stringEstrellas}</div>
@@ -8875,6 +9206,7 @@ async function manejarEnvioVenta(e) {
         imagen: FOTOS_FORMULARIO_TEMP.length > 0 ? FOTOS_FORMULARIO_TEMP[0] : "",
         galeria: FOTOS_FORMULARIO_TEMP.length > 1 ? FOTOS_FORMULARIO_TEMP.slice(1) : [],
         comentariosProducto: document.getElementById('comentariosProducto').value.trim(),
+        descripcion: (document.getElementById('descripcion')?.value || '').trim(),
         rating: parseInt(document.getElementById('rating').value, 10) || 0,
         proveedor: document.getElementById('proveedor').value,
         estado: document.getElementById('estado').value
@@ -8920,6 +9252,14 @@ function editItem(id) {
     document.getElementById('gastoPromocion').value = item.gastoPromocion || 0;
     document.getElementById('canalVenta').value = item.canalVenta || 'Vinted'; 
     document.getElementById('comentariosProducto').value = item.comentariosProducto || '';
+    const campoDescripcion = document.getElementById('descripcion');
+    if (campoDescripcion) campoDescripcion.value = item.descripcion || '';
+    const infoVinted = document.getElementById('info-vinted-producto');
+    if (infoVinted) {
+        const datos = [item.condicion, item.color, item.categoriaVinted].filter(Boolean).map(escapeHtmlSafe).join(' · ');
+        const enlace = item.vintedUrl ? ` · <a href="${escapeHtmlSafe(item.vintedUrl)}" target="_blank" rel="noopener noreferrer" class="text-cyan-300 underline">ver en Vinted ↗</a>` : '';
+        infoVinted.innerHTML = (datos || enlace) ? `— ${datos}${enlace}` : '';
+    }
     document.getElementById('proveedor').value = item.proveedor || 'Sin definir';
     
     FOTOS_FORMULARIO_TEMP = [];
@@ -8941,6 +9281,10 @@ function cancelEdit() {
     document.getElementById('gastosEnvio').value = 0; document.getElementById('cantidad').value = 1;
     document.getElementById('gastoPromocion').value = 0;
     document.getElementById('canalVenta').value = "Vinted"; document.getElementById('comentariosProducto').value = "";
+    const campoDescripcion = document.getElementById('descripcion');
+    if (campoDescripcion) campoDescripcion.value = '';
+    const infoVinted = document.getElementById('info-vinted-producto');
+    if (infoVinted) infoVinted.innerHTML = '';
     document.getElementById('estado').value = "No Vendido";
     document.getElementById('proveedor').value = ""; setFormRating(0); calcularMargenComercialAlVuelo();
     cancelFoto();
@@ -9137,7 +9481,7 @@ async function confirmarVentaDesdeModal() {
             return fetch(`${BACKEND_URL}/api/ventas/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ ...datosVenta, proveedor: payload.proveedor }) });
         });
         const results = await Promise.all(promesas);
-        if (results.every(res => res && res.ok)) { cerrarModalPostVenta(true); await forceRefreshDataManual(); limpiarSeleccionMasiva(); } 
+        if (results.every(res => res && res.ok)) { cerrarModalPostVenta(true); await forceRefreshDataManual(true); limpiarSeleccionMasiva(); alRegistrarVentas(itemIds); }
         else { throw new Error('Fallo al actualizar uno o más artículos.'); }
     } catch (err) {
         alert('Error: ' + err.message);
@@ -9297,6 +9641,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ejecutarPasoInit('refrescarCitas', async () => refrescarCitas());
                 ejecutarPasoInit('actualizarBadgeCitasNav', async () => actualizarBadgeCitasNav());
                 ejecutarPasoInit('cargarNotasBoard', async () => cargarNotasBoard());
+                ejecutarPasoInit('avisosVinted', async () => actualizarContadorAvisosVinted());
                 actualizarVistaFotosFormulario();
                 poblarFiltroEstadosVentaAnalitica();
                 onCambiarPeriodoAnalitica();

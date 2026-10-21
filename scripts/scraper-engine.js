@@ -342,9 +342,11 @@ async function obtenerCookiesVinted(base, forzar = false) {
     const hit = COOKIES_VINTED.get(base);
     if (!forzar && hit && (Date.now() - hit.ts) < COOKIES_VINTED_TTL_MS) return hit.cookie;
     try {
+        // Solo necesitamos las cabeceras: cortamos la descarga de la portada (~1,7 MB).
         const response = await axios.get(`${base}/`, {
             timeout: 15000,
             maxRedirects: 5,
+            responseType: 'stream',
             validateStatus: () => true,
             headers: {
                 'User-Agent': DEFAULT_UA,
@@ -352,6 +354,7 @@ async function obtenerCookiesVinted(base, forzar = false) {
                 'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
             }
         });
+        try { response.data.destroy(); } catch (_) {}
         const cookie = cookiesDeRespuesta(response).join('; ');
         COOKIES_VINTED.set(base, { cookie, ts: Date.now() });
         return cookie;
@@ -831,9 +834,12 @@ function extraerDesdeDomCheerio($) {
     return deduplicarProductos(out);
 }
 
-async function extraerPorApiVinted(urlObjetivo) {
+// respondio = la API contestó con datos válidos (aunque el armario esté vacío):
+// sirve para distinguir "perfil sin prendas" de "Vinted nos bloquea".
+async function consultarApiVinted(urlObjetivo) {
     const userId = extraerMemberId(urlObjetivo);
-    if (!userId) return [];
+    if (!userId) return { productos: [], respondio: false };
+    let respondio = false;
 
     const base = baseVintedDesdeUrl(urlObjetivo);
     const referer = `${base}/member/${userId}`;
@@ -855,6 +861,7 @@ async function extraerPorApiVinted(urlObjetivo) {
                     { retries: 2, baseDelay: 700, factor: 2 }
                 );
 
+                if (Array.isArray(response.data?.items)) respondio = true;
                 const brutos = extraerItemsDePayload(response.data);
                 if (!brutos.length) break;
                 // Si la API no indica propietario no descartamos nada (el endpoint ya es del usuario).
@@ -870,10 +877,15 @@ async function extraerPorApiVinted(urlObjetivo) {
             const status = error?.response?.status || error.code || 'sin-status';
             console.log(`[SCRAPER] API ${ep.ruta} sin datos (${status}).`);
         }
-        if (out.length) return deduplicarProductos(out);
+        if (out.length) return { productos: deduplicarProductos(out), respondio: true };
+        if (respondio) break;
     }
 
-    return [];
+    return { productos: [], respondio };
+}
+
+async function extraerPorApiVinted(urlObjetivo) {
+    return (await consultarApiVinted(urlObjetivo)).productos;
 }
 
 async function extraerConPlaywright(urlObjetivo, session = null) {
@@ -1663,12 +1675,14 @@ async function enviarWebhook(payload, options) {
 async function scrapeVinted(url, options = {}) {
     const sharedSession = options.session || null;
     const deepMode = Boolean(options.deepMode || parseBoolEnv('SCRAPER_DEEP_MODE', false));
-    const resumen = { scripts: 0, ldjson: 0, dom: 0, api: 0, playwright: 0 };
+    const resumen = { scripts: 0, ldjson: 0, dom: 0, api: 0, playwright: 0, apiRespondio: false };
 
     // 1) API con sesión anónima: segundos por perfil y el armario completo paginado.
-    const porApi = await extraerPorApiVinted(url).catch(() => []);
-    resumen.api = porApi.length;
-    if (porApi.length > 0) return { productos: porApi, resumen };
+    const consulta = await consultarApiVinted(url).catch(() => ({ productos: [], respondio: false }));
+    resumen.api = consulta.productos.length;
+    resumen.apiRespondio = consulta.respondio;
+    // Armario leído (con o sin prendas): no hace falta nada más.
+    if (consulta.productos.length > 0 || consulta.respondio) return { productos: consulta.productos, resumen };
 
     // 2) HTML estático (JSON incrustado, ld+json o DOM). Si Vinted lo bloquea, seguimos.
     let productos = [];
@@ -1699,8 +1713,8 @@ async function scrapeVinted(url, options = {}) {
     }
 
     // 3) Navegador real: el HTML solo trae la primera tanda, así que en modo profundo
-    //    también se usa aunque haya encontrado algo.
-    if (deepMode || productos.length < 3) {
+    //    también se usa aunque haya encontrado algo. (sinNavegador: escaneo rápido en el servidor web)
+    if (!options.sinNavegador && (deepMode || productos.length < 3)) {
         const porPlaywright = await extraerConPlaywright(url, sharedSession);
         resumen.playwright = porPlaywright.length;
         productos = deduplicarProductos([...productos, ...porPlaywright]);

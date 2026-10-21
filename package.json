@@ -20,7 +20,7 @@
     "express-session": "^1.19.0",
     "google-auth-library": "^10.9.0",
     "mongoose": "^9.7.3",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^10.1.7",
     "socket.io": "^4.7.5"
   },
   "devDependencies": {

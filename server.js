@@ -14,7 +14,7 @@ const nodemailer = require('nodemailer');
 const http = require('http');
 const { Server } = require('socket.io');
 const vision = require('@google-cloud/vision');
-const { scrapeMonopolio } = require('./scripts/scraper-engine');
+const { scrapeMonopolio, scrapeVinted } = require('./scripts/scraper-engine');
 
 const app = express();
 const server = http.createServer(app);
@@ -154,6 +154,60 @@ async function lanzarScraperUnificadoGithub({
         },
         logTag
     });
+}
+
+// --- Disponibilidad de GitHub Actions ---
+// Con la cuenta de GitHub bloqueada (facturación) o sin minutos, el dispatch se acepta pero
+// el job muere en segundos sin ejecutar ningún paso. Lo detectamos y escaneamos desde aquí.
+const GITHUB_PAUSA_TRAS_FALLO_MS = 30 * 60 * 1000;
+let GITHUB_ACTIONS_NO_DISPONIBLE_HASTA = 0;
+
+function githubActionsDisponible() {
+    return Boolean(process.env.GITHUB_PAT) && Date.now() > GITHUB_ACTIONS_NO_DISPONIBLE_HASTA;
+}
+
+function marcarGithubNoDisponible(motivo) {
+    GITHUB_ACTIONS_NO_DISPONIBLE_HASTA = Date.now() + GITHUB_PAUSA_TRAS_FALLO_MS;
+    console.warn(`[GITHUB] Actions no disponible (${motivo}). Durante 30 min se escanea desde el servidor.`);
+}
+
+// true si algún run lanzado desde `desdeMs` terminó en fallo sin llegar a ejecutar ningún paso.
+async function hayRunsGithubQueNoArrancaron(desdeMs) {
+    const owner = process.env.GITHUB_OWNER || 'dannymedinacoronel';
+    const repo = process.env.GITHUB_REPO || 'app_tienda';
+    const headers = { Authorization: `token ${process.env.GITHUB_PAT}`, Accept: 'application/vnd.github.v3+json' };
+    const { data } = await axios.get(`https://api.github.com/repos/${owner}/${repo}/actions/workflows/vinted-scraper.yml/runs`, {
+        params: { event: 'workflow_dispatch', per_page: 20 },
+        headers,
+        timeout: 10000
+    });
+    const fallidos = (data?.workflow_runs || []).filter((run) => (
+        new Date(run.created_at).getTime() >= desdeMs - 15000
+        && run.status === 'completed'
+        && run.conclusion === 'failure'
+    ));
+    for (const run of fallidos) {
+        const jobs = await axios.get(run.jobs_url, { headers, timeout: 10000 });
+        if ((jobs.data?.jobs || []).some((job) => !Array.isArray(job.steps) || job.steps.length === 0)) return true;
+    }
+    return false;
+}
+
+// Tras lanzar en GitHub comprobamos (a los ~25 s y ~70 s) que los jobs arrancan de verdad.
+function vigilarArranqueGithub(desdeMs, alNoArrancar) {
+    const comprobar = async (intento) => {
+        try {
+            if (await hayRunsGithubQueNoArrancaron(desdeMs)) {
+                marcarGithubNoDisponible('los jobs no arrancan: cuenta de GitHub bloqueada o sin minutos');
+                alNoArrancar();
+                return;
+            }
+        } catch (error) {
+            console.warn('[GITHUB] No se pudo comprobar el estado de Actions:', error.message);
+        }
+        if (intento < 2) setTimeout(() => comprobar(intento + 1), 45000);
+    };
+    setTimeout(() => comprobar(1), 25000);
 }
 
 const KPI_CACHE_TTL_MS = Math.max(10000, Math.min(parseInt(process.env.KPI_CACHE_TTL_MS, 10) || 15000, 20000));
@@ -1677,6 +1731,17 @@ app.post('/api/public/citas', async (req, res) => {
     }
 });
 
+// Salud del servicio: para el health check de Render y para pingers que eviten que se duerma.
+app.get('/api/health', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+        ok: true,
+        uptimeSeg: Math.round(process.uptime()),
+        mongo: mongoose.connection.readyState === 1,
+        githubActions: githubActionsDisponible() ? 'disponible' : 'no-disponible'
+    });
+});
+
 app.get('/api/auth/verificar', (req, res) => {
     if (req.session && req.session.esAdmin) {
         const rol = rolActual(req);
@@ -1694,21 +1759,33 @@ function esperar(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// En el servidor web limitamos el tamaño de cada análisis para no saturar la instancia.
+const MONOPOLIO_LOCAL_MAX_CUENTAS = Math.max(5, Math.min(parseInt(process.env.MONOPOLIO_LOCAL_MAX_CUENTAS, 10) || 120, 400));
+const MONOPOLIO_LOCAL_EN_CURSO = new Set();
+
 function lanzarFallbackMonopolioLocal(empresa, items = []) {
-    const lista = Array.isArray(items) ? items.filter(i => i?.url) : [];
+    const lista = (Array.isArray(items) ? items.filter(i => i?.url) : [])
+        .filter((item) => !MONOPOLIO_LOCAL_EN_CURSO.has(`${empresa}|${normalizarUrlObjetivo(item.url)}`));
     if (lista.length === 0) return;
+    lista.forEach((item) => MONOPOLIO_LOCAL_EN_CURSO.add(`${empresa}|${normalizarUrlObjetivo(item.url)}`));
 
     setTimeout(async () => {
         for (const item of lista) {
+            const urlOrigen = normalizarUrlObjetivo(item.url);
             try {
-                const urlOrigen = normalizarUrlObjetivo(item.url);
                 const alias = String(item.alias || sugerirAliasDesdeUrl(urlOrigen)).trim() || urlOrigen;
-                const resultado = await scrapeMonopolio(urlOrigen, alias);
+                const resultado = await scrapeMonopolio(urlOrigen, alias, {
+                    maxProfiles: MONOPOLIO_LOCAL_MAX_CUENTAS,
+                    timeBudgetMs: 90000
+                });
+                const grupos = Array.isArray(resultado?.grupos) ? resultado.grupos : [];
+                const gruposConProductos = grupos.some((g) => Array.isArray(g?.productos) && g.productos.length);
 
                 emitirEventoScraper(empresa, 'monopolio_update', {
                     mensaje: `Scraping local finalizado para ${alias}.`,
-                    productos: Array.isArray(resultado?.productos) ? resultado.productos : [],
-                    grupos: Array.isArray(resultado?.grupos) ? resultado.grupos : [],
+                    // Los grupos ya contienen los productos: no duplicamos la lista plana.
+                    productos: gruposConProductos ? [] : (Array.isArray(resultado?.productos) ? resultado.productos : []),
+                    grupos,
                     esModoSeguidos: Boolean(resultado?.esModoSeguidos),
                     exploracion: resultado?.exploracion || null,
                     urlOrigen,
@@ -1726,11 +1803,39 @@ function lanzarFallbackMonopolioLocal(empresa, items = []) {
                     origen: 'fallback-local',
                     timestamp: new Date()
                 });
+            } finally {
+                MONOPOLIO_LOCAL_EN_CURSO.delete(`${empresa}|${urlOrigen}`);
             }
 
             await esperar(350);
         }
     }, 25);
+}
+
+// Escaneo de un perfil desde el propio servidor (API de Vinted con sesión, sin navegador).
+// Devuelve el evento emitido, o null si Vinted no respondió y conviene probar con GitHub.
+async function escanearPerfilEnServidor(empresa, url, alias) {
+    try {
+        const { productos, resumen } = await scrapeVinted(url, { sinNavegador: true });
+        const parcial = !resumen.apiRespondio;
+        // Sin respuesta de la API solo tenemos (como mucho) la primera tanda del HTML:
+        // si GitHub está disponible, preferimos su escaneo completo con navegador.
+        if (parcial && (!productos.length || githubActionsDisponible())) return null;
+        const aliasProveedor = String(alias || 'Vinted').trim().slice(0, 80) || 'Vinted';
+        const conAlias = productos.map((p) => ({ ...p, proveedor: aliasProveedor, cuenta: aliasProveedor, origenGrupo: aliasProveedor }));
+        console.log(`[SCRAPER-LOCAL] ${url} -> ${conAlias.length} productos${parcial ? ' (parcial)' : ''}`);
+        return emitirEventoScraper(empresa, 'scraper_update', {
+            mensaje: `Escaneo completado en el servidor: ${conAlias.length} productos.`,
+            productos: conAlias,
+            empresa,
+            urlOrigen: url,
+            origen: 'servidor',
+            timestamp: new Date()
+        });
+    } catch (error) {
+        console.warn(`[SCRAPER-LOCAL] ${url}: ${error.message}`);
+        return null;
+    }
 }
 
 
@@ -3296,6 +3401,18 @@ app.get(/^\/(?!api(?:\/|$)).*/, (req, res) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto: ${PORT}`));
 
+// Render envía SIGTERM a la instancia vieja en cada despliegue: dejamos terminar lo que
+// esté en curso (máx. 10 s) en vez de cortar peticiones a mitad.
+function apagarConGracia(senal) {
+    console.log(`[SERVER] ${senal} recibido: cerrando conexiones...`);
+    setTimeout(() => process.exit(0), 10000).unref();
+    io.close(() => {
+        mongoose.connection.close().catch(() => {}).finally(() => process.exit(0));
+    });
+}
+process.once('SIGTERM', () => apagarConGracia('SIGTERM'));
+process.once('SIGINT', () => apagarConGracia('SIGINT'));
+
 
 //SCRIPT DE SCRAPING
 
@@ -3313,24 +3430,49 @@ server.listen(PORT, () => console.log(`[SERVER] Seychelles Core Activo en puerto
 app.post('/api/scraper/analizar', exigeAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
-        const { url, alias } = req.body;
+        const { url, alias } = req.body || {};
         if (!url) return res.status(400).json({ error: 'URL de Vinted requerida.' });
 
         const aliasLimpio = String(alias || '').trim() || 'Vinted';
+        const urlNormalizada = normalizarUrlObjetivo(url);
+        const serverTime = Date.now();
+
+        // 1) Directo desde el servidor: la API de Vinted responde en segundos y no depende de GitHub.
+        const eventoLocal = await escanearPerfilEnServidor(empresa, urlNormalizada, aliasLimpio);
+        if (eventoLocal) {
+            return res.json({ success: true, local: true, serverTime, evento: eventoLocal, mensaje: eventoLocal.mensaje });
+        }
+
+        // 2) Respaldo: GitHub Actions con navegador real (si Vinted no respondió al servidor).
+        if (!githubActionsDisponible()) {
+            return res.status(503).json({
+                error: process.env.GITHUB_PAT
+                    ? 'Vinted no respondió al servidor y GitHub Actions no está arrancando los escaneos (revisa la facturación de tu cuenta de GitHub). Inténtalo de nuevo en unos minutos.'
+                    : 'Vinted no respondió al servidor y no hay GITHUB_PAT configurado para usar GitHub Actions como respaldo.'
+            });
+        }
 
         await lanzarScraperUnificadoGithub({
             mode: 'manual',
-            targetUrl: url,
+            targetUrl: urlNormalizada,
             empresa,
             alias: aliasLimpio,
             webhookPath: '/api/scraper/webhook-github',
             logTag: 'GITHUB-UNIFIED-MANUAL'
         });
+        vigilarArranqueGithub(serverTime, () => {
+            emitirEventoScraper(empresa, 'scraper_update', {
+                error: 'GitHub Actions no llegó a arrancar el escaneo (cuenta de GitHub bloqueada por facturación o sin minutos) y Vinted no respondió al servidor.',
+                empresa,
+                urlOrigen: urlNormalizada,
+                timestamp: new Date()
+            });
+        });
 
-        res.json({ 
-            success: true, 
-            serverTime: Date.now(),
-            mensaje: 'GitHub está iniciando el escaneo sin bloqueos. Recibirás un aviso en esta pantalla en 1-2 minutos cuando termine.' 
+        res.json({
+            success: true,
+            serverTime,
+            mensaje: 'GitHub está iniciando el escaneo sin bloqueos. Recibirás un aviso en esta pantalla en 1-2 minutos cuando termine.'
         });
 
     } catch (error) {
@@ -4219,6 +4361,46 @@ app.delete('/api/monopolio/urls/:id', exigeAdmin, async (req, res) => {
     }
 });
 
+// Lanza cada URL de Monopolio en GitHub Actions. Lo que no se pueda lanzar, o todo si
+// GitHub no arranca los jobs (cuenta bloqueada, sin minutos...), se analiza desde el servidor.
+async function despacharMonopolio(empresa, items) {
+    const serverTime = Date.now();
+    if (!githubActionsDisponible()) {
+        lanzarFallbackMonopolioLocal(empresa, items);
+        return { serverTime, lanzadas: 0, errores: [], fallbackItems: items, soloServidor: true };
+    }
+
+    let lanzadas = 0;
+    const errores = [];
+    const lanzadasOk = [];
+    for (const item of items) {
+        try {
+            await lanzarScraperUnificadoGithub({
+                mode: 'monopolio',
+                targetUrl: item.url,
+                empresa,
+                alias: item.alias,
+                webhookPath: '/api/monopolio/webhook-github',
+                logTag: 'GITHUB-UNIFIED-MONOPOLIO'
+            });
+            lanzadas += 1;
+            lanzadasOk.push(item);
+        } catch (errItem) {
+            errores.push({
+                url: item.url,
+                alias: item.alias || item.url,
+                detalle: errItem?.response?.data?.message || errItem?.response?.data?.error || errItem.message || 'error desconocido'
+            });
+        }
+        await esperar(400);
+    }
+
+    const fallbackItems = errores.map((e) => ({ url: e.url, alias: e.alias || e.url }));
+    if (fallbackItems.length > 0) lanzarFallbackMonopolioLocal(empresa, fallbackItems);
+    if (lanzadasOk.length > 0) vigilarArranqueGithub(serverTime, () => lanzarFallbackMonopolioLocal(empresa, lanzadasOk));
+    return { serverTime, lanzadas, errores, fallbackItems, soloServidor: false };
+}
+
 // Endpoint para disparar el scraping de todas las URLs guardadas
 app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
     try {
@@ -4229,44 +4411,22 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
             return res.status(400).json({ error: 'No hay URLs guardadas para scrapear.' });
         }
 
-        let lanzadas = 0;
-        const errores = [];
-
-        for (const item of urls) {
-            try {
-                await lanzarScraperUnificadoGithub({
-                    mode: 'monopolio',
-                    targetUrl: item.url,
-                    empresa,
-                    alias: String(item.alias || '').trim() || sugerirAliasDesdeUrl(item.url),
-                    webhookPath: '/api/monopolio/webhook-github',
-                    logTag: 'GITHUB-UNIFIED-MONOPOLIO'
-                });
-                lanzadas += 1;
-            } catch (errItem) {
-                errores.push({
-                    url: item.url,
-                    alias: item.alias || item.url,
-                    detalle: errItem?.response?.data?.message || errItem?.response?.data?.error || errItem.message || 'error desconocido'
-                });
-            }
-            await esperar(400);
-        }
-
-        const fallbackItems = errores.map((e) => ({ url: e.url, alias: e.alias || e.url }));
-        if (fallbackItems.length > 0) {
-            lanzarFallbackMonopolioLocal(empresa, fallbackItems);
-        }
+        const { serverTime, lanzadas, errores, fallbackItems, soloServidor } = await despacharMonopolio(
+            empresa,
+            urls.map((item) => ({ url: item.url, alias: String(item.alias || '').trim() || sugerirAliasDesdeUrl(item.url) }))
+        );
 
         if (lanzadas === 0 && fallbackItems.length > 0) {
             return res.json({
                 success: true,
-                serverTime: Date.now(),
+                serverTime,
                 lanzadas: 0,
                 lanzadasLocal: fallbackItems.length,
                 fallidas: 0,
                 detallesFallos: [],
-                message: `GitHub no respondió. Se lanzó fallback local para ${fallbackItems.length} URL(s).`
+                message: soloServidor
+                    ? `GitHub Actions no está disponible: analizando ${fallbackItems.length} URL(s) desde el servidor.`
+                    : `GitHub no respondió. Se analizan ${fallbackItems.length} URL(s) desde el servidor.`
             });
         }
 
@@ -4279,7 +4439,7 @@ app.post('/api/monopolio/scrape-all', exigeAdmin, async (req, res) => {
 
         res.json({
             success: true,
-            serverTime: Date.now(),
+            serverTime,
             lanzadas,
             lanzadasLocal: fallbackItems.length,
             fallidas: errores.length,
@@ -4326,45 +4486,20 @@ app.post('/api/monopolio/scrape-selected', exigeAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Máximo 25 URLs por ejecución en modo sin guardar.' });
         }
 
-        let lanzadas = 0;
-        const errores = [];
-
-        for (const item of normalizadas) {
-            try {
-                await lanzarScraperUnificadoGithub({
-                    mode: 'monopolio',
-                    targetUrl: item.url,
-                    empresa,
-                    alias: item.alias,
-                    webhookPath: '/api/monopolio/webhook-github',
-                    logTag: 'GITHUB-UNIFIED-MONOPOLIO'
-                });
-                lanzadas += 1;
-            } catch (errItem) {
-                errores.push({
-                    url: item.url,
-                    alias: item.alias || item.url,
-                    detalle: errItem?.response?.data?.message || errItem?.response?.data?.error || errItem.message || 'error desconocido'
-                });
-            }
-            await esperar(400);
-        }
-
-        const fallbackItems = errores.map((e) => ({ url: e.url, alias: e.alias || e.url }));
-        if (fallbackItems.length > 0) {
-            lanzarFallbackMonopolioLocal(empresa, fallbackItems);
-        }
+        const { serverTime, lanzadas, errores, fallbackItems, soloServidor } = await despacharMonopolio(empresa, normalizadas);
 
         if (lanzadas === 0 && fallbackItems.length > 0) {
             return res.json({
                 success: true,
-                serverTime: Date.now(),
+                serverTime,
                 lanzadas: 0,
                 lanzadasLocal: fallbackItems.length,
                 fallidas: 0,
                 detallesFallos: [],
                 totalSolicitadas: normalizadas.length,
-                message: `GitHub no respondió. Fallback local iniciado para ${fallbackItems.length} URL(s).`
+                message: soloServidor
+                    ? `GitHub Actions no está disponible: analizando ${fallbackItems.length} URL(s) desde el servidor.`
+                    : `GitHub no respondió. Se analizan ${fallbackItems.length} URL(s) desde el servidor.`
             });
         }
 
@@ -4377,7 +4512,7 @@ app.post('/api/monopolio/scrape-selected', exigeAdmin, async (req, res) => {
 
         res.json({
             success: true,
-            serverTime: Date.now(),
+            serverTime,
             lanzadas,
             lanzadasLocal: fallbackItems.length,
             fallidas: errores.length,

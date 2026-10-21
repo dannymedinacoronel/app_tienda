@@ -66,8 +66,8 @@ let DRAG_PREVIEW_NODE = null;
 let KANBAN_TIENDAS_COLAPSADAS = {};
 
 const SCRAPER_PROGRESS_MESSAGES = [
-    'Conectando con GitHub Actions...',
-    'Iniciando worker remoto anti-bloqueo...',
+    'Conectando con Vinted...',
+    'Leyendo el armario completo...',
     'Cargando contenido de Vinted...',
     'Detectando productos y precios...',
     'Comparando con inventario en MongoDB...',
@@ -1014,7 +1014,7 @@ function iniciarAnimacionCargaScraper(modo = 'vinted') {
 
     actualizarCargaScraper(
         4,
-        modo === 'archivo' ? 'Leyendo archivo y limpiando datos...' : 'Preparando conexión segura con el scraper remoto...',
+        modo === 'archivo' ? 'Leyendo archivo y limpiando datos...' : 'Preparando el escaneo...',
         'Inicializando'
     );
 
@@ -1771,6 +1771,14 @@ async function iniciarScraping() {
 
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Error al conectar con el servidor.');
+
+        // Escaneo hecho directamente en el servidor: el resultado ya viene en la respuesta
+        // (si también llegó por socket, el eventoId evita procesarlo dos veces).
+        if (data.local && data.evento) {
+            actualizarCargaScraper(90, 'Productos recibidos, comparando con tu inventario...', 'Procesando resultados');
+            await procesarEventoScraper(data.evento);
+            return;
+        }
 
         // 🚀 Si el servidor nos dice que ha lanzado GitHub, avisamos y esperamos
         if (data.success && data.mensaje) {

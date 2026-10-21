@@ -1,0 +1,26 @@
+name: Keep Render Awake
+
+# En el plan gratuito, Render duerme el servicio tras 15 min sin visitas y la siguiente
+# carga tarda 30-60 s. Un ping cada 10 min en horario de uso (aprox. 07:00-00:00 en España)
+# lo mantiene despierto sin gastar las horas gratuitas de noche.
+on:
+  schedule:
+    - cron: '*/10 6-22 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Ping /api/health
+        env:
+          MY_WEB_URL: ${{ secrets.MY_WEB_URL }}
+        run: |
+          if [ -z "$MY_WEB_URL" ]; then
+            echo "MY_WEB_URL no configurado: nada que despertar."
+            exit 0
+          fi
+          URL="${MY_WEB_URL%/}"
+          URL="${URL%/api}"
+          curl -fsS --max-time 90 --retry 2 --retry-delay 10 "$URL/api/health" || echo "El servicio no respondió (puede estar arrancando)."

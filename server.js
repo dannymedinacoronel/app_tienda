@@ -9,11 +9,9 @@ const fs = require('fs');
 const crypto = require('crypto');
 const compression = require('compression');
 const axios = require('axios');
-const cheerio = require('cheerio');
 const nodemailer = require('nodemailer');
 const http = require('http');
 const { Server } = require('socket.io');
-const vision = require('@google-cloud/vision');
 const { scrapeMonopolio, scrapeVinted, obtenerFichaItemVinted, ejecutarConConcurrencia } = require('./scripts/scraper-engine');
 
 const app = express();
@@ -27,21 +25,6 @@ if (!GOOGLE_CLIENT_ID) {
 }
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
-let visionClient;
-if (process.env.GOOGLE_API_KEY) {
-    visionClient = new vision.ImageAnnotatorClient({
-        key: process.env.GOOGLE_API_KEY.trim()
-    });
-    console.log('\x1b[32m[OK]\x1b[0m Cliente de Google Vision inicializado con API Key.');
-} else if (process.env.GOOGLE_CREDENTIALS_JSON) {
-    try {
-        const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
-        visionClient = new vision.ImageAnnotatorClient({ credentials });
-        console.log('\x1b[32m[OK]\x1b[0m Cliente de Google Vision inicializado con Cuenta de Servicio.');
-    } catch (e) {
-        console.error('\x1b[31m[ERROR]\x1b[0m Fallo al parsear GOOGLE_CREDENTIALS_JSON:', e.message);
-    }
-}
 
 const isProd = process.env.NODE_ENV === 'production';
 const EMPRESA_DEFAULT = String(process.env.APP_EMPRESA_DEFAULT || 'seychelles').trim().toLowerCase();
@@ -264,6 +247,27 @@ const TiendaSchema = new mongoose.Schema({
 });
 TiendaSchema.index({ empresa: 1, nombre: 1 }, { unique: true });
 const Tienda = mongoose.models.Tienda || mongoose.model('Tienda', TiendaSchema);
+
+// Opciones de "Comprobar ventas en Vinted" de cada empresa (las guarda el Admin desde la app).
+const ConfigVintedSchema = new mongoose.Schema({
+    empresa: { type: String, required: true, unique: true, trim: true, lowercase: true },
+    avisar: {
+        vendido: { type: Boolean, default: true },
+        no_visible: { type: Boolean, default: true },
+        eliminado: { type: Boolean, default: true }
+    },
+    registrarVendidosAuto: { type: Boolean, default: false },
+    autoCadaHoras: { type: Number, default: 0 }, // 0 = solo cuando se pulsa el botón
+    maxAnuncios: { type: Number, default: 80 },
+    completarFichas: { type: Boolean, default: true },
+    avisoVoz: { type: Boolean, default: true },
+    ultimaComprobacion: { type: Date, default: null },
+    ultimaComprobacionPor: { type: String, default: '' },
+    ultimoResumen: { type: Object, default: null },
+    actualizadoPor: { type: String, default: '' },
+    actualizadoEn: { type: Date, default: Date.now }
+});
+const ConfigVinted = mongoose.models.ConfigVinted || mongoose.model('ConfigVinted', ConfigVintedSchema);
 
 const CategoriaSchema = new mongoose.Schema({
     nombre: { type: String, required: true, trim: true },
@@ -519,40 +523,6 @@ const UiGodUserAccessSchema = new mongoose.Schema({
 UiGodUserAccessSchema.index({ empresa: 1, userEmail: 1 }, { unique: true });
 const UiGodUserAccess = mongoose.models.UiGodUserAccess || mongoose.model('UiGodUserAccess', UiGodUserAccessSchema);
 
-function normalizarSeccionesInput(lista) {
-    const inList = Array.isArray(lista) ? lista : [];
-    const dedupe = new Set();
-    const out = [];
-    for (const raw of inList) {
-        const sec = String(raw || '').trim();
-        if (!UI_SECTION_KEYS.includes(sec)) continue;
-        if (dedupe.has(sec)) continue;
-        dedupe.add(sec);
-        out.push(sec);
-    }
-    return out;
-}
-
-function normalizarOrdenSecciones(lista) {
-    const parsed = normalizarSeccionesInput(lista);
-    const faltantes = UI_SECTION_KEYS.filter(sec => !parsed.includes(sec));
-    return [...parsed, ...faltantes];
-}
-
-function esColorHexValido(valor, fallback) {
-    const v = String(valor || '').trim();
-    return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback;
-}
-
-function limpiarTabLabels(labels) {
-    const raw = labels && typeof labels === 'object' ? labels : {};
-    const out = {};
-    UI_SECTION_KEYS.forEach((sec) => {
-        if (raw[sec] === undefined || raw[sec] === null) return;
-        out[sec] = String(raw[sec]).trim().slice(0, 40);
-    });
-    return out;
-}
 
 const ADMIN_WHITELIST = (process.env.ADMIN_WHITELIST || 'dannymedinacoronel@gmail.com,juliamugo2001@gmail.com').split(',').map(e => e.trim().toLowerCase());
 
@@ -1170,23 +1140,6 @@ async function obtenerUbicacionCompleta(ip, clientLocation) {
     return locationData;
 }
 
-// --- Utilidades de Imagen ---
-async function downloadAndConvertToBase64(url) {
-    if (!url || !url.startsWith('http')) return url || '';
-    try {
-        const response = await axios.get(url, { 
-            responseType: 'arraybuffer', 
-            timeout: 8000,
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
-        });
-        const contentType = response.headers['content-type'];
-        const base64 = Buffer.from(response.data, 'binary').toString('base64');
-        return `data:${contentType};base64,${base64}`;
-    } catch (error) {
-        console.error(`[IMAGE] Error descargando imagen: ${url}`, error.message);
-        return url; // Retornamos la URL original si falla la conversión
-    }
-}
 
 // --- Fotos servidas por URL en vez de incrustadas en el JSON ---
 // Las fotos se guardan como data URL base64 dentro de cada producto. Mandarlas en cada
@@ -2365,23 +2318,6 @@ function normalizarProductoIA(producto = {}, codigo = '') {
     return { prenda, categoria, precioVenta, marca, descripcion, talla, condicion, skuSugerido };
 }
 
-function extraerJsonDeTexto(texto) {
-    const raw = String(texto || '').trim();
-    if (!raw) return null;
-
-    const fenced = raw.match(/```json\s*([\s\S]*?)```/i);
-    if (fenced && fenced[1]) {
-        try { return JSON.parse(fenced[1]); } catch (_) {}
-    }
-
-    const first = raw.indexOf('{');
-    const last = raw.lastIndexOf('}');
-    if (first >= 0 && last > first) {
-        try { return JSON.parse(raw.slice(first, last + 1)); } catch (_) {}
-    }
-
-    return null;
-}
 
 // Lookup de codigo (barcode/QR SKU) para autocompletar formulario
 app.get('/api/producto/lookup-codigo/:codigo', exigeAdmin, async (req, res) => {
@@ -2448,73 +2384,6 @@ app.get('/api/producto/lookup-codigo/:codigo', exigeAdmin, async (req, res) => {
     }
 });
 
-// Analisis de foto para generar sugerencias de producto sin modificar la base de datos.
-app.post('/api/producto/analizar-foto', exigeAdmin, async (req, res) => {
-    if (!visionClient) {
-        return res.status(503).json({ error: 'El servicio de análisis de imagen no está configurado en el servidor.' });
-    }
-
-    try {
-        const imagen = String(req.body?.imagen || '').trim();
-        const codigo = sanitizarCodigoProducto(req.body?.codigo || '');
-        if (!imagen) return res.status(400).json({ error: 'Imagen vacía.' });
-
-        // Google Vision necesita el base64 puro, sin el prefijo "data:image/jpeg;base64,"
-        const imageBase64 = imagen.split(';base64,').pop();
-
-        const request = {
-            image: { content: imageBase64 },
-            features: [{ type: 'LABEL_DETECTION', maxResults: 10 }, { type: 'TEXT_DETECTION' }],
-        };
-
-        const [result] = await visionClient.annotateImage(request);
-        const labels = result.labelAnnotations;
-        const textAnnotations = result.textAnnotations;
-
-        let productoSugerido = {};
-
-        if (labels && labels.length > 0) {
-            const traducciones = {
-                't-shirt': 'Camiseta', 'shirt': 'Camisa', 'jeans': 'Vaqueros', 'trousers': 'Pantalones',
-                'pants': 'Pantalones', 'dress': 'Vestido', 'skirt': 'Falda', 'jacket': 'Chaqueta',
-                'coat': 'Abrigo', 'sneakers': 'Zapatillas', 'shoes': 'Zapatos', 'footwear': 'Calzado',
-                'bag': 'Bolso', 'handbag': 'Bolso', 'hoodie': 'Sudadera', 'sweater': 'Jersey',
-                'clothing': 'Ropa', 'outerwear': 'Ropa de abrigo'
-            };
-
-            const topLabel = labels[0].description.toLowerCase();
-            const prendaSugerida = traducciones[topLabel] || labels[0].description;
-            
-            productoSugerido.prenda = prendaSugerida;
-            productoSugerido.categoria = inferirCategoriaPorTexto(prendaSugerida);
-            productoSugerido.descripcion = `Detectado: ${labels.slice(0, 5).map(l => l.description).join(', ')}.`;
-        } else {
-            productoSugerido.prenda = 'Artículo fotografiado';
-            productoSugerido.categoria = 'General';
-        }
-
-        if (textAnnotations && textAnnotations.length > 0) {
-            const textoCompleto = textAnnotations[0].description.toLowerCase();
-            const marcasConocidas = ['nike', 'adidas', 'zara', 'levi\'s', 'puma', 'gucci', 'prada', 'mango', 'bershka', 'stradivarius'];
-            for (const marca of marcasConocidas) {
-                if (textoCompleto.includes(marca)) {
-                    productoSugerido.marca = marca.charAt(0).toUpperCase() + marca.slice(1);
-                    break;
-                }
-            }
-        }
-
-        return res.json({
-            fuente: 'google-vision',
-            producto: normalizarProductoIA(productoSugerido, codigo)
-        });
-
-    } catch (error) {
-        console.error('[GOOGLE-VISION] Error analizando la foto:', error.message);
-        res.status(500).json({ error: 'Error analizando la foto con Google Vision.' });
-    }
-});
-
 // Autocompletado para nombres de producto
 app.get('/api/productos/sugerir-nombre', exigeAdmin, async (req, res) => {
     try {
@@ -2572,171 +2441,6 @@ app.delete('/api/estados-kanban/:id', exigeAdmin, async (req, res) => {
         const estado = await EstadoKanban.findOneAndDelete({ _id: req.params.id, empresa });
         if(estado) await registrarLog(req.session.email, `Eliminó el estado Kanban: ${estado.nombre}`); res.sendStatus(200);
     } catch (e) { res.status(500).send(e); }
-});
-
-// --- Ruta del Asistente IA (Together AI - Llama 3) ---
-app.post('/api/chat', exigeAdmin, async (req, res) => {
-    const { mensaje, imagen } = req.body;
-    if (!mensaje && !imagen) return res.status(400).json({ error: 'Mensaje vacío' });
-    const empresa = empresaActual(req);
-
-    const apiKey = (process.env.TOGETHER_API_KEY || '').replace(/['"]/g, '').trim();
-    
-    // Fallback amigable si el usuario aún no ha configurado la API Key
-    if (!apiKey) {
-        return res.json({
-            respuesta: "He migrado a un nuevo motor de IA más estable: **Together AI**. Para activarme, crea una cuenta gratuita en **api.together.ai**, genera una clave y pégala en la variable de entorno `TOGETHER_API_KEY` en Render. ¡Te dan 25$ de crédito gratis que duran meses!"
-        });
-    }
-
-    try {
-        // 1. Damos visión del inventario a la IA para que pueda analizarlo (Máx 150 items recientes)
-        const productos = await VentaRopa.find({ empresa }).select('sku prenda estado precioVenta cantidad').limit(150).lean();
-        const inventarioContexto = productos.map(p => `[SKU: ${p.sku || 'N/A'}] ${p.prenda} (${p.cantidad} ud) - ${p.estado} - ${p.precioVenta}€`).join('\n');
-
-        // Le damos personalidad y contexto a la IA
-        const promptSistema = `Eres Seychelles AI, asistente ERP y gerente virtual de la tienda.
-Respuestas extremadamente breves y amigables.
-Inventario actual para análisis:
-${inventarioContexto || 'Inventario vacío.'}
-
-¡TIENES PERMISOS DE ADMINISTRADOR! Puedes ejecutar acciones reales en la base de datos respondiendo EXACTAMENTE con este formato en una línea nueva al final de tu texto:
-[ACCION: comando | param1: valor | param2: valor]
-
-Comandos permitidos:
-1. ACTUALIZAR_PRECIO -> params: sku, precio
-2. CAMBIAR_ESTADO -> params: sku, estado
-3. BORRAR_PRODUCTO -> params: sku
-4. CREAR_PRODUCTO -> params: prenda, precio, categoria
-5. PREPARAR_FACTURA -> params: cliente, sku
-
-Ejemplo: Si te piden cambiar precio de VNT-123 a 20 euros, responde:
-Claro, he actualizado el precio a 20€.
-[ACCION: ACTUALIZAR_PRECIO | sku: VNT-123 | precio: 20]
-
-Ejemplo: Si te piden hacer una factura a Pedro del producto 999:
-[ACCION: PREPARAR_FACTURA | cliente: Pedro | sku: 999]
-
-Si el usuario te envía una FOTO de ropa y pide registrarla/añadirla al stock, inventa un buen título SEO, un precio estimado de venta de mercado y una categoría, y responde:
-[ACCION: CREAR_PRODUCTO | prenda: Camiseta Nike Vintage 90s | precio: 35 | categoria: Camisetas]`;
-        
-        let userContent = mensaje || "Revisa esta imagen y dime qué prenda es.";
-
-        if (imagen) {
-            userContent = [
-                { type: "text", text: userContent },
-                { type: "image_url", image_url: { url: imagen } }
-            ];
-        }
-
-        const endpoints = [
-            { id: "google/gemini-2.0-flash-lite-preview-02-05:free", vision: true },
-            { id: "meta-llama/llama-3.2-11b-vision-instruct:free", vision: true },
-            { id: "qwen/qwen-vl-plus:free", vision: true },
-            { id: "deepseek/deepseek-r1:free", vision: false },
-            { id: "meta-llama/llama-3.1-8b-instruct:free", vision: false },
-            { id: "mistralai/mistral-7b-instruct:free", vision: false }
-        ];
-
-        let iaData = null;
-        let lastErrorMsg = "Error desconocido.";
-        let rateLimitExcedido = false;
-
-        for (const ep of endpoints) {
-            try {
-                let currentContent = userContent;
-                // Si el modelo de respaldo no soporta fotos, enviamos solo texto para evitar un crash
-                if (!ep.vision && imagen) currentContent = mensaje || "Por favor, responde basándote en los datos de la base de datos.";
-
-                const payload = {
-                    model: ep.id,
-                    messages: [
-                        { role: "system", content: promptSistema },
-                        { role: "user", content: currentContent }
-                    ],
-                    temperature: 0.5,
-                    max_tokens: 2000
-                };
-
-                const apiRes = await axios.post(
-                    'https://openrouter.ai/api/v1/chat/completions',
-                    payload,
-                    { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://seychelles-shop.com', 'X-Title': 'Seychelles Core' }, timeout: 15000 }
-                );
-                iaData = apiRes.data;
-                console.log(`[IA INFO] Éxito con OpenRouter usando el modelo: ${ep.id}`);
-                break; // Si funciona, rompemos el bucle y continuamos
-            } catch (err) {
-                lastErrorMsg = err.response?.data?.error?.message || err.message;
-                console.warn(`[IA WARN] Falló ${ep.id} en OpenRouter: ${lastErrorMsg}`);
-                if (err.response?.status === 429) rateLimitExcedido = true;
-            }
-        }
-
-        if (!iaData) {
-            if (rateLimitExcedido) {
-                lastErrorMsg = "Has alcanzado el límite de peticiones gratuitas por minuto de OpenRouter. Espera unos segundos y vuelve a intentarlo.";
-            }
-            console.error("[IA ERROR TOTAL] OpenRouter:", lastErrorMsg);
-            return res.status(400).json({ error: `Fallo de IA: ${lastErrorMsg}` });
-        }
-
-        let textoIA = iaData.choices?.[0]?.message?.content || "El modelo no pudo generar una respuesta.";
-        let accionEjecutada = false;
-        const accionesDetectadas = [];
-
-        // 3. Interceptor de Comandos Mágicos (Si la IA ha decidido modificar la base de datos)
-        const actionRegex = /\[ACCION:\s*(.*?)\s*\]/g;
-        let match;
-        while ((match = actionRegex.exec(textoIA)) !== null) {
-            accionEjecutada = true;
-            const partsCmd = match[1].split('|').map(p => p.trim());
-            const actionType = partsCmd[0];
-            const params = {};
-            for (let i = 1; i < partsCmd.length; i++) {
-                const kv = partsCmd[i].split(':');
-                if (kv.length >= 2) params[kv[0].trim().toLowerCase()] = kv.slice(1).join(':').trim();
-            }
-            
-            accionesDetectadas.push({ tipo: actionType, params });
-
-            try {
-                if (actionType === 'ACTUALIZAR_PRECIO' && params.sku && params.precio) {
-                    await VentaRopa.findOneAndUpdate({ sku: params.sku, empresa }, { precioVenta: parseFloat(params.precio), fechaModificacion: new Date().toISOString().slice(0, 10) });
-                    invalidateKpiResumenCache(empresa);
-                    await registrarLog(req.session.email, `IA actualizó precio de ${params.sku}`);
-                } else if (actionType === 'CAMBIAR_ESTADO' && params.sku && params.estado) {
-                    await VentaRopa.findOneAndUpdate({ sku: params.sku, empresa }, { estado: params.estado, fechaModificacion: new Date().toISOString().slice(0, 10) });
-                    invalidateKpiResumenCache(empresa);
-                    await registrarLog(req.session.email, `IA cambió estado de ${params.sku} a ${params.estado}`);
-                } else if (actionType === 'BORRAR_PRODUCTO' && params.sku) {
-                    await VentaRopa.findOneAndDelete({ sku: params.sku, empresa });
-                    invalidateKpiResumenCache(empresa);
-                    await registrarLog(req.session.email, `IA borró producto ${params.sku}`);
-                } else if (actionType === 'CREAR_PRODUCTO' && params.prenda) {
-                    const nuevo = new VentaRopa({
-                        empresa,
-                        sku: `IA-${Date.now().toString().slice(-6)}`,
-                        prenda: params.prenda, precioVenta: parseFloat(params.precio) || 0,
-                        categoria: params.categoria || 'General', estado: 'No Vendido',
-                        imagen: imagen || '' // Se guarda la foto que le pasaste en el chat directamente en la ficha del producto!
-                    });
-                    await nuevo.save();
-                    invalidateKpiResumenCache(empresa);
-                    await registrarLog(req.session.email, `IA creó producto ${params.prenda}`);
-                }
-            } catch(e) { console.error("Error ejecutando orden de IA:", e); }
-        }
-
-        // Quitamos el texto de sistema para que el usuario no vea los comandos de máquina
-        textoIA = textoIA.replace(actionRegex, '').trim();
-        if (textoIA === '') textoIA = "¡Acción ejecutada con éxito en la base de datos! ✅";
-
-        res.json({ respuesta: textoIA, accionEjecutada, acciones: accionesDetectadas });
-    } catch (error) {
-        console.error("[IA ERROR] Fallo crítico:", error);
-        res.status(500).json({ error: 'No se pudo conectar con el motor de IA.' });
-    }
 });
 
 // --- Rutas de Notas ---
@@ -3584,11 +3288,59 @@ function idMiembroDeUrl(valor) {
 }
 
 async function estadosPorRol(empresa) {
-    const estados = await EstadoKanban.find({ empresa }).select('nombre rolFinanciero').lean();
+    const estados = await EstadoKanban.find({ empresa }).sort({ orden: 1 }).select('nombre rolFinanciero').lean();
     return {
         venta: estados.filter((e) => e.rolFinanciero === 'Venta').map((e) => e.nombre),
         stock: estados.filter((e) => e.rolFinanciero === 'Stock').map((e) => e.nombre)
     };
+}
+
+const TIPOS_AVISO_VINTED = ['vendido', 'no_visible', 'eliminado'];
+const HORAS_AUTO_VINTED = [0, 1, 3, 6, 12, 24];
+const CONFIG_VINTED_DEFECTO = {
+    avisar: { vendido: true, no_visible: true, eliminado: true },
+    registrarVendidosAuto: false,
+    autoCadaHoras: 0,
+    maxAnuncios: 80,
+    completarFichas: true,
+    avisoVoz: true,
+    ultimaComprobacion: null,
+    ultimaComprobacionPor: '',
+    ultimoResumen: null
+};
+
+async function obtenerConfigVinted(empresa) {
+    const doc = await ConfigVinted.findOne({ empresa }).lean();
+    if (!doc) return { ...CONFIG_VINTED_DEFECTO, avisar: { ...CONFIG_VINTED_DEFECTO.avisar } };
+    return {
+        ...CONFIG_VINTED_DEFECTO,
+        ...doc,
+        avisar: { ...CONFIG_VINTED_DEFECTO.avisar, ...(doc.avisar || {}) }
+    };
+}
+
+const tiposAvisoActivos = (config) => TIPOS_AVISO_VINTED.filter((t) => config?.avisar?.[t] !== false);
+
+function configVintedPublica(config) {
+    return {
+        avisar: { ...config.avisar },
+        registrarVendidosAuto: Boolean(config.registrarVendidosAuto),
+        autoCadaHoras: Number(config.autoCadaHoras) || 0,
+        maxAnuncios: Number(config.maxAnuncios) || CONFIG_VINTED_DEFECTO.maxAnuncios,
+        completarFichas: config.completarFichas !== false,
+        avisoVoz: config.avisoVoz !== false,
+        ultimaComprobacion: config.ultimaComprobacion || null,
+        ultimaComprobacionPor: config.ultimaComprobacionPor || '',
+        ultimoResumen: config.ultimoResumen || null
+    };
+}
+
+// Acepta la URL del perfil (vinted.es/.fr/... /member/123-alias) o solo el número de miembro.
+function normalizarPerfilVinted(valor) {
+    const texto = String(valor || '').trim();
+    if (!texto) return { ok: true, url: '' };
+    const id = /^\d{3,}$/.test(texto) ? texto : idMiembroDeUrl(texto);
+    return id ? { ok: true, url: `https://www.vinted.es/member/${id}` } : { ok: false, url: '' };
 }
 
 // Consulta la ficha de Vinted de los productos enlazados que ya no salen en el armario.
@@ -3604,7 +3356,8 @@ async function confirmarEstadoEnVinted(productos, { limite = 40, presupuestoMs =
 }
 
 // Guarda en una sola escritura lo detectado: enlaces con anuncios, estado visto y avisos.
-async function guardarDeteccionVinted(empresa, deteccion) {
+// Los tipos de aviso desactivados en las opciones solo actualizan el estado, sin avisar.
+async function guardarDeteccionVinted(empresa, deteccion, tiposAviso = TIPOS_AVISO_VINTED) {
     const ahora = new Date();
     const ops = [];
     for (const e of deteccion.enlaces || []) {
@@ -3621,6 +3374,7 @@ async function guardarDeteccionVinted(empresa, deteccion) {
     }
     const avisar = (id, aviso, estado) => {
         ops.push({ updateOne: { filter: { _id: id, empresa }, update: { $set: { vintedEstado: estado, vintedRevisadoEn: ahora } } } });
+        if (!tiposAviso.includes(aviso)) return;
         // La fecha del aviso es la de la primera detección.
         // No repetimos un aviso que el usuario ya ignoró para este producto.
         ops.push({ updateOne: { filter: { _id: id, empresa, vintedAviso: { $ne: aviso }, vintedAvisoIgnorado: { $ne: aviso } }, update: { $set: { vintedAviso: aviso, vintedAvisoEn: ahora } } } });
@@ -3898,7 +3652,7 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
             });
         }
 
-        await guardarDeteccionVinted(empresa, deteccion);
+        await guardarDeteccionVinted(empresa, deteccion, tiposAvisoActivos(await obtenerConfigVinted(empresa)));
         if (perfilesPorTienda.size) await enlazarTiendasConPerfiles(empresa, perfilesPorTienda);
 
         res.json(resultados);
@@ -3912,9 +3666,9 @@ app.post('/api/scraper/analizar-manual', exigeAdmin, async (req, res) => {
 app.get('/api/vinted/avisos', exigeSoloAdmin, async (req, res) => {
     try {
         const empresa = empresaActual(req);
-        const roles = await estadosPorRol(empresa);
+        const [roles, config] = await Promise.all([estadosPorRol(empresa), obtenerConfigVinted(empresa)]);
         const filas = await VentaRopa.aggregate([
-            { $match: { empresa, vintedAviso: { $in: ['vendido', 'no_visible', 'eliminado'] }, estado: { $nin: roles.venta } } },
+            { $match: { empresa, vintedAviso: { $in: tiposAvisoActivos(config) }, estado: { $nin: roles.venta } } },
             { $sort: { vintedAvisoEn: -1, _id: -1 } },
             { $limit: 300 },
             { $lookup: { from: 'tiendas', localField: 'tienda', foreignField: '_id', as: 'tiendaInfo' } },
@@ -3944,7 +3698,11 @@ app.get('/api/vinted/avisos', exigeSoloAdmin, async (req, res) => {
             Tienda.countDocuments({ empresa, vintedPerfilUrl: { $nin: ['', null] } }),
             VentaRopa.countDocuments({ empresa, vintedId: { $nin: ['', null] }, estado: { $nin: roles.venta } })
         ]);
-        res.json({ avisos, total: avisos.length, tiendasEnlazadas, productosEnlazados });
+        res.json({
+            avisos, total: avisos.length, tiendasEnlazadas, productosEnlazados,
+            config: configVintedPublica(config),
+            enCurso: COMPROBACIONES_VENTAS_EN_CURSO.has(empresa)
+        });
     } catch (error) {
         console.error('[VINTED-AVISOS]', error.message);
         res.status(500).json({ error: 'No se pudieron cargar los avisos de Vinted.' });
@@ -3968,24 +3726,53 @@ app.post('/api/vinted/avisos/descartar', exigeSoloAdmin, async (req, res) => {
 });
 
 // Revisa en Vinted todos los perfiles enlazados y detecta qué productos en stock se han vendido.
+// La usan el botón "Comprobar" y la comprobación automática, siempre con las opciones guardadas.
 const COMPROBACIONES_VENTAS_EN_CURSO = new Set();
-app.post('/api/vinted/comprobar-ventas', exigeSoloAdmin, async (req, res) => {
-    const empresa = empresaActual(req);
+const MAX_PERFILES_COMPROBACION = 50;
+
+class ComprobacionEnCursoError extends Error {}
+
+// Opción "registrar solas las ventas confirmadas": solo para anuncios que Vinted marca como vendidos.
+async function registrarVentasConfirmadasVinted(empresa, ids, roles) {
+    if (!ids.length) return 0;
+    const estadoVenta = roles.venta[0] || 'Vendido';
+    const hoy = new Date().toISOString().slice(0, 10);
+    const nota = `Vendido en Vinted (registrado automáticamente el ${hoy}).`;
+    const comentarioActual = { $ifNull: ['$comentariosProducto', ''] };
+    const r = await VentaRopa.collection.updateMany(
+        { _id: { $in: ids.map((id) => new mongoose.Types.ObjectId(String(id))) }, empresa, estado: { $nin: roles.venta } },
+        [{
+            $set: {
+                estado: estadoVenta,
+                fechaVenta: hoy,
+                fechaModificacion: hoy,
+                vintedAviso: '',
+                comentariosProducto: { $cond: [{ $gt: [{ $strLenCP: comentarioActual }, 0] }, { $concat: [comentarioActual, ' · ', nota] }, nota] }
+            }
+        }]
+    );
+    if (r.modifiedCount) invalidateKpiResumenCache(empresa);
+    return r.modifiedCount;
+}
+
+async function ejecutarComprobacionVentasVinted(empresa, { actor = '', automatica = false } = {}) {
     if (COMPROBACIONES_VENTAS_EN_CURSO.has(empresa)) {
-        return res.status(409).json({ error: 'Ya hay una comprobación en marcha. Espera unos segundos.' });
+        throw new ComprobacionEnCursoError('Ya hay una comprobación en marcha. Espera unos segundos.');
     }
     COMPROBACIONES_VENTAS_EN_CURSO.add(empresa);
     const inicio = Date.now();
+    const quien = automatica ? 'automática' : actor;
     try {
-        const roles = await estadosPorRol(empresa);
-        const [productos, tiendas] = await Promise.all([
-            VentaRopa.find({ empresa, estado: { $nin: roles.venta }, fechaVenta: { $in: ['', null] }, $or: [{ canalVenta: 'Vinted' }, { vintedId: { $nin: ['', null] } }] })
-                .select('prenda estado tienda vintedId vintedUrl vintedVendedorId descripcion')
-                .lean(),
-            Tienda.find({ empresa }).select('nombre vintedPerfilUrl').lean()
+        const [roles, tiendas, config] = await Promise.all([
+            estadosPorRol(empresa),
+            Tienda.find({ empresa }).select('nombre vintedPerfilUrl').lean(),
+            obtenerConfigVinted(empresa)
         ]);
+        const productos = await VentaRopa.find({ empresa, estado: { $nin: roles.venta }, fechaVenta: { $in: ['', null] }, $or: [{ canalVenta: 'Vinted' }, { vintedId: { $nin: ['', null] } }] })
+            .select('prenda estado tienda vintedId vintedUrl vintedVendedorId descripcion')
+            .lean();
 
-        // Perfiles a revisar: vendedores de productos enlazados + tiendas con perfil guardado.
+        // Perfiles a revisar: tiendas con perfil guardado + vendedores de productos enlazados.
         const vendedorPorTienda = new Map();
         tiendas.forEach((t) => {
             const idMiembro = idMiembroDeUrl(t.vintedPerfilUrl);
@@ -3994,86 +3781,240 @@ app.post('/api/vinted/comprobar-ventas', exigeSoloAdmin, async (req, res) => {
         const vendedores = new Set(vendedorPorTienda.values());
         productos.forEach((p) => { if (p.vintedVendedorId) vendedores.add(String(p.vintedVendedorId)); });
 
-        const resumen = { perfilesRevisados: 0, perfilesConError: 0, productosRevisados: 0, activos: 0, reservados: 0, vendidos: 0, noVisibles: 0, eliminados: 0, sinEnlace: 0, fichasPendientes: 0 };
+        const resumen = { perfilesRevisados: 0, perfilesConError: 0, perfilesOmitidos: 0, productosRevisados: 0, activos: 0, reservados: 0, vendidos: 0, vendidosNuevos: 0, noVisibles: 0, eliminados: 0, sinEnlace: 0, fichasPendientes: 0, registradosAuto: 0 };
+        let mensaje = '';
         if (!vendedores.size) {
             resumen.sinEnlace = productos.length;
-            return res.json({ success: true, resumen, mensaje: 'Ninguna tienda está enlazada todavía con su perfil de Vinted.' });
-        }
-
-        const armarios = new Map();
-        await ejecutarConConcurrencia([...vendedores].slice(0, 30), 2, async (vendedorId) => {
-            const { productos: activos, resumen: r } = await scrapeVinted(`https://www.vinted.es/member/${vendedorId}`, { sinNavegador: true });
-            if (!r.apiRespondio) { resumen.perfilesConError += 1; return; }
-            resumen.perfilesRevisados += 1;
-            armarios.set(vendedorId, {
-                porId: new Map(activos.map((a) => [String(a.id), a])),
-                titulos: activos.map((a) => ({ titulo: tituloComparable(a.titulo), item: a }))
+            mensaje = 'Ninguna tienda está enlazada todavía con su perfil de Vinted. Añádelo en ⚙️ Opciones.';
+        } else {
+            const listaVendedores = [...vendedores];
+            resumen.perfilesOmitidos = Math.max(0, listaVendedores.length - MAX_PERFILES_COMPROBACION);
+            const armarios = new Map();
+            await ejecutarConConcurrencia(listaVendedores.slice(0, MAX_PERFILES_COMPROBACION), 3, async (vendedorId) => {
+                const { productos: activos, resumen: r } = await scrapeVinted(`https://www.vinted.es/member/${vendedorId}`, { sinNavegador: true });
+                if (!r.apiRespondio) { resumen.perfilesConError += 1; return; }
+                resumen.perfilesRevisados += 1;
+                armarios.set(vendedorId, {
+                    porId: new Map(activos.map((a) => [String(a.id), a])),
+                    titulos: activos.map((a) => ({ titulo: tituloComparable(a.titulo), item: a }))
+                });
             });
-        });
 
-        const deteccion = { enlaces: [], vistos: [], vendidos: [], noVisibles: [], eliminados: [] };
-        const noVistos = [];
-        for (const p of productos) {
-            const vendedorId = p.vintedVendedorId ? String(p.vintedVendedorId) : vendedorPorTienda.get(String(p.tienda));
-            if (!vendedorId) { resumen.sinEnlace += 1; continue; }
-            const armario = armarios.get(vendedorId);
-            if (!armario) continue;
-            resumen.productosRevisados += 1;
+            const deteccion = { enlaces: [], vistos: [], vendidos: [], noVisibles: [], eliminados: [] };
+            const noVistos = [];
+            for (const p of productos) {
+                const vendedorId = p.vintedVendedorId ? String(p.vintedVendedorId) : vendedorPorTienda.get(String(p.tienda));
+                if (!vendedorId) { resumen.sinEnlace += 1; continue; }
+                const armario = armarios.get(vendedorId);
+                if (!armario) continue;
+                resumen.productosRevisados += 1;
 
-            let visto = p.vintedId ? armario.porId.get(String(p.vintedId)) : null;
-            if (!visto && !p.vintedId) {
-                const titulo = tituloComparable(p.prenda);
-                const exacto = armario.titulos.find((t) => t.titulo === titulo);
-                if (exacto) {
-                    visto = exacto.item;
-                    deteccion.enlaces.push({ id: p._id, vintedId: String(exacto.item.id), vintedUrl: exacto.item.url, vintedVendedorId: vendedorId });
+                let visto = p.vintedId ? armario.porId.get(String(p.vintedId)) : null;
+                if (!visto && !p.vintedId) {
+                    const titulo = tituloComparable(p.prenda);
+                    const exacto = armario.titulos.find((t) => t.titulo === titulo);
+                    if (exacto) {
+                        visto = exacto.item;
+                        deteccion.enlaces.push({ id: p._id, vintedId: String(exacto.item.id), vintedUrl: exacto.item.url, vintedVendedorId: vendedorId });
+                    } else {
+                        visto = armario.titulos.find((t) => coincidenciaFlexibleTitulos(t.titulo, titulo))?.item || null;
+                    }
+                }
+                if (visto) {
+                    deteccion.vistos.push({ id: p._id, estado: visto.reservado ? 'reservado' : 'activo' });
+                    if (visto.reservado) resumen.reservados += 1; else resumen.activos += 1;
                 } else {
-                    visto = armario.titulos.find((t) => coincidenciaFlexibleTitulos(t.titulo, titulo))?.item || null;
+                    noVistos.push(p);
                 }
             }
-            if (visto) {
-                deteccion.vistos.push({ id: p._id, estado: visto.reservado ? 'reservado' : 'activo' });
-                if (visto.reservado) resumen.reservados += 1; else resumen.activos += 1;
-            } else {
-                noVistos.push(p);
+
+            // Cada anuncio que ya no está en el armario se abre para confirmar qué le pasó.
+            const maxAnuncios = Math.min(Math.max(Number(config.maxAnuncios) || 80, 10), 200);
+            const fichas = await confirmarEstadoEnVinted(noVistos, { limite: maxAnuncios, presupuestoMs: Math.min(120000, 20000 + maxAnuncios * 400) });
+            noVistos.forEach((p) => {
+                const estado = fichas.get(String(p._id))?.estado;
+                if (estado === 'activo' || estado === 'reservado') {
+                    deteccion.vistos.push({ id: p._id, estado });
+                    resumen[estado === 'activo' ? 'activos' : 'reservados'] += 1;
+                } else if (estado === 'vendido') {
+                    deteccion.vendidos.push(p._id);
+                    resumen.vendidos += 1;
+                } else if (estado === 'eliminado' || estado === 'oculto') {
+                    deteccion.eliminados.push({ id: p._id, estado });
+                    resumen.eliminados += 1;
+                } else {
+                    deteccion.noVisibles.push(p._id);
+                    resumen.noVisibles += 1;
+                }
+            });
+
+            if (deteccion.vendidos.length) {
+                resumen.vendidosNuevos = await VentaRopa.countDocuments({ _id: { $in: deteccion.vendidos }, empresa, vintedAviso: { $ne: 'vendido' }, vintedAvisoIgnorado: { $ne: 'vendido' } });
+            }
+            await guardarDeteccionVinted(empresa, deteccion, tiposAvisoActivos(config));
+            if (config.registrarVendidosAuto) resumen.registradosAuto = await registrarVentasConfirmadasVinted(empresa, deteccion.vendidos, roles);
+
+            // De paso, completa la ficha de los enlazados a los que les falte la descripción.
+            if (config.completarFichas !== false) {
+                const sinFicha = productos
+                    .filter((p) => !p.descripcion && (p.vintedId || deteccion.enlaces.some((e) => String(e.id) === String(p._id))))
+                    .map((p) => ({ _id: p._id, vintedId: p.vintedId || deteccion.enlaces.find((e) => String(e.id) === String(p._id))?.vintedId }));
+                resumen.fichasPendientes = completarFichasVinted(empresa, sinFicha, { limite: 60 });
             }
         }
 
-        const fichas = await confirmarEstadoEnVinted(noVistos, { limite: 80, presupuestoMs: 45000 });
-        noVistos.forEach((p) => {
-            const estado = fichas.get(String(p._id))?.estado;
-            if (estado === 'activo' || estado === 'reservado') {
-                deteccion.vistos.push({ id: p._id, estado });
-                resumen[estado === 'activo' ? 'activos' : 'reservados'] += 1;
-            } else if (estado === 'vendido') {
-                deteccion.vendidos.push(p._id);
-                resumen.vendidos += 1;
-            } else if (estado === 'eliminado' || estado === 'oculto') {
-                deteccion.eliminados.push({ id: p._id, estado });
-                resumen.eliminados += 1;
-            } else {
-                deteccion.noVisibles.push(p._id);
-                resumen.noVisibles += 1;
-            }
-        });
-
-        await guardarDeteccionVinted(empresa, deteccion);
-        // De paso, completa la ficha de los enlazados a los que les falte la descripción.
-        const sinFicha = productos
-            .filter((p) => !p.descripcion && (p.vintedId || deteccion.enlaces.some((e) => String(e.id) === String(p._id))))
-            .map((p) => ({ _id: p._id, vintedId: p.vintedId || deteccion.enlaces.find((e) => String(e.id) === String(p._id))?.vintedId }));
-        resumen.fichasPendientes = completarFichasVinted(empresa, sinFicha, { limite: 60 });
-
         resumen.segundos = Math.round((Date.now() - inicio) / 1000);
-        await registrarLog(req.session.email, `Comprobó ventas en Vinted: ${resumen.vendidos} vendidos, ${resumen.noVisibles} no visibles, ${resumen.eliminados} retirados.`);
-        res.json({ success: true, resumen });
+        await ConfigVinted.updateOne(
+            { empresa },
+            { $set: { ultimaComprobacion: new Date(), ultimaComprobacionPor: quien, ultimoResumen: { ...resumen, mensaje } } },
+            { upsert: true }
+        );
+        await registrarLog(automatica ? 'Sistema (comprobación automática)' : actor, `Comprobó ventas en Vinted: ${resumen.vendidos} vendidos, ${resumen.noVisibles} no visibles, ${resumen.eliminados} retirados${resumen.registradosAuto ? `, ${resumen.registradosAuto} registrados solos` : ''}.`);
+        if (global.io) {
+            global.io.to(`empresa:${empresa}`).emit('vinted_ventas_comprobadas', { resumen, mensaje, automatica });
+            if (resumen.registradosAuto) global.io.to(`empresa:${empresa}`).emit('inventario_actualizado', { motivo: 'ventas-vinted', total: resumen.registradosAuto });
+        }
+        return { resumen, mensaje };
     } catch (error) {
-        console.error('[VINTED-VENTAS]', error);
-        res.status(500).json({ error: 'No se pudo comprobar las ventas en Vinted.' });
+        if (!(error instanceof ComprobacionEnCursoError)) {
+            // Se anota el intento fallido para que la comprobación automática no reintente en bucle.
+            await ConfigVinted.updateOne(
+                { empresa },
+                { $set: { ultimaComprobacion: new Date(), ultimaComprobacionPor: quien, ultimoResumen: { error: 'No se pudo completar la comprobación.' } } },
+                { upsert: true }
+            ).catch(() => {});
+        }
+        throw error;
     } finally {
         COMPROBACIONES_VENTAS_EN_CURSO.delete(empresa);
     }
+}
+
+app.post('/api/vinted/comprobar-ventas', exigeSoloAdmin, async (req, res) => {
+    try {
+        const { resumen, mensaje } = await ejecutarComprobacionVentasVinted(empresaActual(req), { actor: req.session.email });
+        res.json({ success: true, resumen, ...(mensaje ? { mensaje } : {}) });
+    } catch (error) {
+        if (error instanceof ComprobacionEnCursoError) return res.status(409).json({ error: error.message });
+        console.error('[VINTED-VENTAS]', error);
+        res.status(500).json({ error: 'No se pudo comprobar las ventas en Vinted.' });
+    }
 });
+
+// --- Opciones de la comprobación (botón ⚙️) ---
+async function datosOpcionesVinted(empresa) {
+    const [config, roles, tiendas] = await Promise.all([
+        obtenerConfigVinted(empresa),
+        estadosPorRol(empresa),
+        Tienda.find({ empresa }).select('nombre vintedPerfilUrl').lean()
+    ]);
+    const stock = await VentaRopa.aggregate([
+        { $match: { empresa, estado: { $nin: roles.venta }, tienda: { $ne: null } } },
+        { $group: { _id: '$tienda', n: { $sum: 1 } } }
+    ]);
+    const stockPorTienda = new Map(stock.map((t) => [String(t._id), t.n]));
+    const lista = tiendas
+        .map((t) => ({ _id: t._id, nombre: t.nombre, vintedPerfilUrl: t.vintedPerfilUrl || '', enStock: stockPorTienda.get(String(t._id)) || 0 }))
+        .sort((a, b) => Number(Boolean(b.vintedPerfilUrl)) - Number(Boolean(a.vintedPerfilUrl)) || b.enStock - a.enStock || a.nombre.localeCompare(b.nombre, 'es'));
+    return {
+        config: configVintedPublica(config),
+        tiendas: lista.slice(0, 500),
+        totalTiendas: lista.length,
+        enCurso: COMPROBACIONES_VENTAS_EN_CURSO.has(empresa),
+        maxPerfiles: MAX_PERFILES_COMPROBACION,
+        horasPermitidas: HORAS_AUTO_VINTED
+    };
+}
+
+app.get('/api/vinted/config', exigeSoloAdmin, async (req, res) => {
+    try {
+        res.json(await datosOpcionesVinted(empresaActual(req)));
+    } catch (error) {
+        console.error('[VINTED-CONFIG]', error.message);
+        res.status(500).json({ error: 'No se pudieron cargar las opciones de Vinted.' });
+    }
+});
+
+app.put('/api/vinted/config', exigeSoloAdmin, async (req, res) => {
+    try {
+        const empresa = empresaActual(req);
+        const body = req.body || {};
+        const avisar = {};
+        TIPOS_AVISO_VINTED.forEach((t) => { avisar[t] = body.avisar?.[t] !== false; });
+        const horas = Number(body.autoCadaHoras);
+        const maxAnuncios = Math.round(Number(body.maxAnuncios));
+        const cambios = {
+            avisar,
+            registrarVendidosAuto: body.registrarVendidosAuto === true,
+            autoCadaHoras: HORAS_AUTO_VINTED.includes(horas) ? horas : 0,
+            maxAnuncios: Number.isFinite(maxAnuncios) ? Math.min(Math.max(maxAnuncios, 10), 200) : CONFIG_VINTED_DEFECTO.maxAnuncios,
+            completarFichas: body.completarFichas !== false,
+            avisoVoz: body.avisoVoz !== false,
+            actualizadoPor: req.session.email || '',
+            actualizadoEn: new Date()
+        };
+
+        // Perfiles de Vinted: de las tiendas que ya existen y de tiendas nuevas.
+        const errores = [];
+        const ops = [];
+        (Array.isArray(body.perfiles) ? body.perfiles : []).slice(0, 500).forEach((p) => {
+            if (!mongoose.isValidObjectId(p?.tiendaId)) return;
+            const perfil = normalizarPerfilVinted(p.url);
+            if (!perfil.ok) { errores.push(String(p.nombre || 'una tienda')); return; }
+            ops.push({ updateOne: { filter: { _id: p.tiendaId, empresa }, update: { $set: { vintedPerfilUrl: perfil.url } } } });
+        });
+        const altas = [];
+        (Array.isArray(body.nuevasTiendas) ? body.nuevasTiendas : []).slice(0, 20).forEach((t) => {
+            const nombre = String(t?.nombre || '').trim().slice(0, 80);
+            const perfil = normalizarPerfilVinted(t?.url);
+            if (!nombre || !perfil.ok || !perfil.url) { errores.push(nombre || 'el perfil nuevo'); return; }
+            altas.push({ nombre, url: perfil.url });
+        });
+        if (errores.length) {
+            return res.status(400).json({ error: `Perfil de Vinted no válido en: ${errores.slice(0, 5).join(', ')}. Pega la URL del perfil (vinted.es/member/...) o solo su número.` });
+        }
+
+        if (ops.length) await Tienda.bulkWrite(ops, { ordered: false });
+        for (const alta of altas) {
+            const existente = await Tienda.findOne({ empresa, nombre: { $regex: new RegExp(`^${escapeRegexSafe(alta.nombre)}$`, 'i') } }).select('_id').lean();
+            if (existente) await Tienda.updateOne({ _id: existente._id }, { $set: { vintedPerfilUrl: alta.url } });
+            else await Tienda.create({ nombre: alta.nombre, empresa, vintedPerfilUrl: alta.url }).catch(() => {});
+        }
+        await ConfigVinted.updateOne({ empresa }, { $set: cambios }, { upsert: true });
+        await registrarLog(req.session.email, `Guardó las opciones de Vinted (automático: ${cambios.autoCadaHoras ? `cada ${cambios.autoCadaHoras} h` : 'no'}; registrar ventas solas: ${cambios.registrarVendidosAuto ? 'sí' : 'no'}; ${ops.length + altas.length} perfil(es)).`);
+        res.json({ success: true, ...(await datosOpcionesVinted(empresa)) });
+    } catch (error) {
+        console.error('[VINTED-CONFIG]', error);
+        res.status(500).json({ error: 'No se pudieron guardar las opciones de Vinted.' });
+    }
+});
+
+// Comprobación automática: cada pocos minutos mira qué empresas la tienen activada y ya les toca.
+let REVISANDO_AUTO_VINTED = false;
+async function revisarComprobacionesAutomaticasVinted() {
+    if (REVISANDO_AUTO_VINTED || mongoose.connection.readyState !== 1) return;
+    REVISANDO_AUTO_VINTED = true;
+    try {
+        const configs = await ConfigVinted.find({ autoCadaHoras: { $gt: 0 } }).select('empresa autoCadaHoras ultimaComprobacion').lean();
+        for (const c of configs) {
+            const toca = !c.ultimaComprobacion || Date.now() - new Date(c.ultimaComprobacion).getTime() >= c.autoCadaHoras * 3600000;
+            if (!toca || COMPROBACIONES_VENTAS_EN_CURSO.has(c.empresa)) continue;
+            try {
+                const { resumen } = await ejecutarComprobacionVentasVinted(c.empresa, { automatica: true });
+                console.log(`[VINTED-AUTO] ${c.empresa}: ${resumen.vendidos} vendidos, ${resumen.noVisibles} no visibles, ${resumen.eliminados} retirados (${resumen.segundos} s)`);
+            } catch (error) {
+                console.warn(`[VINTED-AUTO] ${c.empresa}: ${error.message}`);
+            }
+        }
+    } catch (error) {
+        console.warn('[VINTED-AUTO]', error.message);
+    } finally {
+        REVISANDO_AUTO_VINTED = false;
+    }
+}
+const VINTED_AUTO_REVISION_MS = Math.max(parseInt(process.env.VINTED_AUTO_REVISION_MS, 10) || 5 * 60 * 1000, 1000);
+setInterval(revisarComprobacionesAutomaticasVinted, VINTED_AUTO_REVISION_MS);
+setTimeout(revisarComprobacionesAutomaticasVinted, Math.min(VINTED_AUTO_REVISION_MS, 90 * 1000));
 
 /**
  * Importa productos nuevos seleccionados por el usuario

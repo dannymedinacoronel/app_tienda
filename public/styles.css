@@ -164,8 +164,6 @@ body {
 .card-bg {
   background-color: var(--color-card-bg);
   border-color: var(--color-border);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   border-radius: var(--ui-radius-card);
   box-shadow: var(--ui-shadow-soft);
 }
@@ -292,7 +290,7 @@ pre,
 .kanban-card {
   max-width: 100%;
   overflow: hidden;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease, border-color 0.18s ease;
+  transition: transform 0.18s ease, opacity 0.18s ease, border-color 0.18s ease;
 }
 
 .kanban-card h4 {
@@ -304,10 +302,6 @@ pre,
   opacity: 0.42;
   transform: scale(0.97) rotate(-1deg);
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.55), 0 18px 28px rgba(2, 6, 23, 0.55);
-}
-
-body.drag-active .kanban-card:not(.dragging) {
-  opacity: 0.85;
 }
 
 .drag-preview-ghost {
@@ -347,7 +341,7 @@ body.drag-active .kanban-card:not(.dragging) {
 .drag-over {
   border-color: rgba(56, 189, 248, 0.8) !important;
   background: linear-gradient(180deg, rgba(14, 116, 144, 0.18), rgba(14, 116, 144, 0.04));
-  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.25), 0 0 26px rgba(14, 165, 233, 0.16);
+  box-shadow: inset 0 0 0 2px rgba(34, 211, 238, 0.45);
 }
 
 .drop-highlight {
@@ -413,8 +407,6 @@ body#main-body #wrapper-core {
   background: linear-gradient(180deg, var(--ui-card-top), var(--ui-card-bottom));
   border-color: var(--core-border-soft);
   box-shadow: var(--core-shadow);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
 }
 
 .input-bg {
@@ -464,8 +456,26 @@ button:active {
   transform: translateY(6px);
 }
 
+/* El estado final va en la propia regla y la animación no se "congela" (sin forwards):
+   una animación retenida sobre toda la sección obligaba a recomponerla en cada frame
+   y el scroll y el arrastre bajaban a ~23 fps. */
+/* Mientras se desplaza una lista con scroll propio (columnas del Kanban, paneles...), su
+   contenido no reacciona al cursor: no se recalculan ni repintan los :hover de cada ficha que
+   pasa por debajo. La lista sigue recibiendo la rueda y continúa desplazándose. */
+.desplazando-interno * {
+  pointer-events: none;
+}
+
+/* Cada columna del Kanban en su propia capa: al arrastrar o resaltar una columna solo se
+   repinta esa columna, no franjas enteras de la página (opacity: no altera position: fixed). */
+#kanban-dynamic-wrapper > div {
+  will-change: opacity;
+}
+
 .seccion-app.seccion-active {
-  animation: section-reveal 0.26s ease forwards;
+  opacity: 1;
+  transform: none;
+  animation: section-reveal 0.26s ease backwards;
 }
 
 @keyframes section-reveal {
@@ -549,8 +559,6 @@ tr:hover td {
 #barra-filtros-generales {
   border-color: rgba(148, 163, 184, 0.2) !important;
   background: linear-gradient(180deg, color-mix(in srgb, var(--ui-card-top) 72%, transparent), color-mix(in srgb, var(--ui-card-bottom) 62%, transparent));
-  backdrop-filter: blur(16px) saturate(130%);
-  -webkit-backdrop-filter: blur(16px) saturate(130%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 20px rgba(2, 8, 20, 0.2);
   justify-content: flex-start;
 }
@@ -568,8 +576,6 @@ tr:hover td {
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.45rem;
-  backdrop-filter: blur(14px) saturate(115%);
-  -webkit-backdrop-filter: blur(14px) saturate(115%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 20px rgba(2, 8, 20, 0.2);
   align-items: stretch;
   margin-left: auto;
@@ -637,8 +643,6 @@ tr:hover td {
   border: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
   color: color-mix(in srgb, var(--color-text) 92%, transparent);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 8px 18px rgba(2, 8, 20, 0.22);
-  backdrop-filter: blur(14px) saturate(120%);
-  -webkit-backdrop-filter: blur(14px) saturate(120%);
   position: relative;
   overflow: hidden;
 }
@@ -732,11 +736,11 @@ tr:hover td {
   border: 1px solid rgba(191, 219, 254, 0.16);
 }
 
-#kpi-container-grid .kpi-3d-card:nth-child(1) { animation: kpi-reveal 0.42s ease both; }
-#kpi-container-grid .kpi-3d-card:nth-child(2) { animation: kpi-reveal 0.46s ease both; }
-#kpi-container-grid .kpi-3d-card:nth-child(3) { animation: kpi-reveal 0.5s ease both; }
-#kpi-container-grid .kpi-3d-card:nth-child(4) { animation: kpi-reveal 0.54s ease both; }
-#kpi-container-grid .kpi-3d-card:nth-child(5) { animation: kpi-reveal 0.58s ease both; }
+#kpi-container-grid .kpi-3d-card:nth-child(1) { animation: kpi-reveal 0.42s ease backwards; }
+#kpi-container-grid .kpi-3d-card:nth-child(2) { animation: kpi-reveal 0.46s ease backwards; }
+#kpi-container-grid .kpi-3d-card:nth-child(3) { animation: kpi-reveal 0.5s ease backwards; }
+#kpi-container-grid .kpi-3d-card:nth-child(4) { animation: kpi-reveal 0.54s ease backwards; }
+#kpi-container-grid .kpi-3d-card:nth-child(5) { animation: kpi-reveal 0.58s ease backwards; }
 
 @keyframes kpi-reveal {
   from {
@@ -768,14 +772,12 @@ tr:hover td {
     linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--store-accent-a, rgba(148, 163, 184, 0.18)) 18%, transparent),
-    0 10px 20px rgba(2, 8, 20, 0.35);
+    0 3px 8px rgba(2, 8, 20, 0.3);
   border-left: 4px solid var(--store-accent-a, rgba(148, 163, 184, 0.3)) !important;
 }
 
 [id^='col-dinamica-'] .kanban-card:hover {
   border-color: color-mix(in srgb, var(--ui-accent-b) 48%, transparent) !important;
-  transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(2, 8, 20, 0.45);
 }
 
 [id^='col-dinamica-'] .kanban-card button {
@@ -786,10 +788,6 @@ tr:hover td {
 [id^='col-dinamica-'] .kanban-card button:hover {
   border-color: color-mix(in srgb, var(--ui-accent-a) 45%, transparent);
   background: linear-gradient(180deg, rgba(20, 34, 56, 0.75), rgba(12, 24, 41, 0.66));
-}
-
-.kanban-store-group {
-  backdrop-filter: blur(8px);
 }
 
 .kanban-store-toggle {
@@ -827,7 +825,6 @@ tr:hover td {
 
 .seccion-app .card-bg:hover {
   border-color: rgba(96, 165, 250, 0.28);
-  box-shadow: 0 18px 38px rgba(2, 8, 20, 0.38);
 }
 
 .seccion-app h2,

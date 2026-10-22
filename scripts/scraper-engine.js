@@ -297,10 +297,6 @@ function sanitizarAlias(alias, fallback = 'Vinted') {
         .slice(0, 80) || fallback;
 }
 
-function esUrlSeguidoresVinted(url) {
-    const u = String(url || '').toLowerCase();
-    return u.includes('/following') || u.includes('/followers') || u.includes('/relations');
-}
 
 function extraerAliasDesdeUrlPerfil(url) {
     const str = String(url || '').trim();
@@ -1066,9 +1062,6 @@ async function consultarApiVinted(urlObjetivo) {
     return { productos: [], respondio };
 }
 
-async function extraerPorApiVinted(urlObjetivo) {
-    return (await consultarApiVinted(urlObjetivo)).productos;
-}
 
 async function extraerConPlaywright(urlObjetivo, session = null) {
     const ownSession = !session;

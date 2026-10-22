@@ -191,6 +191,32 @@ function actualizarEstadoBotonesTema(theme) {
     });
 }
 
+// Mientras se desplaza una lista con scroll propio (columnas del Kanban, paneles...), su contenido
+// ignora el cursor (.desplazando-interno en styles.css) para no recalcular los :hover de cada ficha
+// que pasa por debajo. Solo se marca esa lista, no la página entera (eso costaba más que ahorraba),
+// y nunca durante un arrastre: el auto-scroll dejaría las columnas sin recibir el "drop".
+(function activarModoDesplazamiento() {
+    let arrastrando = false;
+    const terminar = (lista) => {
+        clearTimeout(lista.__finDesplazamiento);
+        lista.__finDesplazamiento = null;
+        lista.classList.remove('desplazando-interno');
+    };
+    document.addEventListener('scroll', (e) => {
+        const lista = e.target;
+        if (arrastrando || !(lista instanceof Element)) return;
+        if (lista.__finDesplazamiento) clearTimeout(lista.__finDesplazamiento);
+        else lista.classList.add('desplazando-interno');
+        lista.__finDesplazamiento = setTimeout(() => terminar(lista), 150);
+    }, { capture: true, passive: true });
+    document.addEventListener('dragstart', () => {
+        arrastrando = true;
+        document.querySelectorAll('.desplazando-interno').forEach(terminar);
+    }, true);
+    document.addEventListener('dragend', () => { arrastrando = false; }, true);
+    document.addEventListener('drop', () => { arrastrando = false; }, true);
+})();
+
 function limpiarEstadoVisualDrag() {
     document.body.classList.remove('drag-active');
     if (DRAG_PREVIEW_NODE && DRAG_PREVIEW_NODE.parentNode) {
@@ -995,9 +1021,6 @@ function toggleChatInternoPopup() {
 }
 window.toggleChatInternoPopup = toggleChatInternoPopup;
 
-function esMovilOSimilar() {
-    return window.matchMedia('(max-width: 1024px)').matches;
-}
 
 async function intentarForzarLandscape() {
     // Bloqueo de orientación desactivado por UX.
@@ -1738,18 +1761,6 @@ function debounce(func, wait) {
     };
 }
 
-function throttle(func, limit) {
-    let inThrottle;
-    return function() {
-        const args = arguments;
-        const context = this;
-        if (!inThrottle) {
-            func.apply(context, args);
-            inThrottle = true;
-            setTimeout(() => inThrottle = false, limit);
-        }
-    };
-}
 
 // --- LÓGICA DEL SCRAPER (VINTED / CSV) ---
 function procesarScraperVinted() {
@@ -4622,7 +4633,7 @@ function aplicarRestriccionesRolUI() {
     const hidden = new Set([...bloqueadasPorRol]);
 
     SECCIONES_INHABILITADAS = hidden;
-    document.getElementById('btn-ventas-vinted')?.classList.toggle('hidden', String(USUARIO_ROL_ACTUAL || '') !== 'Admin');
+    document.getElementById('grupo-ventas-vinted')?.classList.toggle('hidden', String(USUARIO_ROL_ACTUAL || '') !== 'Admin');
 
     document.querySelectorAll('.seccion-app').forEach((sec) => {
         const secId = sec.id;
@@ -5098,29 +5109,30 @@ function renderCalendarioStock() {
     });
     const primerDiaMes = new Date(CAL_STOCK_ANIO, CAL_STOCK_MES - 1, 1).getDay();
     const diasEnMes = new Date(CAL_STOCK_ANIO, CAL_STOCK_MES, 0).getDate();
-    grid.innerHTML = '';
-    for (let i = 0; i < primerDiaMes; i++) { grid.innerHTML += `<div class="bg-black/5 rounded-2xl opacity-10 h-full min-h-[90px] border border-white/5"></div>`; }
+    // Se monta todo el HTML y se asigna una vez (antes se re-parseaba el calendario en cada día).
+    const celdas = [];
+    for (let i = 0; i < primerDiaMes; i++) { celdas.push(`<div class="bg-black/5 rounded-2xl opacity-10 h-full min-h-[90px] border border-white/5"></div>`); }
     for (let d = 1; d <= diasEnMes; d++) {
         const now = new Date();
         const esHoy = d === now.getDate() && CAL_STOCK_MES === (now.getMonth() + 1) && CAL_STOCK_ANIO === now.getFullYear();
         let info = '';
         if (addsPorDia[d]) info += `
             <div class="flex items-center gap-1.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[8px] font-black px-2 py-0.5 rounded-lg shadow-sm">
-                <span class="w-1 h-1 rounded-full bg-blue-500 animate-pulse"></span>
+                <span class="w-1 h-1 rounded-full bg-blue-500"></span>
                 <span>${addsPorDia[d]} ALTA${addsPorDia[d] > 1 ? 'S' : ''}</span>
             </div>`;
         if (salesPorDia[d]) info += `
             <div class="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[8px] font-black px-2 py-0.5 rounded-lg shadow-sm">
-                <span class="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span class="w-1 h-1 rounded-full bg-emerald-500"></span>
                 <span>${salesPorDia[d]} VENTA${salesPorDia[d] > 1 ? 'S' : ''}</span>
             </div>`;
         if (modsPorDia[d]) info += `
             <div class="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[8px] font-black px-2 py-0.5 rounded-lg shadow-sm">
-                <span class="w-1 h-1 rounded-full bg-amber-500 animate-pulse"></span>
+                <span class="w-1 h-1 rounded-full bg-amber-500"></span>
                 <span>${modsPorDia[d]} MOD${modsPorDia[d] > 1 ? 'S' : ''}</span>
             </div>`;
 
-        grid.innerHTML += ` 
+        celdas.push(` 
             <div onclick="verDetalleStockDia(${d})" class="calendario-dia group bg-gradient-to-br from-white/5 to-transparent border rounded-2xl p-3.5 flex flex-col gap-2 transition-all hover:bg-blue-500/10 hover:border-blue-500/40 cursor-pointer min-h-[95px] shadow-md relative overflow-hidden ${esHoy ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-500/5' : 'border-white/5'}">
                 <div class="flex justify-between items-center z-10">
                     <span class="text-sm font-black transition-opacity ${esHoy ? 'text-blue-400' : 'opacity-30 group-hover:opacity-100'}">${d}</span>
@@ -5132,8 +5144,9 @@ function renderCalendarioStock() {
                 <div class="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
                      <span class="text-4xl">📦</span>
                 </div>
-            </div>`;
+            </div>`);
     }
+    grid.innerHTML = celdas.join('');
 }
 
 function renderGestionFacturas() {
@@ -6145,151 +6158,6 @@ async function borrarClienteCRM(id) {
     if(confirm("¿Eliminar cliente del CRM?")) { await fetch(`/api/clientes/${id}`, { method: 'DELETE', credentials: 'include' }); refrescarClientesCRM(); }
 }
 
-function toggleAIAssistant() {
-    const chat = document.getElementById('ai-chat-window');
-    chat.classList.toggle('hidden');
-    if (!chat.classList.contains('hidden')) {
-        document.getElementById('ai-chat-input').focus();
-    }
-}
-
-let imagenIABase64 = "";
-
-function procesarImagenIA(event) {
-    const file = event.target.files[0]; if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
-            const MAX = 600; let w = img.width; let h = img.height;
-            if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } } else { if (h > MAX) { w *= MAX / h; h = MAX; } }
-            canvas.width = w; canvas.height = h; ctx.drawImage(img, 0, 0, w, h);
-            imagenIABase64 = canvas.toDataURL('image/jpeg', 0.7);
-            document.getElementById('ai-image-preview').src = imagenIABase64;
-            document.getElementById('ai-image-preview-container').classList.remove('hidden');
-        };
-        img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-}
-
-function quitarImagenIA() {
-    imagenIABase64 = ""; document.getElementById('ai-file-input').value = "";
-    document.getElementById('ai-image-preview-container').classList.add('hidden');
-}
-
-async function enviarMensajeIA(e) {
-    e.preventDefault();
-    const input = document.getElementById('ai-chat-input');
-    const mensaje = input.value.trim();
-    const imgData = imagenIABase64; 
-    if (!mensaje && !imgData) return;
-
-    const chatMessages = document.getElementById('ai-chat-messages');
-    const btnSend = document.getElementById('ai-btn-send');
-
-    let userMsgHtml = mensaje;
-    if (imgData) userMsgHtml = `<img src="${imgData}" class="w-32 rounded-lg mb-2 border border-white/10 shadow-md">` + (mensaje ? `<p>${mensaje}</p>` : '');
-
-    chatMessages.innerHTML += `
-        <div class="flex gap-2 justify-end">
-            <div class="bg-indigo-600/30 border border-indigo-500/30 p-3 rounded-2xl rounded-tr-none opacity-90 leading-relaxed text-indigo-50 max-w-[85%] shadow-sm flex flex-col items-end">
-                ${userMsgHtml}
-            </div>
-        </div>
-    `;
-    input.value = ''; btnSend.disabled = true; btnSend.innerHTML = '⏳';
-    quitarImagenIA();
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-
-    const idTemp = 'ia-temp-' + Date.now();
-    chatMessages.innerHTML += `
-        <div id="${idTemp}" class="flex gap-2">
-            <div class="w-7 h-7 rounded-full bg-purple-600/30 border border-purple-500/30 flex items-center justify-center flex-shrink-0 animate-pulse text-sm mt-1">🤖</div>
-            <div class="bg-white/5 border border-white/5 p-3 rounded-2xl rounded-tl-none opacity-70 italic shadow-sm">
-                Procesando...
-            </div>
-        </div>
-    `;
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-
-    try {
-        const res = await fetch(`${BACKEND_URL}/api/chat`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ mensaje, imagen: imgData })
-        });
-        const data = await res.json();
-        document.getElementById(idTemp).remove();
-
-        if (res.ok) {
-            const respuestaFormat = data.respuesta
-                .replace(/\*\*(.*?)\*\*/g, '<strong class="text-purple-300">$1</strong>')
-                .replace(/\*(.*?)\*/g, '<em class="opacity-80">$1</em>')
-                .replace(/\n/g, '<br>');
-            chatMessages.innerHTML += `
-                <div class="flex gap-2 animate-fadeIn">
-                    <div class="w-7 h-7 rounded-full bg-purple-600/30 border border-purple-500/30 flex items-center justify-center flex-shrink-0 text-sm mt-1">✨</div>
-                    <div class="bg-white/5 border border-white/5 p-3 rounded-2xl rounded-tl-none opacity-90 leading-relaxed max-w-[85%] shadow-sm">
-                        ${respuestaFormat}
-                    </div>
-                </div>
-            `;
-            
-            if (data.accionEjecutada) {
-                cantarPorVoz("Operación ejecutada por Inteligencia Artificial.");
-                await forceRefreshDataManual();
-                
-                if (data.acciones && data.acciones.length > 0) {
-                    data.acciones.forEach(acc => {
-                        if (acc.tipo === 'PREPARAR_FACTURA') {
-                            setTimeout(() => {
-                                navegarASeccion('sec-gestion');
-                                setTimeout(() => {
-                                    if (acc.params.cliente) document.getElementById('fac-cliente-nombre').value = acc.params.cliente;
-                                    
-                                    if (acc.params.sku) {
-                                        const checks = document.querySelectorAll('.fac-check-item');
-                                        checks.forEach(c => c.checked = false);
-                                        let encontrado = false;
-                                        checks.forEach(c => {
-                                            const itemData = BASE_DATOS.find(v => v._id === c.dataset.id);
-                                            if (itemData && itemData.sku && itemData.sku.toLowerCase() === acc.params.sku.toLowerCase()) {
-                                                c.checked = true; encontrado = true;
-                                            }
-                                        });
-                                        recalcularTotalesFactura();
-                                        
-                                        if (encontrado) {
-                                            cantarPorVoz("Generando documento PDF");
-                                            setTimeout(() => generarFacturaPDF(), 1200);
-                                        } else {
-                                            alert("IA: No he podido facturar porque el artículo " + acc.params.sku + " no existe o no está marcado como Vendido.");
-                                        }
-                                    }
-                                }, 200);
-                            }, 100);
-                        }
-                    });
-                }
-            }
-        } else {
-            throw new Error(data.error);
-        }
-    } catch (err) {
-        document.getElementById(idTemp)?.remove();
-        chatMessages.innerHTML += `
-            <div class="flex gap-2">
-                <div class="w-7 h-7 rounded-full bg-rose-600/30 border border-rose-500/30 flex items-center justify-center flex-shrink-0 text-sm mt-1">⚠️</div>
-                <div class="bg-rose-500/10 border border-rose-500/20 text-rose-300 p-3 rounded-2xl rounded-tl-none opacity-90 leading-relaxed max-w-[85%]">
-                    ${err.message || 'Error de conexión con el motor de IA.'}
-                </div>
-            </div>
-        `;
-    } finally {
-        btnSend.disabled = false; btnSend.innerHTML = '➤';
-        chatMessages.scrollTop = chatMessages.scrollHeight; input.focus();
-    }
-}
 
 async function cargarEnFormCRM(id) {
     const c = LISTA_CLIENTES_CACHE.find(x => x._id === id);
@@ -6641,8 +6509,8 @@ async function actualizarCalendarioAuditoria() {
         const primerDiaMes = new Date(CALENDARIO_ANIO, CALENDARIO_MES - 1, 1).getDay();
         const diasEnMes = new Date(CALENDARIO_ANIO, CALENDARIO_MES, 0).getDate();
 
-        grid.innerHTML = '';
-        for (let i = 0; i < primerDiaMes; i++) { grid.innerHTML += `<div class="bg-white/5 rounded-2xl opacity-10"></div>`; }
+        const celdas = [];
+        for (let i = 0; i < primerDiaMes; i++) { celdas.push(`<div class="bg-white/5 rounded-2xl opacity-10"></div>`); }
 
         for (let d = 1; d <= diasEnMes; d++) {
             const hoy = new Date();
@@ -6652,21 +6520,22 @@ async function actualizarCalendarioAuditoria() {
             if (LOGS_MES_ACTUAL[d]) {
                 LOGS_MES_ACTUAL[d].slice(0, 4).forEach(log => {
                     const hora = new Date(log.fechaHora).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-                    logsHtml += `<div class="calendario-log-item text-[7px] mb-0.5 opacity-70" title="${log.accion}">
-                                    <span class="text-indigo-400 font-bold">${hora}</span> ${log.accion}
+                    logsHtml += `<div class="calendario-log-item text-[7px] mb-0.5 opacity-70" title="${escapeHtmlSafe(log.accion)}">
+                                    <span class="text-indigo-400 font-bold">${hora}</span> ${escapeHtmlSafe(log.accion)}
                                  </div>`;
                 });
                 if (LOGS_MES_ACTUAL[d].length > 4) { logsHtml += `<div class="text-[6px] opacity-30 text-right">+${LOGS_MES_ACTUAL[d].length - 4} items</div>`; }
             }
 
-            grid.innerHTML += `
+            celdas.push(`
                 <div onclick="verDetalleDiaCalendario(${d})" class="calendario-dia card-bg border rounded-2xl p-2 flex flex-col gap-1 transition-all hover:scale-[1.02] hover:border-indigo-500/50 ${esHoy ? 'border-indigo-500 shadow-[0_0_15px_rgba(79,70,229,0.3)]' : 'border-white/5'}">
                     <span class="text-[10px] font-black ${esHoy ? 'text-indigo-400' : 'opacity-40'}">${d}</span>
                     <div class="flex-1 overflow-hidden">
                         ${logsHtml}
                     </div>
-                </div>`;
+                </div>`);
         }
+        grid.innerHTML = celdas.join('');
     } catch (err) {
         grid.innerHTML = '<div class="col-span-7 py-20 text-center text-rose-400 text-xs">Error al conectar con la base de datos de auditoría.</div>';
     }
@@ -7016,6 +6885,9 @@ window.allowDrop = function(e) {
 };
 window.clearDrop = function(e) {
     const col = e.currentTarget;
+    // "dragleave" también salta al pasar de una ficha a otra dentro de la misma columna:
+    // solo se quita el resaltado cuando de verdad se sale (antes parpadeaba y repintaba sin parar).
+    if (col && e.relatedTarget && col.contains(e.relatedTarget)) return;
     if (col) col.classList.remove('drag-over');
 };
 
@@ -7076,29 +6948,60 @@ window.handleDropColumn = async function(e, newState) {
         return;
     }
     
+    // La ficha se mueve al instante: solo se redibujan las columnas afectadas (origen, destino y
+    // las que tengan la misma prenda, por el aviso de stock crítico). Antes esperaba al servidor.
     const copiasEstadosAnteriores = {};
+    const prendasMovidas = new Set();
     listaIds.forEach(id => { 
         const idx = BASE_DATOS.findIndex(x => x._id === id); 
         if (idx !== -1) { 
             copiasEstadosAnteriores[id] = BASE_DATOS[idx].estado; 
+            prendasMovidas.add(BASE_DATOS[idx].prenda);
             BASE_DATOS[idx].estado = newState; 
         } 
     });
-    renderKanban();
-    if (e.currentTarget?.classList) {
-        e.currentTarget.classList.add('drop-highlight');
-        setTimeout(() => e.currentTarget?.classList.remove('drop-highlight'), 420);
+    const columnasAfectadas = () => {
+        const columnas = new Set([newState, ...Object.values(copiasEstadosAnteriores)]);
+        BASE_DATOS.forEach((v) => { if (prendasMovidas.has(v.prenda)) columnas.add(v.estado); });
+        return [...columnas];
+    };
+    renderKanban(true, { soloEstados: columnasAfectadas() });
+    const columnaDestino = e.currentTarget;
+    if (columnaDestino?.classList) {
+        columnaDestino.classList.add('drop-highlight');
+        setTimeout(() => columnaDestino.classList.remove('drop-highlight'), 420);
     }
 
     cantarPorVoz(`Columna actualizada`);
     procesarMultiplicadorCombo();
 
     try {
-        const promesas = listaIds.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: newState }) }));
-        await Promise.all(promesas); limpiarSeleccionMasiva(); await forceRefreshDataManual();
+        const respuestas = await Promise.all(listaIds.map(id => fetch(`${BACKEND_URL}/api/ventas/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ estado: newState }) })));
+        if (respuestas.some((r) => !r.ok)) throw new Error('No se pudo guardar el cambio de columna.');
+        // Se aplican las fechas que pone el servidor: así la recarga coincide y no redibuja nada.
+        const cuerpos = await Promise.all(respuestas.map((r) => r.json().catch(() => null)));
+        let cambioVisible = false;
+        cuerpos.forEach((cuerpo) => {
+            const v = cuerpo?.venta;
+            const local = v && BASE_DATOS.find((x) => x._id === String(v._id));
+            if (!local) return;
+            ['estado', 'fechaVenta', 'fechaModificacion', 'loteVendido', 'loteVentaEtiqueta', 'vintedAviso'].forEach((k) => {
+                if (!(k in v)) return;
+                // Vacío, false y ausente se ven igual; la fecha de modificación no se muestra en la ficha.
+                const visible = (x) => (x === undefined || x === null || x === false || x === '') ? '' : JSON.stringify(x);
+                if (k !== 'fechaModificacion' && visible(local[k]) !== visible(v[k])) cambioVisible = true;
+                local[k] = v[k];
+            });
+        });
+        if (cambioVisible) renderKanban(true, { soloEstados: columnasAfectadas() });
+        else FIRMA_DATOS_KANBAN = firmaDatosKanban();
+        limpiarSeleccionMasiva();
+        forceRefreshDataManual(true, true);
     } catch(err) {
         listaIds.forEach(id => { const idx = BASE_DATOS.findIndex(x => x._id === id); if (idx !== -1) BASE_DATOS[idx].estado = copiasEstadosAnteriores[id]; });
-        forceRefreshDataManual(); alert("Fallo de red.");
+        renderKanban(true, { soloEstados: columnasAfectadas() });
+        forceRefreshDataManual(true, true);
+        alert(err?.message && !/fetch/i.test(err.message) ? err.message : 'Fallo de red: el producto vuelve a su columna.');
     }
 };
 
@@ -7298,14 +7201,6 @@ function aplicarFiltrosFrontLineal() {
     renderKanban(true);
 }
 
-function limpiarFiltrosAvanzados() {
-    document.getElementById('filtro-categoria').value = 'TODOS';
-    document.getElementById('filtro-talla').value = 'TODOS';
-    document.getElementById('filtro-canal').value = 'TODOS';
-    const fTienda = document.getElementById('filtro-tienda');
-    if (fTienda) fTienda.value = 'TODOS';
-    aplicarFiltrosFrontLineal();
-}
 
 function setTheme(theme) {
     const body = document.getElementById('main-body');
@@ -7594,7 +7489,8 @@ function actualizarVisibilidadPanelMasivo() {
 
 function limpiarSeleccionMasiva() {
     ITEMS_SELECCIONADOS_MASIVOS = [];
-    document.querySelectorAll('input[type="checkbox"]').forEach(c => c.checked = false);
+    // Solo las casillas de las fichas (antes desmarcaba también las opciones de formularios y modales).
+    document.querySelectorAll('input[type="checkbox"][id^="check-"]').forEach(c => c.checked = false);
     actualizarVisibilidadPanelMasivo();
 }
 
@@ -8094,42 +7990,6 @@ function capturarFotoEscaner() {
     actualizarEstadoEscaner('Foto capturada', 'amber');
 }
 
-async function analizarFotoEscanerIA() {
-    const imagenes = Array.from(new Set([
-        ULTIMA_FOTO_ESCANER,
-        ...(Array.isArray(FOTOS_FORMULARIO_TEMP) ? FOTOS_FORMULARIO_TEMP : [])
-    ].filter(Boolean))).slice(0, 3);
-    const imagen = imagenes[0] || '';
-    if (!imagen) {
-        return alert('Primero captura o sube una foto para analizar el producto.');
-    }
-
-    const codigo = normalizarCodigoEscaneado(document.getElementById('camara-ult-codigo')?.innerText || document.getElementById('sku')?.value || '');
-    const info = document.getElementById('camara-last-lookup');
-    if (info) info.innerText = 'Analizando producto con IA...';
-
-    try {
-        const res = await fetch('/api/producto/analizar-foto', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ imagen, imagenes, codigo })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'No se pudo analizar la foto.');
-
-        if (data?.producto) {
-            aplicarSugerenciasProductoFormulario(data.producto, codigo);
-            if (info) info.innerText = 'Producto analizado y formulario completado.';
-            cantarPorVoz('Producto analizado');
-        } else {
-            throw new Error('Respuesta de analisis sin datos de producto.');
-        }
-    } catch (err) {
-        if (info) info.innerText = `Error de analisis: ${err.message}`;
-        alert(`No se pudo analizar la foto: ${err.message}`);
-    }
-}
 
 async function ejecutarLogicaEscaneo(skuParam) {
     try {
@@ -8221,6 +8081,58 @@ if (window.__pendingGoogleCredential) {
 // Lista los productos en stock que en Vinted ya no están a la venta (vendidos, retirados o que
 // ya no aparecen) para registrar la venta con un clic.
 let AVISOS_VINTED = [];
+let CONFIG_VINTED = null;
+let COMPROBANDO_VINTED = false;
+
+function textoResumenComprobacionVinted(r, mensaje = '') {
+    if (mensaje) return mensaje;
+    if (!r) return '';
+    if (r.error) return `⚠️ ${r.error}`;
+    return [
+        `${r.perfilesRevisados || 0} perfil(es) revisados en ${r.segundos || 0} s`,
+        `${r.vendidos || 0} vendidos`,
+        `${r.noVisibles || 0} no visibles`,
+        `${r.eliminados || 0} retirados`,
+        `${(r.activos || 0) + (r.reservados || 0)} siguen a la venta`,
+        r.registradosAuto ? `${r.registradosAuto} registrados como vendidos` : '',
+        r.sinEnlace ? `${r.sinEnlace} sin enlazar con Vinted` : '',
+        r.perfilesConError ? `${r.perfilesConError} perfil(es) sin respuesta` : '',
+        r.perfilesOmitidos ? `${r.perfilesOmitidos} perfil(es) por encima del máximo` : '',
+        r.fichasPendientes ? `completando ${r.fichasPendientes} ficha(s) en segundo plano` : ''
+    ].filter(Boolean).join(' · ');
+}
+
+function textoUltimaComprobacionVinted(config) {
+    if (!config) return '';
+    const auto = config.autoCadaHoras ? `Automática cada ${config.autoCadaHoras} h.` : 'Automática: desactivada.';
+    if (!config.ultimaComprobacion) return `Aún no se ha comprobado. ${auto}`;
+    const por = config.ultimaComprobacionPor === 'automática' ? ' (automática)' : '';
+    const resumen = textoResumenComprobacionVinted(config.ultimoResumen, config.ultimoResumen?.mensaje);
+    return `Última comprobación ${haceCuantoTexto(config.ultimaComprobacion)}${por}${resumen ? `: ${resumen}` : ''}. ${auto}`;
+}
+
+function aplicarConfigVinted(config) {
+    if (!config) return;
+    CONFIG_VINTED = config;
+    const btn = document.getElementById('btn-comprobar-vinted-directo');
+    if (btn) btn.title = `Comprobar ahora en Vinted con tus opciones guardadas. ${textoUltimaComprobacionVinted(config)}`;
+}
+
+function mostrarToastVinted(texto, { error = false, verPanel = false } = {}) {
+    document.getElementById('toast-vinted')?.remove();
+    const toast = document.createElement('div');
+    toast.id = 'toast-vinted';
+    toast.className = `fixed bottom-24 left-1/2 -translate-x-1/2 z-[9999] ${error ? 'bg-rose-600 border-rose-400' : 'bg-emerald-700 border-emerald-400'} text-white px-5 py-3 rounded-2xl shadow-2xl border flex items-center gap-3 max-w-[92vw]`;
+    toast.innerHTML = `
+        <span class="text-xl">${error ? '⚠️' : '🔎'}</span>
+        <p class="text-xs font-bold flex-1">${escapeHtmlSafe(texto)}</p>
+        ${verPanel ? '<button data-ver class="bg-white/20 hover:bg-white/30 text-[11px] px-3 py-1.5 rounded-lg font-bold">Ver</button>' : ''}
+        <button data-cerrar class="hover:bg-white/10 px-2 py-1 rounded-full">✕</button>`;
+    toast.querySelector('[data-cerrar]').addEventListener('click', () => toast.remove());
+    toast.querySelector('[data-ver]')?.addEventListener('click', () => { toast.remove(); abrirPanelVentasVinted(); });
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 12000);
+}
 
 function panelVentasVintedAbierto() {
     return !document.getElementById('modal-ventas-vinted')?.classList.contains('hidden');
@@ -8241,15 +8153,16 @@ async function actualizarContadorAvisosVinted() {
         const data = await res.json();
         AVISOS_VINTED = Array.isArray(data.avisos) ? data.avisos : [];
         actualizarBadgeVentasVinted(AVISOS_VINTED.length);
+        aplicarConfigVinted(data.config);
         return data;
     } catch (_) {
         return null;
     }
 }
 
-function abrirPanelVentasVinted() {
+function abrirPanelVentasVinted({ recargar = true } = {}) {
     document.getElementById('modal-ventas-vinted')?.classList.remove('hidden');
-    cargarAvisosVinted();
+    if (recargar) cargarAvisosVinted();
 }
 
 function cerrarPanelVentasVinted() {
@@ -8263,9 +8176,12 @@ async function cargarAvisosVinted() {
     const data = await actualizarContadorAvisosVinted();
     if (!data) {
         cont.innerHTML = '<p class="text-xs text-rose-300">No se pudieron cargar los avisos de Vinted.</p>';
-        return;
+        return null;
     }
     renderPanelVentasVinted(data);
+    const estado = document.getElementById('ventas-vinted-estado');
+    if (estado && !COMPROBANDO_VINTED) estado.textContent = textoUltimaComprobacionVinted(data.config);
+    return data;
 }
 
 function haceCuantoTexto(fecha) {
@@ -8297,7 +8213,7 @@ function renderPanelVentasVinted(data) {
                 <p class="text-3xl">✅</p>
                 <p class="text-sm font-bold">No hay ventas pendientes de registrar.</p>
                 ${sinEnlace
-                    ? '<p class="text-[11px] opacity-75 max-w-md mx-auto">Para empezar, escanea una vez el perfil de Vinted de cada tienda en <b>Acciones → Scraper / CSV</b> (pega la URL del perfil y pon como alias el nombre de la tienda). A partir de ahí basta con pulsar «Comprobar ahora».</p>'
+                    ? '<p class="text-[11px] opacity-75 max-w-md mx-auto">Para empezar, añade el perfil de Vinted de cada tienda en <button onclick="abrirOpcionesVinted()" class="underline font-bold">⚙️ Opciones</button> (o escanéalo una vez en <b>Acciones → Scraper / CSV</b>). A partir de ahí basta con pulsar «Comprobar».</p>'
                     : `<p class="text-[11px] opacity-60">${Number(data.tiendasEnlazadas || 0)} tienda(s) y ${Number(data.productosEnlazados || 0)} producto(s) en stock enlazados con Vinted.</p>`}
             </div>`;
         return;
@@ -8372,35 +8288,259 @@ async function descartarAvisosVinted(clave, idUnico = '') {
     }
 }
 
+function marcarBotonesComprobandoVinted(activo) {
+    COMPROBANDO_VINTED = activo;
+    const btnPanel = document.getElementById('btn-comprobar-ventas-vinted');
+    const btnDirecto = document.getElementById('btn-comprobar-vinted-directo');
+    const txtDirecto = document.getElementById('txt-comprobar-vinted-directo');
+    [btnPanel, btnDirecto].forEach((b) => {
+        if (!b) return;
+        b.disabled = activo;
+        b.classList.toggle('opacity-60', activo);
+    });
+    if (btnPanel) btnPanel.textContent = activo ? '⏳ Comprobando...' : '🔎 Comprobar ahora';
+    if (txtDirecto) txtDirecto.textContent = activo ? 'Comprobando...' : 'Comprobar';
+}
+
+// Botón directo de la barra y botón del panel: comprueba con las opciones guardadas.
 async function comprobarVentasVinted() {
-    const btn = document.getElementById('btn-comprobar-ventas-vinted');
+    if (COMPROBANDO_VINTED) return;
+    marcarBotonesComprobandoVinted(true);
     const estado = document.getElementById('ventas-vinted-estado');
-    if (btn) { btn.disabled = true; btn.classList.add('opacity-60'); btn.textContent = '⏳ Comprobando...'; }
     if (estado) estado.textContent = 'Revisando tus perfiles de Vinted y los anuncios que ya no aparecen...';
     try {
         const res = await fetch(`${BACKEND_URL}/api/vinted/comprobar-ventas`, { method: 'POST', credentials: 'include' });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'No se pudo comprobar.');
         const r = data.resumen || {};
-        if (estado) {
-            estado.textContent = data.mensaje || [
-                `${r.perfilesRevisados || 0} perfil(es) revisados en ${r.segundos || 0} s`,
-                `${r.vendidos || 0} vendidos`,
-                `${r.noVisibles || 0} no visibles`,
-                `${r.eliminados || 0} retirados`,
-                `${(r.activos || 0) + (r.reservados || 0)} siguen a la venta`,
-                r.sinEnlace ? `${r.sinEnlace} sin enlazar con Vinted` : '',
-                r.perfilesConError ? `${r.perfilesConError} perfil(es) sin respuesta` : '',
-                r.fichasPendientes ? `completando ${r.fichasPendientes} ficha(s) en segundo plano` : ''
-            ].filter(Boolean).join(' · ');
-        }
-        cantarPorVoz(r.vendidos ? `${r.vendidos} ventas detectadas en Vinted.` : 'Comprobación terminada.');
+        marcarBotonesComprobandoVinted(false);
         await cargarAvisosVinted();
+        if (CONFIG_VINTED?.avisoVoz !== false) {
+            cantarPorVoz(r.registradosAuto
+                ? `${r.registradosAuto} ventas registradas desde Vinted.`
+                : r.vendidos ? `${r.vendidos} ventas detectadas en Vinted.` : 'Comprobación terminada.');
+        }
+        // Con el panel cerrado: si hay algo pendiente se abre; si no, basta con un aviso.
+        if (!panelVentasVintedAbierto()) {
+            if (AVISOS_VINTED.length) abrirPanelVentasVinted({ recargar: false });
+            else mostrarToastVinted(`✅ Nada pendiente. ${textoResumenComprobacionVinted(r, data.mensaje)}`);
+        }
         forceRefreshDataManual(true, true);
     } catch (e) {
         if (estado) estado.textContent = `Error: ${e.message}`;
+        if (!panelVentasVintedAbierto()) mostrarToastVinted(e.message, { error: true });
     } finally {
-        if (btn) { btn.disabled = false; btn.classList.remove('opacity-60'); btn.textContent = '🔎 Comprobar ahora'; }
+        marcarBotonesComprobandoVinted(false);
+    }
+}
+
+// Comprobación hecha en otra pestaña o la automática del servidor: refrescamos contador y vista.
+socket.on('vinted_ventas_comprobadas', async (data) => {
+    if (String(USUARIO_ROL_ACTUAL || '') !== 'Admin' || COMPROBANDO_VINTED) return;
+    await cargarAvisosVinted();
+    forceRefreshDataManual(true, true);
+    const r = data?.resumen || {};
+    if (data?.automatica && (r.vendidosNuevos || r.registradosAuto)) {
+        const texto = r.registradosAuto
+            ? `Comprobación automática: ${r.registradosAuto} venta(s) de Vinted registradas.`
+            : `Comprobación automática: ${r.vendidosNuevos} venta(s) nuevas en Vinted.`;
+        mostrarToastVinted(texto, { verPanel: AVISOS_VINTED.length > 0 });
+        if (CONFIG_VINTED?.avisoVoz !== false) cantarPorVoz(texto);
+    }
+});
+
+// --- Opciones de la comprobación (botón ⚙️) ---
+let OPCIONES_VINTED = null;
+let NUEVOS_PERFILES_VINTED = [];
+
+function perfilVintedValido(valor) {
+    const v = String(valor || '').trim();
+    return !v || /^\d{3,}$/.test(v) || /\/member\/(?:general\/)?\d+/.test(v);
+}
+
+function validarCampoPerfilVinted(input) {
+    const ok = perfilVintedValido(input.value);
+    input.classList.toggle('border-rose-500', !ok);
+    input.title = ok ? '' : 'Pega la URL del perfil (vinted.es/member/...) o solo su número.';
+    return ok;
+}
+
+async function abrirOpcionesVinted() {
+    const modal = document.getElementById('modal-opciones-vinted');
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    NUEVOS_PERFILES_VINTED = [];
+    const lista = document.getElementById('opciones-vinted-tiendas');
+    const estado = document.getElementById('opciones-vinted-estado');
+    if (lista) lista.innerHTML = '<p class="text-xs opacity-60 animate-pulse">Cargando opciones...</p>';
+    if (estado) estado.textContent = '';
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/vinted/config`, { credentials: 'include' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'No se pudieron cargar las opciones.');
+        pintarOpcionesVinted(data);
+    } catch (e) {
+        if (lista) lista.innerHTML = `<p class="text-xs text-rose-300">${escapeHtmlSafe(e.message)}</p>`;
+    }
+}
+
+function cerrarOpcionesVinted() {
+    document.getElementById('modal-opciones-vinted')?.classList.add('hidden');
+}
+
+function pintarOpcionesVinted(data) {
+    OPCIONES_VINTED = data;
+    aplicarConfigVinted(data.config);
+    const c = data.config || {};
+    const marcar = (id, valor) => { const el = document.getElementById(id); if (el) el.checked = Boolean(valor); };
+    ['vendido', 'no_visible', 'eliminado'].forEach((t) => marcar(`opt-vinted-avisar-${t}`, c.avisar?.[t] !== false));
+    marcar('opt-vinted-registrar-auto', c.registrarVendidosAuto);
+    marcar('opt-vinted-fichas', c.completarFichas !== false);
+    marcar('opt-vinted-voz', c.avisoVoz !== false);
+    const auto = document.getElementById('opt-vinted-auto');
+    if (auto) auto.value = String(c.autoCadaHoras || 0);
+    const max = document.getElementById('opt-vinted-max-anuncios');
+    if (max) max.value = String(c.maxAnuncios || 80);
+    const buscar = document.getElementById('opciones-vinted-buscar');
+    if (buscar) { buscar.value = ''; buscar.classList.toggle('hidden', (data.tiendas || []).length <= 8); }
+    pintarTiendasOpcionesVinted();
+    const estado = document.getElementById('opciones-vinted-estado');
+    if (estado) estado.textContent = textoUltimaComprobacionVinted(c);
+}
+
+function pintarTiendasOpcionesVinted() {
+    const cont = document.getElementById('opciones-vinted-tiendas');
+    if (!cont) return;
+    const esc = escapeHtmlSafe;
+    const tiendas = OPCIONES_VINTED?.tiendas || [];
+    const filas = tiendas.map((t) => `
+        <div class="flex flex-wrap items-center gap-2 p-2 rounded-xl border border-white/10 bg-black/20" data-tienda-nombre="${esc(String(t.nombre || '').toLowerCase())}">
+            <div class="min-w-[120px] flex-1">
+                <p class="text-[11px] font-bold truncate">${esc(t.nombre)}</p>
+                <p class="text-[9px] opacity-60">${Number(t.enStock || 0)} en stock</p>
+            </div>
+            <input type="text" data-perfil-tienda="${esc(t._id)}" data-nombre="${esc(t.nombre)}" data-original="${esc(t.vintedPerfilUrl || '')}" value="${esc(t.vintedPerfilUrl || '')}" placeholder="Sin perfil de Vinted" oninput="validarCampoPerfilVinted(this)" class="input-bg border rounded-lg px-2 py-1.5 text-[11px] flex-[2] min-w-[180px]">
+            ${t.vintedPerfilUrl ? `<a href="${esc(t.vintedPerfilUrl)}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-cyan-300 underline">ver ↗</a>` : ''}
+        </div>`).join('');
+    const mas = (OPCIONES_VINTED?.totalTiendas || 0) > tiendas.length
+        ? `<p class="text-[10px] opacity-60">Se muestran ${tiendas.length} de ${OPCIONES_VINTED.totalTiendas} tiendas (primero las que tienen perfil o stock).</p>`
+        : '';
+    const vacio = tiendas.length ? '' : '<p class="text-[11px] opacity-60">Todavía no tienes tiendas. Añade un perfil abajo y se creará la tienda con ese nombre.</p>';
+    const aviso = tiendas.filter((t) => t.vintedPerfilUrl).length > (OPCIONES_VINTED?.maxPerfiles || 50)
+        ? `<p class="text-[10px] text-amber-300">Cada comprobación revisa como máximo ${OPCIONES_VINTED.maxPerfiles} perfiles.</p>`
+        : '';
+    cont.innerHTML = `<div id="opciones-vinted-nuevas" class="space-y-1.5"></div>${filas}${vacio}${mas}${aviso}`;
+    pintarNuevosPerfilesVinted();
+}
+
+function pintarNuevosPerfilesVinted() {
+    const cont = document.getElementById('opciones-vinted-nuevas');
+    if (!cont) return;
+    const esc = escapeHtmlSafe;
+    cont.innerHTML = NUEVOS_PERFILES_VINTED.map((n, i) => `
+        <div class="flex flex-wrap items-center gap-2 p-2 rounded-xl border border-emerald-400/30 bg-emerald-500/10">
+            <span class="text-[11px] font-bold flex-1 truncate">🆕 ${esc(n.nombre)}</span>
+            <span class="text-[10px] font-mono opacity-80 truncate flex-[2]">${esc(n.url)}</span>
+            <button onclick="quitarPerfilNuevoVinted(${i})" class="text-[10px] px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20">Quitar</button>
+        </div>`).join('');
+}
+
+function filtrarTiendasOpcionesVinted(texto) {
+    const q = String(texto || '').trim().toLowerCase();
+    document.querySelectorAll('#opciones-vinted-tiendas [data-tienda-nombre]').forEach((fila) => {
+        fila.classList.toggle('hidden', Boolean(q) && !fila.dataset.tiendaNombre.includes(q));
+    });
+}
+
+// Añade a la lista el perfil escrito abajo. Si la tienda ya existe, se le asigna a ella.
+function anadirPerfilOpcionesVinted({ silencioso = false } = {}) {
+    const inputNombre = document.getElementById('opciones-vinted-nueva-nombre');
+    const inputUrl = document.getElementById('opciones-vinted-nueva-url');
+    const estado = document.getElementById('opciones-vinted-estado');
+    const nombre = String(inputNombre?.value || '').trim();
+    const url = String(inputUrl?.value || '').trim();
+    if (!nombre && !url && silencioso) return true;
+    if (!nombre || !url || !perfilVintedValido(url)) {
+        if (estado) estado.textContent = '⚠️ Escribe el nombre de la tienda y la URL de su perfil de Vinted (vinted.es/member/...) o su número.';
+        (nombre ? inputUrl : inputNombre)?.focus();
+        return false;
+    }
+    const existente = Array.from(document.querySelectorAll('[data-perfil-tienda]'))
+        .find((i) => String(i.dataset.nombre || '').trim().toLowerCase() === nombre.toLowerCase());
+    if (existente) {
+        existente.value = url;
+        validarCampoPerfilVinted(existente);
+        existente.closest('[data-tienda-nombre]')?.scrollIntoView({ block: 'nearest' });
+    } else {
+        NUEVOS_PERFILES_VINTED = NUEVOS_PERFILES_VINTED.filter((n) => n.nombre.toLowerCase() !== nombre.toLowerCase());
+        NUEVOS_PERFILES_VINTED.push({ nombre, url });
+        pintarNuevosPerfilesVinted();
+    }
+    inputNombre.value = '';
+    inputUrl.value = '';
+    if (estado) estado.textContent = existente ? `Perfil asignado a «${nombre}». Pulsa Guardar.` : `«${nombre}» se creará al guardar.`;
+    return true;
+}
+
+function quitarPerfilNuevoVinted(indice) {
+    NUEVOS_PERFILES_VINTED.splice(indice, 1);
+    pintarNuevosPerfilesVinted();
+}
+
+async function guardarOpcionesVinted(comprobarDespues = false) {
+    const estado = document.getElementById('opciones-vinted-estado');
+    // Lo escrito en "Añadir perfil" sin pulsar Añadir también se guarda.
+    if (!anadirPerfilOpcionesVinted({ silencioso: true })) return;
+    const campos = Array.from(document.querySelectorAll('[data-perfil-tienda]'));
+    const invalidos = campos.filter((i) => !validarCampoPerfilVinted(i));
+    if (invalidos.length) {
+        invalidos[0].focus();
+        if (estado) estado.textContent = `⚠️ Perfil no válido en: ${invalidos.slice(0, 3).map((i) => i.dataset.nombre).join(', ')}.`;
+        return;
+    }
+    const marcado = (id) => document.getElementById(id)?.checked === true;
+    const cuerpo = {
+        avisar: {
+            vendido: marcado('opt-vinted-avisar-vendido'),
+            no_visible: marcado('opt-vinted-avisar-no_visible'),
+            eliminado: marcado('opt-vinted-avisar-eliminado')
+        },
+        autoCadaHoras: Number(document.getElementById('opt-vinted-auto')?.value) || 0,
+        registrarVendidosAuto: marcado('opt-vinted-registrar-auto'),
+        maxAnuncios: Number(document.getElementById('opt-vinted-max-anuncios')?.value) || 80,
+        completarFichas: marcado('opt-vinted-fichas'),
+        avisoVoz: marcado('opt-vinted-voz'),
+        perfiles: campos
+            .filter((i) => i.value.trim() !== String(i.dataset.original || ''))
+            .map((i) => ({ tiendaId: i.dataset.perfilTienda, nombre: i.dataset.nombre, url: i.value.trim() })),
+        nuevasTiendas: NUEVOS_PERFILES_VINTED
+    };
+    const botones = ['btn-guardar-opciones-vinted', 'btn-guardar-comprobar-vinted'].map((id) => document.getElementById(id)).filter(Boolean);
+    botones.forEach((b) => { b.disabled = true; b.classList.add('opacity-60'); });
+    if (estado) estado.textContent = 'Guardando...';
+    try {
+        const res = await fetch(`${BACKEND_URL}/api/vinted/config`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(cuerpo)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'No se pudieron guardar las opciones.');
+        NUEVOS_PERFILES_VINTED = [];
+        pintarOpcionesVinted(data);
+        if (estado) estado.textContent = `✅ Opciones guardadas. ${textoUltimaComprobacionVinted(data.config)}`;
+        // Los tipos de aviso activos cambian lo que cuenta el contador.
+        await cargarAvisosVinted();
+        if (comprobarDespues) {
+            cerrarOpcionesVinted();
+            abrirPanelVentasVinted({ recargar: false });
+            comprobarVentasVinted();
+        }
+    } catch (e) {
+        if (estado) estado.textContent = `⚠️ ${e.message}`;
+    } finally {
+        botones.forEach((b) => { b.disabled = false; b.classList.remove('opacity-60'); });
     }
 }
 
@@ -8563,7 +8703,10 @@ async function reloadCoreData(isInitialLoad = false, options = {}) {
             });
         }
 
-        renderKanban(true);
+        // Si llega exactamente lo que ya está pintado (p. ej. tras mover una ficha), no se redibuja.
+        const kanbanPintado = document.querySelector('#kanban-dynamic-wrapper [id^="col-dinamica-"]');
+        if (!kanbanPintado || firmaDatosKanban() !== FIRMA_DATOS_KANBAN) renderKanban(true);
+        else actualizarBotonCargarMasKanban();
         requestAnimationFrame(() => {
             updateTickerWallStreet();
             ejecutarVerificacionAlertasStock();
@@ -8578,7 +8721,7 @@ async function reloadCoreData(isInitialLoad = false, options = {}) {
         
         const contenedorLogs = document.getElementById('contenedor-logs-auditoria');
         if (logsVisible && contenedorLogs && data.logs && data.logs.length > 0) {
-            let htmlLogs = ''; data.logs.forEach(l => { const horaFormateada = new Date(l.fechaHora).toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'}); htmlLogs += `<div class="border-b border-white/5 pb-1"><span class="text-indigo-400">[${horaFormateada}]</span> <b>${l.usuario.split('@')[0]}:</b> ${l.accion}</div>`; });
+            let htmlLogs = ''; data.logs.forEach(l => { const horaFormateada = new Date(l.fechaHora).toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'}); htmlLogs += `<div class="border-b border-white/5 pb-1"><span class="text-indigo-400">[${horaFormateada}]</span> <b>${escapeHtmlSafe(String(l.usuario || '').split('@')[0])}:</b> ${escapeHtmlSafe(l.accion)}</div>`; });
             contenedorLogs.innerHTML = htmlLogs;
         }
     } catch(e) {
@@ -8923,9 +9066,26 @@ function dibujarMapaCalor() {
     }
 }
 
-function renderKanban(isFullRefresh = false) {
+// Huella de los datos que pinta el Kanban: si una recarga trae exactamente lo mismo, no se redibuja.
+let FIRMA_DATOS_KANBAN = '';
+// Claves ordenadas: el mismo producto con los campos en otro orden cuenta como igual.
+const ordenarClavesJson = (_, valor) => (valor && typeof valor === 'object' && !Array.isArray(valor))
+    ? Object.keys(valor).sort().reduce((o, k) => { o[k] = valor[k]; return o; }, {})
+    : valor;
+// El orden de la lista tampoco cuenta: cada columna ordena sus fichas con su propio criterio.
+function firmaDatosKanban() {
+    const productos = [...BASE_DATOS].sort((x, y) => String(x._id).localeCompare(String(y._id)));
+    return JSON.stringify([productos, (LISTA_ESTADOS_KANBAN || []).map((e) => [e._id, e.nombre, e.color, e.icono, e.orden, e.rolFinanciero])], ordenarClavesJson);
+}
+
+// opciones.soloEstados: redibuja solo esas columnas (p. ej. tras mover fichas), sin tocar las demás.
+function renderKanban(isFullRefresh = false, opciones = {}) {
     const wrapper = document.getElementById('kanban-dynamic-wrapper');
     if (!wrapper) return;
+    const soloEstados = Array.isArray(opciones.soloEstados) ? new Set(opciones.soloEstados) : null;
+    // Cada columna conserva su posición de scroll al redibujarse.
+    const scrollPrevio = new Map();
+    wrapper.querySelectorAll('[id^="col-dinamica-"]').forEach((c) => scrollPrevio.set(c.id, c.scrollTop));
 
     const estadoConfigMap = new Map((LISTA_ESTADOS_KANBAN || []).map((e) => [e.nombre, e]));
     const estadosOrdenados = [...(LISTA_ESTADOS_KANBAN || [])].sort((a, b) => a.orden - b.orden);
@@ -8935,12 +9095,12 @@ function renderKanban(isFullRefresh = false) {
     const filtroGlobalCanal = document.getElementById('filtro-canal')?.value || 'TODOS';
     const filtroGlobalTienda = document.getElementById('filtro-tienda')?.value || 'TODOS';
 
-    if (isFullRefresh) {
+    if (isFullRefresh && !soloEstados) {
         let htmlColumns = '';
         estadosOrdenados.forEach((est, index) => {
             const minHClass = index < 2 ? 'min-h-[520px]' : 'min-h-[350px]';
             htmlColumns += `
-            <div class="card-bg border rounded-3xl p-4 flex flex-col ${minHClass} transition-all relative group border-${est.color}-500/20 shadow-lg">
+            <div class="card-bg border rounded-3xl p-4 flex flex-col ${minHClass} relative group border-${est.color}-500/20 shadow-lg">
                 <div class="flex flex-col gap-2 mb-4">
                     <div class="flex justify-between items-center">
                         <h3 class="text-[10px] font-black text-${est.color}-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -8989,6 +9149,7 @@ function renderKanban(isFullRefresh = false) {
     });
 
     estadosOrdenados.forEach(est => {
+        if (soloEstados && !soloEstados.has(est.nombre)) return;
         const colDom = document.getElementById(`col-dinamica-${est._id}`);
         if(!colDom) return;
 
@@ -9023,7 +9184,7 @@ function renderKanban(isFullRefresh = false) {
             const esStockCritico = est.rolFinanciero === 'Stock' && totalStockPorPrenda[v.prenda] < 2;
             const claseAlertaStock = esStockCritico ? 'alerta-stock-critico border-amber-500/70 bg-amber-500/5' : '';
             const colorTienda = obtenerColorVisualTienda(v.proveedor || 'Sin asignar');
-            card.className = `kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing hover:scale-[1.01] flex items-center gap-3 select-none ${claseAlertaStock} border-${est.color}-500/30`;
+            card.className = `kanban-card input-bg border p-4 rounded-2xl shadow-sm cursor-grab active:cursor-grabbing flex items-center gap-3 select-none ${claseAlertaStock} border-${est.color}-500/30`;
             card.style.contentVisibility = 'auto';
             card.style.containIntrinsicSize = '150px';
             card.style.setProperty('--store-accent-a', colorTienda.a);
@@ -9146,8 +9307,14 @@ function renderKanban(isFullRefresh = false) {
         
         const badgeDom = document.getElementById(`badge-kanban-${est._id}`);
         if(badgeDom) badgeDom.innerText = filtrados.length;
+        if (isFullRefresh && scrollPrevio.get(colDom.id)) colDom.scrollTop = scrollPrevio.get(colDom.id);
     });
 
+    if (isFullRefresh) FIRMA_DATOS_KANBAN = firmaDatosKanban();
+    actualizarBotonCargarMasKanban();
+}
+
+function actualizarBotonCargarMasKanban() {
     const loaderContainer = document.getElementById('kanban-loader-container');
     if (loaderContainer) {
         if (!hayMasProductosPorCargar()) {
@@ -9600,21 +9767,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 yearEl.value = String(new Date().getFullYear());
             }
             onCambiarPresetGananciasAdmin();
-
-            const cards3D = document.querySelectorAll('.kpi-3d-card');
-            const handleCardMouseMove = throttle(function(e, card) {
-                const rect = card.getBoundingClientRect();
-                const x = e.clientX - rect.left; const y = e.clientY - rect.top;
-                const centerX = rect.width / 2; const centerY = rect.height / 2;
-                const rotateX = ((y - centerY) / centerY) * -12;
-                const rotateY = ((x - centerX) / centerX) * 12;
-                card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.03, 1.03, 1.03)`;
-            }, 16);
-
-            cards3D.forEach(card => {
-                card.addEventListener('mousemove', e => handleCardMouseMove(e, card));
-                card.addEventListener('mouseleave', () => { card.style.transform = `perspective(1000px) rotateX(0) rotateY(0) scale3d(1, 1, 1)`; });
-            });
 
             const ejecutarPasoInit = async (label, fn) => {
                 try {
